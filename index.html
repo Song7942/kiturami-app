@@ -1213,10 +1213,13 @@ function renderModelBar(){
         const dd=document.getElementById('mbDropdown');
         if(dd.classList.contains('open')&&openGroup===g) closeDropdown();
       } else {
-        // 상단 모델 탭 클릭은 항상 "추가" 방식: 다중선택(다중 토글) 여부와 무관하게
-        // 이미 선택된 다른 모델을 유지한 채 이 모델을 함께 선택합니다.
-        if(selectedKeys===null) selectedKeys=new Set();
-        g.keys.forEach(k=>selectedKeys.add(k));
+        // 다중선택 모드가 켜져있으면 기존 선택에 추가, 꺼져있으면 이 모델로 교체(단일선택)
+        if(multiMode){
+          if(selectedKeys===null) selectedKeys=new Set();
+          g.keys.forEach(k=>selectedKeys.add(k));
+        } else {
+          selectedKeys=new Set(g.keys);
+        }
         manualClosed=false; onSelChange();
         openDropdown(g);
       }
