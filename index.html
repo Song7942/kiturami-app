@@ -279,6 +279,7 @@ input[type="text"]::placeholder{color:var(--muted)}
   .tbl-header-wrap,.tbl-body-wrap,.tbl-footer{display:none}
   .tabs{flex-wrap:wrap;padding:2px 8px}
   .tab-btn{padding:7px 10px;font-size:11px;flex:1 1 auto;text-align:center}
+  #myOrdersTableWrap{display:none}
 }
 /* ══════════ 인증(로그인/가입/찾기) ══════════ */
 #authOverlay{
@@ -855,10 +856,13 @@ input[type="text"]::placeholder{color:var(--muted)}
       </button>
     </div>
     <div style="flex:1;overflow:auto;padding:0 16px 16px">
-      <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:12px">
-        <thead id="myOrdersThead"></thead>
-        <tbody id="myOrdersTbody"></tbody>
-      </table>
+      <div id="myOrdersTableWrap">
+        <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:12px">
+          <thead id="myOrdersThead"></thead>
+          <tbody id="myOrdersTbody"></tbody>
+        </table>
+      </div>
+      <div class="card-list" id="myOrdersCardList" style="margin-top:12px"></div>
       <div class="news-empty" id="myOrdersEmpty" style="display:none"></div>
     </div>
   </div>
@@ -2767,6 +2771,7 @@ function renderMyOrders(){
 
   if(!myOrders.length){
     tbody.innerHTML='';
+    const cl=document.getElementById('myOrdersCardList'); if(cl) cl.innerHTML='';
     emptyEl.textContent=t.myOrdersEmpty;
     emptyEl.style.display='block';
     return;
@@ -2774,23 +2779,31 @@ function renderMyOrders(){
   emptyEl.style.display='none';
   const totalsByRep={};
   myOrders.forEach(r=>{ totalsByRep[r.rep]=(totalsByRep[r.rep]||0)+(r.qty||0); });
-  tbody.innerHTML=myOrders.map(r=>{
+  const rowsHtml=[]; const cardsHtml=[];
+  myOrders.forEach(r=>{
     const name = lang==='ko' ? r.name_ko : (r.name_ru||r.name_ko);
     const flags=getGroupDotFlags(r.models);
     const modelTd=flags.map(f=>`<td style="padding:9px 12px;text-align:center">${dot(f)}</td>`).join('');
     const pending=findMyPendingRequest(r.orderId, r.rep);
-    let actionHtml;
+    let actionHtml, actionHtmlMobile;
     if(pending){
       const label=pending.request_type==='cancel' ? t.reqPendingCancel : t.reqPendingChange(pending.requested_qty);
       actionHtml=`<span style="font-size:11px;color:#f59e0b">${label}</span>`;
+      actionHtmlMobile=`<span style="font-size:12px;color:#f59e0b;font-weight:600">${label}</span>`;
     } else {
       const nameEsc=escapeHtml(name).replace(/"/g,'&quot;');
+      const cancelCall=`requestCancelItem(${r.orderId},'${r.rep.replace(/'/g,"\\'")}','${(r.diag||'').replace(/'/g,"\\'")}','${nameEsc.replace(/'/g,"\\'")}','${escapeHtml(r.spec||'').replace(/'/g,"\\'")}',${r.qty})`;
+      const changeCall=`requestChangeItem(${r.orderId},'${r.rep.replace(/'/g,"\\'")}','${(r.diag||'').replace(/'/g,"\\'")}','${nameEsc.replace(/'/g,"\\'")}','${escapeHtml(r.spec||'').replace(/'/g,"\\'")}',${r.qty})`;
       actionHtml=`<div style="display:flex;gap:6px;justify-content:center">
-        <button class="req-action-btn" onclick="requestCancelItem(${r.orderId},'${r.rep.replace(/'/g,"\\'")}','${(r.diag||'').replace(/'/g,"\\'")}','${nameEsc.replace(/'/g,"\\'")}','${escapeHtml(r.spec||'').replace(/'/g,"\\'")}',${r.qty})">${t.reqCancelBtn}</button>
-        <button class="req-action-btn" onclick="requestChangeItem(${r.orderId},'${r.rep.replace(/'/g,"\\'")}','${(r.diag||'').replace(/'/g,"\\'")}','${nameEsc.replace(/'/g,"\\'")}','${escapeHtml(r.spec||'').replace(/'/g,"\\'")}',${r.qty})">${t.reqChangeBtn}</button>
+        <button class="req-action-btn" onclick="${cancelCall}">${t.reqCancelBtn}</button>
+        <button class="req-action-btn" onclick="${changeCall}">${t.reqChangeBtn}</button>
+      </div>`;
+      actionHtmlMobile=`<div style="display:flex;gap:8px">
+        <button class="req-action-btn" style="flex:1" onclick="${cancelCall}">${t.reqCancelBtn}</button>
+        <button class="req-action-btn" style="flex:1" onclick="${changeCall}">${t.reqChangeBtn}</button>
       </div>`;
     }
-    return `<tr style="border-bottom:1px solid var(--border)">
+    rowsHtml.push(`<tr style="border-bottom:1px solid var(--border)">
       <td style="padding:9px 12px;color:var(--muted);white-space:nowrap">${escapeHtml(r.date)}</td>
       <td style="padding:9px 12px">${escapeHtml(name)}</td>
       ${isKo?`<td style="padding:9px 12px;color:var(--muted)">${escapeHtml(r.spec)}</td>`:''}
@@ -2799,8 +2812,27 @@ function renderMyOrders(){
       <td style="padding:9px 16px 9px 12px;text-align:right;color:var(--muted)">${totalsByRep[r.rep]||0}</td>
       <td style="padding:9px 12px;text-align:right">${r.qty}</td>
       <td style="padding:9px 12px">${actionHtml}</td>
-    </tr>`;
-  }).join('');
+    </tr>`);
+
+    // ── 모바일 카드 (좌우 스크롤 없이 한 화면에서 모든 정보 확인) ──
+    const tagHtml=MODEL_GROUPS.filter((g,i)=>flags[i]).map(g=>`<span class="mt" style="color:${g.color};background:${g.color}22;border-color:${g.color}44">${g.abbr}</span>`).join('');
+    const specHtml=isKo?`<div style="color:var(--muted);font-size:11px;margin-top:2px">${escapeHtml(r.spec)}</div>`:'';
+    cardsHtml.push(`<div class="order-card">
+      <div style="font-size:10px;color:var(--muted)">${escapeHtml(r.date)}</div>
+      <div class="pc-name" style="margin-top:2px">${escapeHtml(name)}</div>
+      ${specHtml}
+      <div class="code" style="margin-top:4px">${escapeHtml(r.rep)}</div>
+      ${tagHtml?`<div class="model-tags" style="margin-top:4px">${tagHtml}</div>`:''}
+      <div style="display:flex;justify-content:space-between;margin-top:10px;padding-top:8px;border-top:1px solid var(--border);font-size:12px">
+        <span style="color:var(--muted)">${t.grpExisting} ${t.colOrder}: <b style="color:var(--text)">${totalsByRep[r.rep]||0}</b></span>
+        <span style="color:var(--muted)">${t.grpNew} ${t.colOrder}: <b style="color:var(--text)">${r.qty}</b></span>
+      </div>
+      <div style="margin-top:10px">${actionHtmlMobile}</div>
+    </div>`);
+  });
+  tbody.innerHTML=rowsHtml.join('');
+  const cardListEl=document.getElementById('myOrdersCardList');
+  if(cardListEl) cardListEl.innerHTML=cardsHtml.join('');
 }
 async function openMyOrdersModal(){
   if(!currentUser) return;
