@@ -1827,9 +1827,14 @@ function renderOrderHeader(){
 
   if(isAllModelsSelected()){
     // 전체 선택: 모델 그룹명만 컬럼으로 (세부모델 X)
+    const forceHighlight = selectedKeys!==null; // 사용자가 명시적으로 "전체"를 선택한 경우만 강조(부품검색과 동일하게)
     const groups=[...new Set(MODEL_DEFS.map(m=>m.group))];
-    columns = groups.map(g=>({isGroup:true, group:g, color:GC[g]||'#888'}));
-    groups.forEach(g=>{ r1+=`<th rowspan="2" class="center" style="color:${GC[g]||'#888'}">${g}</th>`; });
+    columns = groups.map(g=>({isGroup:true, group:g, color:GC[g]||'#888', selected:forceHighlight}));
+    groups.forEach(g=>{
+      const c=GC[g]||'#888';
+      const hl=forceHighlight?`background:${c}22;font-weight:700;border-bottom:2px solid ${c}`:'';
+      r1+=`<th rowspan="2" class="center" style="color:${c};${hl}">${g}</th>`;
+    });
     cols += groups.map(()=>`<col style="width:60px">`).join('');
     r1+=`<th rowspan="2" style="text-align:right;padding-right:16px">${t.orderPrevQty}</th><th rowspan="2" class="center">${t.orderQty}</th>`;
     document.getElementById('order-thead-fixed').innerHTML=`<tr>${r1}</tr>`;
