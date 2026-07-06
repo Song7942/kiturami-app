@@ -1556,31 +1556,36 @@ function onDiagClick(dn,btn){
 }
 function highlightByDiag(dn){
   const onOrder=document.getElementById('pane-order').classList.contains('active');
-  let found=false;
+  const sb=document.getElementById(onOrder?'scrollBodyOrder':'scrollBodyParts');
+  let scrolled=false;
+  function tryScroll(el){
+    if(scrolled||!el) return;
+    if(el.offsetParent===null) return; // 화면에 실제로 보이는(표시 중인) 요소일 때만 스크롤 (모바일=카드 / 데스크탑=표 중 실제 보이는 쪽)
+    scrolled=true;
+    if(sb) setTimeout(()=>sb.scrollTo({top:sb.scrollTop+(el.getBoundingClientRect().top-sb.getBoundingClientRect().top)-40,behavior:'smooth'}),50);
+  }
   if(onOrder){
     const rows=getFilteredOrderParts();
     document.querySelectorAll('#orderTbody tr').forEach((tr,i)=>{
       if(rows[i]&&String(rows[i].diag)===dn){
-        tr.classList.add('highlight');
-        if(!found){found=true;const sb=document.getElementById('scrollBodyOrder');if(sb)setTimeout(()=>sb.scrollTo({top:sb.scrollTop+(tr.getBoundingClientRect().top-sb.getBoundingClientRect().top)-40,behavior:'smooth'}),50);}
+        tr.classList.add('highlight'); tryScroll(tr);
       } else tr.classList.remove('highlight');
     });
     document.querySelectorAll('#orderCardList .order-card').forEach(c=>{
       const d=c.querySelector('.pc-diag');const match=d&&d.textContent.trim()===dn;c.classList.toggle('highlight',match);
-      if(match&&!found){found=true;const sb=document.getElementById('scrollBodyOrder');if(sb)setTimeout(()=>sb.scrollTo({top:sb.scrollTop+(c.getBoundingClientRect().top-sb.getBoundingClientRect().top)-40,behavior:'smooth'}),50);}
+      if(match) tryScroll(c);
     });
     return;
   }
   document.querySelectorAll('#tbody tr').forEach((tr,i)=>{
     const rows=getFilteredParts();
     if(rows[i]&&String(rows[i].diag)===dn){
-      tr.classList.add('highlight');
-      if(!found){found=true;const sb=document.getElementById('scrollBodyParts');if(sb)setTimeout(()=>sb.scrollTo({top:sb.scrollTop+(tr.getBoundingClientRect().top-sb.getBoundingClientRect().top)-40,behavior:'smooth'}),50);}
+      tr.classList.add('highlight'); tryScroll(tr);
     } else tr.classList.remove('highlight');
   });
   document.querySelectorAll('.part-card').forEach(c=>{
     const d=c.querySelector('.pc-diag');const match=d&&d.textContent.trim()===dn;c.classList.toggle('highlight',match);
-    if(match&&!found){found=true;const sb=document.getElementById('scrollBodyParts');if(sb)setTimeout(()=>sb.scrollTo({top:sb.scrollTop+(c.getBoundingClientRect().top-sb.getBoundingClientRect().top)-40,behavior:'smooth'}),50);}
+    if(match) tryScroll(c);
   });
 }
 function clearHighlight(){
