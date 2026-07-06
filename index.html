@@ -1927,6 +1927,7 @@ function renderOrderTable(){
       </div>
     </div>`;
   }).join(''));
+  if(activeDiagNum)highlightByDiag(activeDiagNum);
   updateOrderTableScrollbar();
 }
 
