@@ -280,6 +280,7 @@ input[type="text"]::placeholder{color:var(--muted)}
   .tabs{flex-wrap:wrap;padding:2px 8px}
   .tab-btn{padding:7px 10px;font-size:11px;flex:1 1 auto;text-align:center}
   #myOrdersTableWrap{display:none}
+  #pane-pn .pn-hdr-wrap,#pane-pn .pn-body-wrap,#pane-inventory .pn-hdr-wrap,#pane-inventory .pn-body-wrap{display:none}
 }
 /* ══════════ 인증(로그인/가입/찾기) ══════════ */
 #authOverlay{
@@ -650,8 +651,9 @@ input[type="text"]::placeholder{color:var(--muted)}
           <colgroup id="pn-body-col"></colgroup>
           <tbody id="pnTbody"></tbody>
         </table>
-        <div id="pnNoResult" class="no-result" style="display:none"></div>
       </div>
+      <div class="card-list" id="pnCardList" style="margin:0 0 8px"></div>
+      <div id="pnNoResult" class="no-result" style="display:none"></div>
     </div>
   </div>
 
@@ -683,8 +685,9 @@ input[type="text"]::placeholder{color:var(--muted)}
           <colgroup id="inv-body-col"></colgroup>
           <tbody id="inventoryTbody"></tbody>
         </table>
-        <div id="inventoryNoResult" class="no-result" style="display:none"></div>
       </div>
+      <div class="card-list" id="inventoryCardList" style="margin:0 0 8px"></div>
+      <div id="inventoryNoResult" class="no-result" style="display:none"></div>
     </div>
   </div>
 
@@ -1781,7 +1784,9 @@ function debouncedRenderPN(){
 // ── 품번조회 페이지 렌더 (청크 방식) ──
 let _pnFiltered=[], _pnChunk=100;
 function renderPNChunk(startFrom=0){
+  const t=T[lang];
   const tbody=document.getElementById('pnTbody');
+  const cardList=document.getElementById('pnCardList');
   const isKo=lang==='ko';
   function hlPN(s,kw){
     if(!kw||!s) return s||'';
@@ -1803,6 +1808,25 @@ function renderPNChunk(startFrom=0){
   }).join('');
   if(startFrom===0) tbody.innerHTML=rows;
   else tbody.insertAdjacentHTML('beforeend', rows);
+
+  // ── 모바일 카드 (좌우 스크롤 없이 한 화면에서 모든 정보 확인) ──
+  const cards=chunk.map(r=>{
+    const name=isKo?hlPN(r.name_ko,kw):hlPN(r.name_ru||r.name_ko,kw);
+    const specHtml=isKo?`<div style="color:var(--muted);font-size:11px;margin-top:2px">${hlPN(r.spec,kw)}</div>`:'';
+    const compatsHtml=(r.compats||[]).map(c=>`<span class="pn-badge pn-cur">${hlPN(c,kw)}</span>`).join(' ')||'<span style="font-size:11px;color:var(--muted)">-</span>';
+    const finalHtml=r.final?`<span class="pn-badge pn-fin">${hlPN(r.final,kw)}</span>`:'<span style="font-size:11px;color:var(--muted)">-</span>';
+    return `<div class="part-card" style="border-bottom:1px solid var(--border);padding:10px 0">
+      <div class="pc-name" style="font-weight:600">${name}</div>
+      ${specHtml}
+      <div style="margin-top:8px;display:flex;flex-direction:column;gap:6px">
+        <div><span style="font-size:10px;color:var(--muted);display:block;margin-bottom:2px">${t.pnH1}</span><span class="pn-badge pn-rep">${hlPN(r.rep,kw)}</span></div>
+        <div><span style="font-size:10px;color:var(--muted);display:block;margin-bottom:2px">${t.pnH2}</span>${compatsHtml}</div>
+        <div><span style="font-size:10px;color:var(--muted);display:block;margin-bottom:2px">${t.pnH3}</span>${finalHtml}</div>
+      </div>
+    </div>`;
+  }).join('');
+  if(cardList){ if(startFrom===0) cardList.innerHTML=cards; else cardList.insertAdjacentHTML('beforeend', cards); }
+
   // 더 있으면 스크롤 감지 등록
   if(startFrom+_pnChunk < _pnFiltered.length){
     _pnNextStart=startFrom+_pnChunk;
@@ -2985,10 +3009,12 @@ function renderInventoryList(){
   }).join('')}</tr>`;
 
   const tbody=document.getElementById('inventoryTbody');
+  const cardList=document.getElementById('inventoryCardList');
   const emptyEl=document.getElementById('inventoryNoResult');
-  if(!keys.length){ tbody.innerHTML=''; emptyEl.textContent=t.invEmpty; emptyEl.style.display='block'; return; }
+  if(!keys.length){ tbody.innerHTML=''; if(cardList) cardList.innerHTML=''; emptyEl.textContent=t.invEmpty; emptyEl.style.display='block'; return; }
   emptyEl.style.display='none';
-  tbody.innerHTML=keys.map(k=>{
+  const rowsHtml=[]; const cardsHtml=[];
+  keys.forEach(k=>{
     const g=groups[k];
     const items=g.items.slice().sort((a,b)=>a.articul.localeCompare(b.articul));
     const total=items.reduce((s,it)=>s+(it.qty||0),0);
@@ -2997,6 +3023,7 @@ function renderInventoryList(){
     const pnInfo = g.master ? getPNInfo(g.master) : null;
     const nameText = pnInfo ? (isKo ? pnInfo.name_ko : (pnInfo.name_ru||pnInfo.name_ko)) : '';
     const specTd = isKo ? `<td style="padding:9px 12px;color:var(--muted)">${escapeHtml(pnInfo?pnInfo.spec:'')}</td>` : '';
+    const specHtml = isKo && pnInfo && pnInfo.spec ? `<div style="color:var(--muted);font-size:11px;margin-top:2px">${escapeHtml(pnInfo.spec)}</div>` : '';
     let html='';
     if(g.master && items.length>1){
       html+=`<tr style="background:var(--surface2)">
@@ -3029,8 +3056,25 @@ function renderInventoryList(){
         <td style="padding:9px 16px 9px 12px;text-align:right;font-weight:700">${postAllocText}</td>
       </tr>`;
     }
-    return html;
-  }).join('');
+    rowsHtml.push(html);
+
+    // ── 모바일 카드 (좌우 스크롤 없이 한 화면에서 모든 정보 확인) ──
+    const variantsHtml = items.length>1
+      ? `<div style="margin-top:8px;font-size:11px;color:var(--muted)">${items.map(it=>`<span class="code" style="margin-right:4px">${escapeHtml(it.articul)} (${it.qty})</span>`).join(' ')}</div>`
+      : '';
+    cardsHtml.push(`<div class="order-card">
+      ${nameText?`<div class="pc-name">${escapeHtml(nameText)}</div>`:''}
+      ${specHtml}
+      <div class="code" style="margin-top:4px">${escapeHtml(g.master||items[0].articul)}</div>
+      ${variantsHtml}
+      <div style="display:flex;justify-content:space-between;margin-top:10px;padding-top:8px;border-top:1px solid var(--border);font-size:12px">
+        <span style="color:var(--muted)">${t.invHBase}: <b style="color:var(--text)">${total}</b></span>
+        <span style="color:var(--muted)">${t.invHPostAlloc}: <b style="color:var(--text)">${postAllocText}</b></span>
+      </div>
+    </div>`);
+  });
+  tbody.innerHTML=rowsHtml.join('');
+  if(cardList) cardList.innerHTML=cardsHtml.join('');
 }
 function downloadInventoryTemplate(){
   const header=['Артикул', 'Количество'];
