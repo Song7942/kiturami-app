@@ -223,9 +223,10 @@ input[type="text"]::placeholder{color:var(--muted)}
 /* ── 모바일 카드 ── */
 .card-list{border:1px solid var(--border);border-radius:10px;background:var(--surface)}
 .part-card{padding:9px 12px;border-bottom:1px solid var(--border)}
+.order-card{padding:10px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;background:var(--surface)}
 .part-card:last-child{border-bottom:none}
-.part-card.highlight{background:rgba(245,158,11,.14);border-left:3px solid #f59e0b}
-.order-card.highlight{background:rgba(245,158,11,.14);border-left:3px solid #f59e0b}
+.part-card.highlight{background:rgba(245,158,11,.14)!important;border-left:3px solid #f59e0b}
+.order-card.highlight{background:rgba(245,158,11,.14)!important;border-left:3px solid #f59e0b}
 .pc-top{display:flex;align-items:center;gap:7px;margin-bottom:2px}
 .pc-diag{font-size:9px;color:var(--muted);min-width:22px;text-align:right;flex-shrink:0}
 .pc-name{font-weight:600;font-size:13px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -1911,7 +1912,7 @@ function renderOrderTable(){
       tagHtml = columns.filter(col=>isColumnApplied(d,col)).map(col=>`<span class="mt" style="color:${col.color};background:${col.color}22;border-color:${col.color}44">${col.group} ${col.label}</span>`).join('');
     }
     const modelHtml = tagHtml ? `<div class="model-tags" style="margin-top:4px">${tagHtml}</div>` : '';
-    return `<div class="order-card" style="padding:10px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;background:var(--surface)">
+    return `<div class="order-card">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
         <div style="flex:1;min-width:0">
           <div class="pc-diag" style="font-size:10px;color:var(--muted)">${d.diag}</div>
