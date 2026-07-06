@@ -113,8 +113,11 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0}
   /* ── 분해도 확대 모달 ── */
   #diagModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:99999;align-items:center;justify-content:center}
   #diagModal.show{display:flex}
-  .dm-inner{position:relative;max-width:92vw;max-height:90vh;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.6)}
-  .dm-inner img{display:block;max-width:90vw;max-height:85vh;width:auto;height:auto}
+  .dm-inner{position:relative;max-width:92vw;max-height:90vh;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.6);touch-action:none}
+  #dmZoomWrap{position:relative;display:inline-block;transform-origin:0 0;will-change:transform}
+  .dm-inner img{display:block;max-width:90vw;max-height:85vh;width:auto;height:auto;pointer-events:none;user-select:none;-webkit-user-drag:none}
+  .dm-zoom-hint{position:absolute;top:8px;left:8px;background:rgba(15,17,23,.7);color:#c7d2fe;font-size:10px;font-weight:600;padding:4px 9px;border-radius:5px;pointer-events:none;transition:opacity .3s;z-index:5}
+  .dm-zoom-hint.fade{opacity:0}
   .dm-close{position:absolute;top:8px;right:8px;width:32px;height:32px;border-radius:50%;background:rgba(15,17,23,.8);border:1.5px solid #6366f1;color:#c7d2fe;font-size:16px;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:10;transition:all .15s}
   .dm-close:hover{background:#4f46e5;color:#fff}
   .dm-label{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);background:rgba(15,17,23,.7);color:#c7d2fe;font-size:11px;font-weight:600;padding:3px 10px;border-radius:5px;white-space:nowrap}
@@ -723,9 +726,12 @@ input[type="text"]::placeholder{color:var(--muted)}
 <!-- 분해도 확대 모달 -->
 <div id="diagModal" onclick="closeDiagModal(event)">
   <div class="dm-inner" id="dmInner">
-    <img id="dmImg" src="" alt="">
-    <div class="dm-nums" id="dmNums"></div>
+    <div id="dmZoomWrap">
+      <img id="dmImg" src="" alt="">
+      <div class="dm-nums" id="dmNums"></div>
+    </div>
     <div class="dm-label" id="dmLabel"></div>
+    <div class="dm-zoom-hint" id="dmZoomHint">👆 <span id="i18n-dmzoomhint">손가락으로 확대/이동</span></div>
     <button class="dm-close" onclick="closeDiagModal()">✕</button>
   </div>
 </div>
@@ -922,7 +928,7 @@ const T={
        count:n=>`<b>${n}</b>개`,footer:n=>`총 ${n}개`,noResult:'검색 결과가 없습니다.',
        tabParts:'🔧 부품 검색',tabPN:'🔄 품번 조회',tabOrder:'📦 주문',tabInventory:'📊 재고관리',tabPrice:'💲 가격정보',orderDl:'엑셀 다운로드',orderMailBanner:'주문 접수 이메일: song@krb.co.kr',orderPh:'도면번호, 품명, 대표품번으로 검색…',orderQty:'주문수량',logoutBtn:'로그아웃',
        invTemplate:'양식 다운로드',invUpload:'엑셀 업데이트',invHMaster:'대표품번(미변경)',invHRep:'재고품번',invHQty:'재고수량',invHUpdated:'업데이트 일시',invEmpty:'등록된 재고 데이터가 없습니다.',invCount:n=>`총 ${n}건`,
-       invUploadOk:n=>`재고 ${n}건이 업데이트되었습니다.`,invUploadFail:'업로드에 실패했습니다. 양식을 확인해주세요.',invUploadEmpty:'파일에서 유효한 데이터를 찾지 못했습니다. 양식을 확인해주세요.',invSearchPh:'대표품번으로 검색…',invLastUpdated:d=>`최근 업데이트: ${d}`,
+       invUploadOk:n=>`재고 ${n}건이 업데이트되었습니다.`,invUploadFail:'업로드에 실패했습니다. 양식을 확인해주세요.',invUploadEmpty:'파일에서 유효한 데이터를 찾지 못했습니다. 양식을 확인해주세요.',invSearchPh:'대표품번으로 검색…',invLastUpdated:d=>`최근 업데이트: ${d}`,dmZoomHint:'손가락으로 확대/이동',
        priceTemplate:'양식 다운로드',priceUpload:'엑셀 업데이트',priceHRep:'대표품번',priceHPrice:'가격',priceHUpdated:'업데이트일시',priceEmpty:'등록된 가격 데이터가 없습니다.',priceCount:n=>`총 ${n}건`,
        priceUploadOk:n=>`가격 ${n}건이 업데이트되었습니다.`,priceUploadFail:'업로드에 실패했습니다. 양식을 확인해주세요.',priceUploadEmpty:'파일에서 유효한 데이터를 찾지 못했습니다. 양식을 확인해주세요.',priceSearchPh:'대표품번으로 검색…',
        adminHNewQty:'신규 주문수량',adminHStock:'재고수량',reqOriginalQtyLabel:'신규 주문수량',reqRequestedQtyLabel:'변경신청 수량',reqRepLabel:'대표품번 (미변경)',
@@ -961,7 +967,7 @@ const T={
        count:n=>`<b>${n}</b>`,footer:n=>`Итого: ${n}`,noResult:'Результаты не найдены.',
        tabParts:'🔧 Поиск деталей',tabPN:'🔄 Артикулы',tabOrder:'📦 Заказ',tabInventory:'📊 Склад',tabPrice:'💲 Цены',orderDl:'Скачать Excel',orderMailBanner:'Email для приёма заказов: song@krb.co.kr',orderPh:'Поиск по №чертежа, названию, артикулу…',orderQty:'Кол-во',logoutBtn:'Выйти',
        invTemplate:'Скачать шаблон',invUpload:'Обновить Excel',invHMaster:'Осн. артикул (неизм.)',invHRep:'Артикул склада',invHQty:'Остаток',invHUpdated:'Обновлено',invEmpty:'Данных о складе пока нет.',invCount:n=>`Всего: ${n}`,
-       invUploadOk:n=>`Обновлено позиций: ${n}.`,invUploadFail:'Ошибка загрузки. Проверьте шаблон.',invUploadEmpty:'В файле не найдено данных. Проверьте шаблон.',invSearchPh:'Поиск по артикулу…',invLastUpdated:d=>`Последнее обновление: ${d}`,
+       invUploadOk:n=>`Обновлено позиций: ${n}.`,invUploadFail:'Ошибка загрузки. Проверьте шаблон.',invUploadEmpty:'В файле не найдено данных. Проверьте шаблон.',invSearchPh:'Поиск по артикулу…',invLastUpdated:d=>`Последнее обновление: ${d}`,dmZoomHint:'Растяните пальцами, чтобы увеличить',
        priceTemplate:'Скачать шаблон',priceUpload:'Обновить Excel',priceHRep:'Артикул',priceHPrice:'Цена',priceHUpdated:'Обновлено',priceEmpty:'Данных о ценах пока нет.',priceCount:n=>`Всего: ${n}`,
        priceUploadOk:n=>`Обновлено позиций: ${n}.`,priceUploadFail:'Ошибка загрузки. Проверьте шаблон.',priceUploadEmpty:'В файле не найдено данных. Проверьте шаблон.',priceSearchPh:'Поиск по артикулу…',
        adminHNewQty:'Новое кол-во',adminHStock:'Остаток',reqOriginalQtyLabel:'Исходное кол-во',reqRequestedQtyLabel:'Запрошено',reqRepLabel:'Артикул (неизм.)',
@@ -1071,6 +1077,7 @@ function setLang(l){
   document.getElementById('pnInput').placeholder=t.pnPh;
   // pn 헤더는 renderPN()에서 처리
   document.getElementById('diagHint').textContent=t.diagHint;
+  const zoomHintEl=document.getElementById('i18n-dmzoomhint'); if(zoomHintEl) zoomHintEl.textContent=t.dmZoomHint;
   if(diagTypes && diagTypes.length){
     buildDiagram(diagTypes); // 언어 변경 시 라벨/툴팁 텍스트도 새 언어로 다시 생성
     const suffix=lang==='ru'?' — Сборочный чертёж':' — 분해도';
@@ -1540,6 +1547,9 @@ function openDiagModal(imgIdx,type){
   });
   document.getElementById('diagModal').classList.add('show');
   document.body.style.overflow='hidden';
+  dmResetZoom();
+  const hintEl=document.getElementById('dmZoomHint');
+  if(hintEl){ hintEl.classList.remove('fade'); clearTimeout(dmHintTimer); dmHintTimer=setTimeout(()=>hintEl.classList.add('fade'),2500); }
 }
 let currentModalType=null;
 function closeDiagModal(e){
@@ -1549,6 +1559,89 @@ function closeDiagModal(e){
 }
 // ESC키로 닫기
 document.addEventListener('keydown',function(e){if(e.key==='Escape'){closeDiagModal();closeNewsModal();closeAdminModal();closeMyOrdersModal();}});
+
+// ── 분해도 모달: 손가락 핀치 확대/이동 ──
+let dmScale=1, dmTx=0, dmTy=0;
+let dmPointers={}; let dmLastDist=0; let dmPanStart=null;
+let dmHintTimer=null;
+const DM_MAX_SCALE=5, DM_MIN_SCALE=1;
+function dmApplyTransform(){
+  const wrap=document.getElementById('dmZoomWrap');
+  if(wrap) wrap.style.transform=`translate(${dmTx}px,${dmTy}px) scale(${dmScale})`;
+}
+function dmResetZoom(){
+  dmScale=1;dmTx=0;dmTy=0;dmPointers={};dmPanStart=null;dmApplyTransform();
+}
+function dmDist(a,b){ return Math.hypot(a.x-b.x,a.y-b.y); }
+function dmMid(a,b){ return {x:(a.x+b.x)/2,y:(a.y+b.y)/2}; }
+function dmClampScale(s){ return Math.min(DM_MAX_SCALE,Math.max(DM_MIN_SCALE,s)); }
+function dmHideHint(){ const h=document.getElementById('dmZoomHint'); if(h) h.classList.add('fade'); }
+
+function dmPointerDown(e){
+  const inner=document.getElementById('dmInner');
+  inner.setPointerCapture&&inner.setPointerCapture(e.pointerId);
+  dmPointers[e.pointerId]={x:e.clientX,y:e.clientY};
+  dmHideHint();
+  const pts=Object.values(dmPointers);
+  if(pts.length===2){
+    dmLastDist=dmDist(pts[0],pts[1]);
+    dmPanStart=null;
+  } else if(pts.length===1){
+    dmPanStart={x:e.clientX-dmTx,y:e.clientY-dmTy};
+  }
+}
+function dmPointerMove(e){
+  if(!dmPointers[e.pointerId]) return;
+  e.preventDefault();
+  dmPointers[e.pointerId]={x:e.clientX,y:e.clientY};
+  const pts=Object.values(dmPointers);
+  if(pts.length===2){
+    const dist=dmDist(pts[0],pts[1]);
+    const mid=dmMid(pts[0],pts[1]);
+    if(dmLastDist>0){
+      const newScale=dmClampScale(dmScale*(dist/dmLastDist));
+      const rect=document.getElementById('dmInner').getBoundingClientRect();
+      const localX=mid.x-rect.left, localY=mid.y-rect.top;
+      dmTx = localX-(localX-dmTx)*(newScale/dmScale);
+      dmTy = localY-(localY-dmTy)*(newScale/dmScale);
+      dmScale=newScale;
+      dmApplyTransform();
+    }
+    dmLastDist=dist;
+  } else if(pts.length===1 && dmPanStart && dmScale>1){
+    dmTx=e.clientX-dmPanStart.x;
+    dmTy=e.clientY-dmPanStart.y;
+    dmApplyTransform();
+  }
+}
+function dmPointerUp(e){
+  delete dmPointers[e.pointerId];
+  const pts=Object.values(dmPointers);
+  if(pts.length===1){ dmPanStart={x:pts[0].x-dmTx,y:pts[0].y-dmTy}; dmLastDist=0; }
+  else { dmPanStart=null; dmLastDist=0; }
+}
+function dmDoubleClick(e){
+  e.stopPropagation();
+  if(dmScale>1){ dmResetZoom(); }
+  else {
+    const rect=document.getElementById('dmInner').getBoundingClientRect();
+    const localX=e.clientX-rect.left, localY=e.clientY-rect.top;
+    const newScale=2.5;
+    dmTx=localX-(localX-dmTx)*(newScale/dmScale);
+    dmTy=localY-(localY-dmTy)*(newScale/dmScale);
+    dmScale=newScale;
+    dmApplyTransform();
+  }
+}
+(function initDmZoomHandlers(){
+  const inner=document.getElementById('dmInner');
+  if(!inner) return;
+  inner.addEventListener('pointerdown', dmPointerDown);
+  inner.addEventListener('pointermove', dmPointerMove);
+  inner.addEventListener('pointerup', dmPointerUp);
+  inner.addEventListener('pointercancel', dmPointerUp);
+  inner.addEventListener('dblclick', dmDoubleClick);
+})();
 
 function onDiagClick(dn,btn){
   document.querySelectorAll('.diag-num.active').forEach(b=>b.classList.remove('active'));
