@@ -243,6 +243,8 @@ input[type="text"]::placeholder{color:var(--muted)}
 
 /* ── 품번 조회 ── */
 .pn-tbl-wrap{border:1px solid var(--border);border-radius:10px;background:var(--surface)}
+.sticky-col1{position:sticky;left:0;z-index:2;background:var(--bg)}
+.pn-hdr-wrap .sticky-col1{z-index:3;background:var(--surface2)}
   .pn-hdr-wrap{background:var(--surface);border:1px solid var(--border);border-radius:10px 10px 0 0;border-bottom:none;overflow:hidden}
   .pn-hdr-wrap table{border-collapse:collapse;table-layout:fixed;width:100%;min-width:max-content}
   .pn-hdr-wrap th{background:var(--surface2);padding:7px 12px;font-size:11px;font-weight:600;color:var(--muted);text-align:left;border-bottom:1px solid var(--border);border-right:1px solid var(--border);white-space:nowrap}
@@ -275,6 +277,8 @@ input[type="text"]::placeholder{color:var(--muted)}
 }
 @media(max-width:768px){
   .tbl-header-wrap,.tbl-body-wrap,.tbl-footer{display:none}
+  .tabs{flex-wrap:wrap;padding:2px 8px}
+  .tab-btn{padding:7px 10px;font-size:11px;flex:1 1 auto;text-align:center}
 }
 /* ══════════ 인증(로그인/가입/찾기) ══════════ */
 #authOverlay{
@@ -1786,7 +1790,7 @@ function renderPNChunk(startFrom=0){
     const name=isKo?hlPN(r.name_ko,kw):hlPN(r.name_ru||r.name_ko,kw);
     const spec=isKo?`<td style="font-size:11px;color:var(--muted)">${hlPN(r.spec,kw)}</td>`:'';
     return `<tr>
-      <td style="font-weight:500;font-size:11px">${name}</td>
+      <td class="sticky-col1" style="font-weight:500;font-size:11px">${name}</td>
       ${spec}
       <td><span class="pn-badge pn-rep">${hlPN(r.rep,kw)}</span></td>
       <td>${(r.compats||[]).map(c=>`<span class="pn-badge pn-cur">${hlPN(c,kw)}</span>`).join(' ')}</td>
@@ -1829,8 +1833,8 @@ function renderPN(){
   const thead=document.getElementById('pn-thead');
   if(thead){
     thead.innerHTML=isKo
-      ? `<tr><th>${t.pnH0}</th><th>${t.pnH0s}</th><th id="pn-th1">${t.pnH1}</th><th id="pn-th2">${t.pnH2}</th><th id="pn-th3">${t.pnH3}</th></tr>`
-      : `<tr><th>${t.pnH0}</th><th id="pn-th1">${t.pnH1}</th><th id="pn-th2">${t.pnH2}</th><th id="pn-th3">${t.pnH3}</th></tr>`;
+      ? `<tr><th class="sticky-col1">${t.pnH0}</th><th>${t.pnH0s}</th><th id="pn-th1">${t.pnH1}</th><th id="pn-th2">${t.pnH2}</th><th id="pn-th3">${t.pnH3}</th></tr>`
+      : `<tr><th class="sticky-col1">${t.pnH0}</th><th id="pn-th1">${t.pnH1}</th><th id="pn-th2">${t.pnH2}</th><th id="pn-th3">${t.pnH3}</th></tr>`;
   }
 
   // 청크 렌더링
@@ -2944,7 +2948,8 @@ function renderInventoryList(){
   ['inv-hdr-col','inv-body-col'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=colgroupHtml;});
   document.getElementById('inventoryThead').innerHTML=`<tr>${cols.map((c,i)=>{
     const rightAlign = (i===cols.length-1 || i===cols.length-2);
-    return `<th${rightAlign?' style="text-align:right;padding-right:16px"':''}>${c}</th>`;
+    const stickyCls = i===0 ? ' class="sticky-col1"' : '';
+    return `<th${stickyCls}${rightAlign?' style="text-align:right;padding-right:16px"':''}>${c}</th>`;
   }).join('')}</tr>`;
 
   const tbody=document.getElementById('inventoryTbody');
@@ -2963,7 +2968,7 @@ function renderInventoryList(){
     let html='';
     if(g.master && items.length>1){
       html+=`<tr style="background:var(--surface2)">
-        <td style="padding:9px 12px;font-weight:600">${escapeHtml(nameText)}</td>
+        <td class="sticky-col1" style="padding:9px 12px;font-weight:600;background:var(--surface2)">${escapeHtml(nameText)}</td>
         ${specTd}
         <td style="padding:9px 12px"><span class="code">${escapeHtml(g.master)}</span></td>
         <td style="padding:9px 12px"></td>
@@ -2973,7 +2978,7 @@ function renderInventoryList(){
       items.forEach(it=>{
         const emptySpecTd = isKo ? `<td style="padding:9px 12px"></td>` : '';
         html+=`<tr>
-          <td style="padding:9px 12px"></td>
+          <td class="sticky-col1" style="padding:9px 12px"></td>
           ${emptySpecTd}
           <td style="padding:9px 12px"></td>
           <td style="padding:9px 12px"><span class="code">${escapeHtml(it.articul)}</span></td>
@@ -2984,7 +2989,7 @@ function renderInventoryList(){
     } else {
       const it=items[0];
       html+=`<tr>
-        <td style="padding:9px 12px;font-weight:600">${escapeHtml(nameText)}</td>
+        <td class="sticky-col1" style="padding:9px 12px;font-weight:600">${escapeHtml(nameText)}</td>
         ${specTd}
         <td style="padding:9px 12px">${g.master?`<span class="code">${escapeHtml(g.master)}</span>`:''}</td>
         <td style="padding:9px 12px"><span class="code">${escapeHtml(it.articul)}</span></td>
