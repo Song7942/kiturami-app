@@ -237,8 +237,8 @@ input[type="text"]::placeholder{color:var(--muted)}
 .order-card.highlight{background:rgba(245,158,11,.14)!important;border-left:3px solid #f59e0b}
 .pc-top{display:flex;align-items:center;gap:7px;margin-bottom:2px}
 .pc-diag{font-size:9px;color:var(--muted);min-width:22px;text-align:right;flex-shrink:0}
-.pc-name{font-weight:600;font-size:13px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pc-spec{font-size:13px;color:var(--muted);margin:1px 0 4px 29px}
+.pc-name{font-weight:600;font-size:16px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pc-spec{font-size:14px;color:var(--muted);margin:1px 0 4px 29px}
 .pc-code{margin:0 0 4px 29px}
 .model-tags{display:flex;flex-wrap:wrap;gap:5px;margin-left:29px}
 .mt{font-size:12px;font-weight:600;padding:3px 7px;border-radius:4px;border:1px solid}
@@ -1812,7 +1812,7 @@ function renderTable(){
     const applied=MODEL_DEFS.filter(m=>d.models[m.key]);
     const el=document.createElement('div');el.className='part-card';el.dataset.diag=d.diag;
     const nh=lang==='ko'?`<span class="pc-name">${hl(d.name_ko,kw)}</span></div><div class="pc-spec">${hl(d.spec,kw)}`:`<span class="pc-name">${hl(d.name_ru,kw)}</span>`;
-    el.innerHTML=`<div class="pc-top"><span class="pc-diag">${hl(d.diag,kw)}</span>${nh}</div><div class="pc-code"><span class="code">${hl(d.rep,kw)}</span></div><div class="model-tags">${applied.map(m=>`<span class="mt" style="color:${m.color};background:${m.color}22;border-color:${m.color}44">${m.group} ${m.label}</span>`).join('')}</div>`;
+    el.innerHTML=`<div class="pc-top"><span class="pc-diag">${T[lang].thDiag} ${hl(d.diag,kw)}</span>${nh}</div><div class="pc-code"><span class="code">${hl(d.rep,kw)}</span></div><div class="model-tags">${applied.map(m=>`<span class="mt" style="color:${m.color};background:${m.color}22;border-color:${m.color}44">${m.group} ${m.label}</span>`).join('')}</div>`;
     frag.appendChild(el);
   });
   cl.insertBefore(frag,noR);
@@ -2082,7 +2082,7 @@ function renderOrderTable(){
     const key=orderKey(d);const qty=orderQty[key]||'';
     const prevQty=myOrderTotals[d.rep]||0;
     const nm=isKo?d.name_ko:d.name_ru;
-    const specHtml=isKo?`<div style="color:var(--muted);font-size:11px;margin-top:2px">${d.spec}</div>`:'';
+    const specHtml=isKo?`<div class="pc-spec">${d.spec}</div>`:'';
     let tagHtml='';
     if(columns.length && columns[0].isGroup){
       const appliedGroups=columns.filter(col=>isColumnApplied(d,col));
@@ -2094,15 +2094,21 @@ function renderOrderTable(){
     return `<div class="order-card">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
         <div style="flex:1;min-width:0">
-          <div class="pc-diag" style="font-size:10px;color:var(--muted)">${d.diag}</div>
+          <div class="pc-diag" style="font-size:11px;color:var(--muted)">${t.thDiag} ${d.diag}</div>
           <div class="pc-name">${nm}</div>
           ${specHtml}
           <div class="code" style="margin-top:4px">${d.rep}</div>
           ${modelHtml}
         </div>
-        <div style="display:flex;flex-direction:column;align-items:center;gap:4px;flex-shrink:0">
-          <span style="font-size:10px;color:var(--muted)">${t.orderPrevQty}: ${prevQty}</span>
-          <input type="number" min="0" class="order-qty-input" value="${qty}" data-key="${key.replace(/"/g,'&quot;')}" oninput="setOrderQty(this)" style="width:64px;text-align:center;padding:6px 4px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text)">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:6px;flex-shrink:0">
+          <div style="text-align:center">
+            <div style="font-size:10px;color:var(--muted)">${t.orderPrevQty}</div>
+            <div style="font-size:15px;font-weight:700;color:var(--text)">${prevQty}</div>
+          </div>
+          <div style="text-align:center;margin-top:4px">
+            <div style="font-size:10px;color:var(--accent2);font-weight:600">${t.grpNew} ${t.colOrder}</div>
+            <input type="number" min="0" class="order-qty-input" value="${qty}" data-key="${key.replace(/"/g,'&quot;')}" oninput="setOrderQty(this)" style="width:64px;text-align:center;padding:6px 4px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text);font-size:14px;margin-top:2px">
+          </div>
         </div>
       </div>
     </div>`;
