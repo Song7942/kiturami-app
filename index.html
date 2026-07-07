@@ -330,6 +330,9 @@ input[type="text"]::placeholder{color:var(--muted)}
 }
 .auth-btn:hover{background:#1e3a5f;}
 .auth-links{display:flex;justify-content:center;gap:6px;margin-top:14px;font-size:13px;color:#666;flex-wrap:wrap;}
+.supplier-suggest{position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid var(--border);border-top:none;border-radius:0 0 8px 8px;max-height:180px;overflow-y:auto;z-index:50;box-shadow:0 8px 20px rgba(0,0,0,.12)}
+.supplier-suggest-item{padding:10px 14px;cursor:pointer;font-size:14px;color:#222}
+.supplier-suggest-item:hover{background:#f1f5f9}
 .auth-links a{color:#2b6cb0;cursor:pointer;text-decoration:none;}
 .auth-links a:hover{text-decoration:underline;}
 .auth-err{color:#c53030;font-size:13px;margin:-2px 0 8px;min-height:1px;}
@@ -402,6 +405,10 @@ input[type="text"]::placeholder{color:var(--muted)}
     <div id="authSignup" class="auth-pane">
       <h2 id="as-title">회원가입</h2>
       <input type="text" id="suCompany" placeholder="회사명">
+      <div style="position:relative">
+        <input type="text" id="suSupplier" placeholder="구매처(거래처) 회사명" autocomplete="off" oninput="onSupplierInput()" onfocus="onSupplierInput()" onblur="setTimeout(()=>{const l=document.getElementById('suSupplierList');if(l)l.style.display='none';},150)">
+        <div id="suSupplierList" class="supplier-suggest" style="display:none"></div>
+      </div>
       <input type="text" id="suId" placeholder="아이디" autocomplete="username">
       <input type="password" id="suPw" placeholder="비밀번호" autocomplete="new-password">
       <input type="password" id="suPw2" placeholder="비밀번호 확인" autocomplete="new-password">
@@ -830,6 +837,9 @@ input[type="text"]::placeholder{color:var(--muted)}
       <button class="news-tab" id="adminTabRequests" onclick="switchAdminView('requests')">
         <span id="i18n-admintab-requests">취소·변경 요청</span> <span id="adminReqBadge" style="display:none;background:#f59e0b;color:#1a1a00;border-radius:9px;padding:1px 6px;font-size:10px;font-weight:800;margin-left:4px"></span>
       </button>
+      <button class="news-tab" id="adminTabSignups" onclick="switchAdminView('signups')">
+        <span id="i18n-admintab-signups">가입 승인</span> <span id="adminSignupBadge" style="display:none;background:#ef4444;color:#fff;border-radius:9px;padding:1px 6px;font-size:10px;font-weight:800;margin-left:4px"></span>
+      </button>
     </div>
     <div id="adminOrdersView" style="display:flex;flex-direction:column;flex:1;min-height:0">
       <div style="padding:12px 16px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:10px;border-bottom:1px solid var(--border)">
@@ -852,6 +862,18 @@ input[type="text"]::placeholder{color:var(--muted)}
         <tbody id="adminRequestsList"></tbody>
       </table>
       <div class="news-empty" id="adminRequestsEmpty" style="display:none"></div>
+    </div>
+    <div id="adminSignupsView" style="display:none;flex:1;overflow:auto;padding:14px 16px">
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead><tr style="border-bottom:1px solid var(--border);color:var(--muted);text-align:left">
+          <th style="padding:9px 12px" id="i18n-signup-th-company">회사명</th>
+          <th style="padding:9px 12px" id="i18n-signup-th-id">아이디</th>
+          <th style="padding:9px 12px;text-align:center" id="i18n-signup-th-approve"></th>
+          <th style="padding:9px 12px;text-align:center" id="i18n-signup-th-reject"></th>
+        </tr></thead>
+        <tbody id="adminSignupsList"></tbody>
+      </table>
+      <div class="news-empty" id="adminSignupsEmpty" style="display:none"></div>
     </div>
   </div>
 </div>
@@ -954,14 +976,14 @@ const T={
        count:n=>`<b>${n}</b>개`,footer:n=>`총 ${n}개`,noResult:'검색 결과가 없습니다.',
        tabParts:'🔧 부품 검색',tabPN:'🔄 품번 조회',tabOrder:'📦 주문',tabInventory:'📊 재고관리',tabPrice:'💲 가격정보',orderDl:'엑셀 다운로드',orderMailBanner:'주문 접수 이메일: song@krb.co.kr',orderPh:'도면번호, 품명, 대표품번으로 검색…',orderQty:'주문수량',logoutBtn:'로그아웃',
        invTemplate:'양식 다운로드',invUpload:'엑셀 업데이트',invHMaster:'대표품번(미변경)',invHRep:'재고품번',invHQty:'재고수량',invHUpdated:'업데이트 일시',invEmpty:'등록된 재고 데이터가 없습니다.',invCount:n=>`총 ${n}건`,
-       invUploadOk:n=>`재고 ${n}건이 업데이트되었습니다.`,invUploadFail:'업로드에 실패했습니다. 양식을 확인해주세요.',invUploadEmpty:'파일에서 유효한 데이터를 찾지 못했습니다. 양식을 확인해주세요.',invSearchPh:'대표품번으로 검색…',invLastUpdated:d=>`최근 업데이트: ${d}`,dmZoomHint:'손가락으로 확대/이동',
+       invUploadOk:n=>`재고 ${n}건이 업데이트되었습니다.`,invUploadFail:'업로드에 실패했습니다. 양식을 확인해주세요.',invUploadEmpty:'파일에서 유효한 데이터를 찾지 못했습니다. 양식을 확인해주세요.',invSearchPh:'대표품번으로 검색…',invLastUpdated:d=>`최근 업데이트: ${d}`,dmZoomHint:'손가락으로 확대/이동',invHSupplierStock:'구매처 재고',
        priceTemplate:'양식 다운로드',priceUpload:'엑셀 업데이트',priceHRep:'대표품번',priceHPrice:'가격',priceHUpdated:'업데이트일시',priceEmpty:'등록된 가격 데이터가 없습니다.',priceCount:n=>`총 ${n}건`,
        priceUploadOk:n=>`가격 ${n}건이 업데이트되었습니다.`,priceUploadFail:'업로드에 실패했습니다. 양식을 확인해주세요.',priceUploadEmpty:'파일에서 유효한 데이터를 찾지 못했습니다. 양식을 확인해주세요.',priceSearchPh:'대표품번으로 검색…',
        adminHNewQty:'신규 주문수량',adminHStock:'재고수량',reqOriginalQtyLabel:'신규 주문수량',reqRequestedQtyLabel:'변경신청 수량',reqRepLabel:'대표품번 (미변경)',
        grpExisting:'기존',grpNew:'신규',grpCumulative:'누적',grpTotal:'합계',grpDecision:'공급 결정',grpProgress:'진행여부',
        colOrder:'주문',colSupply:'공급',colStock:'재고',colSupplyRate:'공급율',colNotSupplied:'미공급',colAllocation:'배분',colPreparing:'준비중',colShipped:'출고완료',
        invHBase:'기초재고',invHPostAlloc:'배분후 재고',
-       orderSubmit:'주문 제출',orderSubmitting:'제출 중…',orderSubmitOk:'주문이 접수되었습니다.',orderSubmitFail:'주문 제출에 실패했습니다. 잠시 후 다시 시도해주세요.',orderSubmitEmpty:'주문수량을 입력한 품목이 없습니다.',orderPrevQty:'기존 주문수량',orderStock:'재고',
+       orderSubmit:'주문 제출',orderSubmitting:'제출 중…',orderSubmitOk:'주문이 접수되었습니다.',orderSubmitFail:'주문 제출에 실패했습니다. 잠시 후 다시 시도해주세요.',orderSubmitEmpty:'주문수량을 입력한 품목이 없습니다.',orderPrevQty:'기존 주문수량',orderStock:'내 창고 재고',orderReceived:'접수받은 주문수량',orderNoSupplier:'주문을 보낼 구매처가 지정되어 있지 않습니다.',
        reqActionHeader:'취소/변경',reqCancelBtn:'취소<br>신청',reqChangeBtn:'수량변경<br>신청',
        reqPendingCancel:'취소 승인 대기중',reqPendingChange:n=>`수량변경(${n}) 승인 대기중`,
        reqCancelConfirm:n=>`"${n}" 품목의 주문 취소를 신청하시겠습니까? 관리자 승인 후 처리됩니다.`,
@@ -976,7 +998,10 @@ const T={
        newsAttach:'📎 자료 첨부',newsAttachDownload:'첨부파일 다운로드',newsAttachFail:'파일 업로드에 실패했습니다.',
        newsDeleteConfirm:'이 글을 삭제할까요?',newsReplyDeleteConfirm:'이 답변을 삭제할까요?',newsRepliesLabel:n=>`답변 ${n}개`,newsFillAll:'제목과 내용을 모두 입력해주세요.',newsFillReply:'내용을 입력해주세요.',
        adminBtn:'관리자',adminTitle:'관리자 - 전체 주문내역',adminXls:'엑셀 다운로드',adminEmpty:'등록된 주문이 없습니다.',adminCount:n=>`총 ${n}건`,
-       adminTabOrders:'전체 주문내역',adminTabRequests:'취소·변경 요청',
+       adminTabOrders:'전체 주문내역',adminTabRequests:'취소·변경 요청',adminTabSignups:'가입 승인',
+       signupEmpty:'승인 대기 중인 가입 신청이 없습니다.',signupApprove:'승인',signupReject:'거부',
+       signupApproveConfirm:id=>`${id} 계정의 가입을 승인하시겠습니까?`,signupRejectConfirm:id=>`${id} 계정의 가입을 거부하시겠습니까?`,
+       signupThCompany:'회사명',signupThId:'아이디',
        reqEmpty:'대기중인 요청이 없습니다.',reqTypeCancel:'취소 신청',reqTypeChange:n=>`수량변경 신청 → ${n}`,
        reqApprove:'승인',reqReject:'거부',
        reqApproveConfirm:'이 요청을 승인하고 주문에 반영할까요?',reqRejectConfirm:'이 요청을 거부할까요?',
@@ -993,14 +1018,14 @@ const T={
        count:n=>`<b>${n}</b>`,footer:n=>`Итого: ${n}`,noResult:'Результаты не найдены.',
        tabParts:'🔧 Поиск деталей',tabPN:'🔄 Артикулы',tabOrder:'📦 Заказ',tabInventory:'📊 Склад',tabPrice:'💲 Цены',orderDl:'Скачать Excel',orderMailBanner:'Email для приёма заказов: song@krb.co.kr',orderPh:'Поиск по №чертежа, названию, артикулу…',orderQty:'Кол-во',logoutBtn:'Выйти',
        invTemplate:'Скачать шаблон',invUpload:'Обновить Excel',invHMaster:'Осн. артикул (неизм.)',invHRep:'Артикул склада',invHQty:'Остаток',invHUpdated:'Обновлено',invEmpty:'Данных о складе пока нет.',invCount:n=>`Всего: ${n}`,
-       invUploadOk:n=>`Обновлено позиций: ${n}.`,invUploadFail:'Ошибка загрузки. Проверьте шаблон.',invUploadEmpty:'В файле не найдено данных. Проверьте шаблон.',invSearchPh:'Поиск по артикулу…',invLastUpdated:d=>`Последнее обновление: ${d}`,dmZoomHint:'Растяните пальцами, чтобы увеличить',
+       invUploadOk:n=>`Обновлено позиций: ${n}.`,invUploadFail:'Ошибка загрузки. Проверьте шаблон.',invUploadEmpty:'В файле не найдено данных. Проверьте шаблон.',invSearchPh:'Поиск по артикулу…',invLastUpdated:d=>`Последнее обновление: ${d}`,dmZoomHint:'Растяните пальцами, чтобы увеличить',invHSupplierStock:'Остаток поставщика',
        priceTemplate:'Скачать шаблон',priceUpload:'Обновить Excel',priceHRep:'Артикул',priceHPrice:'Цена',priceHUpdated:'Обновлено',priceEmpty:'Данных о ценах пока нет.',priceCount:n=>`Всего: ${n}`,
        priceUploadOk:n=>`Обновлено позиций: ${n}.`,priceUploadFail:'Ошибка загрузки. Проверьте шаблон.',priceUploadEmpty:'В файле не найдено данных. Проверьте шаблон.',priceSearchPh:'Поиск по артикулу…',
        adminHNewQty:'Новое кол-во',adminHStock:'Остаток',reqOriginalQtyLabel:'Исходное кол-во',reqRequestedQtyLabel:'Запрошено',reqRepLabel:'Артикул (неизм.)',
        grpExisting:'Ранее',grpNew:'Новое',grpCumulative:'Всего',grpTotal:'Итого',grpDecision:'Решение о поставке',grpProgress:'Статус',
        colOrder:'Заказ',colSupply:'Поставка',colStock:'Остаток',colSupplyRate:'% поставки',colNotSupplied:'Не поставлено',colAllocation:'Выделено',colPreparing:'Готовится',colShipped:'Отгружено',
        invHBase:'Начальный остаток',invHPostAlloc:'Остаток после выделения',
-       orderSubmit:'Отправить заказ',orderSubmitting:'Отправка…',orderSubmitOk:'Заказ принят.',orderSubmitFail:'Не удалось отправить заказ. Попробуйте позже.',orderSubmitEmpty:'Не указано количество ни для одного товара.',orderPrevQty:'Ранее заказано',orderStock:'Остаток',
+       orderSubmit:'Отправить заказ',orderSubmitting:'Отправка…',orderSubmitOk:'Заказ принят.',orderSubmitFail:'Не удалось отправить заказ. Попробуйте позже.',orderSubmitEmpty:'Не указано количество ни для одного товара.',orderPrevQty:'Ранее заказано',orderStock:'Мой склад',orderReceived:'Получено заказов',orderNoSupplier:'Поставщик для заказа не указан.',
        reqActionHeader:'Отмена/Изменение',reqCancelBtn:'Запросить<br>отмену',reqChangeBtn:'Изменить<br>кол-во',
        reqPendingCancel:'Ожидает одобрения отмены',reqPendingChange:n=>`Ожидает изменения на ${n}`,
        reqCancelConfirm:n=>`Запросить отмену позиции "${n}"? Будет обработано после одобрения администратором.`,
@@ -1015,7 +1040,10 @@ const T={
        newsAttach:'📎 Прикрепить файл',newsAttachDownload:'Скачать вложение',newsAttachFail:'Не удалось загрузить файл.',
        newsDeleteConfirm:'Удалить эту запись?',newsReplyDeleteConfirm:'Удалить этот ответ?',newsRepliesLabel:n=>`Ответов: ${n}`,newsFillAll:'Пожалуйста, заполните заголовок и содержание.',newsFillReply:'Пожалуйста, введите текст.',
        adminBtn:'Админ',adminTitle:'Админ - Все заказы',adminXls:'Скачать Excel',adminEmpty:'Заказов пока нет.',adminCount:n=>`Всего: ${n}`,
-       adminTabOrders:'Все заказы',adminTabRequests:'Запросы отмены/изменения',
+       adminTabOrders:'Все заказы',adminTabRequests:'Запросы отмены/изменения',adminTabSignups:'Одобрение регистрации',
+       signupEmpty:'Нет заявок, ожидающих одобрения.',signupApprove:'Одобрить',signupReject:'Отклонить',
+       signupApproveConfirm:id=>`Одобрить регистрацию аккаунта ${id}?`,signupRejectConfirm:id=>`Отклонить регистрацию аккаунта ${id}?`,
+       signupThCompany:'Компания',signupThId:'Логин',
        reqEmpty:'Нет ожидающих запросов.',reqTypeCancel:'Запрос отмены',reqTypeChange:n=>`Запрос изменения → ${n}`,
        reqApprove:'Одобрить',reqReject:'Отклонить',
        reqApproveConfirm:'Одобрить этот запрос и применить к заказу?',reqRejectConfirm:'Отклонить этот запрос?',
@@ -1056,7 +1084,7 @@ function scrollToTop(){const el=getScrollBody();if(el)el.scrollTo({top:0,behavio
 
 // ── 탭 ──
 function switchTab(tab){
-  if((tab==='inventory'||tab==='price') && !(currentUser && currentUser.is_admin)) return;
+  if(tab==='price' && !(currentUser && currentUser.is_admin)) return;
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
   document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active'));
   document.getElementById('tab-'+tab).classList.add('active');
@@ -1064,7 +1092,7 @@ function switchTab(tab){
   const el=getScrollBody(); if(el) el.scrollTop=0;
   const btn=document.getElementById('toTopBtn'); if(btn) btn.classList.remove('show');
   if(tab==='pn') renderPN();
-  if(tab==='order'){ mountModelDiag('order'); syncDiagram(); Promise.all([loadMyOrderTotals(), loadInventory(), loadGlobalSuppliedTotals()]).then(renderOrderTable); renderOrderTable(); }
+  if(tab==='order'){ mountModelDiag('order'); syncDiagram(); Promise.all([loadMyOrderTotals(), loadInventory(), loadGlobalSuppliedTotals(), loadReceivedOrderTotals()]).then(renderOrderTable); renderOrderTable(); }
   if(tab==='parts'){ mountModelDiag('parts'); syncDiagram(); renderTable(); }
   if(tab==='inventory'){ Promise.all([loadInventory(), loadGlobalSuppliedTotals()]).then(renderInventoryList); }
   if(tab==='price'){ loadPrices().then(renderPriceList); }
@@ -2027,7 +2055,7 @@ function renderOrderHeader(){
       r1+=`<th rowspan="2" class="center" style="color:${c};${hl}">${g}</th>`;
     });
     cols += groups.map(()=>`<col style="width:60px">`).join('');
-    r1+=`<th rowspan="2" style="text-align:right;padding-right:16px">${t.orderStock}</th><th rowspan="2" style="text-align:right;padding-right:16px">${t.orderPrevQty}</th><th rowspan="2" class="center">${t.orderQty}</th>`;
+    r1+=`<th rowspan="2" style="text-align:right;padding-right:16px">${t.orderReceived}</th><th rowspan="2" style="text-align:right;padding-right:16px">${t.orderStock}</th><th rowspan="2" class="center">${t.orderQty}</th>`;
     document.getElementById('order-thead-fixed').innerHTML=`<tr>${r1}</tr>`;
   } else {
     // 특정 모델(그룹 전체 또는 세부모델) 선택: 해당 그룹의 세부모델 전체를 컬럼으로
@@ -2045,7 +2073,7 @@ function renderOrderHeader(){
         r2+=`<th style="text-align:center;color:${m.color};${hl2}">${m.label}</th>`;
       });
     });
-    r1+=`<th rowspan="2" style="text-align:right;padding-right:16px">${t.orderStock}</th><th rowspan="2" style="text-align:right;padding-right:16px">${t.orderPrevQty}</th><th rowspan="2" class="center">${t.orderQty}</th>`;
+    r1+=`<th rowspan="2" style="text-align:right;padding-right:16px">${t.orderReceived}</th><th rowspan="2" style="text-align:right;padding-right:16px">${t.orderStock}</th><th rowspan="2" class="center">${t.orderQty}</th>`;
     document.getElementById('order-thead-fixed').innerHTML=`<tr>${r1}</tr><tr>${r2}</tr>`;
     cols += od.map(()=>`<col style="width:50px">`).join('');
   }
@@ -2087,22 +2115,32 @@ function renderOrderTable(){
   }
 
   document.getElementById('orderTbody').innerHTML=rows.map(d=>{
-    const key=orderKey(d);const qty=orderQty[key]||'';
-    const prevQty=myOrderTotals[d.rep]||0;
+    const key=orderKey(d);
     const stockVal=getStockFor(d.rep);
-    const stockText=stockVal===null?'-':stockVal;
+    const stockText=stockVal===null?0:stockVal;
+    const receivedQty=receivedOrderTotals[d.rep]||0;
+    if(orderQty[key]===undefined){
+      const shortfall=Math.max(0, receivedQty-stockText);
+      if(shortfall>0) orderQty[key]=shortfall;
+    }
+    const qty=orderQty[key]||'';
     const nc=isKo?`<td style="font-weight:500;text-align:center">${d.name_ko}</td><td style="color:var(--muted);font-size:10px;text-align:center">${d.spec}</td>`:`<td style="font-weight:500;text-align:center">${d.name_ru}</td>`;
     const modelCells=columns.map(col=>{const hlStyle=col.selected?` style="background:${col.color}18"`:'';return `<td class="center"${hlStyle}>${dot(isColumnApplied(d,col))}</td>`;}).join('');
-    return `<tr><td class="center" style="color:var(--muted);font-size:11px">${d.diag}</td>${nc}<td style="text-align:center"><span class="code">${d.rep}</span></td>${modelCells}<td style="text-align:right;padding-right:16px;color:var(--muted)">${stockText}</td><td style="text-align:right;padding-right:16px;color:var(--muted)">${prevQty}</td><td class="center"><input type="number" min="0" class="order-qty-input" value="${qty}" data-key="${key.replace(/"/g,'&quot;')}" oninput="setOrderQty(this)" style="width:70px;text-align:center;padding:5px 4px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text)"></td></tr>`;
+    return `<tr><td class="center" style="color:var(--muted);font-size:11px">${d.diag}</td>${nc}<td style="text-align:center"><span class="code">${d.rep}</span></td>${modelCells}<td style="text-align:right;padding-right:16px;color:var(--muted)">${receivedQty}</td><td style="text-align:right;padding-right:16px;color:var(--muted)">${stockText}</td><td class="center"><input type="number" min="0" class="order-qty-input" value="${qty}" data-key="${key.replace(/"/g,'&quot;')}" oninput="setOrderQty(this)" style="width:70px;text-align:center;padding:5px 4px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text)"></td></tr>`;
   }).join('');
 
   const orderCardListEl=document.getElementById('orderCardList');
   orderCardListEl.querySelectorAll('.order-card').forEach(e=>e.remove());
   orderCardListEl.insertAdjacentHTML('beforeend', rows.map(d=>{
-    const key=orderKey(d);const qty=orderQty[key]||'';
-    const prevQty=myOrderTotals[d.rep]||0;
+    const key=orderKey(d);
     const stockVal=getStockFor(d.rep);
-    const stockText=stockVal===null?'-':stockVal;
+    const stockText=stockVal===null?0:stockVal;
+    const receivedQty=receivedOrderTotals[d.rep]||0;
+    if(orderQty[key]===undefined){
+      const shortfall=Math.max(0, receivedQty-stockText);
+      if(shortfall>0) orderQty[key]=shortfall;
+    }
+    const qty=orderQty[key]||'';
     const nm=isKo?d.name_ko:d.name_ru;
     const specHtml=isKo?`<div class="pc-spec">${d.spec}</div>`:'';
     let tagHtml='';
@@ -2124,12 +2162,12 @@ function renderOrderTable(){
         </div>
         <div style="display:flex;flex-direction:column;align-items:center;gap:6px;flex-shrink:0">
           <div style="text-align:center">
-            <div style="font-size:10px;color:var(--muted)">${t.orderStock}</div>
-            <div style="font-size:15px;font-weight:700;color:var(--text)">${stockText}</div>
+            <div style="font-size:10px;color:var(--muted)">${t.orderReceived}</div>
+            <div style="font-size:15px;font-weight:700;color:var(--text)">${receivedQty}</div>
           </div>
           <div style="text-align:center">
-            <div style="font-size:10px;color:var(--muted)">${t.orderPrevQty}</div>
-            <div style="font-size:15px;font-weight:700;color:var(--text)">${prevQty}</div>
+            <div style="font-size:10px;color:var(--muted)">${t.orderStock}</div>
+            <div style="font-size:15px;font-weight:700;color:var(--text)">${stockText}</div>
           </div>
           <div style="text-align:center;margin-top:4px">
             <div style="font-size:10px;color:var(--accent2);font-weight:600">${t.grpNew} ${t.colOrder}</div>
@@ -2154,6 +2192,7 @@ async function submitOrder(){
   const t=T[lang];
   const rows=getFilteredOrderParts().map(d=>({d,qty:orderQty[orderKey(d)]||0})).filter(r=>r.qty>0);
   if(!rows.length){ alert(t.orderSubmitEmpty); return; }
+  if(!currentUser || !currentUser.supplier_company){ alert(t.orderNoSupplier||'주문을 보낼 구매처가 지정되어 있지 않습니다.'); return; }
 
   const btn=document.getElementById('orderSubmitBtn');
   const origHtml=btn?btn.innerHTML:null;
@@ -2162,7 +2201,8 @@ async function submitOrder(){
   try{
     const items = rows.map(r=>({ diag:r.d.diag, name_ko:r.d.name_ko, name_ru:r.d.name_ru, spec:r.d.spec, rep:r.d.rep, qty:r.qty, models:r.d.models }));
     const { error: insErr } = await sb.from('kt_orders').insert({
-      company: currentUser?currentUser.company:'', user_id: currentUser?currentUser.id:'', items
+      company: currentUser?currentUser.company:'', user_id: currentUser?currentUser.id:'', items,
+      target_company: currentUser.supplier_company
     });
     if(insErr){ console.error('order save error', insErr); alert(t.orderSubmitFail); return; }
 
@@ -2477,7 +2517,7 @@ function refreshNewsTexts(){
 let adminOrderRows=[]; // 화면표시/엑셀다운로드 공용 (아이템 단위로 펼친 행)
 
 async function loadAdminOrders(){
-  const { data, error } = await sb.from('kt_orders').select('*').order('created_at', { ascending:false });
+  const { data, error } = await sb.from('kt_orders').select('*').eq('target_company', currentUser?currentUser.company:'').order('created_at', { ascending:false });
   if(error){ console.error(error); adminOrderRows=[]; return; }
   const rows=[];
   (data||[]).forEach(o=>{
@@ -2614,7 +2654,7 @@ async function updateSupplyQty(orderId, rep, value){
   renderAdminOrders();
 }
 async function openAdminModal(){
-  if(!currentUser || !currentUser.is_admin) return;
+  if(!currentUser) return;
   document.getElementById('adminModal').classList.add('show');
   refreshAdminTexts();
   document.getElementById('adminOrderTbody').innerHTML='';
@@ -2625,12 +2665,62 @@ async function openAdminModal(){
   renderAdminOrders();
   await loadOrderRequests();
   renderOrderRequests();
+  await loadPendingSignups();
+  renderPendingSignups();
+}
+let pendingSignups=[];
+async function loadPendingSignups(){
+  const myCompany=currentUser?currentUser.company:'';
+  const { data, error } = await sb.from('kt_users').select('id,company,supplier_company,status').eq('supplier_company', myCompany).eq('status','pending').order('id');
+  if(error){ console.error(error); pendingSignups=[]; return; }
+  pendingSignups=data||[];
+  const badge=document.getElementById('adminSignupBadge');
+  if(badge){
+    if(pendingSignups.length){ badge.textContent=pendingSignups.length; badge.style.display='inline-block'; }
+    else badge.style.display='none';
+  }
+}
+function renderPendingSignups(){
+  const t=T[lang];
+  const tbody=document.getElementById('adminSignupsList');
+  const emptyEl=document.getElementById('adminSignupsEmpty');
+  if(!pendingSignups.length){
+    tbody.innerHTML='';
+    emptyEl.textContent=t.signupEmpty;
+    emptyEl.style.display='block';
+    return;
+  }
+  emptyEl.style.display='none';
+  tbody.innerHTML=pendingSignups.map(u=>`<tr style="border-bottom:1px solid var(--border)">
+    <td style="padding:9px 12px">${escapeHtml(u.company)}</td>
+    <td style="padding:9px 12px">${escapeHtml(u.id)}</td>
+    <td style="padding:9px 12px;text-align:center"><button class="news-btn-primary" onclick="approveSignup('${u.id.replace(/'/g,"\\'")}')">${t.signupApprove}</button></td>
+    <td style="padding:9px 12px;text-align:center"><button class="news-btn-secondary" onclick="rejectSignup('${u.id.replace(/'/g,"\\'")}')">${t.signupReject}</button></td>
+  </tr>`).join('');
+}
+async function approveSignup(id){
+  const t=T[lang];
+  if(!confirm(t.signupApproveConfirm(id))) return;
+  const { error } = await sb.from('kt_users').update({ status:'approved' }).eq('id', id);
+  if(error){ alert(t.reqFail+'\n\n['+(error.message||error.code)+']'); return; }
+  await loadPendingSignups();
+  renderPendingSignups();
+}
+async function rejectSignup(id){
+  const t=T[lang];
+  if(!confirm(t.signupRejectConfirm(id))) return;
+  const { error } = await sb.from('kt_users').update({ status:'rejected' }).eq('id', id);
+  if(error){ alert(t.reqFail+'\n\n['+(error.message||error.code)+']'); return; }
+  await loadPendingSignups();
+  renderPendingSignups();
 }
 function switchAdminView(view){
   document.getElementById('adminTabOrders').classList.toggle('active', view==='orders');
   document.getElementById('adminTabRequests').classList.toggle('active', view==='requests');
+  document.getElementById('adminTabSignups').classList.toggle('active', view==='signups');
   document.getElementById('adminOrdersView').style.display = view==='orders' ? 'flex' : 'none';
   document.getElementById('adminRequestsView').style.display = view==='requests' ? 'block' : 'none';
+  document.getElementById('adminSignupsView').style.display = view==='signups' ? 'block' : 'none';
 }
 function closeAdminModal(){
   document.getElementById('adminModal').classList.remove('show');
@@ -2683,7 +2773,10 @@ function refreshAdminTexts(){
   setTxt('i18n-adminh-qty', t.adminHQty);
   setTxt('i18n-admintab-orders', t.adminTabOrders);
   setTxt('i18n-admintab-requests', t.adminTabRequests);
-  if(document.getElementById('adminModal').classList.contains('show')){ renderAdminOrders(); renderOrderRequests(); }
+  setTxt('i18n-admintab-signups', t.adminTabSignups);
+  setTxt('i18n-signup-th-company', t.signupThCompany);
+  setTxt('i18n-signup-th-id', t.signupThId);
+  if(document.getElementById('adminModal').classList.contains('show')){ renderAdminOrders(); renderOrderRequests(); renderPendingSignups(); }
 }
 
 // ══════════════════════════════════════════
@@ -2692,7 +2785,7 @@ function refreshAdminTexts(){
 let orderRequests=[]; // 전체 사용자의 취소/변경 요청 (관리자용)
 
 async function loadOrderRequests(){
-  const { data, error } = await sb.from('kt_order_requests').select('*').order('created_at', { ascending:false });
+  const { data, error } = await sb.from('kt_order_requests').select('*').eq('target_company', currentUser?currentUser.company:'').order('created_at', { ascending:false });
   if(error){ console.error(error); orderRequests=[]; return; }
   orderRequests=data||[];
   const pendingCount=orderRequests.filter(r=>r.status==='pending').length;
@@ -2836,7 +2929,8 @@ async function requestCancelItem(orderId, rep, diag, name, spec, qty){
   const { error } = await sb.from('kt_order_requests').insert({
     order_id: orderId, item_rep: rep, item_diag: diag, item_name: name, item_spec: spec,
     request_type: 'cancel', requested_qty: null, original_qty: qty,
-    status: 'pending', company: currentUser?currentUser.company:'', user_id: currentUser?currentUser.id:''
+    status: 'pending', company: currentUser?currentUser.company:'', user_id: currentUser?currentUser.id:'',
+    target_company: currentUser?currentUser.supplier_company:null
   });
   if(error){ console.error(error); alert(t.reqFail+'\n\n['+(error.message||error.code||error)+']'); return; }
   await loadMyRequests();
@@ -2851,7 +2945,8 @@ async function requestChangeItem(orderId, rep, diag, name, spec, qty){
   const { error } = await sb.from('kt_order_requests').insert({
     order_id: orderId, item_rep: rep, item_diag: diag, item_name: name, item_spec: spec,
     request_type: 'change', requested_qty: newQty, original_qty: qty,
-    status: 'pending', company: currentUser?currentUser.company:'', user_id: currentUser?currentUser.id:''
+    status: 'pending', company: currentUser?currentUser.company:'', user_id: currentUser?currentUser.id:'',
+    target_company: currentUser?currentUser.supplier_company:null
   });
   if(error){ console.error(error); alert(t.reqFail+'\n\n['+(error.message||error.code||error)+']'); return; }
   await loadMyRequests();
@@ -2994,11 +3089,26 @@ function refreshMyOrdersTexts(){
 // ══════════════════════════════════════════
 let inventoryData={}; // rep -> {qty, updated_at}
 
+let supplierInventoryData={}; // 구매처(내가 주문을 넣는 곳)의 창고 재고 - 참고용, 읽기 전용
 async function loadInventory(){
-  const { data, error } = await sb.from('kt_inventory').select('*').order('rep');
-  if(error){ console.error(error); inventoryData={}; return; }
-  inventoryData={};
-  (data||[]).forEach(row=>{ inventoryData[row.rep]={ qty:row.qty, updated_at:row.updated_at }; });
+  const myCompany=currentUser?currentUser.company:'';
+  const { data, error } = await sb.from('kt_inventory').select('*').eq('company', myCompany).order('rep');
+  if(error){ console.error(error); inventoryData={}; }
+  else{
+    inventoryData={};
+    (data||[]).forEach(row=>{ inventoryData[row.rep]={ qty:row.qty, updated_at:row.updated_at }; });
+  }
+  const supplierCompany=currentUser?currentUser.supplier_company:'';
+  if(supplierCompany){
+    const { data: supData, error: supErr } = await sb.from('kt_inventory').select('*').eq('company', supplierCompany).order('rep');
+    if(supErr){ console.error(supErr); supplierInventoryData={}; }
+    else{
+      supplierInventoryData={};
+      (supData||[]).forEach(row=>{ supplierInventoryData[row.rep]={ qty:row.qty, updated_at:row.updated_at }; });
+    }
+  } else {
+    supplierInventoryData={};
+  }
 }
 let _pnLookupMap=null;
 function buildPNLookupMap(){
@@ -3017,7 +3127,7 @@ function findMasterRep(articul){
 }
 let globalSuppliedTotals={}; // rep -> 지금까지 관리자가 배분한 누적 수량 (전체 주문 기준)
 async function loadGlobalSuppliedTotals(){
-  const { data, error } = await sb.from('kt_orders').select('items');
+  const { data, error } = await sb.from('kt_orders').select('items').eq('target_company', currentUser?currentUser.company:'');
   if(error){ console.error(error); globalSuppliedTotals={}; return; }
   const totals={};
   (data||[]).forEach(o=>{
@@ -3038,12 +3148,23 @@ function getPNInfo(rep){
   if(!rep) return null;
   return buildPNByRepMap().get(rep) || null;
 }
-function computeMasterRepTotals(){
+let receivedOrderTotals={}; // 고객사(구매처)들로부터 접수받은 주문수량 합계 (rep 기준)
+async function loadReceivedOrderTotals(){
+  const { data, error } = await sb.from('kt_orders').select('items').eq('target_company', currentUser?currentUser.company:'');
+  if(error){ console.error(error); receivedOrderTotals={}; return; }
   const totals={};
-  Object.keys(inventoryData).forEach(articul=>{
+  (data||[]).forEach(o=>{
+    (o.items||[]).forEach(it=>{ totals[it.rep]=(totals[it.rep]||0)+(it.qty||0); });
+  });
+  receivedOrderTotals=totals;
+}
+function computeMasterRepTotals(dataSource){
+  const src=dataSource||inventoryData;
+  const totals={};
+  Object.keys(src).forEach(articul=>{
     const master=findMasterRep(articul);
     if(!master) return;
-    totals[master]=(totals[master]||0)+(inventoryData[articul].qty||0);
+    totals[master]=(totals[master]||0)+(src[articul].qty||0);
   });
   return totals;
 }
@@ -3083,9 +3204,9 @@ function renderInventoryList(){
 
   // 헤더 + 열 너비 (품번조회 화면과 동일하게 품명/규격을 맨 앞에 배치)
   const cols = isKo
-    ? [t.adminHName, t.thSpec, t.invHMaster, t.invHRep, t.invHBase, t.invHPostAlloc]
-    : [t.adminHName, t.invHMaster, t.invHRep, t.invHBase, t.invHPostAlloc];
-  const widths = isKo ? ['20%','16%','20%','20%','12%','12%'] : ['24%','24%','24%','14%','14%'];
+    ? [t.adminHName, t.thSpec, t.invHMaster, t.invHRep, t.invHBase, t.invHPostAlloc, t.invHSupplierStock]
+    : [t.adminHName, t.invHMaster, t.invHRep, t.invHBase, t.invHPostAlloc, t.invHSupplierStock];
+  const widths = isKo ? ['18%','14%','18%','16%','11%','11%','12%'] : ['22%','20%','20%','12%','12%','14%'];
   const colgroupHtml = widths.map(w=>`<col style="width:${w}">`).join('');
   ['inv-hdr-col','inv-body-col'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=colgroupHtml;});
   document.getElementById('inventoryThead').innerHTML=`<tr>${cols.map((c,i)=>{
@@ -3099,6 +3220,7 @@ function renderInventoryList(){
   const emptyEl=document.getElementById('inventoryNoResult');
   if(!keys.length){ tbody.innerHTML=''; if(cardList) cardList.innerHTML=''; emptyEl.textContent=t.invEmpty; emptyEl.style.display='block'; return; }
   emptyEl.style.display='none';
+  const supplierMasterTotals=computeMasterRepTotals(supplierInventoryData);
   const rowsHtml=[]; const cardsHtml=[];
   keys.forEach(k=>{
     const g=groups[k];
@@ -3106,6 +3228,7 @@ function renderInventoryList(){
     const total=items.reduce((s,it)=>s+(it.qty||0),0);
     const postAlloc = g.master ? Math.max(0, total-(globalSuppliedTotals[g.master]||0)) : null;
     const postAllocText = postAlloc===null ? '-' : postAlloc;
+    const supplierStockText = g.master && supplierMasterTotals[g.master]!==undefined ? supplierMasterTotals[g.master] : '-';
     const pnInfo = g.master ? getPNInfo(g.master) : null;
     const nameText = pnInfo ? (isKo ? pnInfo.name_ko : (pnInfo.name_ru||pnInfo.name_ko)) : '';
     const specTd = isKo ? `<td style="padding:9px 12px;color:var(--muted)">${escapeHtml(pnInfo?pnInfo.spec:'')}</td>` : '';
@@ -3119,6 +3242,7 @@ function renderInventoryList(){
         <td style="padding:9px 12px"></td>
         <td style="padding:9px 16px 9px 12px;text-align:right;font-weight:700">${total}</td>
         <td style="padding:9px 16px 9px 12px;text-align:right;font-weight:700">${postAllocText}</td>
+        <td style="padding:9px 16px 9px 12px;text-align:right;color:var(--muted)">${supplierStockText}</td>
       </tr>`;
       items.forEach(it=>{
         const emptySpecTd = isKo ? `<td style="padding:9px 12px"></td>` : '';
@@ -3128,6 +3252,7 @@ function renderInventoryList(){
           <td style="padding:9px 12px"></td>
           <td style="padding:9px 12px"><span class="code">${escapeHtml(it.articul)}</span></td>
           <td style="padding:9px 16px 9px 12px;text-align:right">${it.qty}</td>
+          <td style="padding:9px 16px 9px 12px;text-align:right;color:var(--muted)"></td>
           <td style="padding:9px 16px 9px 12px;text-align:right;color:var(--muted)"></td>
         </tr>`;
       });
@@ -3140,6 +3265,7 @@ function renderInventoryList(){
         <td style="padding:9px 12px"><span class="code">${escapeHtml(it.articul)}</span></td>
         <td style="padding:9px 16px 9px 12px;text-align:right">${it.qty}</td>
         <td style="padding:9px 16px 9px 12px;text-align:right;font-weight:700">${postAllocText}</td>
+        <td style="padding:9px 16px 9px 12px;text-align:right;color:var(--muted)">${supplierStockText}</td>
       </tr>`;
     }
     rowsHtml.push(html);
@@ -3153,9 +3279,10 @@ function renderInventoryList(){
       ${specHtml}
       <div class="code" style="margin-top:4px">${escapeHtml(g.master||items[0].articul)}</div>
       ${variantsHtml}
-      <div style="display:flex;justify-content:space-between;margin-top:10px;padding-top:8px;border-top:1px solid var(--border);font-size:12px">
+      <div style="display:flex;justify-content:space-between;margin-top:10px;padding-top:8px;border-top:1px solid var(--border);font-size:12px;flex-wrap:wrap;gap:6px">
         <span style="color:var(--muted)">${t.invHBase}: <b style="color:var(--text)">${total}</b></span>
         <span style="color:var(--muted)">${t.invHPostAlloc}: <b style="color:var(--text)">${postAllocText}</b></span>
+        <span style="color:var(--muted)">${t.invHSupplierStock}: <b style="color:var(--text)">${supplierStockText}</b></span>
       </div>
     </div>`);
   });
@@ -3229,13 +3356,15 @@ async function handleInventoryUpload(event){
         if(dedupMap[r.rep]){ dedupMap[r.rep].qty+=r.qty; dedupMap[r.rep].updated_at=r.updated_at; }
         else{ dedupMap[r.rep]={ rep:r.rep, qty:r.qty, updated_at:r.updated_at }; }
       });
-      const dedupedRows=Object.values(dedupMap);
+      const myCompany=currentUser?currentUser.company:'';
+      const dedupedRows=Object.values(dedupMap).map(r=>Object.assign({company:myCompany}, r));
 
-      // 새 엑셀로 업데이트하면 기존 재고 데이터는 전부 지우고 새 파일 내용으로 완전히 교체합니다.
-      const { error: delErr } = await sb.from('kt_inventory').delete().not('rep','is',null);
+      // 새 엑셀로 업데이트하면 "내 회사"의 기존 재고 데이터만 지우고 새 파일 내용으로 완전히 교체합니다.
+      // (다른 회사의 재고 데이터는 건드리지 않습니다)
+      const { error: delErr } = await sb.from('kt_inventory').delete().eq('company', myCompany);
       if(delErr){ console.error(delErr); alert(t.invUploadFail+'\n\n['+(delErr.message||delErr.code)+']'); event.target.value=''; return; }
 
-      const { error } = await sb.from('kt_inventory').upsert(dedupedRows,{onConflict:'rep'});
+      const { error } = await sb.from('kt_inventory').upsert(dedupedRows,{onConflict:'company,rep'});
       if(error){ console.error(error); alert(t.invUploadFail+'\n\n['+(error.message||error.code)+']'); event.target.value=''; return; }
       await loadInventory();
       renderInventoryList();
@@ -3375,8 +3504,9 @@ const AUTH_T = {
     findPwTitle:'비밀번호 재설정', findPwDesc:'회사명과 아이디를 입력해 본인 확인 후 새 비밀번호를 설정하세요.',
     verifyBtn:'본인 확인', newPwPh:'새 비밀번호', newPwPh2:'새 비밀번호 확인', resetBtn:'비밀번호 변경',
     errFill:'모든 항목을 입력해주세요.', errIdExists:'이미 사용중인 아이디입니다.', errPwMismatch:'비밀번호가 일치하지 않습니다.',
-    errPwShort:'비밀번호는 4자 이상 입력해주세요.', okSignup:'가입이 완료되었습니다. 로그인해주세요.',
+    errPwShort:'비밀번호는 4자 이상 입력해주세요.', okSignup:'가입이 완료되었습니다. 로그인해주세요.', okSignupPending:sup=>`가입 신청이 완료되었습니다. ${sup}의 승인 후 로그인하실 수 있습니다.`,
     errLogin:'아이디 또는 비밀번호가 올바르지 않습니다.',
+    errPending:sup=>`가입 승인 대기 중입니다. ${sup?sup+'의 ':''}승인을 기다려주세요.`, errRejected:'가입 신청이 거부되었습니다. 구매처에 문의해주세요.',
     errNoCompany:'해당 회사명으로 등록된 아이디가 없습니다.', foundIdsPrefix:'등록된 아이디: ',
     errNoMatch:'회사명과 아이디가 일치하는 계정을 찾을 수 없습니다.', okVerified:'본인 확인되었습니다. 새 비밀번호를 입력하세요.',
     okReset:'비밀번호가 변경되었습니다. 로그인해주세요.', logoutBtn:'로그아웃'
@@ -3389,8 +3519,9 @@ const AUTH_T = {
     findPwTitle:'Сброс пароля', findPwDesc:'Введите название компании и логин для подтверждения, затем задайте новый пароль.',
     verifyBtn:'Подтвердить', newPwPh:'Новый пароль', newPwPh2:'Подтвердите новый пароль', resetBtn:'Изменить пароль',
     errFill:'Заполните все поля.', errIdExists:'Этот логин уже используется.', errPwMismatch:'Пароли не совпадают.',
-    errPwShort:'Пароль должен быть не менее 4 символов.', okSignup:'Регистрация завершена. Пожалуйста, войдите.',
+    errPwShort:'Пароль должен быть не менее 4 символов.', okSignup:'Регистрация завершена. Пожалуйста, войдите.', okSignupPending:sup=>`Заявка отправлена. Вход будет доступен после одобрения компанией ${sup}.`,
     errLogin:'Неверный логин или пароль.',
+    errPending:sup=>`Ожидает одобрения${sup?' от '+sup:''}.`, errRejected:'Заявка отклонена. Обратитесь к вашему поставщику.',
     errNoCompany:'Логины с таким названием компании не найдены.', foundIdsPrefix:'Найденные логины: ',
     errNoMatch:'Не удалось найти учётную запись с таким названием компании и логином.', okVerified:'Подтверждено. Введите новый пароль.',
     okReset:'Пароль изменён. Пожалуйста, войдите.', logoutBtn:'Выйти'
@@ -3454,15 +3585,37 @@ function setAuthLang(l){
   const lb = document.getElementById('logoutBtn'); if(lb) lb.textContent = t.logoutBtn;
 }
 
+let _allCompanyNames=null;
+async function loadAllCompanyNames(){
+  const { data, error } = await sb.from('kt_users').select('company');
+  if(error){ _allCompanyNames=[]; return; }
+  const set=new Set((data||[]).map(u=>u.company).filter(Boolean));
+  _allCompanyNames=[...set];
+}
+async function onSupplierInput(){
+  if(_allCompanyNames===null) await loadAllCompanyNames();
+  const kw=document.getElementById('suSupplier').value.trim().toLowerCase();
+  const list=document.getElementById('suSupplierList');
+  if(!kw){ list.style.display='none'; list.innerHTML=''; return; }
+  const matches=_allCompanyNames.filter(c=>c.toLowerCase().includes(kw)).slice(0,8);
+  if(!matches.length){ list.style.display='none'; list.innerHTML=''; return; }
+  list.innerHTML=matches.map(c=>`<div class="supplier-suggest-item" onmousedown="selectSupplier('${c.replace(/'/g,"\\'")}')">${escapeHtml(c)}</div>`).join('');
+  list.style.display='block';
+}
+function selectSupplier(name){
+  document.getElementById('suSupplier').value=name;
+  document.getElementById('suSupplierList').style.display='none';
+}
 async function doSignup(){
   const t = AUTH_T[authLang];
   const company = document.getElementById('suCompany').value.trim();
+  const supplierCompany = document.getElementById('suSupplier').value.trim();
   const id = document.getElementById('suId').value.trim();
   const pw = document.getElementById('suPw').value;
   const pw2 = document.getElementById('suPw2').value;
   authSetErr('authSignupErr',''); authSetOk('authSignupOk','');
 
-  if(!company || !id || !pw || !pw2){ authSetErr('authSignupErr', t.errFill); return; }
+  if(!company || !supplierCompany || !id || !pw || !pw2){ authSetErr('authSignupErr', t.errFill); return; }
   if(pw.length < 4){ authSetErr('authSignupErr', t.errPwShort); return; }
   if(pw !== pw2){ authSetErr('authSignupErr', t.errPwMismatch); return; }
 
@@ -3471,15 +3624,16 @@ async function doSignup(){
   if(existing && existing.length){ authSetErr('authSignupErr', t.errIdExists); return; }
 
   const password_hash = await sha256Hex(pw);
-  const { error: insErr } = await sb.from('kt_users').insert({ id, company, password_hash });
+  const { error: insErr } = await sb.from('kt_users').insert({ id, company, password_hash, supplier_company: supplierCompany, status: 'pending' });
   if(insErr){ authSetErr('authSignupErr', insErr.message); return; }
 
-  authSetOk('authSignupOk', t.okSignup);
+  authSetOk('authSignupOk', t.okSignupPending ? t.okSignupPending(supplierCompany) : t.okSignup);
   document.getElementById('suCompany').value='';
+  document.getElementById('suSupplier').value='';
   document.getElementById('suId').value='';
   document.getElementById('suPw').value='';
   document.getElementById('suPw2').value='';
-  setTimeout(()=>showAuth('login'), 1200);
+  setTimeout(()=>showAuth('login'), 1800);
 }
 
 async function doLogin(){
@@ -3488,11 +3642,14 @@ async function doLogin(){
   const pw = document.getElementById('loginPw').value;
   authSetErr('authLoginErr','');
   const password_hash = await sha256Hex(pw);
-  const { data, error } = await sb.from('kt_users').select('id,company,password_hash,is_admin').ilike('id', id).limit(1);
+  const { data, error } = await sb.from('kt_users').select('id,company,password_hash,is_admin,supplier_company,status').ilike('id', id).limit(1);
   if(error){ authSetErr('authLoginErr', error.message); return; }
   const found = data && data[0];
   if(!found || found.password_hash !== password_hash){ authSetErr('authLoginErr', t.errLogin); return; }
-  const user = {id:found.id, company:found.company, is_admin: !!found.is_admin};
+  const status = found.status || 'approved'; // 이 필드가 없던 기존 계정은 승인된 것으로 간주
+  if(status==='pending'){ authSetErr('authLoginErr', t.errPending ? t.errPending(found.supplier_company||'') : '가입 승인 대기 중입니다.'); return; }
+  if(status==='rejected'){ authSetErr('authLoginErr', t.errRejected || '가입 신청이 거부되었습니다.'); return; }
+  const user = {id:found.id, company:found.company, is_admin: !!found.is_admin, supplier_company: found.supplier_company||null};
   localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(user));
   enterApp(user);
 }
@@ -3560,12 +3717,12 @@ function enterApp(user){
   const lb2 = document.getElementById('logoutBtn');
   if(lb2) lb2.textContent = T[lang].logoutBtn;
   const adminBtn = document.getElementById('adminBtn');
-  if(adminBtn) adminBtn.style.display = user.is_admin ? 'flex' : 'none';
+  if(adminBtn) adminBtn.style.display = 'flex';
   const tabInv=document.getElementById('tab-inventory');
   const tabPrice=document.getElementById('tab-price');
-  if(tabInv) tabInv.style.display = user.is_admin ? 'block' : 'none';
+  if(tabInv) tabInv.style.display = 'block';
   if(tabPrice) tabPrice.style.display = user.is_admin ? 'block' : 'none';
-  Promise.all([loadMyOrderTotals(), loadInventory(), loadGlobalSuppliedTotals()]).then(()=>{ if(document.getElementById('pane-order').classList.contains('active')) renderOrderTable(); });
+  Promise.all([loadMyOrderTotals(), loadInventory(), loadGlobalSuppliedTotals(), loadReceivedOrderTotals()]).then(()=>{ if(document.getElementById('pane-order').classList.contains('active')) renderOrderTable(); });
   loadNewsPosts();
 }
 
