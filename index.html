@@ -961,7 +961,7 @@ const T={
        grpExisting:'기존',grpNew:'신규',grpCumulative:'누적',grpTotal:'합계',grpDecision:'공급 결정',grpProgress:'진행여부',
        colOrder:'주문',colSupply:'공급',colStock:'재고',colSupplyRate:'공급율',colNotSupplied:'미공급',colAllocation:'배분',colPreparing:'준비중',colShipped:'출고완료',
        invHBase:'기초재고',invHPostAlloc:'배분후 재고',
-       orderSubmit:'주문 제출',orderSubmitting:'제출 중…',orderSubmitOk:'주문이 접수되었습니다.',orderSubmitFail:'주문 제출에 실패했습니다. 잠시 후 다시 시도해주세요.',orderSubmitEmpty:'주문수량을 입력한 품목이 없습니다.',orderPrevQty:'기존 주문수량',
+       orderSubmit:'주문 제출',orderSubmitting:'제출 중…',orderSubmitOk:'주문이 접수되었습니다.',orderSubmitFail:'주문 제출에 실패했습니다. 잠시 후 다시 시도해주세요.',orderSubmitEmpty:'주문수량을 입력한 품목이 없습니다.',orderPrevQty:'기존 주문수량',orderStock:'재고',
        reqActionHeader:'취소/변경',reqCancelBtn:'취소<br>신청',reqChangeBtn:'수량변경<br>신청',
        reqPendingCancel:'취소 승인 대기중',reqPendingChange:n=>`수량변경(${n}) 승인 대기중`,
        reqCancelConfirm:n=>`"${n}" 품목의 주문 취소를 신청하시겠습니까? 관리자 승인 후 처리됩니다.`,
@@ -1000,7 +1000,7 @@ const T={
        grpExisting:'Ранее',grpNew:'Новое',grpCumulative:'Всего',grpTotal:'Итого',grpDecision:'Решение о поставке',grpProgress:'Статус',
        colOrder:'Заказ',colSupply:'Поставка',colStock:'Остаток',colSupplyRate:'% поставки',colNotSupplied:'Не поставлено',colAllocation:'Выделено',colPreparing:'Готовится',colShipped:'Отгружено',
        invHBase:'Начальный остаток',invHPostAlloc:'Остаток после выделения',
-       orderSubmit:'Отправить заказ',orderSubmitting:'Отправка…',orderSubmitOk:'Заказ принят.',orderSubmitFail:'Не удалось отправить заказ. Попробуйте позже.',orderSubmitEmpty:'Не указано количество ни для одного товара.',orderPrevQty:'Ранее заказано',
+       orderSubmit:'Отправить заказ',orderSubmitting:'Отправка…',orderSubmitOk:'Заказ принят.',orderSubmitFail:'Не удалось отправить заказ. Попробуйте позже.',orderSubmitEmpty:'Не указано количество ни для одного товара.',orderPrevQty:'Ранее заказано',orderStock:'Остаток',
        reqActionHeader:'Отмена/Изменение',reqCancelBtn:'Запросить<br>отмену',reqChangeBtn:'Изменить<br>кол-во',
        reqPendingCancel:'Ожидает одобрения отмены',reqPendingChange:n=>`Ожидает изменения на ${n}`,
        reqCancelConfirm:n=>`Запросить отмену позиции "${n}"? Будет обработано после одобрения администратором.`,
@@ -1064,7 +1064,7 @@ function switchTab(tab){
   const el=getScrollBody(); if(el) el.scrollTop=0;
   const btn=document.getElementById('toTopBtn'); if(btn) btn.classList.remove('show');
   if(tab==='pn') renderPN();
-  if(tab==='order'){ mountModelDiag('order'); syncDiagram(); loadMyOrderTotals().then(renderOrderTable); renderOrderTable(); }
+  if(tab==='order'){ mountModelDiag('order'); syncDiagram(); Promise.all([loadMyOrderTotals(), loadInventory(), loadGlobalSuppliedTotals()]).then(renderOrderTable); renderOrderTable(); }
   if(tab==='parts'){ mountModelDiag('parts'); syncDiagram(); renderTable(); }
   if(tab==='inventory'){ Promise.all([loadInventory(), loadGlobalSuppliedTotals()]).then(renderInventoryList); }
   if(tab==='price'){ loadPrices().then(renderPriceList); }
@@ -2027,7 +2027,7 @@ function renderOrderHeader(){
       r1+=`<th rowspan="2" class="center" style="color:${c};${hl}">${g}</th>`;
     });
     cols += groups.map(()=>`<col style="width:60px">`).join('');
-    r1+=`<th rowspan="2" style="text-align:right;padding-right:16px">${t.orderPrevQty}</th><th rowspan="2" class="center">${t.orderQty}</th>`;
+    r1+=`<th rowspan="2" style="text-align:right;padding-right:16px">${t.orderStock}</th><th rowspan="2" style="text-align:right;padding-right:16px">${t.orderPrevQty}</th><th rowspan="2" class="center">${t.orderQty}</th>`;
     document.getElementById('order-thead-fixed').innerHTML=`<tr>${r1}</tr>`;
   } else {
     // 특정 모델(그룹 전체 또는 세부모델) 선택: 해당 그룹의 세부모델 전체를 컬럼으로
@@ -2045,12 +2045,12 @@ function renderOrderHeader(){
         r2+=`<th style="text-align:center;color:${m.color};${hl2}">${m.label}</th>`;
       });
     });
-    r1+=`<th rowspan="2" style="text-align:right;padding-right:16px">${t.orderPrevQty}</th><th rowspan="2" class="center">${t.orderQty}</th>`;
+    r1+=`<th rowspan="2" style="text-align:right;padding-right:16px">${t.orderStock}</th><th rowspan="2" style="text-align:right;padding-right:16px">${t.orderPrevQty}</th><th rowspan="2" class="center">${t.orderQty}</th>`;
     document.getElementById('order-thead-fixed').innerHTML=`<tr>${r1}</tr><tr>${r2}</tr>`;
     cols += od.map(()=>`<col style="width:50px">`).join('');
   }
 
-  cols += `<col style="width:100px"><col style="width:100px">`;
+  cols += `<col style="width:80px"><col style="width:100px"><col style="width:100px">`;
   ['order-hdr-col','order-body-col'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=cols;});
 
   return columns;
@@ -2079,12 +2079,21 @@ function renderOrderTable(){
   if(window.innerWidth>=769){hw.style.display='block';bw.style.display='block';fw.style.display='flex';if(osbEl)osbEl.style.display='block';}
   else{hw.style.display='none';bw.style.display='none';fw.style.display='none';if(osbEl)osbEl.style.display='none';}
 
+  const masterRepTotals=computeMasterRepTotals();
+  function getStockFor(rep){
+    const base=masterRepTotals[rep];
+    if(base===undefined) return null;
+    return Math.max(0, base-(globalSuppliedTotals[rep]||0));
+  }
+
   document.getElementById('orderTbody').innerHTML=rows.map(d=>{
     const key=orderKey(d);const qty=orderQty[key]||'';
     const prevQty=myOrderTotals[d.rep]||0;
+    const stockVal=getStockFor(d.rep);
+    const stockText=stockVal===null?'-':stockVal;
     const nc=isKo?`<td style="font-weight:500;text-align:center">${d.name_ko}</td><td style="color:var(--muted);font-size:10px;text-align:center">${d.spec}</td>`:`<td style="font-weight:500;text-align:center">${d.name_ru}</td>`;
     const modelCells=columns.map(col=>{const hlStyle=col.selected?` style="background:${col.color}18"`:'';return `<td class="center"${hlStyle}>${dot(isColumnApplied(d,col))}</td>`;}).join('');
-    return `<tr><td class="center" style="color:var(--muted);font-size:11px">${d.diag}</td>${nc}<td style="text-align:center"><span class="code">${d.rep}</span></td>${modelCells}<td style="text-align:right;padding-right:16px;color:var(--muted)">${prevQty}</td><td class="center"><input type="number" min="0" class="order-qty-input" value="${qty}" data-key="${key.replace(/"/g,'&quot;')}" oninput="setOrderQty(this)" style="width:70px;text-align:center;padding:5px 4px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text)"></td></tr>`;
+    return `<tr><td class="center" style="color:var(--muted);font-size:11px">${d.diag}</td>${nc}<td style="text-align:center"><span class="code">${d.rep}</span></td>${modelCells}<td style="text-align:right;padding-right:16px;color:var(--muted)">${stockText}</td><td style="text-align:right;padding-right:16px;color:var(--muted)">${prevQty}</td><td class="center"><input type="number" min="0" class="order-qty-input" value="${qty}" data-key="${key.replace(/"/g,'&quot;')}" oninput="setOrderQty(this)" style="width:70px;text-align:center;padding:5px 4px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text)"></td></tr>`;
   }).join('');
 
   const orderCardListEl=document.getElementById('orderCardList');
@@ -2092,6 +2101,8 @@ function renderOrderTable(){
   orderCardListEl.insertAdjacentHTML('beforeend', rows.map(d=>{
     const key=orderKey(d);const qty=orderQty[key]||'';
     const prevQty=myOrderTotals[d.rep]||0;
+    const stockVal=getStockFor(d.rep);
+    const stockText=stockVal===null?'-':stockVal;
     const nm=isKo?d.name_ko:d.name_ru;
     const specHtml=isKo?`<div class="pc-spec">${d.spec}</div>`:'';
     let tagHtml='';
@@ -2112,6 +2123,10 @@ function renderOrderTable(){
           ${modelHtml}
         </div>
         <div style="display:flex;flex-direction:column;align-items:center;gap:6px;flex-shrink:0">
+          <div style="text-align:center">
+            <div style="font-size:10px;color:var(--muted)">${t.orderStock}</div>
+            <div style="font-size:15px;font-weight:700;color:var(--text)">${stockText}</div>
+          </div>
           <div style="text-align:center">
             <div style="font-size:10px;color:var(--muted)">${t.orderPrevQty}</div>
             <div style="font-size:15px;font-weight:700;color:var(--text)">${prevQty}</div>
@@ -3169,7 +3184,17 @@ async function handleInventoryUpload(event){
       // 처리할 수 있도록, 표 형태(JSON) 대신 배열 형태로 읽어서 직접 열 위치를 탐색합니다.
       const aoa=XLSX.utils.sheet_to_json(sheet,{header:1, defval:''});
       const repKeys=['Артикул','대표품번','품번','rep','REP'];
-      const qtyKeys=['Количество','재고수량','수량','Остаток','qty','QTY'];
+      const qtyKeys=['Количество','재고수량','수량','Остаток','Дебет','qty','QTY'];
+
+      function columnHasNumbers(col, fromRow){
+        let count=0;
+        for(let r=fromRow;r<Math.min(fromRow+40, aoa.length);r++){
+          const v=aoa[r]&&aoa[r][col];
+          if(v!==undefined && v!=='' && !isNaN(Number(v))) count++;
+          if(count>=3) return true;
+        }
+        return count>=3;
+      }
 
       let colRep=-1, colQty=-1;
       const scanRows=Math.min(30, aoa.length);
@@ -3178,7 +3203,9 @@ async function handleInventoryUpload(event){
         for(let c=0;c<row.length;c++){
           const val=String(row[c]||'').trim();
           if(colRep===-1 && repKeys.includes(val)) colRep=c;
-          if(colQty===-1 && qtyKeys.includes(val)) colQty=c;
+          // 같은 이름의 열이 실제 수량 데이터 없이 요약 문구로만 등장하는 경우(예: 회계 리포트의
+          // "출력 데이터: 수량" 같은 안내문)를 걸러내기 위해, 실제로 숫자가 이어지는 열인지 확인합니다.
+          if(colQty===-1 && qtyKeys.includes(val) && columnHasNumbers(c, r+1)) colQty=c;
         }
       }
       if(colRep===-1 || colQty===-1){ alert(t.invUploadEmpty); event.target.value=''; return; }
@@ -3203,6 +3230,11 @@ async function handleInventoryUpload(event){
         else{ dedupMap[r.rep]={ rep:r.rep, qty:r.qty, updated_at:r.updated_at }; }
       });
       const dedupedRows=Object.values(dedupMap);
+
+      // 새 엑셀로 업데이트하면 기존 재고 데이터는 전부 지우고 새 파일 내용으로 완전히 교체합니다.
+      const { error: delErr } = await sb.from('kt_inventory').delete().not('rep','is',null);
+      if(delErr){ console.error(delErr); alert(t.invUploadFail+'\n\n['+(delErr.message||delErr.code)+']'); event.target.value=''; return; }
+
       const { error } = await sb.from('kt_inventory').upsert(dedupedRows,{onConflict:'rep'});
       if(error){ console.error(error); alert(t.invUploadFail+'\n\n['+(error.message||error.code)+']'); event.target.value=''; return; }
       await loadInventory();
@@ -3533,7 +3565,7 @@ function enterApp(user){
   const tabPrice=document.getElementById('tab-price');
   if(tabInv) tabInv.style.display = user.is_admin ? 'block' : 'none';
   if(tabPrice) tabPrice.style.display = user.is_admin ? 'block' : 'none';
-  loadMyOrderTotals().then(()=>{ if(document.getElementById('pane-order').classList.contains('active')) renderOrderTable(); });
+  Promise.all([loadMyOrderTotals(), loadInventory(), loadGlobalSuppliedTotals()]).then(()=>{ if(document.getElementById('pane-order').classList.contains('active')) renderOrderTable(); });
   loadNewsPosts();
 }
 
