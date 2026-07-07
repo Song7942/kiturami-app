@@ -1020,7 +1020,7 @@ const T={
        diagTitle:'ALPHA PLUS — Сборочный чертёж',apsDiagTitle:'ALPHA PLUS S — Сборочный чертёж',diagHint:'Нажмите номер → выделение'},
 };
 let lang='ko',searchKw='',activeDiagNum=null,diagBuilt=false,manualClosed=false;
-let selectedKeys=null,openGroup=null,multiMode=false;
+let selectedKeys=null,openGroup=null,openSeries=null,multiMode=false;
 let orderSearchKw='',orderQty={};
 
 // ── 스크롤 & 맨위로 ──
@@ -1112,7 +1112,7 @@ function setLang(l){
   refreshMyOrdersTexts();
   refreshInventoryTexts();
   refreshPriceTexts();
-  renderModelBar(); if(openGroup) buildDropdown(openGroup);
+  renderModelBar(); if(openGroup) buildDropdown(openGroup); else if(openSeries) buildSeriesDropdown(openSeries);
   renderTable(); renderPN();
   if(document.getElementById('pane-order').classList.contains('active')) renderOrderTable();
 }
@@ -1125,7 +1125,7 @@ function openDropdown(g){
   if(item){const bar=document.getElementById('modelBar');dd.style.left=(item.getBoundingClientRect().left-bar.getBoundingClientRect().left)+'px';}
   buildDropdown(g); dd.classList.add('open');
 }
-function closeDropdown(){document.getElementById('mbDropdown').classList.remove('open');openGroup=null;}
+function closeDropdown(){document.getElementById('mbDropdown').classList.remove('open');openGroup=null;openSeries=null;}
 function buildDropdown(g){
   const t=T[lang];
   document.getElementById('dd-title').textContent=lang==='ru'?g.name_ru:g.name;
@@ -1150,17 +1150,54 @@ function buildDropdown(g){
   });
   row.appendChild(nameEl); row.appendChild(subsEl); rows.appendChild(row);
 }
+function openSeriesDropdown(series){
+  openGroup=null; openSeries=series;
+  const dd=document.getElementById('mbDropdown');
+  const item=document.querySelector(`.mb-item[data-series="${series.label_ko}"]`);
+  if(item){const bar=document.getElementById('modelBar');dd.style.left=(item.getBoundingClientRect().left-bar.getBoundingClientRect().left)+'px';}
+  buildSeriesDropdown(series); dd.classList.add('open');
+}
+function buildSeriesDropdown(series){
+  const t=T[lang];
+  document.getElementById('dd-title').textContent=lang==='ru'?series.label_ru:series.label_ko;
+  const seriesGroups=MODEL_GROUPS.filter(g=>series.abbrs.includes(g.abbr));
+  const seriesKeys=seriesGroups.flatMap(g=>g.keys);
+  const hasAny=selectedKeys!==null&&seriesKeys.some(k=>selectedKeys.has(k));
+  document.getElementById('dd-all-text').textContent=hasAny?t.ddAllOn:t.ddAllOff;
+  const rows=document.getElementById('ddRows'); rows.innerHTML='';
+  seriesGroups.forEach(g=>{
+    const row=document.createElement('div'); row.className='dd-row';
+    const nameEl=document.createElement('div'); nameEl.className='dd-name';
+    nameEl.style.color=g.color; nameEl.style.borderLeftColor=g.color;
+    nameEl.textContent=g.abbr;
+    nameEl.addEventListener('click',()=>{toggleGroup(g);buildSeriesDropdown(series);});
+    const subsEl=document.createElement('div'); subsEl.className='dd-subs';
+    g.subs.forEach((sub,i)=>{
+      const key=g.keys[i]; const chip=document.createElement('button'); chip.className='sub-chip';
+      const isActive=selectedKeys!==null&&selectedKeys.has(key);
+      chip.style.background=isActive?g.color+'33':'var(--surface2)';
+      chip.style.color=isActive?g.color:'var(--muted)';
+      chip.style.borderColor=isActive?g.color:'var(--border)';
+      if(isActive) chip.classList.add('active'); chip.textContent=sub;
+      chip.addEventListener('click',e=>{e.stopPropagation();toggleSub(key,g);buildSeriesDropdown(series);});
+      subsEl.appendChild(chip);
+    });
+    row.appendChild(nameEl); row.appendChild(subsEl); rows.appendChild(row);
+  });
+}
 function selectAll(){
-  if(!openGroup) return;
-  const hasAny=selectedKeys!==null&&openGroup.keys.some(k=>selectedKeys.has(k));
+  if(!openGroup && !openSeries) return;
+  const keys = openGroup ? openGroup.keys : MODEL_GROUPS.filter(g=>openSeries.abbrs.includes(g.abbr)).flatMap(g=>g.keys);
+  const hasAny=selectedKeys!==null&&keys.some(k=>selectedKeys.has(k));
   if(hasAny){
-    openGroup.keys.forEach(k=>selectedKeys.delete(k));
+    keys.forEach(k=>selectedKeys.delete(k));
     if(selectedKeys.size===0) selectedKeys=null;
   } else {
     if(selectedKeys===null) selectedKeys=new Set();
-    openGroup.keys.forEach(k=>selectedKeys.add(k));
+    keys.forEach(k=>selectedKeys.add(k));
   }
   if(openGroup) buildDropdown(openGroup);
+  else if(openSeries) buildSeriesDropdown(openSeries);
   manualClosed=false; onSelChange();
 }
 
@@ -1192,13 +1229,32 @@ function renderModelBar(){
 
   MODEL_SERIES.forEach(series=>{
     const seriesKeys=MODEL_GROUPS.filter(g=>series.abbrs.includes(g.abbr)).flatMap(g=>g.keys);
+    const seriesGroups=MODEL_GROUPS.filter(g=>series.abbrs.includes(g.abbr));
     const allIn=selectedKeys!==null&&seriesKeys.every(k=>selectedKeys.has(k));
+    const any=selectedKeys!==null&&seriesKeys.some(k=>selectedKeys.has(k));
     const item=document.createElement('div'); item.className='mb-item mb-series'; item.dataset.series=series.label_ko;
     if(allIn) item.classList.add('has-selection');
     const label=document.createElement('div'); label.className='mb-abbr';
     label.style.color=series.color; label.textContent=lang==='ru'?series.label_ru:series.label_ko;
-    item.appendChild(label);
-    item.addEventListener('click', ()=>{
+    const prevEl=document.createElement('div'); prevEl.className='mb-subs-preview';
+    if(any){
+      const activeGroups=seriesGroups.filter(g=>g.keys.some(k=>selectedKeys.has(k)));
+      prevEl.textContent=activeGroups.map(g=>g.abbr).join(' · ');
+      prevEl.style.color=series.color+'cc';
+    } else {
+      prevEl.textContent=series.abbrs.join(' · ');
+    }
+    const arrEl=document.createElement('div'); arrEl.className='mb-arrow'; arrEl.textContent='▾';
+    item.appendChild(label); item.appendChild(prevEl); item.appendChild(arrEl);
+    item.addEventListener('click', e=>{
+      e.stopPropagation();
+      if(e.target===arrEl){
+        // 화살표 클릭: 선택 상태는 건드리지 않고 계단식 드롭다운만 열고 닫기 (세부모델 선택용)
+        const dd=document.getElementById('mbDropdown');
+        if(dd.classList.contains('open')&&openSeries===series) closeDropdown();
+        else openSeriesDropdown(series);
+        return;
+      }
       const allInNow=selectedKeys!==null&&seriesKeys.every(k=>selectedKeys.has(k));
       if(allInNow){
         seriesKeys.forEach(k=>selectedKeys.delete(k));
@@ -1210,50 +1266,6 @@ function renderModelBar(){
         selectedKeys=new Set(seriesKeys);
       }
       manualClosed=false; onSelChange();
-    });
-    scroll.appendChild(item);
-  });
-
-  MODEL_GROUPS.forEach(g=>{
-    const item=document.createElement('div'); item.className='mb-item'; item.dataset.abbr=g.abbr;
-    const any=selectedKeys!==null&&g.keys.some(k=>selectedKeys.has(k));
-    if(any){item.classList.add('has-selection');const badge=document.createElement('div');badge.className='mb-badge';item.appendChild(badge);}
-    const abbrEl=document.createElement('div'); abbrEl.className='mb-abbr';
-    abbrEl.style.color=any?g.color:'var(--muted)';
-    abbrEl.textContent=lang==='ru'?g.name_ru:g.name;
-    const prevEl=document.createElement('div'); prevEl.className='mb-subs-preview';
-    if(any){const sel=g.subs.filter((_,i)=>selectedKeys.has(g.keys[i]));prevEl.textContent=g.abbr+' '+sel.join(' ');prevEl.style.color=g.color+'cc';}
-    else{prevEl.textContent=g.abbr+' '+g.subs.join(' ');}
-    const arrEl=document.createElement('div'); arrEl.className='mb-arrow'; arrEl.textContent='▾';
-    item.appendChild(abbrEl); item.appendChild(prevEl); item.appendChild(arrEl);
-    item.addEventListener('click',e=>{
-      e.stopPropagation();
-      if(e.target===arrEl){
-        // 화살표 클릭: 선택 상태는 건드리지 않고 드롭다운만 열고 닫기(세부모델 확인/조정용)
-        const dd=document.getElementById('mbDropdown');
-        if(dd.classList.contains('open')&&openGroup===g) closeDropdown();
-        else openDropdown(g);
-        return;
-      }
-      const allIn=selectedKeys!==null&&g.keys.every(k=>selectedKeys.has(k));
-      if(allIn){
-        // 이미 선택된 모델을 다시 클릭하면 세부모델 조정 없이 바로 선택 해제됩니다.
-        g.keys.forEach(k=>selectedKeys.delete(k));
-        if(selectedKeys.size===0) selectedKeys=null;
-        manualClosed=false; onSelChange();
-        const dd=document.getElementById('mbDropdown');
-        if(dd.classList.contains('open')&&openGroup===g) closeDropdown();
-      } else {
-        // 다중선택 모드가 켜져있으면 기존 선택에 추가, 꺼져있으면 이 모델로 교체(단일선택)
-        if(multiMode){
-          if(selectedKeys===null) selectedKeys=new Set();
-          g.keys.forEach(k=>selectedKeys.add(k));
-        } else {
-          selectedKeys=new Set(g.keys);
-        }
-        manualClosed=false; onSelChange();
-        openDropdown(g);
-      }
     });
     scroll.appendChild(item);
   });
