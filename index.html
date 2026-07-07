@@ -405,6 +405,9 @@ input[type="text"]::placeholder{color:var(--muted)}
     <div id="authSignup" class="auth-pane">
       <h2 id="as-title">회원가입</h2>
       <input type="text" id="suCompany" placeholder="회사명" oninput="this.value=this.value.toUpperCase();onSuCompanyInput()">
+      <input type="text" id="suContactName" placeholder="담당자명">
+      <input type="tel" id="suPhone" placeholder="연락처">
+      <input type="email" id="suEmail" placeholder="이메일주소">
       <div id="suSupplierWrap" style="position:relative">
         <input type="text" id="suSupplier" placeholder="구매처(거래처) 회사명" autocomplete="off" oninput="this.value=this.value.toUpperCase();onSupplierInput()" onfocus="onSupplierInput()" onblur="setTimeout(()=>{const l=document.getElementById('suSupplierList');if(l)l.style.display='none';},150)">
         <div id="suSupplierList" class="supplier-suggest" style="display:none"></div>
@@ -841,7 +844,7 @@ input[type="text"]::placeholder{color:var(--muted)}
         <span id="i18n-admintab-requests">취소·변경 요청</span> <span id="adminReqBadge" style="display:none;background:#f59e0b;color:#1a1a00;border-radius:9px;padding:1px 6px;font-size:10px;font-weight:800;margin-left:4px"></span>
       </button>
       <button class="news-tab" id="adminTabSignups" onclick="switchAdminView('signups')">
-        <span id="i18n-admintab-signups">가입 승인</span> <span id="adminSignupBadge" style="display:none;background:#ef4444;color:#fff;border-radius:9px;padding:1px 6px;font-size:10px;font-weight:800;margin-left:4px"></span>
+        <span id="i18n-admintab-signups">가입 회원 관리</span> <span id="adminSignupBadge" style="display:none;background:#ef4444;color:#fff;border-radius:9px;padding:1px 6px;font-size:10px;font-weight:800;margin-left:4px"></span>
       </button>
     </div>
     <div id="adminOrdersView" style="display:flex;flex-direction:column;flex:1;min-height:0">
@@ -885,9 +888,12 @@ input[type="text"]::placeholder{color:var(--muted)}
       <table style="width:100%;border-collapse:collapse;font-size:13px">
         <thead><tr style="border-bottom:1px solid var(--border);color:var(--muted);text-align:left">
           <th style="padding:9px 12px" id="i18n-signup-th-company">회사명</th>
+          <th style="padding:9px 12px" id="i18n-signup-th-contact">담당자명</th>
+          <th style="padding:9px 12px" id="i18n-signup-th-phone">연락처</th>
+          <th style="padding:9px 12px" id="i18n-signup-th-email">이메일</th>
           <th style="padding:9px 12px" id="i18n-signup-th-id">아이디</th>
-          <th style="padding:9px 12px;text-align:center" id="i18n-signup-th-approve"></th>
-          <th style="padding:9px 12px;text-align:center" id="i18n-signup-th-reject"></th>
+          <th style="padding:9px 12px;text-align:center" id="i18n-signup-th-status">상태</th>
+          <th style="padding:9px 12px;text-align:center" colspan="2"></th>
         </tr></thead>
         <tbody id="adminSignupsList"></tbody>
       </table>
@@ -1017,9 +1023,10 @@ const T={
        newsDeleteConfirm:'이 글을 삭제할까요?',newsReplyDeleteConfirm:'이 답변을 삭제할까요?',newsRepliesLabel:n=>`답변 ${n}개`,newsFillAll:'제목과 내용을 모두 입력해주세요.',newsFillReply:'내용을 입력해주세요.',
        adminBtn:'관리자',adminTitle:'관리자 - 전체 주문내역',adminXls:'엑셀 다운로드',adminEmpty:'등록된 주문이 없습니다.',adminCount:n=>`총 ${n}건`,
        adminTabOrders:'내가 받은 주문내역',adminTabMyOrders:'내가 신청한 주문내역',adminTabRequests:'취소·변경 요청',adminTabSignups:'가입 승인',
-       signupEmpty:'승인 대기 중인 가입 신청이 없습니다.',signupApprove:'승인',signupReject:'거부',
-       signupApproveConfirm:id=>`${id} 계정의 가입을 승인하시겠습니까?`,signupRejectConfirm:id=>`${id} 계정의 가입을 거부하시겠습니까?`,
-       signupThCompany:'회사명',signupThId:'아이디',
+       signupEmpty:'등록된 회원이 없습니다.',signupApprove:'승인',signupReject:'거부',signupDelete:'삭제',
+       signupApproveConfirm:id=>`${id} 계정의 가입을 승인하시겠습니까?`,signupRejectConfirm:id=>`${id} 계정의 가입을 거부하시겠습니까?`,signupDeleteConfirm:id=>`${id} 계정을 삭제하시겠습니까? 삭제하면 되돌릴 수 없습니다.`,
+       signupThCompany:'회사명',signupThId:'아이디',signupThContact:'담당자명',signupThPhone:'연락처',signupThEmail:'이메일',signupThStatus:'상태',
+       signupStatusPending:'승인대기',signupStatusApproved:'승인됨',signupStatusRejected:'거부됨',
        reqEmpty:'대기중인 요청이 없습니다.',reqTypeCancel:'취소 신청',reqTypeChange:n=>`수량변경 신청 → ${n}`,
        reqApprove:'승인',reqReject:'거부',
        reqApproveConfirm:'이 요청을 승인하고 주문에 반영할까요?',reqRejectConfirm:'이 요청을 거부할까요?',
@@ -1059,9 +1066,10 @@ const T={
        newsDeleteConfirm:'Удалить эту запись?',newsReplyDeleteConfirm:'Удалить этот ответ?',newsRepliesLabel:n=>`Ответов: ${n}`,newsFillAll:'Пожалуйста, заполните заголовок и содержание.',newsFillReply:'Пожалуйста, введите текст.',
        adminBtn:'Админ',adminTitle:'Админ - Все заказы',adminXls:'Скачать Excel',adminEmpty:'Заказов пока нет.',adminCount:n=>`Всего: ${n}`,
        adminTabOrders:'Полученные заказы',adminTabMyOrders:'Мои заявки',adminTabRequests:'Запросы отмены/изменения',adminTabSignups:'Одобрение регистрации',
-       signupEmpty:'Нет заявок, ожидающих одобрения.',signupApprove:'Одобрить',signupReject:'Отклонить',
-       signupApproveConfirm:id=>`Одобрить регистрацию аккаунта ${id}?`,signupRejectConfirm:id=>`Отклонить регистрацию аккаунта ${id}?`,
-       signupThCompany:'Компания',signupThId:'Логин',
+       signupEmpty:'Нет зарегистрированных участников.',signupApprove:'Одобрить',signupReject:'Отклонить',signupDelete:'Удалить',
+       signupApproveConfirm:id=>`Одобрить регистрацию аккаунта ${id}?`,signupRejectConfirm:id=>`Отклонить регистрацию аккаунта ${id}?`,signupDeleteConfirm:id=>`Удалить аккаунт ${id}? Это необратимо.`,
+       signupThCompany:'Компания',signupThId:'Логин',signupThContact:'Контактное лицо',signupThPhone:'Телефон',signupThEmail:'Email',signupThStatus:'Статус',
+       signupStatusPending:'Ожидает',signupStatusApproved:'Одобрено',signupStatusRejected:'Отклонено',
        reqEmpty:'Нет ожидающих запросов.',reqTypeCancel:'Запрос отмены',reqTypeChange:n=>`Запрос изменения → ${n}`,
        reqApprove:'Одобрить',reqReject:'Отклонить',
        reqApproveConfirm:'Одобрить этот запрос и применить к заказу?',reqRejectConfirm:'Отклонить этот запрос?',
@@ -2688,15 +2696,16 @@ async function openAdminModal(){
   await loadPendingSignups();
   renderPendingSignups();
 }
-let pendingSignups=[];
+let companyMembers=[];
 async function loadPendingSignups(){
   const myCompany=currentUser?currentUser.company:'';
-  const { data, error } = await sb.from('kt_users').select('id,company,supplier_company,status').eq('supplier_company', myCompany).eq('status','pending').order('id');
-  if(error){ console.error(error); pendingSignups=[]; return; }
-  pendingSignups=data||[];
+  const { data, error } = await sb.from('kt_users').select('id,company,contact_name,phone,email,supplier_company,status').eq('supplier_company', myCompany).order('id');
+  if(error){ console.error(error); companyMembers=[]; return; }
+  companyMembers=data||[];
+  const pendingCount=companyMembers.filter(u=>u.status==='pending').length;
   const badge=document.getElementById('adminSignupBadge');
   if(badge){
-    if(pendingSignups.length){ badge.textContent=pendingSignups.length; badge.style.display='inline-block'; }
+    if(pendingCount){ badge.textContent=pendingCount; badge.style.display='inline-block'; }
     else badge.style.display='none';
   }
 }
@@ -2704,19 +2713,33 @@ function renderPendingSignups(){
   const t=T[lang];
   const tbody=document.getElementById('adminSignupsList');
   const emptyEl=document.getElementById('adminSignupsEmpty');
-  if(!pendingSignups.length){
+  if(!companyMembers.length){
     tbody.innerHTML='';
     emptyEl.textContent=t.signupEmpty;
     emptyEl.style.display='block';
     return;
   }
   emptyEl.style.display='none';
-  tbody.innerHTML=pendingSignups.map(u=>`<tr style="border-bottom:1px solid var(--border)">
+  const statusLabel=(s)=>{
+    if(s==='pending') return `<span style="color:#f59e0b;font-weight:700">${t.signupStatusPending}</span>`;
+    if(s==='rejected') return `<span style="color:#ef4444;font-weight:700">${t.signupStatusRejected}</span>`;
+    return `<span style="color:#22c55e;font-weight:700">${t.signupStatusApproved}</span>`;
+  };
+  tbody.innerHTML=companyMembers.map(u=>{
+    const idEsc=u.id.replace(/'/g,"\\'");
+    const approveBtn=u.status==='pending' ? `<button class="news-btn-primary" onclick="approveSignup('${idEsc}')">${t.signupApprove}</button>` : '';
+    const rejectBtn=u.status==='pending' ? `<button class="news-btn-secondary" onclick="rejectSignup('${idEsc}')">${t.signupReject}</button>` : '';
+    return `<tr style="border-bottom:1px solid var(--border)">
     <td style="padding:9px 12px">${escapeHtml(u.company)}</td>
+    <td style="padding:9px 12px">${escapeHtml(u.contact_name||'')}</td>
+    <td style="padding:9px 12px">${escapeHtml(u.phone||'')}</td>
+    <td style="padding:9px 12px">${escapeHtml(u.email||'')}</td>
     <td style="padding:9px 12px">${escapeHtml(u.id)}</td>
-    <td style="padding:9px 12px;text-align:center"><button class="news-btn-primary" onclick="approveSignup('${u.id.replace(/'/g,"\\'")}')">${t.signupApprove}</button></td>
-    <td style="padding:9px 12px;text-align:center"><button class="news-btn-secondary" onclick="rejectSignup('${u.id.replace(/'/g,"\\'")}')">${t.signupReject}</button></td>
-  </tr>`).join('');
+    <td style="padding:9px 12px;text-align:center">${statusLabel(u.status)}</td>
+    <td style="padding:9px 12px;text-align:center">${approveBtn}${rejectBtn}</td>
+    <td style="padding:9px 12px;text-align:center"><button class="news-btn-secondary" onclick="deleteMember('${idEsc}')">${t.signupDelete}</button></td>
+  </tr>`;
+  }).join('');
 }
 async function approveSignup(id){
   const t=T[lang];
@@ -2730,6 +2753,14 @@ async function rejectSignup(id){
   const t=T[lang];
   if(!confirm(t.signupRejectConfirm(id))) return;
   const { error } = await sb.from('kt_users').update({ status:'rejected' }).eq('id', id);
+  if(error){ alert(t.reqFail+'\n\n['+(error.message||error.code)+']'); return; }
+  await loadPendingSignups();
+  renderPendingSignups();
+}
+async function deleteMember(id){
+  const t=T[lang];
+  if(!confirm(t.signupDeleteConfirm(id))) return;
+  const { error } = await sb.from('kt_users').delete().eq('id', id);
   if(error){ alert(t.reqFail+'\n\n['+(error.message||error.code)+']'); return; }
   await loadPendingSignups();
   renderPendingSignups();
@@ -2842,6 +2873,10 @@ function refreshAdminTexts(){
   setTxt('i18n-adminmyorderxls', t.adminXls||t.myOrdersXls||'엑셀 다운로드');
   setTxt('i18n-signup-th-company', t.signupThCompany);
   setTxt('i18n-signup-th-id', t.signupThId);
+  setTxt('i18n-signup-th-contact', t.signupThContact);
+  setTxt('i18n-signup-th-phone', t.signupThPhone);
+  setTxt('i18n-signup-th-email', t.signupThEmail);
+  setTxt('i18n-signup-th-status', t.signupThStatus);
   if(document.getElementById('adminModal').classList.contains('show')){ renderAdminOrders(); renderAdminMyOrders(); renderOrderRequests(); renderPendingSignups(); }
 }
 
@@ -3569,7 +3604,7 @@ const AUTH_T = {
     findIdTitle:'아이디 찾기', findIdDesc:'가입시 등록한 회사명을 입력하세요.', findIdBtn:'아이디 조회',
     findPwTitle:'비밀번호 재설정', findPwDesc:'회사명과 아이디를 입력해 본인 확인 후 새 비밀번호를 설정하세요.',
     verifyBtn:'본인 확인', newPwPh:'새 비밀번호', newPwPh2:'새 비밀번호 확인', resetBtn:'비밀번호 변경',
-    errFill:'모든 항목을 입력해주세요.', errIdExists:'이미 사용중인 아이디입니다.', errPwMismatch:'비밀번호가 일치하지 않습니다.',
+    errFill:'모든 항목을 입력해주세요.', errIdExists:'이미 사용중인 아이디입니다.', errPwMismatch:'비밀번호가 일치하지 않습니다.', errEmailInvalid:'이메일 주소 형식이 올바르지 않습니다.',
     errPwShort:'비밀번호는 4자 이상 입력해주세요.', okSignup:'가입이 완료되었습니다. 로그인해주세요.', okSignupPending:sup=>`가입 신청이 완료되었습니다. ${sup}의 승인 후 로그인하실 수 있습니다.`,
     errLogin:'아이디 또는 비밀번호가 올바르지 않습니다.',
     errPending:sup=>`가입 승인 대기 중입니다. ${sup?sup+'의 ':''}승인을 기다려주세요.`, errRejected:'가입 신청이 거부되었습니다. 구매처에 문의해주세요.',
@@ -3584,7 +3619,7 @@ const AUTH_T = {
     findIdTitle:'Найти логин', findIdDesc:'Введите название компании, указанное при регистрации.', findIdBtn:'Найти',
     findPwTitle:'Сброс пароля', findPwDesc:'Введите название компании и логин для подтверждения, затем задайте новый пароль.',
     verifyBtn:'Подтвердить', newPwPh:'Новый пароль', newPwPh2:'Подтвердите новый пароль', resetBtn:'Изменить пароль',
-    errFill:'Заполните все поля.', errIdExists:'Этот логин уже используется.', errPwMismatch:'Пароли не совпадают.',
+    errFill:'Заполните все поля.', errIdExists:'Этот логин уже используется.', errPwMismatch:'Пароли не совпадают.', errEmailInvalid:'Неверный формат email.',
     errPwShort:'Пароль должен быть не менее 4 символов.', okSignup:'Регистрация завершена. Пожалуйста, войдите.', okSignupPending:sup=>`Заявка отправлена. Вход будет доступен после одобрения компанией ${sup}.`,
     errLogin:'Неверный логин или пароль.',
     errPending:sup=>`Ожидает одобрения${sup?' от '+sup:''}.`, errRejected:'Заявка отклонена. Обратитесь к вашему поставщику.',
@@ -3686,6 +3721,9 @@ function selectSupplier(name){
 async function doSignup(){
   const t = AUTH_T[authLang];
   const company = document.getElementById('suCompany').value.trim();
+  const contactName = document.getElementById('suContactName').value.trim();
+  const phone = document.getElementById('suPhone').value.trim();
+  const email = document.getElementById('suEmail').value.trim();
   const supplierCompany = document.getElementById('suSupplier').value.trim();
   const id = document.getElementById('suId').value.trim();
   const pw = document.getElementById('suPw').value;
@@ -3694,7 +3732,8 @@ async function doSignup(){
 
   const isTopSupplier = company.toUpperCase()==='KITURAMI';
 
-  if(!company || (!isTopSupplier && !supplierCompany) || !id || !pw || !pw2){ authSetErr('authSignupErr', t.errFill); return; }
+  if(!company || !contactName || !phone || !email || (!isTopSupplier && !supplierCompany) || !id || !pw || !pw2){ authSetErr('authSignupErr', t.errFill); return; }
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ authSetErr('authSignupErr', t.errEmailInvalid||'이메일 주소 형식이 올바르지 않습니다.'); return; }
   if(pw.length < 4){ authSetErr('authSignupErr', t.errPwShort); return; }
   if(pw !== pw2){ authSetErr('authSignupErr', t.errPwMismatch); return; }
 
@@ -3704,13 +3743,16 @@ async function doSignup(){
 
   const password_hash = await sha256Hex(pw);
   const insertPayload = isTopSupplier
-    ? { id, company, password_hash, supplier_company: null, status: 'approved' }
-    : { id, company, password_hash, supplier_company: supplierCompany, status: 'pending' };
+    ? { id, company, password_hash, contact_name: contactName, phone, email, supplier_company: null, status: 'approved' }
+    : { id, company, password_hash, contact_name: contactName, phone, email, supplier_company: supplierCompany, status: 'pending' };
   const { error: insErr } = await sb.from('kt_users').insert(insertPayload);
   if(insErr){ authSetErr('authSignupErr', insErr.message); return; }
 
   authSetOk('authSignupOk', isTopSupplier ? t.okSignup : (t.okSignupPending ? t.okSignupPending(supplierCompany) : t.okSignup));
   document.getElementById('suCompany').value='';
+  document.getElementById('suContactName').value='';
+  document.getElementById('suPhone').value='';
+  document.getElementById('suEmail').value='';
   document.getElementById('suSupplier').value='';
   document.getElementById('suId').value='';
   document.getElementById('suPw').value='';
