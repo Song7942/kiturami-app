@@ -832,7 +832,10 @@ input[type="text"]::placeholder{color:var(--muted)}
     </div>
     <div class="news-tabs">
       <button class="news-tab active" id="adminTabOrders" onclick="switchAdminView('orders')">
-        <span id="i18n-admintab-orders">전체 주문내역</span>
+        <span id="i18n-admintab-orders">내가 받은 주문내역</span>
+      </button>
+      <button class="news-tab" id="adminTabMyOrders" onclick="switchAdminView('myorders')">
+        <span id="i18n-admintab-myorders">내가 신청한 주문내역</span>
       </button>
       <button class="news-tab" id="adminTabRequests" onclick="switchAdminView('requests')">
         <span id="i18n-admintab-requests">취소·변경 요청</span> <span id="adminReqBadge" style="display:none;background:#f59e0b;color:#1a1a00;border-radius:9px;padding:1px 6px;font-size:10px;font-weight:800;margin-left:4px"></span>
@@ -854,6 +857,21 @@ input[type="text"]::placeholder{color:var(--muted)}
           <tbody id="adminOrderTbody"></tbody>
         </table>
         <div class="news-empty" id="adminOrderEmpty" style="display:none"></div>
+      </div>
+    </div>
+    <div id="adminMyOrdersView" style="display:none;flex-direction:column;flex:1;min-height:0">
+      <div style="padding:12px 16px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:10px;border-bottom:1px solid var(--border)">
+        <span id="adminMyOrderCount" style="font-size:11px;color:var(--muted)"></span>
+        <button class="news-btn-primary" onclick="downloadMyOrders()">
+          <span id="i18n-adminmyorderxls">엑셀 다운로드</span>
+        </button>
+      </div>
+      <div style="flex:1;overflow:auto;padding:0 16px 16px">
+        <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:12px">
+          <thead id="adminMyOrdersThead"></thead>
+          <tbody id="adminMyOrdersTbody"></tbody>
+        </table>
+        <div class="news-empty" id="adminMyOrdersEmpty" style="display:none"></div>
       </div>
     </div>
     <div id="adminRequestsView" style="display:none;flex:1;overflow:auto;padding:14px 16px">
@@ -998,7 +1016,7 @@ const T={
        newsAttach:'📎 자료 첨부',newsAttachDownload:'첨부파일 다운로드',newsAttachFail:'파일 업로드에 실패했습니다.',
        newsDeleteConfirm:'이 글을 삭제할까요?',newsReplyDeleteConfirm:'이 답변을 삭제할까요?',newsRepliesLabel:n=>`답변 ${n}개`,newsFillAll:'제목과 내용을 모두 입력해주세요.',newsFillReply:'내용을 입력해주세요.',
        adminBtn:'관리자',adminTitle:'관리자 - 전체 주문내역',adminXls:'엑셀 다운로드',adminEmpty:'등록된 주문이 없습니다.',adminCount:n=>`총 ${n}건`,
-       adminTabOrders:'전체 주문내역',adminTabRequests:'취소·변경 요청',adminTabSignups:'가입 승인',
+       adminTabOrders:'내가 받은 주문내역',adminTabMyOrders:'내가 신청한 주문내역',adminTabRequests:'취소·변경 요청',adminTabSignups:'가입 승인',
        signupEmpty:'승인 대기 중인 가입 신청이 없습니다.',signupApprove:'승인',signupReject:'거부',
        signupApproveConfirm:id=>`${id} 계정의 가입을 승인하시겠습니까?`,signupRejectConfirm:id=>`${id} 계정의 가입을 거부하시겠습니까?`,
        signupThCompany:'회사명',signupThId:'아이디',
@@ -1040,7 +1058,7 @@ const T={
        newsAttach:'📎 Прикрепить файл',newsAttachDownload:'Скачать вложение',newsAttachFail:'Не удалось загрузить файл.',
        newsDeleteConfirm:'Удалить эту запись?',newsReplyDeleteConfirm:'Удалить этот ответ?',newsRepliesLabel:n=>`Ответов: ${n}`,newsFillAll:'Пожалуйста, заполните заголовок и содержание.',newsFillReply:'Пожалуйста, введите текст.',
        adminBtn:'Админ',adminTitle:'Админ - Все заказы',adminXls:'Скачать Excel',adminEmpty:'Заказов пока нет.',adminCount:n=>`Всего: ${n}`,
-       adminTabOrders:'Все заказы',adminTabRequests:'Запросы отмены/изменения',adminTabSignups:'Одобрение регистрации',
+       adminTabOrders:'Полученные заказы',adminTabMyOrders:'Мои заявки',adminTabRequests:'Запросы отмены/изменения',adminTabSignups:'Одобрение регистрации',
        signupEmpty:'Нет заявок, ожидающих одобрения.',signupApprove:'Одобрить',signupReject:'Отклонить',
        signupApproveConfirm:id=>`Одобрить регистрацию аккаунта ${id}?`,signupRejectConfirm:id=>`Отклонить регистрацию аккаунта ${id}?`,
        signupThCompany:'Компания',signupThId:'Логин',
@@ -2663,6 +2681,8 @@ async function openAdminModal(){
   await loadInventory();
   await loadAdminOrders();
   renderAdminOrders();
+  await loadMyOrders();
+  renderAdminMyOrders();
   await loadOrderRequests();
   renderOrderRequests();
   await loadPendingSignups();
@@ -2714,11 +2734,55 @@ async function rejectSignup(id){
   await loadPendingSignups();
   renderPendingSignups();
 }
+function renderAdminMyOrders(){
+  const t=T[lang];
+  const isKo=lang==='ko';
+  const countEl=document.getElementById('adminMyOrderCount');
+  if(countEl) countEl.textContent=t.myOrdersCount(myOrders.length);
+  const thead=document.getElementById('adminMyOrdersThead');
+  const tbody=document.getElementById('adminMyOrdersTbody');
+  const emptyEl=document.getElementById('adminMyOrdersEmpty');
+
+  const modelTh=MODEL_GROUPS.map(g=>`<th style="padding:9px 12px;text-align:center;color:${g.color}">${g.abbr}</th>`).join('');
+  const specTh=isKo?`<th style="padding:9px 12px">${t.thSpec}</th>`:'';
+  thead.innerHTML=`<tr style="border-bottom:1px solid var(--border);color:var(--muted);text-align:left">
+      <th style="padding:9px 12px">${t.adminHDate}</th>
+      <th style="padding:9px 12px">${t.adminHName}</th>
+      ${specTh}
+      <th style="padding:9px 12px">${t.adminHRep}</th>
+      ${modelTh}
+      <th style="padding:9px 16px 9px 12px;text-align:right">${t.adminHQty}</th>
+    </tr>`;
+
+  if(!myOrders.length){
+    tbody.innerHTML='';
+    emptyEl.textContent=t.myOrdersEmpty;
+    emptyEl.style.display='block';
+    return;
+  }
+  emptyEl.style.display='none';
+  tbody.innerHTML=myOrders.map(r=>{
+    const name = lang==='ko' ? r.name_ko : (r.name_ru||r.name_ko);
+    const flags=getGroupDotFlags(r.models);
+    const modelTd=flags.map(f=>`<td style="padding:9px 12px;text-align:center">${dot(f)}</td>`).join('');
+    const specTd=isKo?`<td style="padding:9px 12px;color:var(--muted)">${escapeHtml(r.spec)}</td>`:'';
+    return `<tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:9px 12px;color:var(--muted);white-space:nowrap">${escapeHtml(r.date)}</td>
+      <td style="padding:9px 12px">${escapeHtml(name)}</td>
+      ${specTd}
+      <td style="padding:9px 12px"><span class="code">${escapeHtml(r.rep)}</span></td>
+      ${modelTd}
+      <td style="padding:9px 16px 9px 12px;text-align:right">${r.qty}</td>
+    </tr>`;
+  }).join('');
+}
 function switchAdminView(view){
   document.getElementById('adminTabOrders').classList.toggle('active', view==='orders');
+  document.getElementById('adminTabMyOrders').classList.toggle('active', view==='myorders');
   document.getElementById('adminTabRequests').classList.toggle('active', view==='requests');
   document.getElementById('adminTabSignups').classList.toggle('active', view==='signups');
   document.getElementById('adminOrdersView').style.display = view==='orders' ? 'flex' : 'none';
+  document.getElementById('adminMyOrdersView').style.display = view==='myorders' ? 'flex' : 'none';
   document.getElementById('adminRequestsView').style.display = view==='requests' ? 'block' : 'none';
   document.getElementById('adminSignupsView').style.display = view==='signups' ? 'block' : 'none';
 }
@@ -2772,11 +2836,13 @@ function refreshAdminTexts(){
   setTxt('i18n-adminh-model', t.adminHModel);
   setTxt('i18n-adminh-qty', t.adminHQty);
   setTxt('i18n-admintab-orders', t.adminTabOrders);
+  setTxt('i18n-admintab-myorders', t.adminTabMyOrders);
   setTxt('i18n-admintab-requests', t.adminTabRequests);
   setTxt('i18n-admintab-signups', t.adminTabSignups);
+  setTxt('i18n-adminmyorderxls', t.adminXls||t.myOrdersXls||'엑셀 다운로드');
   setTxt('i18n-signup-th-company', t.signupThCompany);
   setTxt('i18n-signup-th-id', t.signupThId);
-  if(document.getElementById('adminModal').classList.contains('show')){ renderAdminOrders(); renderOrderRequests(); renderPendingSignups(); }
+  if(document.getElementById('adminModal').classList.contains('show')){ renderAdminOrders(); renderAdminMyOrders(); renderOrderRequests(); renderPendingSignups(); }
 }
 
 // ══════════════════════════════════════════
