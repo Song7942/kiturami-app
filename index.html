@@ -384,7 +384,7 @@ input[type="text"]::placeholder{color:var(--muted)}
     <!-- 로그인 -->
     <div id="authLogin" class="auth-pane active">
       <h2 id="al-title">로그인</h2>
-      <input type="text" id="loginId" placeholder="아이디" autocomplete="username">
+      <input type="text" id="loginId" placeholder="아이디" autocomplete="username" oninput="this.value=this.value.toUpperCase()">
       <input type="password" id="loginPw" placeholder="비밀번호" autocomplete="current-password">
       <div id="authLoginErr" class="auth-err"></div>
       <button class="auth-btn" id="al-btn" onclick="doLogin()">로그인</button>
@@ -404,12 +404,12 @@ input[type="text"]::placeholder{color:var(--muted)}
     <!-- 회원가입 -->
     <div id="authSignup" class="auth-pane">
       <h2 id="as-title">회원가입</h2>
-      <input type="text" id="suCompany" placeholder="회사명" oninput="onSuCompanyInput()">
+      <input type="text" id="suCompany" placeholder="회사명" oninput="this.value=this.value.toUpperCase();onSuCompanyInput()">
       <div id="suSupplierWrap" style="position:relative">
-        <input type="text" id="suSupplier" placeholder="구매처(거래처) 회사명" autocomplete="off" oninput="onSupplierInput()" onfocus="onSupplierInput()" onblur="setTimeout(()=>{const l=document.getElementById('suSupplierList');if(l)l.style.display='none';},150)">
+        <input type="text" id="suSupplier" placeholder="구매처(거래처) 회사명" autocomplete="off" oninput="this.value=this.value.toUpperCase();onSupplierInput()" onfocus="onSupplierInput()" onblur="setTimeout(()=>{const l=document.getElementById('suSupplierList');if(l)l.style.display='none';},150)">
         <div id="suSupplierList" class="supplier-suggest" style="display:none"></div>
       </div>
-      <input type="text" id="suId" placeholder="아이디" autocomplete="username">
+      <input type="text" id="suId" placeholder="아이디" autocomplete="username" oninput="this.value=this.value.toUpperCase()">
       <input type="password" id="suPw" placeholder="비밀번호" autocomplete="new-password">
       <input type="password" id="suPw2" placeholder="비밀번호 확인" autocomplete="new-password">
       <div id="authSignupErr" class="auth-err"></div>
@@ -424,7 +424,7 @@ input[type="text"]::placeholder{color:var(--muted)}
     <div id="authFindId" class="auth-pane">
       <h2 id="afi-title">아이디 찾기</h2>
       <p id="afi-desc" class="auth-desc">가입시 등록한 회사명을 입력하세요.</p>
-      <input type="text" id="fiCompany" placeholder="회사명">
+      <input type="text" id="fiCompany" placeholder="회사명" oninput="this.value=this.value.toUpperCase()">
       <div id="authFindIdErr" class="auth-err"></div>
       <div id="authFindIdResult" class="auth-ok"></div>
       <button class="auth-btn" id="afi-btn" onclick="doFindId()">아이디 조회</button>
@@ -438,7 +438,7 @@ input[type="text"]::placeholder{color:var(--muted)}
       <h2 id="afp-title">비밀번호 재설정</h2>
       <p id="afp-desc" class="auth-desc">회사명과 아이디를 입력해 본인 확인 후 새 비밀번호를 설정하세요.</p>
       <input type="text" id="fpCompany" placeholder="회사명">
-      <input type="text" id="fpId" placeholder="아이디">
+      <input type="text" id="fpId" placeholder="아이디" oninput="this.value=this.value.toUpperCase()">
       <div id="authFindPwErr1" class="auth-err"></div>
       <button class="auth-btn" id="afp-verify-btn" onclick="doVerifyFindPw()">본인 확인</button>
 
