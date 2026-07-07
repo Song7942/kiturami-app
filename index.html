@@ -71,7 +71,7 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0}
 .mb-scroll{display:flex;align-items:stretch;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;flex:1}
 .mb-scroll::-webkit-scrollbar{display:none}
 .mb-item{position:relative;flex-shrink:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:6px 12px;cursor:pointer;border-right:1px solid var(--border);user-select:none;min-width:70px}
-.mb-series{background:var(--surface2);font-weight:700;border-right:2px solid var(--border);padding-right:28px}
+.mb-series{font-weight:700;border-right:2px solid var(--border);padding-right:28px}
 .mb-series.has-selection{background:rgba(99,102,241,.12)}
 .mb-series .mb-abbr{font-size:11px;white-space:nowrap}
 .mb-item:last-child{border-right:none}
@@ -286,6 +286,10 @@ input[type="text"]::placeholder{color:var(--muted)}
   .tab-btn{padding:7px 10px;font-size:11px;flex:1 1 auto;text-align:center}
   #myOrdersTableWrap{display:none}
   #pane-pn .pn-hdr-wrap,#pane-pn .pn-body-wrap,#pane-inventory .pn-hdr-wrap,#pane-inventory .pn-body-wrap{display:none}
+}
+@media(max-width:1024px){
+  .tbl-body-wrap td{font-size:13px}
+  .tbl-header-wrap th{font-size:11px}
 }
 /* ══════════ 인증(로그인/가입/찾기) ══════════ */
 #authOverlay{
@@ -1236,6 +1240,7 @@ function renderModelBar(){
     const any=selectedKeys!==null&&seriesKeys.some(k=>selectedKeys.has(k));
     const item=document.createElement('div'); item.className='mb-item mb-series'; item.dataset.series=series.label_ko;
     if(allIn) item.classList.add('has-selection');
+    item.style.background = any ? series.color+'22' : '#fff';
     const label=document.createElement('div'); label.className='mb-abbr';
     label.style.color=series.color; label.textContent=lang==='ru'?series.label_ru:series.label_ko;
     const prevEl=document.createElement('div'); prevEl.className='mb-subs-preview';
