@@ -404,8 +404,8 @@ input[type="text"]::placeholder{color:var(--muted)}
     <!-- 회원가입 -->
     <div id="authSignup" class="auth-pane">
       <h2 id="as-title">회원가입</h2>
-      <input type="text" id="suCompany" placeholder="회사명">
-      <div style="position:relative">
+      <input type="text" id="suCompany" placeholder="회사명" oninput="onSuCompanyInput()">
+      <div id="suSupplierWrap" style="position:relative">
         <input type="text" id="suSupplier" placeholder="구매처(거래처) 회사명" autocomplete="off" oninput="onSupplierInput()" onfocus="onSupplierInput()" onblur="setTimeout(()=>{const l=document.getElementById('suSupplierList');if(l)l.style.display='none';},150)">
         <div id="suSupplierList" class="supplier-suggest" style="display:none"></div>
       </div>
@@ -3651,6 +3651,17 @@ function setAuthLang(l){
   const lb = document.getElementById('logoutBtn'); if(lb) lb.textContent = t.logoutBtn;
 }
 
+function onSuCompanyInput(){
+  const company=document.getElementById('suCompany').value.trim().toUpperCase();
+  const wrap=document.getElementById('suSupplierWrap');
+  if(!wrap) return;
+  if(company==='KITURAMI'){
+    wrap.style.display='none';
+    document.getElementById('suSupplier').value='';
+  } else {
+    wrap.style.display='block';
+  }
+}
 let _allCompanyNames=null;
 async function loadAllCompanyNames(){
   const { data, error } = await sb.from('kt_users').select('company');
@@ -3681,7 +3692,9 @@ async function doSignup(){
   const pw2 = document.getElementById('suPw2').value;
   authSetErr('authSignupErr',''); authSetOk('authSignupOk','');
 
-  if(!company || !supplierCompany || !id || !pw || !pw2){ authSetErr('authSignupErr', t.errFill); return; }
+  const isTopSupplier = company.toUpperCase()==='KITURAMI';
+
+  if(!company || (!isTopSupplier && !supplierCompany) || !id || !pw || !pw2){ authSetErr('authSignupErr', t.errFill); return; }
   if(pw.length < 4){ authSetErr('authSignupErr', t.errPwShort); return; }
   if(pw !== pw2){ authSetErr('authSignupErr', t.errPwMismatch); return; }
 
@@ -3690,10 +3703,13 @@ async function doSignup(){
   if(existing && existing.length){ authSetErr('authSignupErr', t.errIdExists); return; }
 
   const password_hash = await sha256Hex(pw);
-  const { error: insErr } = await sb.from('kt_users').insert({ id, company, password_hash, supplier_company: supplierCompany, status: 'pending' });
+  const insertPayload = isTopSupplier
+    ? { id, company, password_hash, supplier_company: null, status: 'approved' }
+    : { id, company, password_hash, supplier_company: supplierCompany, status: 'pending' };
+  const { error: insErr } = await sb.from('kt_users').insert(insertPayload);
   if(insErr){ authSetErr('authSignupErr', insErr.message); return; }
 
-  authSetOk('authSignupOk', t.okSignupPending ? t.okSignupPending(supplierCompany) : t.okSignup);
+  authSetOk('authSignupOk', isTopSupplier ? t.okSignup : (t.okSignupPending ? t.okSignupPending(supplierCompany) : t.okSignup));
   document.getElementById('suCompany').value='';
   document.getElementById('suSupplier').value='';
   document.getElementById('suId').value='';
