@@ -419,7 +419,7 @@ input[type="text"]::placeholder{color:var(--muted)}
       </div>
       <div style="display:flex;gap:6px;margin-bottom:10px">
         <span id="suPhonePrefix" style="flex-shrink:0;min-width:52px;display:flex;align-items:center;justify-content:center;border:1px solid #ccc;border-radius:7px;color:#94a3b8;font-size:14px">+--</span>
-        <input type="tel" id="suPhone" placeholder="휴대폰 번호 (숫자만)" style="flex:1;margin-bottom:0" oninput="this.value=this.value.replace(/[^0-9\- ]/g,'')">
+        <input type="tel" id="suPhone" placeholder="휴대폰 번호 (숫자만)" style="flex:1;margin-bottom:0" oninput="this.value=this.value.replace(/[^0-9\- ]/g,'')" onblur="normalizePhoneOnBlur('suPhone')">
       </div>
       <input type="email" id="suEmail" placeholder="이메일주소">
       <div id="suSupplierWrap" style="position:relative">
@@ -3925,6 +3925,16 @@ function setAuthLang(l){
   const lb = document.getElementById('logoutBtn'); if(lb) lb.textContent = t.logoutBtn;
 }
 
+function normalizePhoneOnBlur(inputId){
+  // 국제전기통신연합(ITU-T E.164) 표준: 국가번호(+82 등)를 앞에 붙일 때는
+  // 국내에서 쓰는 트렁크 접두번호(맨 앞 0, 예: 010 → 10)를 제거해야 합니다.
+  const input=document.getElementById(inputId);
+  if(!input) return;
+  const val=input.value.trim();
+  if(/^0[0-9]/.test(val)){
+    input.value=val.slice(1).trim();
+  }
+}
 function countryDisplayName(c){ return authLang==='ru' ? c.name_ru : c.name_ko; }
 function onCountryInput(){
   const list=document.getElementById('suCountryList');
@@ -4040,7 +4050,8 @@ async function doSignup(){
 
   if(!company || !contactName || !country || !region || !phoneRaw || !email || (!isTopSupplier && !supplierCompany) || !id || !pw || !pw2){ authSetErr('authSignupErr', t.errFill); return; }
   if(!callingCode){ authSetErr('authSignupErr', t.errCountryRequired||'목록에서 국가를 선택해주세요.'); return; }
-  const phoneDigits = phoneRaw.replace(/[^0-9]/g,'');
+  let phoneDigits = phoneRaw.replace(/[^0-9]/g,'');
+  if(phoneDigits.length>1 && phoneDigits[0]==='0') phoneDigits=phoneDigits.slice(1); // 트렁크 접두번호(0) 제거 안전장치
   if(phoneDigits.length < 4 || phoneDigits.length > (15-String(callingCode).length)){ authSetErr('authSignupErr', t.errPhoneInvalid||'전화번호 형식이 올바르지 않습니다.'); return; }
   const phone = `+${callingCode} ${phoneDigits}`; // ITU-T E.164 형식(국가번호 + 가입자번호)으로 저장
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ authSetErr('authSignupErr', t.errEmailInvalid||'이메일 주소 형식이 올바르지 않습니다.'); return; }
