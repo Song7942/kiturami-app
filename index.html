@@ -2769,7 +2769,7 @@ async function openAdminModal(){
   await loadPendingSignups();
   renderPendingSignups();
   const resetWrap=document.getElementById("resetAllMembersWrap");
-  if(resetWrap) resetWrap.style.display = (!currentUser.supplier_company) ? "block" : "none";
+  if(resetWrap) resetWrap.style.display = (currentUser.is_admin && !currentUser.supplier_company) ? "block" : "none";
 }
 let companyMembers=[];
 async function loadPendingSignups(){
