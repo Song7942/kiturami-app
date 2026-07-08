@@ -419,7 +419,7 @@ input[type="text"]::placeholder{color:var(--muted)}
       </div>
       <div style="display:flex;gap:6px;margin-bottom:10px">
         <span id="suPhonePrefix" style="flex-shrink:0;min-width:52px;display:flex;align-items:center;justify-content:center;border:1px solid #ccc;border-radius:7px;color:#94a3b8;font-size:14px">+--</span>
-        <input type="tel" id="suPhone" placeholder="연락처 (숫자만)" style="flex:1;margin-bottom:0" oninput="this.value=this.value.replace(/[^0-9\- ]/g,'')">
+        <input type="tel" id="suPhone" placeholder="휴대폰 번호 (숫자만)" style="flex:1;margin-bottom:0" oninput="this.value=this.value.replace(/[^0-9\- ]/g,'')">
       </div>
       <input type="email" id="suEmail" placeholder="이메일주소">
       <div id="suSupplierWrap" style="position:relative">
@@ -911,7 +911,7 @@ input[type="text"]::placeholder{color:var(--muted)}
         <thead><tr style="border-bottom:1px solid var(--border);color:var(--muted);text-align:left">
           <th style="padding:9px 12px" id="i18n-signup-th-company">회사명</th>
           <th style="padding:9px 12px" id="i18n-signup-th-contact">담당자명</th>
-          <th style="padding:9px 12px" id="i18n-signup-th-phone">연락처</th>
+          <th style="padding:9px 12px" id="i18n-signup-th-phone">휴대폰</th>
           <th style="padding:9px 12px" id="i18n-signup-th-email">이메일</th>
           <th style="padding:9px 12px" id="i18n-signup-th-id">아이디</th>
           <th style="padding:9px 12px;text-align:center" id="i18n-signup-th-status">상태</th>
@@ -947,7 +947,7 @@ input[type="text"]::placeholder{color:var(--muted)}
         <input type="text" id="emContactName" oninput="this.value=this.value.toUpperCase()" style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)">
       </div>
       <div style="margin-bottom:12px">
-        <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" id="i18n-editmember-phone">연락처</label>
+        <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" id="i18n-editmember-phone">휴대폰</label>
         <input type="tel" id="emPhone" style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)">
       </div>
       <div style="margin-bottom:16px">
@@ -986,7 +986,7 @@ input[type="text"]::placeholder{color:var(--muted)}
         <input type="text" id="miContactName" oninput="this.value=this.value.toUpperCase()" style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)">
       </div>
       <div style="margin-bottom:12px">
-        <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" id="i18n-myinfo-phone">연락처</label>
+        <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" id="i18n-myinfo-phone">휴대폰</label>
         <input type="tel" id="miPhone" style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)">
       </div>
       <div style="margin-bottom:16px">
@@ -1130,12 +1130,12 @@ const T={
        adminBtn:'관리자',adminTitle:'관리자 - 전체 주문내역',adminXls:'엑셀 다운로드',adminEmpty:'등록된 주문이 없습니다.',adminCount:n=>`총 ${n}건`,
        adminTabOrders:'내가 받은 주문내역',adminTabMyOrders:'내가 신청한 주문내역',adminTabRequests:'취소·변경 요청',adminTabSignups:'가입 승인',
        signupEmpty:'등록된 회원이 없습니다.',signupApprove:'승인',signupReject:'거부',signupDelete:'삭제',signupEdit:'수정',
-       editMemberTitle:'회원 정보 수정',editMemberId:'아이디',editMemberCompany:'회사명',editMemberContact:'담당자명',editMemberPhone:'연락처',editMemberEmail:'이메일',
+       editMemberTitle:'회원 정보 수정',editMemberId:'아이디',editMemberCompany:'회사명',editMemberContact:'담당자명',editMemberPhone:'휴대폰',editMemberEmail:'이메일',
        editMemberPwHint:'비밀번호를 재설정하려면 입력하세요 (선택사항)',editMemberSave:'저장',
        resetAllConfirmWord:'초기화',resetAllConfirmPrompt:w=>`정말로 전체 회원을 초기화하시겠습니까?\n이 작업은 되돌릴 수 없습니다. 계속하려면 아래에 "${w}"를 정확히 입력하세요.`,
        resetAllCancelled:'취소되었습니다.',resetAllDone:'전체 회원이 초기화되었습니다.',
        signupApproveConfirm:id=>`${id} 계정의 가입을 승인하시겠습니까?`,signupRejectConfirm:id=>`${id} 계정의 가입을 거부하시겠습니까?`,signupDeleteConfirm:id=>`${id} 계정을 삭제하시겠습니까? 삭제하면 되돌릴 수 없습니다.`,
-       signupThCompany:'회사명',signupThId:'아이디',signupThContact:'담당자명',signupThPhone:'연락처',signupThEmail:'이메일',signupThStatus:'상태',
+       signupThCompany:'회사명',signupThId:'아이디',signupThContact:'담당자명',signupThPhone:'휴대폰',signupThEmail:'이메일',signupThStatus:'상태',
        resetAllMembersBtn:'전체 회원 초기화',
        signupStatusPending:'승인대기',signupStatusApproved:'승인됨',signupStatusRejected:'거부됨',
        reqEmpty:'대기중인 요청이 없습니다.',reqTypeCancel:'취소 신청',reqTypeChange:n=>`수량변경 신청 → ${n}`,
@@ -1143,9 +1143,9 @@ const T={
        reqApproveConfirm:'이 요청을 승인하고 주문에 반영할까요?',reqRejectConfirm:'이 요청을 거부할까요?',
        adminHDate:'주문일시',adminHCompany:'회사',adminHUser:'아이디',adminHDiag:'도면번호',adminHName:'품명',adminHRep:'대표품번',adminHQty:'수량',adminHModel:'기본모델명',
        myOrders:'내 주문내역',myOrdersTitle:'내 주문내역',myOrdersXls:'엑셀 다운로드',myOrdersEmpty:'제출한 주문이 없습니다.',myOrdersCount:n=>`총 ${n}건`,myOrdersOrderLabel:n=>`주문 #${n}`,
-       myInfoBtn:'내 정보',myInfoTitle:'내 정보 수정',myInfoCompany:'회사명',myInfoId:'아이디',myInfoContact:'담당자명',myInfoPhone:'연락처',myInfoEmail:'이메일',
+       myInfoBtn:'내 정보',myInfoTitle:'내 정보 수정',myInfoCompany:'회사명',myInfoId:'아이디',myInfoContact:'담당자명',myInfoPhone:'휴대폰',myInfoEmail:'이메일',
        myInfoPwHint:'비밀번호를 변경하려면 입력하세요 (선택사항)',myInfoSave:'저장',myInfoSaved:'저장되었습니다.',
-       myInfoErrFill:'담당자명, 연락처, 이메일을 모두 입력해주세요.',myInfoErrEmail:'이메일 주소 형식이 올바르지 않습니다.',
+       myInfoErrFill:'담당자명, 휴대폰, 이메일을 모두 입력해주세요.',myInfoErrEmail:'이메일 주소 형식이 올바르지 않습니다.',
        myInfoErrPwShort:'비밀번호는 4자 이상 입력해주세요.',myInfoErrPwMismatch:'새 비밀번호가 일치하지 않습니다.',
        pnPh:'대표품번, 호환품번, 최종품번으로 검색…',
        pnH0:'품명',pnH0s:'규격',pnH1:'대표품번 (미변경)',pnH2:'호환품번 (변경)',pnH3:'최종품번 (변경, 현시점)',
@@ -1182,12 +1182,12 @@ const T={
        adminBtn:'Админ',adminTitle:'Админ - Все заказы',adminXls:'Скачать Excel',adminEmpty:'Заказов пока нет.',adminCount:n=>`Всего: ${n}`,
        adminTabOrders:'Полученные заказы',adminTabMyOrders:'Мои заявки',adminTabRequests:'Запросы отмены/изменения',adminTabSignups:'Одобрение регистрации',
        signupEmpty:'Нет зарегистрированных участников.',signupApprove:'Одобрить',signupReject:'Отклонить',signupDelete:'Удалить',signupEdit:'Изменить',
-       editMemberTitle:'Изменить участника',editMemberId:'Логин',editMemberCompany:'Компания',editMemberContact:'Контактное лицо',editMemberPhone:'Телефон',editMemberEmail:'Email',
+       editMemberTitle:'Изменить участника',editMemberId:'Логин',editMemberCompany:'Компания',editMemberContact:'Контактное лицо',editMemberPhone:'Мобильный',editMemberEmail:'Email',
        editMemberPwHint:'Введите, чтобы сбросить пароль (необязательно)',editMemberSave:'Сохранить',
        resetAllConfirmWord:'СБРОС',resetAllConfirmPrompt:w=>`Вы уверены, что хотите сбросить всех участников?\nЭто необратимо. Введите "${w}", чтобы продолжить.`,
        resetAllCancelled:'Отменено.',resetAllDone:'Все участники сброшены.',
        signupApproveConfirm:id=>`Одобрить регистрацию аккаунта ${id}?`,signupRejectConfirm:id=>`Отклонить регистрацию аккаунта ${id}?`,signupDeleteConfirm:id=>`Удалить аккаунт ${id}? Это необратимо.`,
-       signupThCompany:'Компания',signupThId:'Логин',signupThContact:'Контактное лицо',signupThPhone:'Телефон',signupThEmail:'Email',signupThStatus:'Статус',
+       signupThCompany:'Компания',signupThId:'Логин',signupThContact:'Контактное лицо',signupThPhone:'Мобильный',signupThEmail:'Email',signupThStatus:'Статус',
        resetAllMembersBtn:'Сбросить всех участников',
        signupStatusPending:'Ожидает',signupStatusApproved:'Одобрено',signupStatusRejected:'Отклонено',
        reqEmpty:'Нет ожидающих запросов.',reqTypeCancel:'Запрос отмены',reqTypeChange:n=>`Запрос изменения → ${n}`,
@@ -1195,9 +1195,9 @@ const T={
        reqApproveConfirm:'Одобрить этот запрос и применить к заказу?',reqRejectConfirm:'Отклонить этот запрос?',
        adminHDate:'Дата заказа',adminHCompany:'Компания',adminHUser:'Логин',adminHDiag:'№чертежа',adminHName:'Название',adminHRep:'Артикул',adminHQty:'Кол-во',adminHModel:'Модель',
        myOrders:'Мои заказы',myOrdersTitle:'Мои заказы',myOrdersXls:'Скачать Excel',myOrdersEmpty:'Вы ещё не отправляли заказов.',myOrdersCount:n=>`Всего: ${n}`,myOrdersOrderLabel:n=>`Заказ #${n}`,
-       myInfoBtn:'Мой профиль',myInfoTitle:'Изменить профиль',myInfoCompany:'Компания',myInfoId:'Логин',myInfoContact:'Контактное лицо',myInfoPhone:'Телефон',myInfoEmail:'Email',
+       myInfoBtn:'Мой профиль',myInfoTitle:'Изменить профиль',myInfoCompany:'Компания',myInfoId:'Логин',myInfoContact:'Контактное лицо',myInfoPhone:'Мобильный',myInfoEmail:'Email',
        myInfoPwHint:'Введите, чтобы изменить пароль (необязательно)',myInfoSave:'Сохранить',myInfoSaved:'Сохранено.',
-       myInfoErrFill:'Заполните контактное лицо, телефон и email.',myInfoErrEmail:'Неверный формат email.',
+       myInfoErrFill:'Заполните контактное лицо, мобильный и email.',myInfoErrEmail:'Неверный формат email.',
        myInfoErrPwShort:'Пароль должен быть не менее 4 символов.',myInfoErrPwMismatch:'Новые пароли не совпадают.',
        pnPh:'Поиск по артикулу…',
        pnH0:'Наименование',pnH0s:'',pnH1:'Осн. артикул (неизм.)',pnH2:'Артикул замены',pnH3:'Актуальный артикул',
@@ -3827,13 +3827,13 @@ const AUTH_T = {
     loginTitle:'로그인', idPh:'아이디', pwPh:'비밀번호', loginBtn:'로그인',
     linkSignup:'회원가입', linkFindId:'아이디 찾기', linkFindPw:'비밀번호 찾기',
     signupTitle:'회원가입', companyPh:'회사명', pwPh2:'비밀번호 확인', signupBtn:'가입하기', backToLogin:'← 로그인으로 돌아가기',
-    contactNamePh:'담당자명', phonePh:'연락처', emailPh:'이메일주소', supplierPh:'구매처(거래처) 회사명',
+    contactNamePh:'담당자명', phonePh:'휴대폰', emailPh:'이메일주소', supplierPh:'구매처(거래처) 회사명',
     findIdTitle:'아이디 찾기', findIdDesc:'가입시 등록한 회사명을 입력하세요.', findIdBtn:'아이디 조회',
     findPwTitle:'비밀번호 재설정', findPwDesc:'회사명과 아이디를 입력해 본인 확인 후 새 비밀번호를 설정하세요.',
     verifyBtn:'본인 확인', newPwPh:'새 비밀번호', newPwPh2:'새 비밀번호 확인', resetBtn:'비밀번호 변경',
     errFill:'모든 항목을 입력해주세요.', errIdExists:'이미 사용중인 아이디입니다.', errPwMismatch:'비밀번호가 일치하지 않습니다.', errEmailInvalid:'이메일 주소 형식이 올바르지 않습니다.',
     errCountryRequired:'목록에서 국가를 선택해주세요.', errPhoneInvalid:'전화번호 형식이 올바르지 않습니다.',
-    countryPh:'국가', regionPh:'지역(시/도)', phonePh2:'연락처 (숫자만)',
+    countryPh:'국가', regionPh:'지역(시/도)', phonePh2:'휴대폰 번호 (숫자만)',
     errPwShort:'비밀번호는 4자 이상 입력해주세요.', okSignup:'가입이 완료되었습니다. 로그인해주세요.', okSignupPending:sup=>`가입 신청이 완료되었습니다. ${sup}의 승인 후 로그인하실 수 있습니다.`,
     errLogin:'아이디 또는 비밀번호가 올바르지 않습니다.',
     errPending:sup=>`가입 승인 대기 중입니다. ${sup?sup+'의 ':''}승인을 기다려주세요.`, errRejected:'가입 신청이 거부되었습니다. 구매처에 문의해주세요.',
@@ -3845,13 +3845,13 @@ const AUTH_T = {
     loginTitle:'Вход', idPh:'Логин', pwPh:'Пароль', loginBtn:'Войти',
     linkSignup:'Регистрация', linkFindId:'Найти логин', linkFindPw:'Забыли пароль',
     signupTitle:'Регистрация', companyPh:'Название компании', pwPh2:'Подтвердите пароль', signupBtn:'Зарегистрироваться', backToLogin:'← Назад ко входу',
-    contactNamePh:'Контактное лицо', phonePh:'Телефон', emailPh:'Email адрес', supplierPh:'Компания-поставщик',
+    contactNamePh:'Контактное лицо', phonePh:'Мобильный', emailPh:'Email адрес', supplierPh:'Компания-поставщик',
     findIdTitle:'Найти логин', findIdDesc:'Введите название компании, указанное при регистрации.', findIdBtn:'Найти',
     findPwTitle:'Сброс пароля', findPwDesc:'Введите название компании и логин для подтверждения, затем задайте новый пароль.',
     verifyBtn:'Подтвердить', newPwPh:'Новый пароль', newPwPh2:'Подтвердите новый пароль', resetBtn:'Изменить пароль',
     errFill:'Заполните все поля.', errIdExists:'Этот логин уже используется.', errPwMismatch:'Пароли не совпадают.', errEmailInvalid:'Неверный формат email.',
     errCountryRequired:'Выберите страну из списка.', errPhoneInvalid:'Неверный формат номера телефона.',
-    countryPh:'Страна', regionPh:'Регион/область', phonePh2:'Телефон (только цифры)',
+    countryPh:'Страна', regionPh:'Регион/область', phonePh2:'Мобильный номер (только цифры)',
     errPwShort:'Пароль должен быть не менее 4 символов.', okSignup:'Регистрация завершена. Пожалуйста, войдите.', okSignupPending:sup=>`Заявка отправлена. Вход будет доступен после одобрения компанией ${sup}.`,
     errLogin:'Неверный логин или пароль.',
     errPending:sup=>`Ожидает одобрения${sup?' от '+sup:''}.`, errRejected:'Заявка отклонена. Обратитесь к вашему поставщику.',
