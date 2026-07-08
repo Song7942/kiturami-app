@@ -885,6 +885,11 @@ input[type="text"]::placeholder{color:var(--muted)}
       <div class="news-empty" id="adminRequestsEmpty" style="display:none"></div>
     </div>
     <div id="adminSignupsView" style="display:none;flex:1;overflow:auto;padding:14px 16px">
+      <div id="resetAllMembersWrap" style="display:none;margin-bottom:12px;text-align:right">
+        <button class="news-btn-secondary" style="color:#ef4444;border-color:#ef4444" onclick="resetAllMembers()">
+          <span id="i18n-resetallmembers">전체 회원 초기화</span>
+        </button>
+      </div>
       <table style="width:100%;border-collapse:collapse;font-size:13px">
         <thead><tr style="border-bottom:1px solid var(--border);color:var(--muted);text-align:left">
           <th style="padding:9px 12px" id="i18n-signup-th-company">회사명</th>
@@ -1024,8 +1029,11 @@ const T={
        adminBtn:'관리자',adminTitle:'관리자 - 전체 주문내역',adminXls:'엑셀 다운로드',adminEmpty:'등록된 주문이 없습니다.',adminCount:n=>`총 ${n}건`,
        adminTabOrders:'내가 받은 주문내역',adminTabMyOrders:'내가 신청한 주문내역',adminTabRequests:'취소·변경 요청',adminTabSignups:'가입 승인',
        signupEmpty:'등록된 회원이 없습니다.',signupApprove:'승인',signupReject:'거부',signupDelete:'삭제',
+       resetAllConfirmWord:'초기화',resetAllConfirmPrompt:w=>`정말로 전체 회원을 초기화하시겠습니까?\n이 작업은 되돌릴 수 없습니다. 계속하려면 아래에 "${w}"를 정확히 입력하세요.`,
+       resetAllCancelled:'취소되었습니다.',resetAllDone:'전체 회원이 초기화되었습니다.',
        signupApproveConfirm:id=>`${id} 계정의 가입을 승인하시겠습니까?`,signupRejectConfirm:id=>`${id} 계정의 가입을 거부하시겠습니까?`,signupDeleteConfirm:id=>`${id} 계정을 삭제하시겠습니까? 삭제하면 되돌릴 수 없습니다.`,
        signupThCompany:'회사명',signupThId:'아이디',signupThContact:'담당자명',signupThPhone:'연락처',signupThEmail:'이메일',signupThStatus:'상태',
+       resetAllMembersBtn:'전체 회원 초기화',
        signupStatusPending:'승인대기',signupStatusApproved:'승인됨',signupStatusRejected:'거부됨',
        reqEmpty:'대기중인 요청이 없습니다.',reqTypeCancel:'취소 신청',reqTypeChange:n=>`수량변경 신청 → ${n}`,
        reqApprove:'승인',reqReject:'거부',
@@ -1067,8 +1075,11 @@ const T={
        adminBtn:'Админ',adminTitle:'Админ - Все заказы',adminXls:'Скачать Excel',adminEmpty:'Заказов пока нет.',adminCount:n=>`Всего: ${n}`,
        adminTabOrders:'Полученные заказы',adminTabMyOrders:'Мои заявки',adminTabRequests:'Запросы отмены/изменения',adminTabSignups:'Одобрение регистрации',
        signupEmpty:'Нет зарегистрированных участников.',signupApprove:'Одобрить',signupReject:'Отклонить',signupDelete:'Удалить',
+       resetAllConfirmWord:'СБРОС',resetAllConfirmPrompt:w=>`Вы уверены, что хотите сбросить всех участников?\nЭто необратимо. Введите "${w}", чтобы продолжить.`,
+       resetAllCancelled:'Отменено.',resetAllDone:'Все участники сброшены.',
        signupApproveConfirm:id=>`Одобрить регистрацию аккаунта ${id}?`,signupRejectConfirm:id=>`Отклонить регистрацию аккаунта ${id}?`,signupDeleteConfirm:id=>`Удалить аккаунт ${id}? Это необратимо.`,
        signupThCompany:'Компания',signupThId:'Логин',signupThContact:'Контактное лицо',signupThPhone:'Телефон',signupThEmail:'Email',signupThStatus:'Статус',
+       resetAllMembersBtn:'Сбросить всех участников',
        signupStatusPending:'Ожидает',signupStatusApproved:'Одобрено',signupStatusRejected:'Отклонено',
        reqEmpty:'Нет ожидающих запросов.',reqTypeCancel:'Запрос отмены',reqTypeChange:n=>`Запрос изменения → ${n}`,
        reqApprove:'Одобрить',reqReject:'Отклонить',
@@ -2695,6 +2706,8 @@ async function openAdminModal(){
   renderOrderRequests();
   await loadPendingSignups();
   renderPendingSignups();
+  const resetWrap=document.getElementById("resetAllMembersWrap");
+  if(resetWrap) resetWrap.style.display = (currentUser.is_admin && !currentUser.supplier_company) ? "block" : "none";
 }
 let companyMembers=[];
 async function loadPendingSignups(){
@@ -2756,6 +2769,17 @@ async function rejectSignup(id){
   if(error){ alert(t.reqFail+'\n\n['+(error.message||error.code)+']'); return; }
   await loadPendingSignups();
   renderPendingSignups();
+}
+async function resetAllMembers(){
+  const t=T[lang];
+  const typed = prompt(t.resetAllConfirmPrompt(t.resetAllConfirmWord));
+  if(typed===null) return;
+  if(typed.trim()!==t.resetAllConfirmWord){ alert(t.resetAllCancelled); return; }
+  const { error } = await sb.from('kt_users').delete().not('supplier_company','is',null);
+  if(error){ alert(t.reqFail+'\n\n['+(error.message||error.code)+']'); return; }
+  await loadPendingSignups();
+  renderPendingSignups();
+  alert(t.resetAllDone);
 }
 async function deleteMember(id){
   const t=T[lang];
@@ -2877,6 +2901,7 @@ function refreshAdminTexts(){
   setTxt('i18n-signup-th-phone', t.signupThPhone);
   setTxt('i18n-signup-th-email', t.signupThEmail);
   setTxt('i18n-signup-th-status', t.signupThStatus);
+  setTxt('i18n-resetallmembers', t.resetAllMembersBtn);
   if(document.getElementById('adminModal').classList.contains('show')){ renderAdminOrders(); renderAdminMyOrders(); renderOrderRequests(); renderPendingSignups(); }
 }
 
