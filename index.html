@@ -901,7 +901,7 @@ input[type="text"]::placeholder{color:var(--muted)}
           <th style="padding:9px 12px" id="i18n-signup-th-email">이메일</th>
           <th style="padding:9px 12px" id="i18n-signup-th-id">아이디</th>
           <th style="padding:9px 12px;text-align:center" id="i18n-signup-th-status">상태</th>
-          <th style="padding:9px 12px;text-align:center" colspan="2"></th>
+          <th style="padding:9px 12px;text-align:center" colspan="3"></th>
         </tr></thead>
         <tbody id="adminSignupsList"></tbody>
       </table>
@@ -911,6 +911,47 @@ input[type="text"]::placeholder{color:var(--muted)}
 </div>
 
 <!-- 내 정보 수정 모달 -->
+<!-- 관리자 - 회원 정보 수정 모달 -->
+<div id="editMemberModal" class="news-modal" onclick="closeEditMemberModalBg(event)">
+  <div class="news-modal-inner" onclick="event.stopPropagation()" style="max-width:420px">
+    <div class="news-modal-hdr">
+      <span id="i18n-editmembertitle">회원 정보 수정</span>
+      <button class="news-modal-close" onclick="closeEditMemberModal()">✕</button>
+    </div>
+    <div style="padding:20px;overflow-y:auto">
+      <input type="hidden" id="emId">
+      <div style="margin-bottom:12px">
+        <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" id="i18n-editmember-id">아이디</label>
+        <input type="text" id="emIdDisplay" disabled style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--muted)">
+      </div>
+      <div style="margin-bottom:12px">
+        <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" id="i18n-editmember-company">회사명</label>
+        <input type="text" id="emCompany" oninput="this.value=this.value.toUpperCase()" style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)">
+      </div>
+      <div style="margin-bottom:12px">
+        <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" id="i18n-editmember-contact">담당자명</label>
+        <input type="text" id="emContactName" oninput="this.value=this.value.toUpperCase()" style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)">
+      </div>
+      <div style="margin-bottom:12px">
+        <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" id="i18n-editmember-phone">연락처</label>
+        <input type="tel" id="emPhone" style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)">
+      </div>
+      <div style="margin-bottom:16px">
+        <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" id="i18n-editmember-email">이메일</label>
+        <input type="email" id="emEmail" style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)">
+      </div>
+      <div style="border-top:1px solid var(--border);padding-top:14px;margin-bottom:8px">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:10px" id="i18n-editmember-pwhint">비밀번호를 재설정하려면 입력하세요 (선택사항)</div>
+        <input type="password" id="emNewPw" autocomplete="new-password" style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)" placeholder="새 비밀번호">
+      </div>
+      <div id="editMemberErr" style="color:#ef4444;font-size:12px;min-height:16px;margin-bottom:8px"></div>
+      <button class="news-btn-primary" style="width:100%;padding:11px;font-size:14px" onclick="saveEditMember()">
+        <span id="i18n-editmember-save">저장</span>
+      </button>
+    </div>
+  </div>
+</div>
+
 <div id="myInfoModal" class="news-modal" onclick="closeMyInfoModalBg(event)">
   <div class="news-modal-inner" onclick="event.stopPropagation()" style="max-width:420px">
     <div class="news-modal-hdr">
@@ -1072,7 +1113,9 @@ const T={
        newsDeleteConfirm:'이 글을 삭제할까요?',newsReplyDeleteConfirm:'이 답변을 삭제할까요?',newsRepliesLabel:n=>`답변 ${n}개`,newsFillAll:'제목과 내용을 모두 입력해주세요.',newsFillReply:'내용을 입력해주세요.',
        adminBtn:'관리자',adminTitle:'관리자 - 전체 주문내역',adminXls:'엑셀 다운로드',adminEmpty:'등록된 주문이 없습니다.',adminCount:n=>`총 ${n}건`,
        adminTabOrders:'내가 받은 주문내역',adminTabMyOrders:'내가 신청한 주문내역',adminTabRequests:'취소·변경 요청',adminTabSignups:'가입 승인',
-       signupEmpty:'등록된 회원이 없습니다.',signupApprove:'승인',signupReject:'거부',signupDelete:'삭제',
+       signupEmpty:'등록된 회원이 없습니다.',signupApprove:'승인',signupReject:'거부',signupDelete:'삭제',signupEdit:'수정',
+       editMemberTitle:'회원 정보 수정',editMemberId:'아이디',editMemberCompany:'회사명',editMemberContact:'담당자명',editMemberPhone:'연락처',editMemberEmail:'이메일',
+       editMemberPwHint:'비밀번호를 재설정하려면 입력하세요 (선택사항)',editMemberSave:'저장',
        resetAllConfirmWord:'초기화',resetAllConfirmPrompt:w=>`정말로 전체 회원을 초기화하시겠습니까?\n이 작업은 되돌릴 수 없습니다. 계속하려면 아래에 "${w}"를 정확히 입력하세요.`,
        resetAllCancelled:'취소되었습니다.',resetAllDone:'전체 회원이 초기화되었습니다.',
        signupApproveConfirm:id=>`${id} 계정의 가입을 승인하시겠습니까?`,signupRejectConfirm:id=>`${id} 계정의 가입을 거부하시겠습니까?`,signupDeleteConfirm:id=>`${id} 계정을 삭제하시겠습니까? 삭제하면 되돌릴 수 없습니다.`,
@@ -1122,7 +1165,9 @@ const T={
        newsDeleteConfirm:'Удалить эту запись?',newsReplyDeleteConfirm:'Удалить этот ответ?',newsRepliesLabel:n=>`Ответов: ${n}`,newsFillAll:'Пожалуйста, заполните заголовок и содержание.',newsFillReply:'Пожалуйста, введите текст.',
        adminBtn:'Админ',adminTitle:'Админ - Все заказы',adminXls:'Скачать Excel',adminEmpty:'Заказов пока нет.',adminCount:n=>`Всего: ${n}`,
        adminTabOrders:'Полученные заказы',adminTabMyOrders:'Мои заявки',adminTabRequests:'Запросы отмены/изменения',adminTabSignups:'Одобрение регистрации',
-       signupEmpty:'Нет зарегистрированных участников.',signupApprove:'Одобрить',signupReject:'Отклонить',signupDelete:'Удалить',
+       signupEmpty:'Нет зарегистрированных участников.',signupApprove:'Одобрить',signupReject:'Отклонить',signupDelete:'Удалить',signupEdit:'Изменить',
+       editMemberTitle:'Изменить участника',editMemberId:'Логин',editMemberCompany:'Компания',editMemberContact:'Контактное лицо',editMemberPhone:'Телефон',editMemberEmail:'Email',
+       editMemberPwHint:'Введите, чтобы сбросить пароль (необязательно)',editMemberSave:'Сохранить',
        resetAllConfirmWord:'СБРОС',resetAllConfirmPrompt:w=>`Вы уверены, что хотите сбросить всех участников?\nЭто необратимо. Введите "${w}", чтобы продолжить.`,
        resetAllCancelled:'Отменено.',resetAllDone:'Все участники сброшены.',
        signupApproveConfirm:id=>`Одобрить регистрацию аккаунта ${id}?`,signupRejectConfirm:id=>`Отклонить регистрацию аккаунта ${id}?`,signupDeleteConfirm:id=>`Удалить аккаунт ${id}? Это необратимо.`,
@@ -2812,6 +2857,7 @@ function renderPendingSignups(){
     <td style="padding:9px 12px">${escapeHtml(u.id)}</td>
     <td style="padding:9px 12px;text-align:center">${statusLabel(u.status)}</td>
     <td style="padding:9px 12px;text-align:center">${approveBtn}${rejectBtn}</td>
+    <td style="padding:9px 12px;text-align:center"><button class="news-btn-secondary" onclick="openEditMemberModal('${idEsc}')">${t.signupEdit}</button></td>
     <td style="padding:9px 12px;text-align:center"><button class="news-btn-secondary" onclick="deleteMember('${idEsc}')">${t.signupDelete}</button></td>
   </tr>`;
   }).join('');
@@ -2850,6 +2896,48 @@ async function deleteMember(id){
   if(error){ alert(t.reqFail+'\n\n['+(error.message||error.code)+']'); return; }
   await loadPendingSignups();
   renderPendingSignups();
+}
+function openEditMemberModal(id){
+  const m=companyMembers.find(u=>u.id===id);
+  if(!m) return;
+  document.getElementById('emId').value=m.id;
+  document.getElementById('emIdDisplay').value=m.id;
+  document.getElementById('emCompany').value=m.company||'';
+  document.getElementById('emContactName').value=m.contact_name||'';
+  document.getElementById('emPhone').value=m.phone||'';
+  document.getElementById('emEmail').value=m.email||'';
+  document.getElementById('emNewPw').value='';
+  document.getElementById('editMemberErr').textContent='';
+  document.getElementById('editMemberModal').classList.add('show');
+}
+function closeEditMemberModal(){ document.getElementById('editMemberModal').classList.remove('show'); }
+function closeEditMemberModalBg(e){ if(e.target===document.getElementById('editMemberModal')) closeEditMemberModal(); }
+async function saveEditMember(){
+  const t=T[lang];
+  const errEl=document.getElementById('editMemberErr');
+  errEl.textContent='';
+  const id=document.getElementById('emId').value;
+  const company=document.getElementById('emCompany').value.trim();
+  const contactName=document.getElementById('emContactName').value.trim();
+  const phone=document.getElementById('emPhone').value.trim();
+  const email=document.getElementById('emEmail').value.trim();
+  const newPw=document.getElementById('emNewPw').value;
+
+  if(!company || !contactName || !phone || !email){ errEl.textContent=t.myInfoErrFill; return; }
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ errEl.textContent=t.myInfoErrEmail; return; }
+
+  const payload = { company, contact_name: contactName, phone, email };
+  if(newPw){
+    if(newPw.length < 4){ errEl.textContent=t.myInfoErrPwShort; return; }
+    payload.password_hash = await sha256Hex(newPw);
+  }
+
+  const { error } = await sb.from('kt_users').update(payload).eq('id', id);
+  if(error){ errEl.textContent=(error.message||error.code); return; }
+  await loadPendingSignups();
+  renderPendingSignups();
+  closeEditMemberModal();
+  alert(t.myInfoSaved);
 }
 function renderAdminMyOrders(){
   const t=T[lang];
@@ -2964,6 +3052,14 @@ function refreshAdminTexts(){
   setTxt('i18n-signup-th-email', t.signupThEmail);
   setTxt('i18n-signup-th-status', t.signupThStatus);
   setTxt('i18n-resetallmembers', t.resetAllMembersBtn);
+  setTxt('i18n-editmembertitle', t.editMemberTitle);
+  setTxt('i18n-editmember-id', t.editMemberId);
+  setTxt('i18n-editmember-company', t.editMemberCompany);
+  setTxt('i18n-editmember-contact', t.editMemberContact);
+  setTxt('i18n-editmember-phone', t.editMemberPhone);
+  setTxt('i18n-editmember-email', t.editMemberEmail);
+  setTxt('i18n-editmember-pwhint', t.editMemberPwHint);
+  setTxt('i18n-editmember-save', t.editMemberSave);
   if(document.getElementById('adminModal').classList.contains('show')){ renderAdminOrders(); renderAdminMyOrders(); renderOrderRequests(); renderPendingSignups(); }
 }
 
