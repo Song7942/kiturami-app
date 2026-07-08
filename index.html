@@ -3601,6 +3601,7 @@ const AUTH_T = {
     loginTitle:'로그인', idPh:'아이디', pwPh:'비밀번호', loginBtn:'로그인',
     linkSignup:'회원가입', linkFindId:'아이디 찾기', linkFindPw:'비밀번호 찾기',
     signupTitle:'회원가입', companyPh:'회사명', pwPh2:'비밀번호 확인', signupBtn:'가입하기', backToLogin:'← 로그인으로 돌아가기',
+    contactNamePh:'담당자명', phonePh:'연락처', emailPh:'이메일주소', supplierPh:'구매처(거래처) 회사명',
     findIdTitle:'아이디 찾기', findIdDesc:'가입시 등록한 회사명을 입력하세요.', findIdBtn:'아이디 조회',
     findPwTitle:'비밀번호 재설정', findPwDesc:'회사명과 아이디를 입력해 본인 확인 후 새 비밀번호를 설정하세요.',
     verifyBtn:'본인 확인', newPwPh:'새 비밀번호', newPwPh2:'새 비밀번호 확인', resetBtn:'비밀번호 변경',
@@ -3616,6 +3617,7 @@ const AUTH_T = {
     loginTitle:'Вход', idPh:'Логин', pwPh:'Пароль', loginBtn:'Войти',
     linkSignup:'Регистрация', linkFindId:'Найти логин', linkFindPw:'Забыли пароль',
     signupTitle:'Регистрация', companyPh:'Название компании', pwPh2:'Подтвердите пароль', signupBtn:'Зарегистрироваться', backToLogin:'← Назад ко входу',
+    contactNamePh:'Контактное лицо', phonePh:'Телефон', emailPh:'Email адрес', supplierPh:'Компания-поставщик',
     findIdTitle:'Найти логин', findIdDesc:'Введите название компании, указанное при регистрации.', findIdBtn:'Найти',
     findPwTitle:'Сброс пароля', findPwDesc:'Введите название компании и логин для подтверждения, затем задайте новый пароль.',
     verifyBtn:'Подтвердить', newPwPh:'Новый пароль', newPwPh2:'Подтвердите новый пароль', resetBtn:'Изменить пароль',
@@ -3661,6 +3663,10 @@ function setAuthLang(l){
 
   document.getElementById('as-title').textContent = t.signupTitle;
   document.getElementById('suCompany').placeholder = t.companyPh;
+  document.getElementById('suContactName').placeholder = t.contactNamePh;
+  document.getElementById('suPhone').placeholder = t.phonePh;
+  document.getElementById('suEmail').placeholder = t.emailPh;
+  document.getElementById('suSupplier').placeholder = t.supplierPh;
   document.getElementById('suId').placeholder = t.idPh;
   document.getElementById('suPw').placeholder = t.pwPh;
   document.getElementById('suPw2').placeholder = t.pwPh2;
