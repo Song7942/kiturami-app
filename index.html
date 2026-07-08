@@ -2847,15 +2847,22 @@ function computeAdminOrderBreakdown(){
   const globalSuppliedByRep={};
   adminOrderRows.forEach(r=>{ globalSuppliedByRep[r.rep]=(globalSuppliedByRep[r.rep]||0)+(r.supplied||0); });
   const masterRepTotals=computeMasterRepTotals(); // 재고 엑셀의 대표품번 기준 합산 수량(기초재고)
+  // 기존 공급량은 이제 실제 출고내역(kt_shipments)에서 가져옵니다 (대표품번 기준으로 합산).
+  const shippedByMasterRep={};
+  (shipmentsData||[]).forEach(s=>{
+    const master=findMasterRep(s.rep);
+    if(!master) return;
+    shippedByMasterRep[master]=(shippedByMasterRep[master]||0)+(s.qty||0);
+  });
   adminOrderRows.forEach((row,idx)=>{
-    let existingOrderQty=0, existingSupplied=0;
+    let existingOrderQty=0;
     adminOrderRows.forEach((r2,idx2)=>{
       if(idx2===idx) return;
       if(r2.company===row.company && r2.rep===row.rep){
         existingOrderQty+=r2.qty||0;
-        existingSupplied+=r2.supplied||0;
       }
     });
+    const existingSupplied=shippedByMasterRep[row.rep]||0; // 기존-공급: 출고내역 기준
     row.existingOrderQty=existingOrderQty;      // 기존-주문
     row.existingSupplied=existingSupplied;      // 기존-공급
     row.newOrderQty=row.qty||0;                 // 신규-주문
@@ -2971,6 +2978,7 @@ async function openAdminModal(){
   document.getElementById('adminOrderEmpty').style.display='none';
   switchAdminView('orders');
   await loadInventory();
+  await loadShipments();
   await loadAdminOrders();
   renderAdminOrders();
   await loadMyOrders();
