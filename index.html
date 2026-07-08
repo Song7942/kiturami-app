@@ -1953,7 +1953,7 @@ function findDiagTypeForRow(d){
   }
   return null;
 }
-function trySearchDiagHighlight(rows){
+function trySearchDiagHighlight(rows, searchInputId){
   if(!rows || rows.length!==1) return; // 검색 결과가 정확히 하나로 좁혀졌을 때만(여러 개면 어떤 걸 보여줄지 모호함)
   const d=rows[0];
   if(!d.diag) return;
@@ -1977,6 +1977,15 @@ function trySearchDiagHighlight(rows){
   setTimeout(()=>{
     const btn=document.querySelector(`.diag-num[data-diag="${String(d.diag)}"]`);
     if(btn) onDiagClick(String(d.diag), btn);
+    // 검색어를 계속 남겨두면 표가 이 품목 하나로만 계속 좁혀진 채로 있어서,
+    // 이후 다른 도면번호를 클릭하거나 탭을 옮겨도 그 결과가 안 보이게 됩니다.
+    // 강조가 적용된 뒤에는 검색어를 지워 전체 목록이 다시 보이게 합니다(강조 표시는 유지됨).
+    const searchInput=document.getElementById(searchInputId);
+    if(searchInput && searchInput.value){
+      searchInput.value='';
+      if(searchInputId==='searchInput'){ searchKw=''; renderTable(); }
+      else { orderSearchKw=''; renderOrderTable(); }
+    }
   }, needsSwitch?120:0);
 }
 function onDiagClick(dn,btn){
@@ -2501,8 +2510,8 @@ window.addEventListener('resize',()=>{
 });
 
 document.addEventListener('click',e=>{const bar=document.getElementById('modelBar');if(!bar.contains(e.target))closeDropdown();});
-document.getElementById('searchInput').addEventListener('input',e=>{searchKw=e.target.value.trim();renderTable();if(searchKw) trySearchDiagHighlight(getFilteredParts());});
-document.getElementById('orderSearchInput').addEventListener('input',e=>{orderSearchKw=e.target.value.trim();renderOrderTable();if(orderSearchKw) trySearchDiagHighlight(getFilteredOrderParts());});
+document.getElementById('searchInput').addEventListener('input',e=>{searchKw=e.target.value.trim();renderTable();if(searchKw) trySearchDiagHighlight(getFilteredParts(),'searchInput');});
+document.getElementById('orderSearchInput').addEventListener('input',e=>{orderSearchKw=e.target.value.trim();renderOrderTable();if(orderSearchKw) trySearchDiagHighlight(getFilteredOrderParts(),'orderSearchInput');});
 
 // ══════════════════════════════════════════
 // News (공지사항 / 질문·답변)
