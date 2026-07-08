@@ -849,7 +849,7 @@ input[type="text"]::placeholder{color:var(--muted)}
 <div id="adminModal" class="news-modal" onclick="closeAdminModalBg(event)">
   <div class="news-modal-inner" onclick="event.stopPropagation()" style="max-width:1300px;width:95vw;max-height:90vh">
     <div class="news-modal-hdr">
-      <span id="i18n-admintitle">관리자 - 전체 주문내역</span>
+      <span id="i18n-admintitle">회원 및 주문관리</span>
       <button class="news-modal-close" onclick="closeAdminModal()">✕</button>
     </div>
     <div class="news-tabs">
@@ -863,7 +863,7 @@ input[type="text"]::placeholder{color:var(--muted)}
         <span id="i18n-admintab-requests">취소·변경 요청</span> <span id="adminReqBadge" style="display:none;background:#f59e0b;color:#1a1a00;border-radius:9px;padding:1px 6px;font-size:10px;font-weight:800;margin-left:4px"></span>
       </button>
       <button class="news-tab" id="adminTabSignups" onclick="switchAdminView('signups')">
-        <span id="i18n-admintab-signups">가입 회원 관리</span> <span id="adminSignupBadge" style="display:none;background:#ef4444;color:#fff;border-radius:9px;padding:1px 6px;font-size:10px;font-weight:800;margin-left:4px"></span>
+        <span id="i18n-admintab-signups">회원관리 및 가입승인</span> <span id="adminSignupBadge" style="display:none;background:#ef4444;color:#fff;border-radius:9px;padding:1px 6px;font-size:10px;font-weight:800;margin-left:4px"></span>
       </button>
     </div>
     <div id="adminOrdersView" style="display:flex;flex-direction:column;flex:1;min-height:0">
@@ -1155,8 +1155,8 @@ const T={
        newsEmpty:'등록된 글이 없습니다.',newsTitlePh:'제목을 입력하세요',newsContentPh:'내용을 입력하세요',newsReplyPh:'답변/댓글을 입력하세요',newsDeleteBtn:'삭제',
        newsAttach:'📎 자료 첨부',newsAttachDownload:'첨부파일 다운로드',newsAttachFail:'파일 업로드에 실패했습니다.',
        newsDeleteConfirm:'이 글을 삭제할까요?',newsReplyDeleteConfirm:'이 답변을 삭제할까요?',newsRepliesLabel:n=>`답변 ${n}개`,newsFillAll:'제목과 내용을 모두 입력해주세요.',newsFillReply:'내용을 입력해주세요.',
-       adminBtn:'관리자',adminTitle:'관리자 - 전체 주문내역',adminXls:'엑셀 다운로드',adminEmpty:'등록된 주문이 없습니다.',adminCount:n=>`총 ${n}건`,
-       adminTabOrders:'내가 받은 주문내역',adminTabMyOrders:'내가 신청한 주문내역',adminTabRequests:'취소·변경 요청',adminTabSignups:'가입 승인',
+       adminBtn:'관리자',adminTitle:'회원 및 주문관리',adminXls:'엑셀 다운로드',adminEmpty:'등록된 주문이 없습니다.',adminCount:n=>`총 ${n}건`,
+       adminTabOrders:'내가 받은 주문내역',adminTabMyOrders:'내가 신청한 주문내역',adminTabRequests:'취소·변경 요청',adminTabSignups:'회원관리 및 가입승인',
        signupEmpty:'등록된 회원이 없습니다.',signupApprove:'승인',signupReject:'거부',signupDelete:'삭제',signupEdit:'수정',
        editMemberTitle:'회원 정보 수정',editMemberId:'아이디',editMemberCompany:'회사명',editMemberContact:'담당자명',editMemberPhone:'휴대폰',editMemberEmail:'이메일',
        editMemberPwHint:'비밀번호를 재설정하려면 입력하세요 (선택사항)',editMemberSave:'저장',
@@ -1209,8 +1209,8 @@ const T={
        newsEmpty:'Записей пока нет.',newsTitlePh:'Введите заголовок',newsContentPh:'Введите содержание',newsReplyPh:'Введите ответ/комментарий',newsDeleteBtn:'Удалить',
        newsAttach:'📎 Прикрепить файл',newsAttachDownload:'Скачать вложение',newsAttachFail:'Не удалось загрузить файл.',
        newsDeleteConfirm:'Удалить эту запись?',newsReplyDeleteConfirm:'Удалить этот ответ?',newsRepliesLabel:n=>`Ответов: ${n}`,newsFillAll:'Пожалуйста, заполните заголовок и содержание.',newsFillReply:'Пожалуйста, введите текст.',
-       adminBtn:'Админ',adminTitle:'Админ - Все заказы',adminXls:'Скачать Excel',adminEmpty:'Заказов пока нет.',adminCount:n=>`Всего: ${n}`,
-       adminTabOrders:'Полученные заказы',adminTabMyOrders:'Мои заявки',adminTabRequests:'Запросы отмены/изменения',adminTabSignups:'Одобрение регистрации',
+       adminBtn:'Админ',adminTitle:'Управление участниками и заказами',adminXls:'Скачать Excel',adminEmpty:'Заказов пока нет.',adminCount:n=>`Всего: ${n}`,
+       adminTabOrders:'Полученные заказы',adminTabMyOrders:'Мои заявки',adminTabRequests:'Запросы отмены/изменения',adminTabSignups:'Управление участниками и одобрение',
        signupEmpty:'Нет зарегистрированных участников.',signupApprove:'Одобрить',signupReject:'Отклонить',signupDelete:'Удалить',signupEdit:'Изменить',
        editMemberTitle:'Изменить участника',editMemberId:'Логин',editMemberCompany:'Компания',editMemberContact:'Контактное лицо',editMemberPhone:'Мобильный',editMemberEmail:'Email',
        editMemberPwHint:'Введите, чтобы сбросить пароль (необязательно)',editMemberSave:'Сохранить',
@@ -1953,18 +1953,16 @@ function findDiagTypeForRow(d){
   }
   return null;
 }
-function trySearchDiagHighlight(rows, searchInputId){
-  if(!rows || rows.length!==1) return; // 검색 결과가 정확히 하나로 좁혀졌을 때만(여러 개면 어떤 걸 보여줄지 모호함)
-  const d=rows[0];
-  if(!d.diag) return;
+function openDiagramAndHighlightRow(d, afterFn){
+  if(!d || !d.diag) return false;
   const type=findDiagTypeForRow(d);
-  if(!type) return;
+  if(!type) return false;
 
   const panelOpen=document.getElementById('diagramPanel').classList.contains('open');
   const needsSwitch = !panelOpen || !diagTypes.includes(type);
   if(needsSwitch){
     const group=MODEL_GROUPS.find(g=>g.abbr===DIAG_ABBR[type]);
-    if(!group) return;
+    if(!group) return false;
     if(multiMode){
       if(selectedKeys===null) selectedKeys=new Set();
       group.keys.forEach(k=>selectedKeys.add(k));
@@ -1977,6 +1975,14 @@ function trySearchDiagHighlight(rows, searchInputId){
   setTimeout(()=>{
     const btn=document.querySelector(`.diag-num[data-diag="${String(d.diag)}"]`);
     if(btn) onDiagClick(String(d.diag), btn);
+    if(afterFn) afterFn();
+  }, needsSwitch?120:0);
+  return true;
+}
+function trySearchDiagHighlight(rows, searchInputId){
+  if(!rows || rows.length!==1) return; // 검색 결과가 정확히 하나로 좁혀졌을 때만(여러 개면 어떤 걸 보여줄지 모호함)
+  const d=rows[0];
+  openDiagramAndHighlightRow(d, ()=>{
     // 검색어를 계속 남겨두면 표가 이 품목 하나로만 계속 좁혀진 채로 있어서,
     // 이후 다른 도면번호를 클릭하거나 탭을 옮겨도 그 결과가 안 보이게 됩니다.
     // 강조가 적용된 뒤에는 검색어를 지워 전체 목록이 다시 보이게 합니다(강조 표시는 유지됨).
@@ -1986,8 +1992,28 @@ function trySearchDiagHighlight(rows, searchInputId){
       if(searchInputId==='searchInput'){ searchKw=''; renderTable(); }
       else { orderSearchKw=''; renderOrderTable(); }
     }
-  }, needsSwitch?120:0);
+  });
 }
+// 표(또는 카드)의 품목 행을 직접 클릭했을 때: 분해도를 열고 번호+행을 함께 강조.
+// 같은 행을 다시 클릭하거나 관련 없는 곳을 클릭하면 강조와 분해도를 모두 닫습니다.
+function onRowClickHighlight(diag, rep, isOrder){
+  const rows = isOrder ? getFilteredOrderParts() : getFilteredParts();
+  const d = rows.find(r=>String(r.diag)===String(diag) && r.rep===rep);
+  if(!d) return;
+  const dn=String(d.diag);
+  if(activeDiagNum===dn){
+    activeDiagNum=null; clearHighlight(); closeDiagram();
+    return;
+  }
+  openDiagramAndHighlightRow(d);
+}
+document.addEventListener('click', function(e){
+  if(!activeDiagNum) return;
+  const insideRelevant = e.target.closest('.tbl-body-wrap, .card-list, #diagramPanel, .diag-num, .mb-item, #mbDropdown, .diag-zoom-btn');
+  if(!insideRelevant){
+    activeDiagNum=null; clearHighlight(); closeDiagram();
+  }
+});
 function onDiagClick(dn,btn){
   document.querySelectorAll('.diag-num.active').forEach(b=>b.classList.remove('active'));
   if(activeDiagNum===dn){activeDiagNum=null;clearHighlight();return;}
@@ -2084,13 +2110,14 @@ function renderTable(){
   const od=renderHeader();
   document.getElementById('tbody').innerHTML=rows.map(d=>{
     const nc=lang==='ko'?`<td style="font-weight:500;text-align:center">${hl(d.name_ko,kw)}</td><td style="color:var(--muted);font-size:10px;text-align:center">${hl(d.spec,kw)}</td>`:`<td style="font-weight:500;text-align:center">${hl(d.name_ru,kw)}</td>`;
-    return `<tr data-diag="${d.diag}" onclick="onRowClick(this,'${d.diag}')"><td class="center" style="color:var(--muted);font-size:11px">${hl(d.diag,kw)}</td>${nc}<td style="text-align:center"><span class="code">${hl(d.rep,kw)}</span></td>${od.map(m=>{const sel=selectedKeys!==null&&selectedKeys.has(m.key);return `<td class="center"${sel?` style="background:${m.color}18"`:''}>${dot(d.models[m.key])}</td>`;}).join('')}</tr>`;
+    return `<tr data-diag="${d.diag}" onclick="onRowClickHighlight('${d.diag}','${d.rep.replace(/'/g,"\\'")}',false)"><td class="center" style="color:var(--muted);font-size:11px">${hl(d.diag,kw)}</td>${nc}<td style="text-align:center"><span class="code">${hl(d.rep,kw)}</span></td>${od.map(m=>{const sel=selectedKeys!==null&&selectedKeys.has(m.key);return `<td class="center"${sel?` style="background:${m.color}18"`:''}>${dot(d.models[m.key])}</td>`;}).join('')}</tr>`;
   }).join('');
   const cl=document.getElementById('cardList');cl.querySelectorAll('.part-card').forEach(e=>e.remove());
   const frag=document.createDocumentFragment();
   rows.forEach(d=>{
     const applied=MODEL_DEFS.filter(m=>d.models[m.key]);
     const el=document.createElement('div');el.className='part-card';el.dataset.diag=d.diag;
+    el.addEventListener('click',()=>onRowClickHighlight(String(d.diag), d.rep, false));
     const nh=lang==='ko'?`<span class="pc-name">${hl(d.name_ko,kw)}</span></div><div class="pc-spec">${hl(d.spec,kw)}`:`<span class="pc-name">${hl(d.name_ru,kw)}</span>`;
     el.innerHTML=`<div class="pc-top"><span class="pc-diag" data-diag="${escapeHtml(String(d.diag))}">${T[lang].thDiag} ${hl(d.diag,kw)}</span>${nh}</div><div class="pc-code"><span class="code">${hl(d.rep,kw)}</span></div><div class="model-tags">${applied.map(m=>`<span class="mt" style="color:${m.color};background:${m.color}22;border-color:${m.color}44">${m.group} ${m.label}</span>`).join('')}</div>`;
     frag.appendChild(el);
@@ -2367,7 +2394,7 @@ function renderOrderTable(){
     const qty=orderQty[key]||'';
     const nc=isKo?`<td style="font-weight:500;text-align:center">${d.name_ko}</td><td style="color:var(--muted);font-size:10px;text-align:center">${d.spec}</td>`:`<td style="font-weight:500;text-align:center">${d.name_ru}</td>`;
     const modelCells=columns.map(col=>{const hlStyle=col.selected?` style="background:${col.color}18"`:'';return `<td class="center"${hlStyle}>${dot(isColumnApplied(d,col))}</td>`;}).join('');
-    return `<tr><td class="center" style="color:var(--muted);font-size:11px">${d.diag}</td>${nc}<td style="text-align:center"><span class="code">${d.rep}</span></td>${modelCells}<td style="text-align:right;padding-right:16px;color:var(--muted)">${receivedQty}</td><td style="text-align:right;padding-right:16px;color:var(--muted)">${stockText}</td><td class="center"><input type="number" min="0" class="order-qty-input" value="${qty}" data-key="${key.replace(/"/g,'&quot;')}" oninput="setOrderQty(this)" style="width:70px;text-align:center;padding:5px 4px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text)"></td></tr>`;
+    return `<tr onclick="onRowClickHighlight('${d.diag}','${d.rep.replace(/'/g,"\\'")}',true)"><td class="center" style="color:var(--muted);font-size:11px">${d.diag}</td>${nc}<td style="text-align:center"><span class="code">${d.rep}</span></td>${modelCells}<td style="text-align:right;padding-right:16px;color:var(--muted)">${receivedQty}</td><td style="text-align:right;padding-right:16px;color:var(--muted)">${stockText}</td><td class="center" onclick="event.stopPropagation()"><input type="number" min="0" class="order-qty-input" value="${qty}" data-key="${key.replace(/"/g,'&quot;')}" oninput="setOrderQty(this)" style="width:70px;text-align:center;padding:5px 4px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text)"></td></tr>`;
   }).join('');
 
   const orderCardListEl=document.getElementById('orderCardList');
@@ -2392,7 +2419,7 @@ function renderOrderTable(){
       tagHtml = columns.filter(col=>isColumnApplied(d,col)).map(col=>`<span class="mt" style="color:${col.color};background:${col.color}22;border-color:${col.color}44">${col.group} ${col.label}</span>`).join('');
     }
     const modelHtml = tagHtml ? `<div class="model-tags" style="margin-top:4px">${tagHtml}</div>` : '';
-    return `<div class="order-card">
+    return `<div class="order-card" onclick="onRowClickHighlight('${d.diag}','${d.rep.replace(/'/g,"\\'")}',true)">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
         <div style="flex:1;min-width:0">
           <div class="pc-diag" data-diag="${escapeHtml(String(d.diag))}" style="font-size:11px;color:var(--muted)">${t.thDiag} ${d.diag}</div>
@@ -2410,7 +2437,7 @@ function renderOrderTable(){
             <div style="font-size:10px;color:var(--muted)">${t.orderStock}</div>
             <div style="font-size:15px;font-weight:700;color:var(--text)">${stockText}</div>
           </div>
-          <div style="text-align:center;margin-top:4px">
+          <div style="text-align:center;margin-top:4px" onclick="event.stopPropagation()">
             <div style="font-size:10px;color:var(--accent2);font-weight:600">${t.grpNew} ${t.colOrder}</div>
             <input type="number" min="0" class="order-qty-input" value="${qty}" data-key="${key.replace(/"/g,'&quot;')}" oninput="setOrderQty(this)" style="width:64px;text-align:center;padding:6px 4px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text);font-size:14px;margin-top:2px">
           </div>
@@ -2758,7 +2785,7 @@ function refreshNewsTexts(){
 let adminOrderRows=[]; // 화면표시/엑셀다운로드 공용 (아이템 단위로 펼친 행)
 
 async function loadAdminOrders(){
-  const { data, error } = await sb.from('kt_orders').select('*').eq('target_company', currentUser?currentUser.company:'').order('created_at', { ascending:false });
+  const { data, error } = await sb.from('kt_orders').select('*').ilike('target_company', currentUser?currentUser.company:'').order('created_at', { ascending:false });
   if(error){ console.error(error); adminOrderRows=[]; return; }
   const rows=[];
   (data||[]).forEach(o=>{
@@ -2916,7 +2943,7 @@ async function openAdminModal(){
 let companyMembers=[];
 async function loadPendingSignups(){
   const myCompany=currentUser?currentUser.company:'';
-  const { data, error } = await sb.from('kt_users').select('id,company,contact_name,country,region,phone,email,supplier_company,status').eq('supplier_company', myCompany).order('id');
+  const { data, error } = await sb.from('kt_users').select('id,company,contact_name,country,region,phone,email,supplier_company,status').ilike('supplier_company', myCompany).order('id');
   if(error){ console.error(error); companyMembers=[]; return; }
   companyMembers=data||[];
   const pendingCount=companyMembers.filter(u=>u.status==='pending').length;
@@ -2980,6 +3007,9 @@ async function resetAllMembers(){
   const typed = prompt(t.resetAllConfirmPrompt(t.resetAllConfirmWord));
   if(typed===null) return;
   if(typed.trim()!==t.resetAllConfirmWord){ alert(t.resetAllCancelled); return; }
+  // 회원을 전부 초기화하면, 그 회원들이 넣었던 주문/취소변경요청도 유령 데이터로 남지 않도록 함께 지웁니다.
+  await sb.from('kt_order_requests').delete().not('id','is',null);
+  await sb.from('kt_orders').delete().not('id','is',null);
   const { error } = await sb.from('kt_users').delete().not('supplier_company','is',null);
   if(error){ alert(t.reqFail+'\n\n['+(error.message||error.code)+']'); return; }
   await loadPendingSignups();
@@ -2989,6 +3019,9 @@ async function resetAllMembers(){
 async function deleteMember(id){
   const t=T[lang];
   if(!confirm(t.signupDeleteConfirm(id))) return;
+  // 계정을 삭제할 때, 그 계정이 넣었던 주문/요청도 함께 지워서 유령 데이터로 남지 않게 합니다.
+  await sb.from('kt_orders').delete().eq('user_id', id);
+  await sb.from('kt_order_requests').delete().eq('user_id', id);
   const { error } = await sb.from('kt_users').delete().eq('id', id);
   if(error){ alert(t.reqFail+'\n\n['+(error.message||error.code)+']'); return; }
   await loadPendingSignups();
@@ -3173,7 +3206,7 @@ function refreshAdminTexts(){
 let orderRequests=[]; // 전체 사용자의 취소/변경 요청 (관리자용)
 
 async function loadOrderRequests(){
-  const { data, error } = await sb.from('kt_order_requests').select('*').eq('target_company', currentUser?currentUser.company:'').order('created_at', { ascending:false });
+  const { data, error } = await sb.from('kt_order_requests').select('*').ilike('target_company', currentUser?currentUser.company:'').order('created_at', { ascending:false });
   if(error){ console.error(error); orderRequests=[]; return; }
   orderRequests=data||[];
   const pendingCount=orderRequests.filter(r=>r.status==='pending').length;
@@ -3480,7 +3513,7 @@ let inventoryData={}; // rep -> {qty, updated_at}
 let supplierInventoryData={}; // 구매처(내가 주문을 넣는 곳)의 창고 재고 - 참고용, 읽기 전용
 async function loadInventory(){
   const myCompany=currentUser?currentUser.company:'';
-  const { data, error } = await sb.from('kt_inventory').select('*').eq('company', myCompany).order('rep');
+  const { data, error } = await sb.from('kt_inventory').select('*').ilike('company', myCompany).order('rep');
   if(error){ console.error(error); inventoryData={}; }
   else{
     inventoryData={};
@@ -3488,7 +3521,7 @@ async function loadInventory(){
   }
   const supplierCompany=currentUser?currentUser.supplier_company:'';
   if(supplierCompany){
-    const { data: supData, error: supErr } = await sb.from('kt_inventory').select('*').eq('company', supplierCompany).order('rep');
+    const { data: supData, error: supErr } = await sb.from('kt_inventory').select('*').ilike('company', supplierCompany).order('rep');
     if(supErr){ console.error(supErr); supplierInventoryData={}; }
     else{
       supplierInventoryData={};
@@ -3515,7 +3548,7 @@ function findMasterRep(articul){
 }
 let globalSuppliedTotals={}; // rep -> 지금까지 관리자가 배분한 누적 수량 (전체 주문 기준)
 async function loadGlobalSuppliedTotals(){
-  const { data, error } = await sb.from('kt_orders').select('items').eq('target_company', currentUser?currentUser.company:'');
+  const { data, error } = await sb.from('kt_orders').select('items').ilike('target_company', currentUser?currentUser.company:'');
   if(error){ console.error(error); globalSuppliedTotals={}; return; }
   const totals={};
   (data||[]).forEach(o=>{
@@ -3538,7 +3571,7 @@ function getPNInfo(rep){
 }
 let receivedOrderTotals={}; // 고객사(구매처)들로부터 접수받은 주문수량 합계 (rep 기준)
 async function loadReceivedOrderTotals(){
-  const { data, error } = await sb.from('kt_orders').select('items').eq('target_company', currentUser?currentUser.company:'');
+  const { data, error } = await sb.from('kt_orders').select('items').ilike('target_company', currentUser?currentUser.company:'');
   if(error){ console.error(error); receivedOrderTotals={}; return; }
   const totals={};
   (data||[]).forEach(o=>{
@@ -3776,7 +3809,7 @@ async function handleInventoryUpload(event){
 
       // 새 엑셀로 업데이트하면 "내 회사"의 기존 재고 데이터만 지우고 새 파일 내용으로 완전히 교체합니다.
       // (다른 회사의 재고 데이터는 건드리지 않습니다)
-      const { error: delErr } = await sb.from('kt_inventory').delete().eq('company', myCompany);
+      const { error: delErr } = await sb.from('kt_inventory').delete().ilike('company', myCompany);
       if(delErr){ console.error(delErr); alert(t.invUploadFail+'\n\n['+(delErr.message||delErr.code)+']'); event.target.value=''; return; }
 
       const { error } = await sb.from('kt_inventory').upsert(dedupedRows,{onConflict:'company,rep'});
