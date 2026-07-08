@@ -3853,7 +3853,7 @@ updatePartsTableScrollbar();updateOrderTableScrollbar();
 // ══════════════════════════════════════════
 // 인증 (로그인 / 회원가입 / 아이디·비밀번호 찾기)
 // ══════════════════════════════════════════
-const AUTH_SESSION_KEY = 'kt_session'; // 세션은 편의상 로컬에 캐시(비밀번호는 저장 안 함)
+const AUTH_SESSION_KEY = 'kt_session'; // 세션은 탭(창)마다 따로 유지되도록 sessionStorage 사용 (한 PC에서 여러 계정을 각각 다른 탭으로 동시 로그인 가능)
 let authLang = 'ko';
 let _fpVerifiedUser = null; // 비밀번호 재설정 시, 본인확인된 사용자 참조
 
@@ -4235,7 +4235,7 @@ async function doLogin(){
   if(status==='pending'){ authSetErr('authLoginErr', t.errPending ? t.errPending(found.supplier_company||'') : '가입 승인 대기 중입니다.'); return; }
   if(status==='rejected'){ authSetErr('authLoginErr', t.errRejected || '가입 신청이 거부되었습니다.'); return; }
   const user = {id:found.id, company:found.company, is_admin: !!found.is_admin, supplier_company: found.supplier_company||null};
-  localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(user));
+  sessionStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(user));
   enterApp(user);
 }
 
@@ -4288,7 +4288,7 @@ async function saveMyInfo(){
   closeMyInfoModal();
 }
 function doLogout(){
-  localStorage.removeItem(AUTH_SESSION_KEY);
+  sessionStorage.removeItem(AUTH_SESSION_KEY);
   document.getElementById('appRoot').style.display='none';
   document.getElementById('authOverlay').style.display='flex';
   document.getElementById('loginId').value='';
@@ -4370,7 +4370,7 @@ function authInit(){
 
   // 기존 세션 확인 (편의상 로컬 캐시를 그대로 신뢰; 비밀번호는 캐시하지 않음)
   try{
-    const sess = JSON.parse(localStorage.getItem(AUTH_SESSION_KEY));
+    const sess = JSON.parse(sessionStorage.getItem(AUTH_SESSION_KEY));
     if(sess && sess.id){ enterApp(sess); return; }
   }catch(e){}
   document.getElementById('authOverlay').style.display='flex';
