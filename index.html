@@ -946,9 +946,22 @@ input[type="text"]::placeholder{color:var(--muted)}
         <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" id="i18n-editmember-contact">담당자명</label>
         <input type="text" id="emContactName" oninput="this.value=this.value.toUpperCase()" style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)">
       </div>
+      <div style="margin-bottom:12px;position:relative">
+        <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" id="i18n-editmember-country">국가</label>
+        <input type="text" id="emCountry" autocomplete="off" oninput="onEmCountryInput()" onfocus="onEmCountryInput()" onblur="setTimeout(()=>{const l=document.getElementById('emCountryList');if(l)l.style.display='none';},150)" style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)">
+        <div id="emCountryList" class="supplier-suggest" style="display:none"></div>
+      </div>
+      <div style="margin-bottom:12px;position:relative">
+        <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" id="i18n-editmember-region">지역(시/도)</label>
+        <input type="text" id="emRegion" autocomplete="off" oninput="onEmRegionInput()" onfocus="onEmRegionInput()" onblur="setTimeout(()=>{const l=document.getElementById('emRegionList');if(l)l.style.display='none';},150)" style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)">
+        <div id="emRegionList" class="supplier-suggest" style="display:none"></div>
+      </div>
       <div style="margin-bottom:12px">
         <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" id="i18n-editmember-phone">휴대폰</label>
-        <input type="tel" id="emPhone" style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)">
+        <div style="display:flex;gap:6px">
+          <span id="emPhonePrefix" style="flex-shrink:0;min-width:52px;display:flex;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:14px">+--</span>
+          <input type="tel" id="emPhone" oninput="this.value=this.value.replace(/[^0-9\- ]/g,'')" onblur="normalizePhoneOnBlur('emPhone')" style="flex:1;box-sizing:border-box;padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)">
+        </div>
       </div>
       <div style="margin-bottom:16px">
         <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" id="i18n-editmember-email">이메일</label>
@@ -985,9 +998,22 @@ input[type="text"]::placeholder{color:var(--muted)}
         <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" id="i18n-myinfo-contact">담당자명</label>
         <input type="text" id="miContactName" oninput="this.value=this.value.toUpperCase()" style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)">
       </div>
+      <div style="margin-bottom:12px;position:relative">
+        <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" id="i18n-myinfo-country">국가</label>
+        <input type="text" id="miCountry" autocomplete="off" oninput="onMiCountryInput()" onfocus="onMiCountryInput()" onblur="setTimeout(()=>{const l=document.getElementById('miCountryList');if(l)l.style.display='none';},150)" style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)">
+        <div id="miCountryList" class="supplier-suggest" style="display:none"></div>
+      </div>
+      <div style="margin-bottom:12px;position:relative">
+        <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" id="i18n-myinfo-region">지역(시/도)</label>
+        <input type="text" id="miRegion" autocomplete="off" oninput="onMiRegionInput()" onfocus="onMiRegionInput()" onblur="setTimeout(()=>{const l=document.getElementById('miRegionList');if(l)l.style.display='none';},150)" style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)">
+        <div id="miRegionList" class="supplier-suggest" style="display:none"></div>
+      </div>
       <div style="margin-bottom:12px">
         <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" id="i18n-myinfo-phone">휴대폰</label>
-        <input type="tel" id="miPhone" style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)">
+        <div style="display:flex;gap:6px">
+          <span id="miPhonePrefix" style="flex-shrink:0;min-width:52px;display:flex;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:14px">+--</span>
+          <input type="tel" id="miPhone" oninput="this.value=this.value.replace(/[^0-9\- ]/g,'')" onblur="normalizePhoneOnBlur('miPhone')" style="flex:1;box-sizing:border-box;padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)">
+        </div>
       </div>
       <div style="margin-bottom:16px">
         <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" id="i18n-myinfo-email">이메일</label>
@@ -1147,6 +1173,8 @@ const T={
        myInfoPwHint:'비밀번호를 변경하려면 입력하세요 (선택사항)',myInfoSave:'저장',myInfoSaved:'저장되었습니다.',
        myInfoErrFill:'담당자명, 휴대폰, 이메일을 모두 입력해주세요.',myInfoErrEmail:'이메일 주소 형식이 올바르지 않습니다.',
        myInfoErrPwShort:'비밀번호는 4자 이상 입력해주세요.',myInfoErrPwMismatch:'새 비밀번호가 일치하지 않습니다.',
+       myInfoErrCountry:'목록에서 국가를 선택해주세요.',myInfoErrPhone:'전화번호 형식이 올바르지 않습니다.',
+       myInfoCountry:'국가',myInfoRegion:'지역(시/도)',editMemberCountry:'국가',editMemberRegion:'지역(시/도)',
        pnPh:'대표품번, 호환품번, 최종품번으로 검색…',
        pnH0:'품명',pnH0s:'규격',pnH1:'대표품번 (미변경)',pnH2:'호환품번 (변경)',pnH3:'최종품번 (변경, 현시점)',
        pnNoResult:'검색 결과가 없습니다.',
@@ -1199,6 +1227,8 @@ const T={
        myInfoPwHint:'Введите, чтобы изменить пароль (необязательно)',myInfoSave:'Сохранить',myInfoSaved:'Сохранено.',
        myInfoErrFill:'Заполните контактное лицо, мобильный и email.',myInfoErrEmail:'Неверный формат email.',
        myInfoErrPwShort:'Пароль должен быть не менее 4 символов.',myInfoErrPwMismatch:'Новые пароли не совпадают.',
+       myInfoErrCountry:'Выберите страну из списка.',myInfoErrPhone:'Неверный формат номера телефона.',
+       myInfoCountry:'Страна',myInfoRegion:'Регион/область',editMemberCountry:'Страна',editMemberRegion:'Регион/область',
        pnPh:'Поиск по артикулу…',
        pnH0:'Наименование',pnH0s:'',pnH1:'Осн. артикул (неизм.)',pnH2:'Артикул замены',pnH3:'Актуальный артикул',
        pnNoResult:'Результаты не найдены.',
@@ -1288,6 +1318,10 @@ function setLang(l){
   setTxtIfExists('i18n-myinfo-id', t.myInfoId);
   setTxtIfExists('i18n-myinfo-contact', t.myInfoContact);
   setTxtIfExists('i18n-myinfo-phone', t.myInfoPhone);
+  setTxtIfExists('i18n-myinfo-country', t.myInfoCountry);
+  setTxtIfExists('i18n-myinfo-region', t.myInfoRegion);
+  setTxtIfExists('i18n-editmember-country', t.editMemberCountry);
+  setTxtIfExists('i18n-editmember-region', t.editMemberRegion);
   setTxtIfExists('i18n-myinfo-email', t.myInfoEmail);
   setTxtIfExists('i18n-myinfo-pwhint', t.myInfoPwHint);
   setTxtIfExists('i18n-myinfo-save', t.myInfoSave);
@@ -2835,7 +2869,7 @@ async function openAdminModal(){
 let companyMembers=[];
 async function loadPendingSignups(){
   const myCompany=currentUser?currentUser.company:'';
-  const { data, error } = await sb.from('kt_users').select('id,company,contact_name,phone,email,supplier_company,status').eq('supplier_company', myCompany).order('id');
+  const { data, error } = await sb.from('kt_users').select('id,company,contact_name,country,region,phone,email,supplier_company,status').eq('supplier_company', myCompany).order('id');
   if(error){ console.error(error); companyMembers=[]; return; }
   companyMembers=data||[];
   const pendingCount=companyMembers.filter(u=>u.status==='pending').length;
@@ -2920,7 +2954,9 @@ function openEditMemberModal(id){
   document.getElementById('emIdDisplay').value=m.id;
   document.getElementById('emCompany').value=m.company||'';
   document.getElementById('emContactName').value=m.contact_name||'';
-  document.getElementById('emPhone').value=m.phone||'';
+  document.getElementById('emRegion').value=m.region||'';
+  const { country, digits } = splitStoredPhone(m.phone, m.country);
+  applyPhoneToModal('em', country, digits);
   document.getElementById('emEmail').value=m.email||'';
   document.getElementById('emNewPw').value='';
   document.getElementById('editMemberErr').textContent='';
@@ -2935,14 +2971,19 @@ async function saveEditMember(){
   const id=document.getElementById('emId').value;
   const company=document.getElementById('emCompany').value.trim();
   const contactName=document.getElementById('emContactName').value.trim();
-  const phone=document.getElementById('emPhone').value.trim();
+  const country=document.getElementById('emCountry').value.trim();
+  const region=document.getElementById('emRegion').value.trim();
   const email=document.getElementById('emEmail').value.trim();
   const newPw=document.getElementById('emNewPw').value;
 
-  if(!company || !contactName || !phone || !email){ errEl.textContent=t.myInfoErrFill; return; }
+  const { callingCode, digits, phone } = readE164FromModal('em');
+
+  if(!company || !contactName || !country || !region || !digits || !email){ errEl.textContent=t.myInfoErrFill; return; }
+  if(!callingCode){ errEl.textContent=t.myInfoErrCountry||'목록에서 국가를 선택해주세요.'; return; }
+  if(digits.length < 4 || digits.length > (15-String(callingCode).length)){ errEl.textContent=t.myInfoErrPhone||'전화번호 형식이 올바르지 않습니다.'; return; }
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ errEl.textContent=t.myInfoErrEmail; return; }
 
-  const payload = { company, contact_name: contactName, phone, email };
+  const payload = { company, contact_name: contactName, country, region, phone, email };
   if(newPw){
     if(newPw.length < 4){ errEl.textContent=t.myInfoErrPwShort; return; }
     payload.password_hash = await sha256Hex(newPw);
@@ -3974,6 +4015,100 @@ function selectRegion(name){
   document.getElementById('suRegion').value=name;
   document.getElementById('suRegionList').style.display='none';
 }
+function buildCountrySuggestList(inputId, listId, selectFnName){
+  const list=document.getElementById(listId);
+  const kw=document.getElementById(inputId).value.trim().toLowerCase();
+  let matches;
+  if(!kw) matches=COUNTRIES.slice(0,15);
+  else matches=COUNTRIES.filter(c=>(lang==='ru'?c.name_ru:c.name_ko).toLowerCase().includes(kw)).slice(0,10);
+  if(!matches.length){ list.style.display='none'; list.innerHTML=''; return; }
+  list.innerHTML=matches.map(c=>`<div class="supplier-suggest-item" onmousedown="${selectFnName}('${c.iso2}')">${lang==='ru'?c.name_ru:c.name_ko} (+${c.callingCode})</div>`).join('');
+  list.style.display='block';
+}
+function buildRegionSuggestList(countryInputId, regionInputId, listId, selectFnName){
+  const list=document.getElementById(listId);
+  const iso2=document.getElementById(countryInputId).dataset.iso2;
+  const kw=document.getElementById(regionInputId).value.trim().toLowerCase();
+  const regionList=(iso2 && REGIONS_BY_COUNTRY[iso2]) || [];
+  let matches;
+  if(!kw) matches=regionList.slice(0,15);
+  else matches=regionList.filter(r=>r.toLowerCase().includes(kw)).slice(0,10);
+  if(!matches.length){ list.style.display='none'; list.innerHTML=''; return; }
+  list.innerHTML=matches.map(r=>`<div class="supplier-suggest-item" onmousedown="${selectFnName}('${r.replace(/'/g,"\\'")}')">${escapeHtml(r)}</div>`).join('');
+  list.style.display='block';
+}
+function findCountryByStoredName(name){
+  if(!name) return null;
+  return COUNTRIES.find(c=>c.name_ko===name || c.name_ru===name) || null;
+}
+function onMiCountryInput(){ buildCountrySuggestList('miCountry','miCountryList','selectMiCountry'); }
+function selectMiCountry(iso2){
+  const c=COUNTRIES.find(x=>x.iso2===iso2); if(!c) return;
+  const input=document.getElementById('miCountry');
+  input.value = lang==='ru'?c.name_ru:c.name_ko;
+  input.dataset.iso2=iso2; input.dataset.callingCode=c.callingCode;
+  document.getElementById('miCountryList').style.display='none';
+  document.getElementById('miPhonePrefix').textContent='+'+c.callingCode;
+  document.getElementById('miRegion').value='';
+}
+function onMiRegionInput(){ buildRegionSuggestList('miCountry','miRegion','miRegionList','selectMiRegion'); }
+function selectMiRegion(name){ document.getElementById('miRegion').value=name; document.getElementById('miRegionList').style.display='none'; }
+
+function onEmCountryInput(){ buildCountrySuggestList('emCountry','emCountryList','selectEmCountry'); }
+function selectEmCountry(iso2){
+  const c=COUNTRIES.find(x=>x.iso2===iso2); if(!c) return;
+  const input=document.getElementById('emCountry');
+  input.value = lang==='ru'?c.name_ru:c.name_ko;
+  input.dataset.iso2=iso2; input.dataset.callingCode=c.callingCode;
+  document.getElementById('emCountryList').style.display='none';
+  document.getElementById('emPhonePrefix').textContent='+'+c.callingCode;
+  document.getElementById('emRegion').value='';
+}
+function onEmRegionInput(){ buildRegionSuggestList('emCountry','emRegion','emRegionList','selectEmRegion'); }
+function selectEmRegion(name){ document.getElementById('emRegion').value=name; document.getElementById('emRegionList').style.display='none'; }
+
+// 저장된 전화번호("+82 1012345678")를 국가 선택 + 순수 번호로 다시 나눠서 편집 화면에 보여줍니다.
+function splitStoredPhone(phone, countryName){
+  let country = findCountryByStoredName(countryName);
+  let digits = '';
+  if(phone){
+    const m = String(phone).trim().match(/^\+(\d+)\s*(.*)$/);
+    if(m){
+      digits = m[2].replace(/[^0-9]/g,'');
+      if(!country){
+        // 국가 정보가 따로 없으면 전화번호의 국가번호로 추정합니다(같은 국가번호를 쓰는 나라가 여럿일 수 있어 참고용입니다).
+        country = COUNTRIES.find(c=>String(c.callingCode)===m[1]) || null;
+      }
+    } else {
+      digits = String(phone).replace(/[^0-9]/g,'');
+    }
+  }
+  return { country, digits };
+}
+function applyPhoneToModal(prefix, country, digits){
+  const countryInput=document.getElementById(prefix+'Country');
+  const phoneInput=document.getElementById(prefix+'Phone');
+  const prefixEl=document.getElementById(prefix+'PhonePrefix');
+  if(country){
+    countryInput.value = lang==='ru'?country.name_ru:country.name_ko;
+    countryInput.dataset.iso2=country.iso2;
+    countryInput.dataset.callingCode=country.callingCode;
+    if(prefixEl) prefixEl.textContent='+'+country.callingCode;
+  } else {
+    countryInput.value='';
+    delete countryInput.dataset.iso2;
+    delete countryInput.dataset.callingCode;
+    if(prefixEl) prefixEl.textContent='+--';
+  }
+  phoneInput.value = digits || '';
+}
+function readE164FromModal(prefix){
+  const countryInput=document.getElementById(prefix+'Country');
+  const callingCode=countryInput.dataset.callingCode;
+  let digits=document.getElementById(prefix+'Phone').value.replace(/[^0-9]/g,'');
+  if(digits.length>1 && digits[0]==='0') digits=digits.slice(1);
+  return { callingCode, digits, phone: callingCode?`+${callingCode} ${digits}`:'' };
+}
 function renderCompanySuggestList(listId, selectFnName){
   const list=document.getElementById(listId);
   const inputId = listId==='suCompanyList' ? 'suCompany' : 'suSupplier';
@@ -4106,12 +4241,14 @@ async function doLogin(){
 
 async function openMyInfoModal(){
   if(!currentUser) return;
-  const { data, error } = await sb.from('kt_users').select('company,id,contact_name,phone,email').eq('id', currentUser.id).limit(1);
+  const { data, error } = await sb.from('kt_users').select('company,id,contact_name,country,region,phone,email').eq('id', currentUser.id).limit(1);
   const row = (data && data[0]) || {};
   document.getElementById('miCompany').value = row.company || currentUser.company || '';
   document.getElementById('miId').value = row.id || currentUser.id || '';
   document.getElementById('miContactName').value = row.contact_name || '';
-  document.getElementById('miPhone').value = row.phone || '';
+  document.getElementById('miRegion').value = row.region || '';
+  const { country, digits } = splitStoredPhone(row.phone, row.country);
+  applyPhoneToModal('mi', country, digits);
   document.getElementById('miEmail').value = row.email || '';
   document.getElementById('miNewPw').value = '';
   document.getElementById('miNewPw2').value = '';
@@ -4125,15 +4262,20 @@ async function saveMyInfo(){
   const errEl=document.getElementById('myInfoErr');
   errEl.textContent='';
   const contactName=document.getElementById('miContactName').value.trim();
-  const phone=document.getElementById('miPhone').value.trim();
+  const country=document.getElementById('miCountry').value.trim();
+  const region=document.getElementById('miRegion').value.trim();
   const email=document.getElementById('miEmail').value.trim();
   const newPw=document.getElementById('miNewPw').value;
   const newPw2=document.getElementById('miNewPw2').value;
 
-  if(!contactName || !phone || !email){ errEl.textContent=t.myInfoErrFill; return; }
+  const { callingCode, digits, phone } = readE164FromModal('mi');
+
+  if(!contactName || !country || !region || !digits || !email){ errEl.textContent=t.myInfoErrFill; return; }
+  if(!callingCode){ errEl.textContent=t.myInfoErrCountry||'목록에서 국가를 선택해주세요.'; return; }
+  if(digits.length < 4 || digits.length > (15-String(callingCode).length)){ errEl.textContent=t.myInfoErrPhone||'전화번호 형식이 올바르지 않습니다.'; return; }
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ errEl.textContent=t.myInfoErrEmail; return; }
 
-  const payload = { contact_name: contactName, phone, email };
+  const payload = { contact_name: contactName, country, region, phone, email };
   if(newPw || newPw2){
     if(newPw.length < 4){ errEl.textContent=t.myInfoErrPwShort; return; }
     if(newPw !== newPw2){ errEl.textContent=t.myInfoErrPwMismatch; return; }
