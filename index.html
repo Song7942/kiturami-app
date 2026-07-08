@@ -405,11 +405,11 @@ input[type="text"]::placeholder{color:var(--muted)}
     <div id="authSignup" class="auth-pane">
       <h2 id="as-title">회원가입</h2>
       <input type="text" id="suCompany" placeholder="회사명" oninput="this.value=this.value.toUpperCase();onSuCompanyInput()">
-      <input type="text" id="suContactName" placeholder="담당자명">
+      <input type="text" id="suContactName" placeholder="담당자명" oninput="this.value=this.value.toUpperCase()">
       <input type="tel" id="suPhone" placeholder="연락처">
       <input type="email" id="suEmail" placeholder="이메일주소">
       <div id="suSupplierWrap" style="position:relative">
-        <input type="text" id="suSupplier" placeholder="구매처(거래처) 회사명" autocomplete="off" oninput="this.value=this.value.toUpperCase();onSupplierInput()" onfocus="onSupplierInput()" onblur="setTimeout(()=>{const l=document.getElementById('suSupplierList');if(l)l.style.display='none';},150)">
+        <input type="text" id="suSupplier" placeholder="구매처(거래처) 회사명" autocomplete="off" oninput="this.value=this.value.toUpperCase();onSupplierInput()" onfocus="onSupplierFocus()" onblur="setTimeout(()=>{const l=document.getElementById('suSupplierList');if(l)l.style.display='none';},150)">
         <div id="suSupplierList" class="supplier-suggest" style="display:none"></div>
       </div>
       <input type="text" id="suId" placeholder="아이디" autocomplete="username" oninput="this.value=this.value.toUpperCase()">
@@ -3706,15 +3706,18 @@ function onSuCompanyInput(){
 let _allCompanyNames=null;
 async function loadAllCompanyNames(){
   const { data, error } = await sb.from('kt_users').select('company');
-  if(error){ _allCompanyNames=[]; return; }
+  if(error){ console.error(error); _allCompanyNames=_allCompanyNames||[]; return; }
   const set=new Set((data||[]).map(u=>u.company).filter(Boolean));
   _allCompanyNames=[...set];
 }
-async function onSupplierInput(){
-  if(_allCompanyNames===null) await loadAllCompanyNames();
+async function onSupplierFocus(){
+  await loadAllCompanyNames(); // 포커스될 때마다 최신 회사 목록을 새로 불러옴 (새로 가입한 회사도 바로 반영)
+  onSupplierInput();
+}
+function onSupplierInput(){
   const kw=document.getElementById('suSupplier').value.trim().toLowerCase();
   const list=document.getElementById('suSupplierList');
-  if(!kw){ list.style.display='none'; list.innerHTML=''; return; }
+  if(!kw || !_allCompanyNames){ list.style.display='none'; list.innerHTML=''; return; }
   const matches=_allCompanyNames.filter(c=>c.toLowerCase().includes(kw)).slice(0,8);
   if(!matches.length){ list.style.display='none'; list.innerHTML=''; return; }
   list.innerHTML=matches.map(c=>`<div class="supplier-suggest-item" onmousedown="selectSupplier('${c.replace(/'/g,"\\'")}')">${escapeHtml(c)}</div>`).join('');
