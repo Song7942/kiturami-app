@@ -3573,6 +3573,15 @@ function parseReportDate(text){
   const year=m[3];
   return `${year}-${month}-${day}`;
 }
+const RU_MONTHS_REV=['','января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+function formatShipDate(isoDate){
+  if(!isoDate) return '';
+  const parts=String(isoDate).split('-').map(Number);
+  const y=parts[0], m=parts[1], d=parts[2];
+  if(!y||!m||!d) return isoDate;
+  if(lang==='ru') return `${d} ${RU_MONTHS_REV[m]} ${y} г.`;
+  return `${y}년 ${m}월 ${d}일`;
+}
 function displayClientName(name){
   const t=T[lang];
   const stripped=String(name||'').replace(/^\d+\s+/,'').trim();
@@ -3688,7 +3697,7 @@ function renderShipmentsList(){
   tbody.innerHTML=rows.map(r=>`<tr>
     <td style="padding:9px 12px"><span class="code">${escapeHtml(r.rep)}</span></td>
     <td style="padding:9px 12px">${escapeHtml(displayClientName(r.client_name))}</td>
-    <td style="padding:9px 12px;color:var(--muted)">${escapeHtml(r.ship_date||'')}</td>
+    <td style="padding:9px 12px;color:var(--muted)">${escapeHtml(formatShipDate(r.ship_date))}</td>
     <td style="padding:9px 16px 9px 12px;text-align:right;font-weight:700">${r.qty}</td>
   </tr>`).join('');
   if(cardList) cardList.innerHTML=rows.map(r=>`<div class="order-card">
@@ -3697,7 +3706,7 @@ function renderShipmentsList(){
       <span style="color:var(--muted)">${t.shipThClient}: <b style="color:var(--text)">${escapeHtml(displayClientName(r.client_name))}</b></span>
     </div>
     <div style="display:flex;justify-content:space-between;margin-top:6px;padding-top:8px;border-top:1px solid var(--border);font-size:12px">
-      <span style="color:var(--muted)">${t.shipThDate}: <b style="color:var(--text)">${escapeHtml(r.ship_date||'')}</b></span>
+      <span style="color:var(--muted)">${t.shipThDate}: <b style="color:var(--text)">${escapeHtml(formatShipDate(r.ship_date))}</b></span>
       <span style="color:var(--muted)">${t.shipThQty}: <b style="color:var(--text)">${r.qty}</b></span>
     </div>
   </div>`).join('');
