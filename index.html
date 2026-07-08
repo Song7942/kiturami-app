@@ -2011,7 +2011,7 @@ function highlightByDiag(dn){
       } else tr.classList.remove('highlight');
     });
     document.querySelectorAll('#orderCardList .order-card').forEach(c=>{
-      const d=c.querySelector('.pc-diag');const match=d&&d.textContent.trim()===dn;c.classList.toggle('highlight',match);
+      const d=c.querySelector('.pc-diag');const match=d&&d.dataset.diag===dn;c.classList.toggle('highlight',match);
       if(match) tryScroll(c);
     });
     return;
@@ -2023,7 +2023,7 @@ function highlightByDiag(dn){
     } else tr.classList.remove('highlight');
   });
   document.querySelectorAll('.part-card').forEach(c=>{
-    const d=c.querySelector('.pc-diag');const match=d&&d.textContent.trim()===dn;c.classList.toggle('highlight',match);
+    const d=c.querySelector('.pc-diag');const match=d&&d.dataset.diag===dn;c.classList.toggle('highlight',match);
     if(match) tryScroll(c);
   });
 }
@@ -2092,7 +2092,7 @@ function renderTable(){
     const applied=MODEL_DEFS.filter(m=>d.models[m.key]);
     const el=document.createElement('div');el.className='part-card';el.dataset.diag=d.diag;
     const nh=lang==='ko'?`<span class="pc-name">${hl(d.name_ko,kw)}</span></div><div class="pc-spec">${hl(d.spec,kw)}`:`<span class="pc-name">${hl(d.name_ru,kw)}</span>`;
-    el.innerHTML=`<div class="pc-top"><span class="pc-diag">${T[lang].thDiag} ${hl(d.diag,kw)}</span>${nh}</div><div class="pc-code"><span class="code">${hl(d.rep,kw)}</span></div><div class="model-tags">${applied.map(m=>`<span class="mt" style="color:${m.color};background:${m.color}22;border-color:${m.color}44">${m.group} ${m.label}</span>`).join('')}</div>`;
+    el.innerHTML=`<div class="pc-top"><span class="pc-diag" data-diag="${escapeHtml(String(d.diag))}">${T[lang].thDiag} ${hl(d.diag,kw)}</span>${nh}</div><div class="pc-code"><span class="code">${hl(d.rep,kw)}</span></div><div class="model-tags">${applied.map(m=>`<span class="mt" style="color:${m.color};background:${m.color}22;border-color:${m.color}44">${m.group} ${m.label}</span>`).join('')}</div>`;
     frag.appendChild(el);
   });
   cl.insertBefore(frag,noR);
@@ -2395,7 +2395,7 @@ function renderOrderTable(){
     return `<div class="order-card">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
         <div style="flex:1;min-width:0">
-          <div class="pc-diag" style="font-size:11px;color:var(--muted)">${t.thDiag} ${d.diag}</div>
+          <div class="pc-diag" data-diag="${escapeHtml(String(d.diag))}" style="font-size:11px;color:var(--muted)">${t.thDiag} ${d.diag}</div>
           <div class="pc-name">${nm}</div>
           ${specHtml}
           <div class="code" style="margin-top:4px">${d.rep}</div>
