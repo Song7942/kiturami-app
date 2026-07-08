@@ -1941,6 +1941,42 @@ function dmDoubleClick(e){
   inner.addEventListener('dblclick', dmDoubleClick);
 })();
 
+function findDiagTypeForRow(d){
+  if(!d || !d.models) return null;
+  for(const m of MODEL_DEFS){
+    if(d.models[m.key]){
+      const type=Object.keys(DIAG_ABBR).find(k=>DIAG_ABBR[k]===m.group);
+      if(type) return type;
+    }
+  }
+  return null;
+}
+function trySearchDiagHighlight(rows){
+  if(!rows || rows.length!==1) return; // 검색 결과가 정확히 하나로 좁혀졌을 때만(여러 개면 어떤 걸 보여줄지 모호함)
+  const d=rows[0];
+  if(!d.diag) return;
+  const type=findDiagTypeForRow(d);
+  if(!type) return;
+
+  const panelOpen=document.getElementById('diagramPanel').classList.contains('open');
+  const needsSwitch = !panelOpen || !diagTypes.includes(type);
+  if(needsSwitch){
+    const group=MODEL_GROUPS.find(g=>g.abbr===DIAG_ABBR[type]);
+    if(!group) return;
+    if(multiMode){
+      if(selectedKeys===null) selectedKeys=new Set();
+      group.keys.forEach(k=>selectedKeys.add(k));
+    } else {
+      selectedKeys=new Set(group.keys);
+    }
+    manualClosed=false;
+    onSelChange();
+  }
+  setTimeout(()=>{
+    const btn=document.querySelector(`.diag-num[data-diag="${String(d.diag)}"]`);
+    if(btn) onDiagClick(String(d.diag), btn);
+  }, needsSwitch?120:0);
+}
 function onDiagClick(dn,btn){
   document.querySelectorAll('.diag-num.active').forEach(b=>b.classList.remove('active'));
   if(activeDiagNum===dn){activeDiagNum=null;clearHighlight();return;}
@@ -2463,8 +2499,8 @@ window.addEventListener('resize',()=>{
 });
 
 document.addEventListener('click',e=>{const bar=document.getElementById('modelBar');if(!bar.contains(e.target))closeDropdown();});
-document.getElementById('searchInput').addEventListener('input',e=>{searchKw=e.target.value.trim();renderTable();});
-document.getElementById('orderSearchInput').addEventListener('input',e=>{orderSearchKw=e.target.value.trim();renderOrderTable();});
+document.getElementById('searchInput').addEventListener('input',e=>{searchKw=e.target.value.trim();renderTable();if(searchKw) trySearchDiagHighlight(getFilteredParts());});
+document.getElementById('orderSearchInput').addEventListener('input',e=>{orderSearchKw=e.target.value.trim();renderOrderTable();if(orderSearchKw) trySearchDiagHighlight(getFilteredOrderParts());});
 
 // ══════════════════════════════════════════
 // News (공지사항 / 질문·답변)
