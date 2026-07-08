@@ -404,7 +404,10 @@ input[type="text"]::placeholder{color:var(--muted)}
     <!-- 회원가입 -->
     <div id="authSignup" class="auth-pane">
       <h2 id="as-title">회원가입</h2>
-      <input type="text" id="suCompany" placeholder="회사명" oninput="this.value=this.value.toUpperCase();onSuCompanyInput()">
+      <div style="position:relative">
+        <input type="text" id="suCompany" placeholder="회사명" autocomplete="off" oninput="this.value=this.value.toUpperCase();onSuCompanyInput()" onfocus="onCompanyFocus()" onblur="setTimeout(()=>{const l=document.getElementById('suCompanyList');if(l)l.style.display='none';},150)">
+        <div id="suCompanyList" class="supplier-suggest" style="display:none"></div>
+      </div>
       <input type="text" id="suContactName" placeholder="담당자명" oninput="this.value=this.value.toUpperCase()">
       <input type="tel" id="suPhone" placeholder="연락처">
       <input type="email" id="suEmail" placeholder="이메일주소">
@@ -3902,16 +3905,37 @@ function setAuthLang(l){
   const lb = document.getElementById('logoutBtn'); if(lb) lb.textContent = t.logoutBtn;
 }
 
+function renderCompanySuggestList(listId, selectFnName){
+  const list=document.getElementById(listId);
+  const inputId = listId==='suCompanyList' ? 'suCompany' : 'suSupplier';
+  const kw=document.getElementById(inputId).value.trim().toLowerCase();
+  if(!kw || !_allCompanyNames){ list.style.display='none'; list.innerHTML=''; return; }
+  const matches=_allCompanyNames.filter(c=>c.toLowerCase().includes(kw)).slice(0,8);
+  if(!matches.length){ list.style.display='none'; list.innerHTML=''; return; }
+  list.innerHTML=matches.map(c=>`<div class="supplier-suggest-item" onmousedown="${selectFnName}('${c.replace(/'/g,"\\'")}')">${escapeHtml(c)}</div>`).join('');
+  list.style.display='block';
+}
+async function onCompanyFocus(){
+  await loadAllCompanyNames();
+  renderCompanySuggestList('suCompanyList','selectCompanyName');
+}
+function selectCompanyName(name){
+  document.getElementById('suCompany').value=name;
+  document.getElementById('suCompanyList').style.display='none';
+  onSuCompanyInput();
+}
 function onSuCompanyInput(){
   const company=document.getElementById('suCompany').value.trim().toUpperCase();
   const wrap=document.getElementById('suSupplierWrap');
-  if(!wrap) return;
-  if(company==='KITURAMI'){
-    wrap.style.display='none';
-    document.getElementById('suSupplier').value='';
-  } else {
-    wrap.style.display='block';
+  if(wrap){
+    if(company==='KITURAMI'){
+      wrap.style.display='none';
+      document.getElementById('suSupplier').value='';
+    } else {
+      wrap.style.display='block';
+    }
   }
+  renderCompanySuggestList('suCompanyList','selectCompanyName');
 }
 let _allCompanyNames=null;
 async function loadAllCompanyNames(){
