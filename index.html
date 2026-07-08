@@ -3667,6 +3667,7 @@ async function handleShipmentsUpload(event){
 }
 function renderShipmentsList(){
   const t=T[lang];
+  const isKo=lang==='ko';
   const kwEl=document.getElementById('shipSearchInput');
   const kw=(kwEl?kwEl.value:'').trim().toLowerCase();
   let rows=shipmentsData;
@@ -3679,11 +3680,13 @@ function renderShipmentsList(){
   const latest=shipmentsData.length ? shipmentsData.reduce((a,b)=> (a.created_at>b.created_at?a:b)).created_at : null;
   if(lastUpdatedEl) lastUpdatedEl.textContent = latest ? t.invLastUpdated(formatNewsDate(new Date(latest).getTime())) : '';
 
-  const cols=[t.shipThRep, t.shipThClient, t.shipThDate, t.shipThQty];
-  const widths=['28%','34%','20%','18%'];
+  const cols = isKo
+    ? [t.shipThRep, t.adminHName, t.thSpec, t.shipThClient, t.shipThDate, t.shipThQty]
+    : [t.shipThRep, t.adminHName, t.shipThClient, t.shipThDate, t.shipThQty];
+  const widths = isKo ? ['16%','24%','18%','20%','12%','10%'] : ['18%','30%','22%','15%','15%'];
   const colgroupHtml=widths.map(w=>`<col style="width:${w}">`).join('');
   ['ship-hdr-col','ship-body-col'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=colgroupHtml;});
-  document.getElementById('shipmentsThead').innerHTML=`<tr><th>${cols[0]}</th><th>${cols[1]}</th><th>${cols[2]}</th><th style="text-align:right;padding-right:16px">${cols[3]}</th></tr>`;
+  document.getElementById('shipmentsThead').innerHTML=`<tr>${cols.map((c,i)=>`<th${i===cols.length-1?' style="text-align:right;padding-right:16px"':''}>${c}</th>`).join('')}</tr>`;
 
   const tbody=document.getElementById('shipmentsTbody');
   const cardList=document.getElementById('shipmentsCardList');
@@ -3694,14 +3697,27 @@ function renderShipmentsList(){
     return;
   }
   emptyEl.style.display='none';
-  tbody.innerHTML=rows.map(r=>`<tr>
+  tbody.innerHTML=rows.map(r=>{
+    const pnInfo=getPNInfo(r.rep);
+    const nameText=pnInfo ? (isKo?pnInfo.name_ko:(pnInfo.name_ru||pnInfo.name_ko)) : '';
+    const specTd=isKo?`<td style="padding:9px 12px;color:var(--muted)">${escapeHtml(pnInfo?pnInfo.spec:'')}</td>`:'';
+    return `<tr>
     <td style="padding:9px 12px"><span class="code">${escapeHtml(r.rep)}</span></td>
+    <td style="padding:9px 12px;font-weight:500">${escapeHtml(nameText)}</td>
+    ${specTd}
     <td style="padding:9px 12px">${escapeHtml(displayClientName(r.client_name))}</td>
     <td style="padding:9px 12px;color:var(--muted)">${escapeHtml(formatShipDate(r.ship_date))}</td>
     <td style="padding:9px 16px 9px 12px;text-align:right;font-weight:700">${r.qty}</td>
-  </tr>`).join('');
-  if(cardList) cardList.innerHTML=rows.map(r=>`<div class="order-card">
-    <div class="code">${escapeHtml(r.rep)}</div>
+  </tr>`;
+  }).join('');
+  if(cardList) cardList.innerHTML=rows.map(r=>{
+    const pnInfo=getPNInfo(r.rep);
+    const nameText=pnInfo ? (isKo?pnInfo.name_ko:(pnInfo.name_ru||pnInfo.name_ko)) : '';
+    const specHtml=isKo && pnInfo && pnInfo.spec ? `<div class="pc-spec">${escapeHtml(pnInfo.spec)}</div>` : '';
+    return `<div class="order-card">
+    <div class="pc-name">${escapeHtml(nameText)}</div>
+    ${specHtml}
+    <div class="code" style="margin-top:4px">${escapeHtml(r.rep)}</div>
     <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:12px">
       <span style="color:var(--muted)">${t.shipThClient}: <b style="color:var(--text)">${escapeHtml(displayClientName(r.client_name))}</b></span>
     </div>
@@ -3709,7 +3725,8 @@ function renderShipmentsList(){
       <span style="color:var(--muted)">${t.shipThDate}: <b style="color:var(--text)">${escapeHtml(formatShipDate(r.ship_date))}</b></span>
       <span style="color:var(--muted)">${t.shipThQty}: <b style="color:var(--text)">${r.qty}</b></span>
     </div>
-  </div>`).join('');
+  </div>`;
+  }).join('');
 }
 async function loadInventory(){
   const myCompany=currentUser?currentUser.company:'';
