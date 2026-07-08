@@ -482,6 +482,9 @@ input[type="text"]::placeholder{color:var(--muted)}
   </div>
   <div class="user-box">
     <span id="userInfoTxt"></span>
+    <button id="myInfoBtn" onclick="openMyInfoModal()" style="background:none;border:1px solid var(--border);border-radius:6px;padding:5px 10px;font-size:12px;color:var(--text);cursor:pointer;margin-right:6px">
+      <span id="i18n-myinfobtn">내 정보</span>
+    </button>
     <button id="logoutBtn" onclick="doLogout()">로그아웃</button>
   </div>
 </header>
@@ -907,6 +910,47 @@ input[type="text"]::placeholder{color:var(--muted)}
   </div>
 </div>
 
+<!-- 내 정보 수정 모달 -->
+<div id="myInfoModal" class="news-modal" onclick="closeMyInfoModalBg(event)">
+  <div class="news-modal-inner" onclick="event.stopPropagation()" style="max-width:420px">
+    <div class="news-modal-hdr">
+      <span id="i18n-myinfotitle">내 정보 수정</span>
+      <button class="news-modal-close" onclick="closeMyInfoModal()">✕</button>
+    </div>
+    <div style="padding:20px;overflow-y:auto">
+      <div style="margin-bottom:12px">
+        <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" id="i18n-myinfo-company">회사명</label>
+        <input type="text" id="miCompany" disabled style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--muted)">
+      </div>
+      <div style="margin-bottom:12px">
+        <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" id="i18n-myinfo-id">아이디</label>
+        <input type="text" id="miId" disabled style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--muted)">
+      </div>
+      <div style="margin-bottom:12px">
+        <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" id="i18n-myinfo-contact">담당자명</label>
+        <input type="text" id="miContactName" oninput="this.value=this.value.toUpperCase()" style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)">
+      </div>
+      <div style="margin-bottom:12px">
+        <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" id="i18n-myinfo-phone">연락처</label>
+        <input type="tel" id="miPhone" style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)">
+      </div>
+      <div style="margin-bottom:16px">
+        <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" id="i18n-myinfo-email">이메일</label>
+        <input type="email" id="miEmail" style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)">
+      </div>
+      <div style="border-top:1px solid var(--border);padding-top:14px;margin-bottom:8px">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:10px" id="i18n-myinfo-pwhint">비밀번호를 변경하려면 입력하세요 (선택사항)</div>
+        <input type="password" id="miNewPw" autocomplete="new-password" style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);margin-bottom:8px" placeholder="새 비밀번호">
+        <input type="password" id="miNewPw2" autocomplete="new-password" style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)" placeholder="새 비밀번호 확인">
+      </div>
+      <div id="myInfoErr" style="color:#ef4444;font-size:12px;min-height:16px;margin-bottom:8px"></div>
+      <button class="news-btn-primary" style="width:100%;padding:11px;font-size:14px" onclick="saveMyInfo()">
+        <span id="i18n-myinfo-save">저장</span>
+      </button>
+    </div>
+  </div>
+</div>
+
 <!-- 내 주문내역 모달 -->
 <div id="myOrdersModal" class="news-modal" onclick="closeMyOrdersModalBg(event)">
   <div class="news-modal-inner" onclick="event.stopPropagation()" style="max-width:1200px;width:95vw;max-height:90vh">
@@ -1040,6 +1084,10 @@ const T={
        reqApproveConfirm:'이 요청을 승인하고 주문에 반영할까요?',reqRejectConfirm:'이 요청을 거부할까요?',
        adminHDate:'주문일시',adminHCompany:'회사',adminHUser:'아이디',adminHDiag:'도면번호',adminHName:'품명',adminHRep:'대표품번',adminHQty:'수량',adminHModel:'기본모델명',
        myOrders:'내 주문내역',myOrdersTitle:'내 주문내역',myOrdersXls:'엑셀 다운로드',myOrdersEmpty:'제출한 주문이 없습니다.',myOrdersCount:n=>`총 ${n}건`,myOrdersOrderLabel:n=>`주문 #${n}`,
+       myInfoBtn:'내 정보',myInfoTitle:'내 정보 수정',myInfoCompany:'회사명',myInfoId:'아이디',myInfoContact:'담당자명',myInfoPhone:'연락처',myInfoEmail:'이메일',
+       myInfoPwHint:'비밀번호를 변경하려면 입력하세요 (선택사항)',myInfoSave:'저장',myInfoSaved:'저장되었습니다.',
+       myInfoErrFill:'담당자명, 연락처, 이메일을 모두 입력해주세요.',myInfoErrEmail:'이메일 주소 형식이 올바르지 않습니다.',
+       myInfoErrPwShort:'비밀번호는 4자 이상 입력해주세요.',myInfoErrPwMismatch:'새 비밀번호가 일치하지 않습니다.',
        pnPh:'대표품번, 호환품번, 최종품번으로 검색…',
        pnH0:'품명',pnH0s:'규격',pnH1:'대표품번 (미변경)',pnH2:'호환품번 (변경)',pnH3:'최종품번 (변경, 현시점)',
        pnNoResult:'검색 결과가 없습니다.',
@@ -1086,6 +1134,10 @@ const T={
        reqApproveConfirm:'Одобрить этот запрос и применить к заказу?',reqRejectConfirm:'Отклонить этот запрос?',
        adminHDate:'Дата заказа',adminHCompany:'Компания',adminHUser:'Логин',adminHDiag:'№чертежа',adminHName:'Название',adminHRep:'Артикул',adminHQty:'Кол-во',adminHModel:'Модель',
        myOrders:'Мои заказы',myOrdersTitle:'Мои заказы',myOrdersXls:'Скачать Excel',myOrdersEmpty:'Вы ещё не отправляли заказов.',myOrdersCount:n=>`Всего: ${n}`,myOrdersOrderLabel:n=>`Заказ #${n}`,
+       myInfoBtn:'Мой профиль',myInfoTitle:'Изменить профиль',myInfoCompany:'Компания',myInfoId:'Логин',myInfoContact:'Контактное лицо',myInfoPhone:'Телефон',myInfoEmail:'Email',
+       myInfoPwHint:'Введите, чтобы изменить пароль (необязательно)',myInfoSave:'Сохранить',myInfoSaved:'Сохранено.',
+       myInfoErrFill:'Заполните контактное лицо, телефон и email.',myInfoErrEmail:'Неверный формат email.',
+       myInfoErrPwShort:'Пароль должен быть не менее 4 символов.',myInfoErrPwMismatch:'Новые пароли не совпадают.',
        pnPh:'Поиск по артикулу…',
        pnH0:'Наименование',pnH0s:'',pnH1:'Осн. артикул (неизм.)',pnH2:'Артикул замены',pnH3:'Актуальный артикул',
        pnNoResult:'Результаты не найдены.',
@@ -1168,6 +1220,16 @@ function setLang(l){
   document.getElementById('pnInput').placeholder=t.pnPh;
   // pn 헤더는 renderPN()에서 처리
   document.getElementById('diagHint').textContent=t.diagHint;
+  const myInfoBtnEl=document.getElementById('i18n-myinfobtn'); if(myInfoBtnEl) myInfoBtnEl.textContent=t.myInfoBtn;
+  const setTxtIfExists=(id,val)=>{const el=document.getElementById(id);if(el)el.textContent=val;};
+  setTxtIfExists('i18n-myinfotitle', t.myInfoTitle);
+  setTxtIfExists('i18n-myinfo-company', t.myInfoCompany);
+  setTxtIfExists('i18n-myinfo-id', t.myInfoId);
+  setTxtIfExists('i18n-myinfo-contact', t.myInfoContact);
+  setTxtIfExists('i18n-myinfo-phone', t.myInfoPhone);
+  setTxtIfExists('i18n-myinfo-email', t.myInfoEmail);
+  setTxtIfExists('i18n-myinfo-pwhint', t.myInfoPwHint);
+  setTxtIfExists('i18n-myinfo-save', t.myInfoSave);
   const zoomHintEl=document.getElementById('i18n-dmzoomhint'); if(zoomHintEl) zoomHintEl.textContent=t.dmZoomHint;
   if(diagTypes && diagTypes.length){
     buildDiagram(diagTypes); // 언어 변경 시 라벨/툴팁 텍스트도 새 언어로 다시 생성
@@ -2707,7 +2769,7 @@ async function openAdminModal(){
   await loadPendingSignups();
   renderPendingSignups();
   const resetWrap=document.getElementById("resetAllMembersWrap");
-  if(resetWrap) resetWrap.style.display = (currentUser.is_admin && !currentUser.supplier_company) ? "block" : "none";
+  if(resetWrap) resetWrap.style.display = (!currentUser.supplier_company) ? "block" : "none";
 }
 let companyMembers=[];
 async function loadPendingSignups(){
@@ -3461,6 +3523,33 @@ async function handleInventoryUpload(event){
           if(colQty===-1 && qtyKeys.includes(val) && columnHasNumbers(c, r+1)) colQty=c;
         }
       }
+
+      // 헤더 문구(Артикул/Количество 등)가 아예 없는 파일도 지원:
+      // 알파벳이 섞인 품번처럼 보이는 열과, 그 바로 옆의 숫자 열을 자동으로 찾아봅니다.
+      if(colRep===-1 || colQty===-1){
+        function looksLikeRepColumn(col, fromRow){
+          let count=0, checked=0;
+          for(let r=fromRow;r<Math.min(fromRow+40, aoa.length);r++){
+            const v=aoa[r]&&aoa[r][col];
+            if(v===undefined||v===''||v===null) continue;
+            checked++;
+            if(/[A-Za-zА-Яа-я]/.test(String(v)) && String(v).trim().length>=4 && isNaN(Number(v))) count++;
+            if(count>=3) return true;
+          }
+          return checked>0 && count>=3;
+        }
+        outer:
+        for(let r=0;r<Math.min(10, aoa.length);r++){
+          const row=aoa[r]||[];
+          for(let c=0;c<row.length-1;c++){
+            if(looksLikeRepColumn(c, r) && columnHasNumbers(c+1, r)){
+              colRep=c; colQty=c+1;
+              break outer;
+            }
+          }
+        }
+      }
+
       if(colRep===-1 || colQty===-1){ alert(t.invUploadEmpty); event.target.value=''; return; }
 
       const rows=[];
@@ -3812,6 +3901,47 @@ async function doLogin(){
   enterApp(user);
 }
 
+async function openMyInfoModal(){
+  if(!currentUser) return;
+  const { data, error } = await sb.from('kt_users').select('company,id,contact_name,phone,email').eq('id', currentUser.id).limit(1);
+  const row = (data && data[0]) || {};
+  document.getElementById('miCompany').value = row.company || currentUser.company || '';
+  document.getElementById('miId').value = row.id || currentUser.id || '';
+  document.getElementById('miContactName').value = row.contact_name || '';
+  document.getElementById('miPhone').value = row.phone || '';
+  document.getElementById('miEmail').value = row.email || '';
+  document.getElementById('miNewPw').value = '';
+  document.getElementById('miNewPw2').value = '';
+  document.getElementById('myInfoErr').textContent = '';
+  document.getElementById('myInfoModal').classList.add('show');
+}
+function closeMyInfoModal(){ document.getElementById('myInfoModal').classList.remove('show'); }
+function closeMyInfoModalBg(e){ if(e.target===document.getElementById('myInfoModal')) closeMyInfoModal(); }
+async function saveMyInfo(){
+  const t=T[lang];
+  const errEl=document.getElementById('myInfoErr');
+  errEl.textContent='';
+  const contactName=document.getElementById('miContactName').value.trim();
+  const phone=document.getElementById('miPhone').value.trim();
+  const email=document.getElementById('miEmail').value.trim();
+  const newPw=document.getElementById('miNewPw').value;
+  const newPw2=document.getElementById('miNewPw2').value;
+
+  if(!contactName || !phone || !email){ errEl.textContent=t.myInfoErrFill; return; }
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ errEl.textContent=t.myInfoErrEmail; return; }
+
+  const payload = { contact_name: contactName, phone, email };
+  if(newPw || newPw2){
+    if(newPw.length < 4){ errEl.textContent=t.myInfoErrPwShort; return; }
+    if(newPw !== newPw2){ errEl.textContent=t.myInfoErrPwMismatch; return; }
+    payload.password_hash = await sha256Hex(newPw);
+  }
+
+  const { error } = await sb.from('kt_users').update(payload).eq('id', currentUser.id);
+  if(error){ errEl.textContent=(error.message||error.code); return; }
+  alert(t.myInfoSaved);
+  closeMyInfoModal();
+}
 function doLogout(){
   localStorage.removeItem(AUTH_SESSION_KEY);
   document.getElementById('appRoot').style.display='none';
