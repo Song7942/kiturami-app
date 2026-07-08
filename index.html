@@ -509,6 +509,7 @@ input[type="text"]::placeholder{color:var(--muted)}
   <button class="tab-btn active" onclick="switchTab('parts')" id="tab-parts">🔧 부품 검색</button>
   <button class="tab-btn"        onclick="switchTab('pn')"    id="tab-pn">🔄 품번 조회</button>
   <button class="tab-btn" style="display:none" onclick="switchTab('inventory')" id="tab-inventory">📊 재고관리</button>
+  <button class="tab-btn" style="display:none" onclick="switchTab('shipments')" id="tab-shipments"><span id="i18n-tab-shipments">🚚 출고내역</span></button>
   <button class="tab-btn" style="display:none" onclick="switchTab('price')"     id="tab-price">💲 가격정보</button>
 </div>
 
@@ -728,6 +729,40 @@ input[type="text"]::placeholder{color:var(--muted)}
       </div>
       <div class="card-list" id="inventoryCardList" style="margin:0 0 8px"></div>
       <div id="inventoryNoResult" class="no-result" style="display:none"></div>
+    </div>
+  </div>
+
+  <!-- 출고내역 -->
+  <div class="tab-pane" id="pane-shipments">
+    <div class="fixed-top">
+      <div class="search-bar">
+        <div class="search-wrap">
+          <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+          <input type="text" id="shipSearchInput" placeholder="품번, 거래처명으로 검색…" oninput="renderShipmentsList()">
+        </div>
+        <div class="count-badge" id="shipCountBadge"></div>
+        <label class="dl-btn" style="cursor:pointer;background:var(--accent2);border-color:var(--accent2);color:#fff">
+          <span id="i18n-shipupload">엑셀 업데이트</span>
+          <input type="file" id="shipFileInput" accept=".xlsx,.xls" style="display:none" onchange="handleShipmentsUpload(event)">
+        </label>
+      </div>
+      <div id="shipLastUpdated" style="padding:2px 4px 6px;font-size:11px;color:var(--muted)"></div>
+      <div class="pn-hdr-wrap">
+        <table>
+          <colgroup id="ship-hdr-col"></colgroup>
+          <thead id="shipmentsThead"></thead>
+        </table>
+      </div>
+    </div>
+    <div class="scroll-body" id="scrollBodyShipments" style="padding:0 12px 72px">
+      <div class="pn-body-wrap">
+        <table>
+          <colgroup id="ship-body-col"></colgroup>
+          <tbody id="shipmentsTbody"></tbody>
+        </table>
+      </div>
+      <div class="card-list" id="shipmentsCardList" style="margin:0 0 8px"></div>
+      <div id="shipmentsNoResult" class="no-result" style="display:none"></div>
     </div>
   </div>
 
@@ -1135,6 +1170,9 @@ const T={
        tabParts:'🔧 부품 검색',tabPN:'🔄 품번 조회',tabOrder:'📦 주문',tabInventory:'📊 재고관리',tabPrice:'💲 가격정보',orderDl:'엑셀 다운로드',orderMailBanner:'주문 접수 이메일: song@krb.co.kr',orderPh:'도면번호, 품명, 대표품번으로 검색…',orderQty:'주문수량',logoutBtn:'로그아웃',
        invTemplate:'양식 다운로드',invUpload:'엑셀 업데이트',invHMaster:'대표품번(미변경)',invHRep:'재고품번',invHQty:'재고수량',invHUpdated:'업데이트 일시',invEmpty:'등록된 재고 데이터가 없습니다.',invCount:n=>`총 ${n}건`,
        invUploadOk:n=>`재고 ${n}건이 업데이트되었습니다.`,invUploadFail:'업로드에 실패했습니다. 양식을 확인해주세요.',invUploadEmpty:'파일에서 유효한 데이터를 찾지 못했습니다. 양식을 확인해주세요.',invSearchPh:'대표품번으로 검색…',invLastUpdated:d=>`최근 업데이트: ${d}`,dmZoomHint:'손가락으로 확대/이동',invHSupplierStock:'구매처 재고',
+       tabShipments:'출고내역',shipUpload:'엑셀 업데이트',shipThRep:'품번',shipThClient:'거래처명',shipThDate:'일자',shipThQty:'출고',
+       shipUploadOk:n=>`출고내역 ${n}건이 추가되었습니다.`,shipUploadFail:'업로드에 실패했습니다. 양식을 확인해주세요.',shipUploadEmpty:'파일에서 유효한 데이터를 찾지 못했습니다. 양식을 확인해주세요.',
+       shipIndividual:'개인',
        priceTemplate:'양식 다운로드',priceUpload:'엑셀 업데이트',priceHRep:'대표품번',priceHPrice:'가격',priceHUpdated:'업데이트일시',priceEmpty:'등록된 가격 데이터가 없습니다.',priceCount:n=>`총 ${n}건`,
        priceUploadOk:n=>`가격 ${n}건이 업데이트되었습니다.`,priceUploadFail:'업로드에 실패했습니다. 양식을 확인해주세요.',priceUploadEmpty:'파일에서 유효한 데이터를 찾지 못했습니다. 양식을 확인해주세요.',priceSearchPh:'대표품번으로 검색…',
        adminHNewQty:'신규 주문수량',adminHStock:'재고수량',reqOriginalQtyLabel:'신규 주문수량',reqRequestedQtyLabel:'변경신청 수량',reqRepLabel:'대표품번 (미변경)',
@@ -1189,6 +1227,9 @@ const T={
        tabParts:'🔧 Поиск деталей',tabPN:'🔄 Артикулы',tabOrder:'📦 Заказ',tabInventory:'📊 Склад',tabPrice:'💲 Цены',orderDl:'Скачать Excel',orderMailBanner:'Email для приёма заказов: song@krb.co.kr',orderPh:'Поиск по №чертежа, названию, артикулу…',orderQty:'Кол-во',logoutBtn:'Выйти',
        invTemplate:'Скачать шаблон',invUpload:'Обновить Excel',invHMaster:'Осн. артикул (неизм.)',invHRep:'Артикул склада',invHQty:'Остаток',invHUpdated:'Обновлено',invEmpty:'Данных о складе пока нет.',invCount:n=>`Всего: ${n}`,
        invUploadOk:n=>`Обновлено позиций: ${n}.`,invUploadFail:'Ошибка загрузки. Проверьте шаблон.',invUploadEmpty:'В файле не найдено данных. Проверьте шаблон.',invSearchPh:'Поиск по артикулу…',invLastUpdated:d=>`Последнее обновление: ${d}`,dmZoomHint:'Растяните пальцами, чтобы увеличить',invHSupplierStock:'Остаток поставщика',
+       tabShipments:'Отгрузки',shipUpload:'Обновить Excel',shipThRep:'Артикул',shipThClient:'Клиент',shipThDate:'Дата',shipThQty:'Отгружено',
+       shipUploadOk:n=>`Добавлено записей: ${n}.`,shipUploadFail:'Ошибка загрузки. Проверьте шаблон.',shipUploadEmpty:'В файле не найдено данных. Проверьте шаблон.',
+       shipIndividual:'Частное лицо',
        priceTemplate:'Скачать шаблон',priceUpload:'Обновить Excel',priceHRep:'Артикул',priceHPrice:'Цена',priceHUpdated:'Обновлено',priceEmpty:'Данных о ценах пока нет.',priceCount:n=>`Всего: ${n}`,
        priceUploadOk:n=>`Обновлено позиций: ${n}.`,priceUploadFail:'Ошибка загрузки. Проверьте шаблон.',priceUploadEmpty:'В файле не найдено данных. Проверьте шаблон.',priceSearchPh:'Поиск по артикулу…',
        adminHNewQty:'Новое кол-во',adminHStock:'Остаток',reqOriginalQtyLabel:'Исходное кол-во',reqRequestedQtyLabel:'Запрошено',reqRepLabel:'Артикул (неизм.)',
@@ -1277,6 +1318,7 @@ function switchTab(tab){
   if(tab==='order'){ mountModelDiag('order'); syncDiagram(); Promise.all([loadMyOrderTotals(), loadInventory(), loadGlobalSuppliedTotals(), loadReceivedOrderTotals()]).then(renderOrderTable); renderOrderTable(); }
   if(tab==='parts'){ mountModelDiag('parts'); syncDiagram(); renderTable(); }
   if(tab==='inventory'){ Promise.all([loadInventory(), loadGlobalSuppliedTotals()]).then(renderInventoryList); }
+  if(tab==='shipments'){ loadShipments().then(renderShipmentsList); }
   if(tab==='price'){ loadPrices().then(renderPriceList); }
 }
 
@@ -3511,6 +3553,155 @@ function refreshMyOrdersTexts(){
 let inventoryData={}; // rep -> {qty, updated_at}
 
 let supplierInventoryData={}; // 구매처(내가 주문을 넣는 곳)의 창고 재고 - 참고용, 읽기 전용
+// ══════════════════════════════════════════
+// 출고내역
+// ══════════════════════════════════════════
+let shipmentsData=[];
+async function loadShipments(){
+  const myCompany=currentUser?currentUser.company:'';
+  const { data, error } = await sb.from('kt_shipments').select('*').ilike('company', myCompany).order('ship_date',{ascending:false}).order('id',{ascending:false});
+  if(error){ console.error(error); shipmentsData=[]; return; }
+  shipmentsData=data||[];
+}
+const RU_MONTHS={'января':1,'февраля':2,'марта':3,'апреля':4,'мая':5,'июня':6,'июля':7,'августа':8,'сентября':9,'октября':10,'ноября':11,'декабря':12};
+function parseReportDate(text){
+  if(!text) return null;
+  const m=String(text).match(/(\d{1,2})\s+(января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)\s+(\d{4})/i);
+  if(!m) return null;
+  const day=m[1].padStart(2,'0');
+  const month=String(RU_MONTHS[m[2].toLowerCase()]).padStart(2,'0');
+  const year=m[3];
+  return `${year}-${month}-${day}`;
+}
+function displayClientName(name){
+  const t=T[lang];
+  const stripped=String(name||'').replace(/^\d+\s+/,'').trim();
+  if(stripped.toLowerCase()==='частное лицо'){
+    return lang==='ru' ? 'Частное лицо' : (t.shipIndividual||'개인');
+  }
+  return stripped;
+}
+async function handleShipmentsUpload(event){
+  const t=T[lang];
+  const file=event.target.files[0];
+  if(!file) return;
+  const reader=new FileReader();
+  reader.onload=async function(e){
+    try{
+      const data=new Uint8Array(e.target.result);
+      const wb=XLSX.read(data,{type:'array'});
+      const sheet=wb.Sheets[wb.SheetNames[0]];
+      const aoa=XLSX.utils.sheet_to_json(sheet,{header:1, defval:''});
+
+      // 보고서 제목 줄에서 날짜 추출 (예: "...за 7 июля 2026 г.")
+      let reportDate=null;
+      for(let r=0;r<Math.min(6, aoa.length);r++){
+        const v=(aoa[r]||[]).join(' ');
+        const found=parseReportDate(v);
+        if(found){ reportDate=found; break; }
+      }
+      if(!reportDate) reportDate=new Date().toISOString().slice(0,10);
+
+      // 헤더 문구("Артикул","Количество")를 찾아 열 위치를 확인 (품번 파일과 동일한 방식)
+      let colArtikul=-1, colQty=-1;
+      const scanRows=Math.min(15, aoa.length);
+      for(let r=0;r<scanRows;r++){
+        const row=aoa[r]||[];
+        for(let c=0;c<row.length;c++){
+          const val=String(row[c]||'').trim();
+          if(colArtikul===-1 && val==='Артикул') colArtikul=c;
+          if(colQty===-1 && val.startsWith('Количество')) colQty=c;
+        }
+      }
+      if(colArtikul===-1) colArtikul=2; // 이 리포트 양식의 기본 위치(열 C)로 대체
+      if(colQty===-1) colQty=3; // 기본 위치(열 D)
+
+      const colName=0; // 거래처명/품명이 함께 있는 첫 번째 열
+      const rows=[];
+      let currentClient=null;
+      for(let r=0;r<aoa.length;r++){
+        const row=aoa[r]||[];
+        const nameVal=String(row[colName]||'').trim();
+        const artikulVal=String(row[colArtikul]||'').trim();
+        if(!nameVal && !artikulVal) continue;
+        if(nameVal && artikulVal && nameVal===artikulVal){
+          // 거래처명 구분 행: 품명 열과 품번 열에 같은 텍스트(거래처명)가 반복됩니다.
+          currentClient=nameVal;
+          continue;
+        }
+        if(!artikulVal || !currentClient) continue; // 창고 소계/합계 등 품번 없는 행은 건너뜀
+        const qtyRaw=row[colQty];
+        const qty=Number(qtyRaw);
+        if(isNaN(qty) || qty<=0) continue;
+        rows.push({
+          company: currentUser.company,
+          rep: findMasterRep(artikulVal) || artikulVal,
+          client_name: currentClient,
+          ship_date: reportDate,
+          qty
+        });
+      }
+      if(!rows.length){ alert(t.shipUploadEmpty); event.target.value=''; return; }
+
+      const { error } = await sb.from('kt_shipments').insert(rows);
+      if(error){ console.error(error); alert(t.shipUploadFail+'\n\n['+(error.message||error.code)+']'); event.target.value=''; return; }
+      await loadShipments();
+      renderShipmentsList();
+      alert(t.shipUploadOk(rows.length));
+    }catch(err){
+      console.error(err);
+      alert(t.shipUploadFail);
+    }
+    event.target.value='';
+  };
+  reader.readAsArrayBuffer(file);
+}
+function renderShipmentsList(){
+  const t=T[lang];
+  const kwEl=document.getElementById('shipSearchInput');
+  const kw=(kwEl?kwEl.value:'').trim().toLowerCase();
+  let rows=shipmentsData;
+  if(kw){
+    rows=rows.filter(r=>String(r.rep||'').toLowerCase().includes(kw) || displayClientName(r.client_name).toLowerCase().includes(kw));
+  }
+  document.getElementById('shipCountBadge').innerHTML=t.invCount(rows.length);
+
+  const lastUpdatedEl=document.getElementById('shipLastUpdated');
+  const latest=shipmentsData.length ? shipmentsData.reduce((a,b)=> (a.created_at>b.created_at?a:b)).created_at : null;
+  if(lastUpdatedEl) lastUpdatedEl.textContent = latest ? t.invLastUpdated(formatNewsDate(new Date(latest).getTime())) : '';
+
+  const cols=[t.shipThRep, t.shipThClient, t.shipThDate, t.shipThQty];
+  const widths=['28%','34%','20%','18%'];
+  const colgroupHtml=widths.map(w=>`<col style="width:${w}">`).join('');
+  ['ship-hdr-col','ship-body-col'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=colgroupHtml;});
+  document.getElementById('shipmentsThead').innerHTML=`<tr><th>${cols[0]}</th><th>${cols[1]}</th><th>${cols[2]}</th><th style="text-align:right;padding-right:16px">${cols[3]}</th></tr>`;
+
+  const tbody=document.getElementById('shipmentsTbody');
+  const cardList=document.getElementById('shipmentsCardList');
+  const emptyEl=document.getElementById('shipmentsNoResult');
+  if(!rows.length){
+    tbody.innerHTML=''; if(cardList) cardList.innerHTML='';
+    emptyEl.textContent=t.invEmpty; emptyEl.style.display='block';
+    return;
+  }
+  emptyEl.style.display='none';
+  tbody.innerHTML=rows.map(r=>`<tr>
+    <td style="padding:9px 12px"><span class="code">${escapeHtml(r.rep)}</span></td>
+    <td style="padding:9px 12px">${escapeHtml(displayClientName(r.client_name))}</td>
+    <td style="padding:9px 12px;color:var(--muted)">${escapeHtml(r.ship_date||'')}</td>
+    <td style="padding:9px 16px 9px 12px;text-align:right;font-weight:700">${r.qty}</td>
+  </tr>`).join('');
+  if(cardList) cardList.innerHTML=rows.map(r=>`<div class="order-card">
+    <div class="code">${escapeHtml(r.rep)}</div>
+    <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:12px">
+      <span style="color:var(--muted)">${t.shipThClient}: <b style="color:var(--text)">${escapeHtml(displayClientName(r.client_name))}</b></span>
+    </div>
+    <div style="display:flex;justify-content:space-between;margin-top:6px;padding-top:8px;border-top:1px solid var(--border);font-size:12px">
+      <span style="color:var(--muted)">${t.shipThDate}: <b style="color:var(--text)">${escapeHtml(r.ship_date||'')}</b></span>
+      <span style="color:var(--muted)">${t.shipThQty}: <b style="color:var(--text)">${r.qty}</b></span>
+    </div>
+  </div>`).join('');
+}
 async function loadInventory(){
   const myCompany=currentUser?currentUser.company:'';
   const { data, error } = await sb.from('kt_inventory').select('*').ilike('company', myCompany).order('rep');
@@ -3830,6 +4021,8 @@ function refreshInventoryTexts(){
   const setTxt=(id,val)=>{const el=document.getElementById(id);if(el)el.textContent=val;};
   const tabEl=document.getElementById('tab-inventory'); if(tabEl) tabEl.textContent=t.tabInventory;
   setTxt('i18n-invupload', t.invUpload);
+  setTxt('i18n-shipupload', t.shipUpload);
+  setTxt('i18n-tab-shipments', '🚚 '+t.tabShipments);
   const sEl=document.getElementById('invSearchInput'); if(sEl) sEl.placeholder=t.invSearchPh;
   if(document.getElementById('pane-inventory').classList.contains('active')) renderInventoryList();
 }
@@ -4432,8 +4625,10 @@ function enterApp(user){
   const adminBtn = document.getElementById('adminBtn');
   if(adminBtn) adminBtn.style.display = 'flex';
   const tabInv=document.getElementById('tab-inventory');
+  const tabShip=document.getElementById('tab-shipments');
   const tabPrice=document.getElementById('tab-price');
   if(tabInv) tabInv.style.display = 'block';
+  if(tabShip) tabShip.style.display = 'block';
   if(tabPrice) tabPrice.style.display = user.is_admin ? 'block' : 'none';
   Promise.all([loadMyOrderTotals(), loadInventory(), loadGlobalSuppliedTotals(), loadReceivedOrderTotals()]).then(()=>{ if(document.getElementById('pane-order').classList.contains('active')) renderOrderTable(); });
   loadNewsPosts();
