@@ -3644,7 +3644,7 @@ async function handleShipmentsUpload(event){
         if(isNaN(qty) || qty<=0) continue;
         rows.push({
           company: currentUser.company,
-          rep: findMasterRep(artikulVal) || artikulVal,
+          rep: artikulVal,
           client_name: currentClient,
           ship_date: reportDate,
           qty
@@ -3681,9 +3681,9 @@ function renderShipmentsList(){
   if(lastUpdatedEl) lastUpdatedEl.textContent = latest ? t.invLastUpdated(formatNewsDate(new Date(latest).getTime())) : '';
 
   const cols = isKo
-    ? [t.shipThRep, t.adminHName, t.thSpec, t.shipThClient, t.shipThDate, t.shipThQty]
-    : [t.shipThRep, t.adminHName, t.shipThClient, t.shipThDate, t.shipThQty];
-  const widths = isKo ? ['16%','24%','18%','20%','12%','10%'] : ['18%','30%','22%','15%','15%'];
+    ? [t.adminHName, t.thSpec, t.invHMaster, t.shipThRep, t.shipThClient, t.shipThDate, t.shipThQty]
+    : [t.adminHName, t.invHMaster, t.shipThRep, t.shipThClient, t.shipThDate, t.shipThQty];
+  const widths = isKo ? ['20%','16%','16%','12%','16%','12%','8%'] : ['24%','18%','14%','20%','12%','12%'];
   const colgroupHtml=widths.map(w=>`<col style="width:${w}">`).join('');
   ['ship-hdr-col','ship-body-col'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=colgroupHtml;});
   document.getElementById('shipmentsThead').innerHTML=`<tr>${cols.map((c,i)=>`<th${i===cols.length-1?' style="text-align:right;padding-right:16px"':''}>${c}</th>`).join('')}</tr>`;
@@ -3698,26 +3698,31 @@ function renderShipmentsList(){
   }
   emptyEl.style.display='none';
   tbody.innerHTML=rows.map(r=>{
-    const pnInfo=getPNInfo(r.rep);
+    const masterRep=findMasterRep(r.rep)||'';
+    const pnInfo=masterRep?getPNInfo(masterRep):null;
     const nameText=pnInfo ? (isKo?pnInfo.name_ko:(pnInfo.name_ru||pnInfo.name_ko)) : '';
     const specTd=isKo?`<td style="padding:9px 12px;color:var(--muted)">${escapeHtml(pnInfo?pnInfo.spec:'')}</td>`:'';
     return `<tr>
-    <td style="padding:9px 12px"><span class="code">${escapeHtml(r.rep)}</span></td>
     <td style="padding:9px 12px;font-weight:500">${escapeHtml(nameText)}</td>
     ${specTd}
+    <td style="padding:9px 12px">${masterRep?`<span class="code">${escapeHtml(masterRep)}</span>`:''}</td>
+    <td style="padding:9px 12px"><span class="code">${escapeHtml(r.rep)}</span></td>
     <td style="padding:9px 12px">${escapeHtml(displayClientName(r.client_name))}</td>
     <td style="padding:9px 12px;color:var(--muted)">${escapeHtml(formatShipDate(r.ship_date))}</td>
     <td style="padding:9px 16px 9px 12px;text-align:right;font-weight:700">${r.qty}</td>
   </tr>`;
   }).join('');
   if(cardList) cardList.innerHTML=rows.map(r=>{
-    const pnInfo=getPNInfo(r.rep);
+    const masterRep=findMasterRep(r.rep)||'';
+    const pnInfo=masterRep?getPNInfo(masterRep):null;
     const nameText=pnInfo ? (isKo?pnInfo.name_ko:(pnInfo.name_ru||pnInfo.name_ko)) : '';
     const specHtml=isKo && pnInfo && pnInfo.spec ? `<div class="pc-spec">${escapeHtml(pnInfo.spec)}</div>` : '';
+    const masterHtml=masterRep?`<div style="font-size:11px;color:var(--muted);margin-top:2px">${t.invHMaster}: <span class="code">${escapeHtml(masterRep)}</span></div>`:'';
     return `<div class="order-card">
     <div class="pc-name">${escapeHtml(nameText)}</div>
     ${specHtml}
     <div class="code" style="margin-top:4px">${escapeHtml(r.rep)}</div>
+    ${masterHtml}
     <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:12px">
       <span style="color:var(--muted)">${t.shipThClient}: <b style="color:var(--text)">${escapeHtml(displayClientName(r.client_name))}</b></span>
     </div>
