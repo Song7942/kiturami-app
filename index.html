@@ -2982,7 +2982,17 @@ function isSameClient(clientName, company){
   if(!a || !b) return false;
   return a.includes(b) || b.includes(a);
 }
-const toDateOnly=iso=>String(iso||'').slice(0,10);
+const toDateOnly=iso=>{
+  if(!iso) return '';
+  const d=new Date(iso);
+  if(isNaN(d.getTime())) return String(iso).slice(0,10);
+  // UTC로 저장된 시각을 그대로 자르면, 로컬 시간대에서는 이미 다음 날이어도
+  // 아직 UTC로는 전날일 때 하루 전 날짜로 잘못 표시될 수 있습니다. 로컬 날짜로 변환합니다.
+  const y=d.getFullYear();
+  const m=String(d.getMonth()+1).padStart(2,'0');
+  const day=String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+};
 
 // 회사+대표품번 기준으로 묶어서, 누계(주문총량/공급총량/미공급/공급율/완료여부)와
 // 개별 주문·출고 내역(일자+수량)을 나란히 나열하는 형태로 재구성합니다.
