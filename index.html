@@ -4381,9 +4381,9 @@ async function handleInventoryUpload(event){
             if(v===undefined||v===''||v===null) continue;
             checked++;
             if(/[A-Za-zА-Яа-я]/.test(String(v)) && String(v).trim().length>=4 && isNaN(Number(v))) count++;
-            if(count>=3) return true;
+            if(count>=1) return true;
           }
-          return checked>0 && count>=3;
+          return checked>0 && count>=1;
         }
         outer:
         for(let r=0;r<Math.min(10, aoa.length);r++){
