@@ -940,6 +940,9 @@ input[type="text"]::placeholder{color:var(--muted)}
     </div>
     <div id="adminSignupsView" style="display:none;flex:1;overflow:auto;padding:14px 16px">
       <div id="resetAllMembersWrap" style="display:none;margin-bottom:12px;text-align:right">
+        <button class="news-btn-secondary" style="color:#ef4444;border-color:#ef4444;margin-right:8px" onclick="resetAllOrderData()">
+          <span id="i18n-resetallorders">주문·재고·출고 초기화</span>
+        </button>
         <button class="news-btn-secondary" style="color:#ef4444;border-color:#ef4444" onclick="resetAllMembers()">
           <span id="i18n-resetallmembers">전체 회원 초기화</span>
         </button>
@@ -1246,9 +1249,11 @@ const T={
        editMemberPwHint:'비밀번호를 재설정하려면 입력하세요 (선택사항)',editMemberSave:'저장',
        resetAllConfirmWord:'초기화',resetAllConfirmPrompt:w=>`정말로 전체 회원을 초기화하시겠습니까?\n이 작업은 되돌릴 수 없습니다. 계속하려면 아래에 "${w}"를 정확히 입력하세요.`,
        resetAllCancelled:'취소되었습니다.',resetAllDone:'전체 회원이 초기화되었습니다.',
+       resetOrdersConfirmPrompt:w=>`모든 회원의 주문·재고·출고내역을 전부 지우시겠습니까?\n회원 계정 자체는 유지됩니다. 이 작업은 되돌릴 수 없습니다. 계속하려면 아래에 "${w}"를 정확히 입력하세요.`,
+       resetOrdersDone:'주문·재고·출고내역이 전부 초기화되었습니다.',
        signupApproveConfirm:id=>`${id} 계정의 가입을 승인하시겠습니까?`,signupRejectConfirm:id=>`${id} 계정의 가입을 거부하시겠습니까?`,signupDeleteConfirm:id=>`${id} 계정을 삭제하시겠습니까? 삭제하면 되돌릴 수 없습니다.`,
        signupThCompany:'회사명',signupThId:'아이디',signupThContact:'담당자명',signupThPhone:'휴대폰',signupThEmail:'이메일',signupThStatus:'상태',
-       resetAllMembersBtn:'전체 회원 초기화',
+       resetAllMembersBtn:'전체 회원 초기화',resetAllOrdersBtn:'주문·재고·출고 초기화',
        signupStatusPending:'승인대기',signupStatusApproved:'승인됨',signupStatusRejected:'거부됨',
        reqEmpty:'대기중인 요청이 없습니다.',reqTypeCancel:'취소 신청',reqTypeChange:n=>`수량변경 신청 → ${n}`,
        reqApprove:'승인',reqReject:'거부',
@@ -1307,9 +1312,11 @@ const T={
        editMemberPwHint:'Введите, чтобы сбросить пароль (необязательно)',editMemberSave:'Сохранить',
        resetAllConfirmWord:'СБРОС',resetAllConfirmPrompt:w=>`Вы уверены, что хотите сбросить всех участников?\nЭто необратимо. Введите "${w}", чтобы продолжить.`,
        resetAllCancelled:'Отменено.',resetAllDone:'Все участники сброшены.',
+       resetOrdersConfirmPrompt:w=>`Удалить все заказы, склад и отгрузки всех участников?\nСами аккаунты останутся. Это необратимо. Введите "${w}", чтобы продолжить.`,
+       resetOrdersDone:'Заказы, склад и отгрузки сброшены.',
        signupApproveConfirm:id=>`Одобрить регистрацию аккаунта ${id}?`,signupRejectConfirm:id=>`Отклонить регистрацию аккаунта ${id}?`,signupDeleteConfirm:id=>`Удалить аккаунт ${id}? Это необратимо.`,
        signupThCompany:'Компания',signupThId:'Логин',signupThContact:'Контактное лицо',signupThPhone:'Мобильный',signupThEmail:'Email',signupThStatus:'Статус',
-       resetAllMembersBtn:'Сбросить всех участников',
+       resetAllMembersBtn:'Сбросить всех участников',resetAllOrdersBtn:'Сбросить заказы/склад/отгрузки',
        signupStatusPending:'Ожидает',signupStatusApproved:'Одобрено',signupStatusRejected:'Отклонено',
        reqEmpty:'Нет ожидающих запросов.',reqTypeCancel:'Запрос отмены',reqTypeChange:n=>`Запрос изменения → ${n}`,
        reqApprove:'Одобрить',reqReject:'Отклонить',
@@ -3149,6 +3156,25 @@ async function rejectSignup(id){
   await loadPendingSignups();
   renderPendingSignups();
 }
+async function resetAllOrderData(){
+  const t=T[lang];
+  const typed = prompt(t.resetOrdersConfirmPrompt(t.resetAllConfirmWord));
+  if(typed===null) return;
+  if(typed.trim()!==t.resetAllConfirmWord){ alert(t.resetAllCancelled); return; }
+  // 회원 계정은 그대로 두고, 주문·재고·출고내역 관련 데이터만 전부 지웁니다.
+  await sb.from('kt_order_requests').delete().not('id','is',null);
+  await sb.from('kt_order_allocations').delete().not('rep','is',null);
+  await sb.from('kt_orders').delete().not('id','is',null);
+  await sb.from('kt_inventory').delete().not('rep','is',null);
+  const { error } = await sb.from('kt_shipments').delete().not('id','is',null);
+  if(error){ alert(t.reqFail+'\n\n['+(error.message||error.code)+']'); return; }
+  await loadInventory();
+  await loadShipments();
+  await loadOrderAllocations();
+  await loadAdminOrders();
+  renderAdminOrders();
+  alert(t.resetOrdersDone);
+}
 async function resetAllMembers(){
   const t=T[lang];
   const typed = prompt(t.resetAllConfirmPrompt(t.resetAllConfirmWord));
@@ -3350,6 +3376,7 @@ function refreshAdminTexts(){
   setTxt('i18n-signup-th-email', t.signupThEmail);
   setTxt('i18n-signup-th-status', t.signupThStatus);
   setTxt('i18n-resetallmembers', t.resetAllMembersBtn);
+  setTxt('i18n-resetallorders', t.resetAllOrdersBtn);
   setTxt('i18n-editmembertitle', t.editMemberTitle);
   setTxt('i18n-editmember-id', t.editMemberId);
   setTxt('i18n-editmember-company', t.editMemberCompany);
