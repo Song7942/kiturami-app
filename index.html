@@ -1231,7 +1231,7 @@ const T={
        grpExisting:'기존',grpNew:'신규',grpCumulative:'누적',grpTotal:'합계',grpDecision:'공급 결정',grpProgress:'진행여부',
        statusDone:'출고완료',statusPending:'준비중',
        colOrder:'주문',colSupply:'공급',colStock:'재고',colSupplyRate:'공급율',colNotSupplied:'미공급',colAllocation:'배분',colPreparing:'준비중',colShipped:'출고완료',
-       colDate:'일시',colStatus:'완료여부',grpStatusHdr:'공급현황',
+       colDate:'일시',colStatus:'완료여부',grpStatusHdr:'공급현황',colFinalOrder:'최종주문',colDecision:'의사결정',decisionAgreed:'동의',myOrderReqSection:'구매처의 요청사항',agreeBtn:'동의',colSupplyAvailable:'공급가능',
        invHBase:'기초재고',invHPostAlloc:'배분후 재고',
        orderSubmit:'주문 제출',orderSubmitting:'제출 중…',orderSubmitOk:'주문이 접수되었습니다.',orderSubmitFail:'주문 제출에 실패했습니다. 잠시 후 다시 시도해주세요.',orderSubmitEmpty:'주문수량을 입력한 품목이 없습니다.',orderPrevQty:'기존 주문수량',orderStock:'내 창고 재고',orderReceived:'접수받은 주문수량',orderNoSupplier:'주문을 보낼 구매처가 지정되어 있지 않습니다.',
        reqActionHeader:'취소/변경',reqCancelBtn:'취소<br>신청',reqChangeBtn:'수량변경<br>신청',
@@ -1297,7 +1297,7 @@ const T={
        grpExisting:'Ранее',grpNew:'Новое',grpCumulative:'Всего',grpTotal:'Итого',grpDecision:'Решение о поставке',grpProgress:'Статус',
        statusDone:'Отгружено',statusPending:'В процессе',
        colOrder:'Заказ',colSupply:'Поставка',colStock:'Остаток',colSupplyRate:'% поставки',colNotSupplied:'Не поставлено',colAllocation:'Выделено',colPreparing:'Готовится',colShipped:'Отгружено',
-       colDate:'Дата',colStatus:'Статус',grpStatusHdr:'Статус поставки',
+       colDate:'Дата',colStatus:'Статус',grpStatusHdr:'Статус поставки',colFinalOrder:'Финальный заказ',colDecision:'Решение',decisionAgreed:'Согласен',myOrderReqSection:'Предложение поставщика',agreeBtn:'Согласиться',colSupplyAvailable:'Доступно',
        invHBase:'Начальный остаток',invHPostAlloc:'Остаток после выделения',
        orderSubmit:'Отправить заказ',orderSubmitting:'Отправка…',orderSubmitOk:'Заказ принят.',orderSubmitFail:'Не удалось отправить заказ. Попробуйте позже.',orderSubmitEmpty:'Не указано количество ни для одного товара.',orderPrevQty:'Ранее заказано',orderStock:'Мой склад',orderReceived:'Получено заказов',orderNoSupplier:'Поставщик для заказа не указан.',
        reqActionHeader:'Отмена/Изменение',reqCancelBtn:'Запросить<br>отмену',reqChangeBtn:'Изменить<br>кол-во',
@@ -2921,23 +2921,47 @@ async function loadAdminOrders(){
   });
   adminOrderRows=rows;
 }
-let orderAllocations={}; // key: company+'||'+rep -> 배분(수정 가능한 임시 할당) 수량
+let orderAllocations={}; // key: company+'||'+rep -> {allocated, agreed} (내가 받은 주문내역: 내가 이 회사에게 제안한 배분/공급가능 수량과 그 회사의 동의 여부)
 async function loadOrderAllocations(){
   const { data, error } = await sb.from('kt_order_allocations').select('*').ilike('target_company', currentUser?currentUser.company:'');
   if(error){ console.error(error); orderAllocations={}; return; }
   orderAllocations={};
-  (data||[]).forEach(a=>{ orderAllocations[a.company+'||'+a.rep]=a.allocated||0; });
+  (data||[]).forEach(a=>{ orderAllocations[a.company+'||'+a.rep]={allocated:a.allocated||0, agreed:!!a.agreed}; });
 }
 async function updateGroupAllocation(company, rep, value){
   const t=T[lang];
   const newVal=Math.max(0, parseInt(value,10)||0);
+  // 배분 수량을 새로 입력/수정하면 새로운 제안이므로, 상대방의 동의 상태는 다시 초기화합니다.
   const { error } = await sb.from('kt_order_allocations').upsert(
-    [{ target_company: currentUser.company, company, rep, allocated:newVal }],
+    [{ target_company: currentUser.company, company, rep, allocated:newVal, agreed:false }],
     { onConflict:'target_company,company,rep' }
   );
   if(error){ alert(t.reqFail+'\n\n['+(error.message||error.code)+']'); return; }
-  orderAllocations[company+'||'+rep]=newVal;
+  orderAllocations[company+'||'+rep]={allocated:newVal, agreed:false};
   renderAdminOrders();
+}
+let myOrderAllocations={}; // key: rep -> {allocated, agreed} (내가 신청한 주문내역: 내 구매처가 나에게 제안한 공급가능 수량과 내 동의 여부)
+async function loadMyOrderAllocations(){
+  if(!currentUser || !currentUser.supplier_company){ myOrderAllocations={}; return; }
+  const { data, error } = await sb.from('kt_order_allocations').select('*').ilike('target_company', currentUser.supplier_company).ilike('company', currentUser.company);
+  if(error){ console.error(error); myOrderAllocations={}; return; }
+  myOrderAllocations={};
+  (data||[]).forEach(a=>{ myOrderAllocations[a.rep]={allocated:a.allocated||0, agreed:!!a.agreed}; });
+}
+async function agreeToAllocation(rep){
+  const t=T[lang];
+  if(!currentUser || !currentUser.supplier_company) return;
+  const { error } = await sb.from('kt_order_allocations').update({agreed:true}).ilike('target_company', currentUser.supplier_company).ilike('company', currentUser.company).ilike('rep', rep);
+  if(error){ alert(t.reqFail+'\n\n['+(error.message||error.code)+']'); return; }
+  await loadMyOrderAllocations();
+  renderAdminMyOrders();
+}
+let shipmentsToMe=[]; // 내 구매처가 나에게 보낸 출고내역(구매처의 kt_shipments 중 거래처명이 나와 일치하는 것)
+async function loadShipmentsToMe(){
+  if(!currentUser || !currentUser.supplier_company){ shipmentsToMe=[]; return; }
+  const { data, error } = await sb.from('kt_shipments').select('*').ilike('company', currentUser.supplier_company);
+  if(error){ console.error(error); shipmentsToMe=[]; return; }
+  shipmentsToMe=(data||[]).filter(s=>isSameClient(s.client_name, currentUser.company));
 }
 const CYR_TO_LAT={а:'a',б:'b',в:'v',г:'g',д:'d',е:'e',ё:'e',ж:'zh',з:'z',и:'i',й:'y',к:'k',л:'l',м:'m',н:'n',о:'o',п:'p',р:'r',с:'s',т:'t',у:'u',ф:'f',х:'h',ц:'ts',ч:'ch',ш:'sh',щ:'sch',ъ:'',ы:'y',ь:'',э:'e',ю:'yu',я:'ya'};
 function translit(str){
@@ -2964,7 +2988,7 @@ function buildAdminOrderGroups(){
   const globalAllocByRep={};
   Object.keys(orderAllocations).forEach(k=>{
     const rep=k.split('||')[1];
-    globalAllocByRep[rep]=(globalAllocByRep[rep]||0)+(orderAllocations[k]||0);
+    globalAllocByRep[rep]=(globalAllocByRep[rep]||0)+(orderAllocations[k].allocated||0);
   });
 
   const groups={};
@@ -2986,11 +3010,16 @@ function buildAdminOrderGroups(){
       .sort((a,b)=> (a.date||'')<(b.date||'')?-1:((a.date||'')>(b.date||'')?1:0));
     g.totalSuppliedQty=g.supplyLines.reduce((s,l)=>s+l.qty,0);
 
-    g.notSupplied=Math.max(0, g.totalOrderQty-g.totalSuppliedQty);
-    g.supplyRate=g.totalOrderQty>0 ? (g.totalSuppliedQty/g.totalOrderQty) : 0;
-    g.status=(g.totalOrderQty>0 && g.supplyRate>=1) ? 'done' : 'pending';
+    const allocInfo=orderAllocations[g.company+'||'+g.rep]||{allocated:0, agreed:false};
+    g.allocated=allocInfo.allocated;
+    g.agreed=allocInfo.agreed;
+    g.finalOrderQty = g.agreed ? g.allocated : null; // 최종주문: 상대방이 동의해야 확정됩니다.
 
-    g.allocated=orderAllocations[g.company+'||'+g.rep]||0;
+    const compareBase = g.finalOrderQty!==null ? g.finalOrderQty : g.totalOrderQty;
+    g.notSupplied=Math.max(0, compareBase-g.totalSuppliedQty);
+    g.supplyRate=compareBase>0 ? (g.totalSuppliedQty/compareBase) : 0;
+    g.status=(compareBase>0 && g.totalSuppliedQty>=compareBase) ? 'done' : 'pending';
+
     const baseStock=masterRepTotals[g.rep]!==undefined ? masterRepTotals[g.rep] : null;
     g.stockDisplay=baseStock===null ? null : Math.max(0, baseStock-(globalAllocByRep[g.rep]||0));
   });
@@ -3013,7 +3042,8 @@ function renderAdminOrders(){
       ${specTh}
       <th id="i18n-adminh-rep" rowspan="2" style="padding:9px 12px">${t.adminHRep}</th>
       <th colspan="2" style="text-align:center;border-bottom:1px solid var(--border);border-left:2px solid var(--border);font-size:13px;font-weight:700;color:var(--text);padding:6px">${t.colOrder}</th>
-      <th colspan="2" style="text-align:center;border-bottom:1px solid var(--border);border-left:2px solid var(--border);font-size:13px;font-weight:700;color:var(--text);padding:6px">${t.grpDecision}</th>
+      <th colspan="3" style="text-align:center;border-bottom:1px solid var(--border);border-left:2px solid var(--border);font-size:13px;font-weight:700;color:var(--text);padding:6px">${t.grpDecision}</th>
+      <th rowspan="2" style="text-align:center;border-left:2px solid var(--border);font-size:13px;font-weight:700;color:var(--text);padding:6px">${t.colFinalOrder}</th>
       <th colspan="2" style="text-align:center;border-bottom:1px solid var(--border);border-left:2px solid var(--border);font-size:13px;font-weight:700;color:var(--text);padding:6px">${t.colSupply}</th>
       <th colspan="3" style="text-align:center;border-bottom:1px solid var(--border);border-left:2px solid var(--border);font-size:13px;font-weight:700;color:var(--text);padding:6px">${t.grpStatusHdr}</th>
     </tr>
@@ -3022,6 +3052,7 @@ function renderAdminOrders(){
       <th style="padding:6px 16px 6px 10px;text-align:right;font-size:10px">${t.colOrder}</th>
       <th style="padding:6px 16px 6px 10px;text-align:right;border-left:2px solid var(--border);font-size:10px">${t.colStock}</th>
       <th style="padding:6px 10px;text-align:center;font-size:10px">${t.colAllocation}</th>
+      <th style="padding:6px 10px;text-align:center;font-size:10px">${t.colDecision}</th>
       <th style="padding:6px 12px;border-left:2px solid var(--border);font-size:10px">${t.colDate}</th>
       <th style="padding:6px 16px 6px 10px;text-align:right;font-size:10px">${t.colSupply}</th>
       <th style="padding:6px 16px 6px 10px;text-align:right;border-left:2px solid var(--border);font-size:10px">${t.colNotSupplied}</th>
@@ -3047,6 +3078,7 @@ function renderAdminOrders(){
     const stockText=g.stockDisplay===null?'-':g.stockDisplay;
 
     // 누계(굵은 글씨) 행
+    const finalOrderText = g.finalOrderQty===null ? '-' : g.finalOrderQty;
     let html=`<tr style="border-bottom:1px solid var(--border);font-weight:700;background:var(--surface2)">
       <td style="padding:9px 12px">${escapeHtml(g.company)}</td>
       <td style="padding:9px 12px">${escapeHtml(g.user_id)}</td>
@@ -3060,6 +3092,8 @@ function renderAdminOrders(){
         <input type="number" min="0" value="${g.allocated}" class="admin-supply-input" style="width:60px;text-align:center;padding:4px;border:1px solid var(--border);border-radius:5px;background:var(--surface);color:var(--text);font-weight:600"
           onchange="updateGroupAllocation('${companyEsc}','${repEsc}',this.value)">
       </td>
+      <td style="padding:9px 12px;text-align:center">${g.agreed?`<span style="color:#22c55e">${t.decisionAgreed}</span>`:''}</td>
+      <td style="padding:9px 12px;text-align:center;border-left:2px solid var(--border)">${finalOrderText}</td>
       <td style="padding:9px 12px;border-left:2px solid var(--border)"></td>
       <td style="padding:9px 16px 9px 12px;text-align:right">${g.totalSuppliedQty}</td>
       <td style="padding:9px 16px 9px 12px;text-align:right;border-left:2px solid var(--border);color:${g.notSupplied>0?'#ef4444':'var(--text)'}">${g.notSupplied}</td>
@@ -3076,7 +3110,8 @@ function renderAdminOrders(){
         <td style="padding:6px 12px;border-left:2px solid var(--border)">${ol?escapeHtml(ol.date):''}</td>
         <td style="padding:6px 16px 6px 10px;text-align:right">${ol?ol.qty:''}</td>
         <td style="border-left:2px solid var(--border)"></td>
-        <td></td>
+        <td></td><td></td>
+        <td style="border-left:2px solid var(--border)"></td>
         <td style="padding:6px 12px;border-left:2px solid var(--border)">${sl?escapeHtml(formatShipDate(sl.date)):''}</td>
         <td style="padding:6px 16px 6px 10px;text-align:right">${sl?sl.qty:''}</td>
         <td style="border-left:2px solid var(--border)"></td><td></td><td></td>
@@ -3098,7 +3133,9 @@ async function openAdminModal(){
   await loadOrderAllocations();
   await loadAdminOrders();
   renderAdminOrders();
-  await loadMyOrders();
+  await loadMyOrderAllocations();
+  await loadShipmentsToMe();
+  await loadMyCompanyOrders();
   renderAdminMyOrders();
   await loadOrderRequests();
   renderOrderRequests();
@@ -3262,46 +3299,140 @@ async function saveEditMember(){
   closeEditMemberModal();
   alert(t.myInfoSaved);
 }
+let myCompanyOrderRows=[]; // 내가 신청한 주문내역(회사 전체, 그룹화용)
+async function loadMyCompanyOrders(){
+  if(!currentUser){ myCompanyOrderRows=[]; return; }
+  const { data, error } = await sb.from('kt_orders').select('*').ilike('company', currentUser.company).order('created_at', { ascending:true });
+  if(error){ console.error(error); myCompanyOrderRows=[]; return; }
+  const rows=[];
+  (data||[]).forEach(o=>{
+    (o.items||[]).forEach(it=>{
+      rows.push({ orderId:o.id, createdAt:o.created_at, name_ko:it.name_ko||'', name_ru:it.name_ru||'', spec:it.spec||'', rep:it.rep||'', qty:it.qty||0 });
+    });
+  });
+  myCompanyOrderRows=rows;
+}
+// 회사+대표품번 기준으로 묶어서, 내 재고, 구매처의 공급가능 제안/의사결정, 최종주문, 출고 현황을 보여줍니다.
+function buildMyOrderGroups(){
+  const ownMasterTotals=computeMasterRepTotals(); // 내 창고 재고(대표품번 기준)
+  const groups={};
+  myCompanyOrderRows.forEach(r=>{
+    const key=r.rep;
+    if(!groups[key]){ groups[key]={ rep:r.rep, name_ko:r.name_ko, name_ru:r.name_ru, spec:r.spec, orderLines:[] }; }
+    groups[key].orderLines.push({ date: toDateOnly(r.createdAt), qty: r.qty||0 });
+  });
+  Object.values(groups).forEach(g=>{
+    g.orderLines.sort((a,b)=> a.date<b.date?-1:(a.date>b.date?1:0));
+    g.totalOrderQty=g.orderLines.reduce((s,l)=>s+l.qty,0);
+
+    const baseStock=ownMasterTotals[g.rep];
+    g.stockDisplay = baseStock===undefined ? null : baseStock;
+
+    const allocInfo=myOrderAllocations[g.rep]||{allocated:0, agreed:false};
+    g.supplyAvailable=allocInfo.allocated; // 구매처의 요청사항-공급가능
+    g.agreed=allocInfo.agreed;
+    g.finalOrderQty=g.agreed ? g.supplyAvailable : null; // 최종주문(구매처 제안에 동의해야 확정)
+
+    g.supplyLines=(shipmentsToMe||[])
+      .filter(s=>findMasterRep(s.rep)===g.rep)
+      .map(s=>({date:s.ship_date, qty:s.qty||0}))
+      .sort((a,b)=> (a.date||'')<(b.date||'')?-1:((a.date||'')>(b.date||'')?1:0));
+    g.totalSuppliedQty=g.supplyLines.reduce((s,l)=>s+l.qty,0);
+
+    const compareBase=g.finalOrderQty!==null ? g.finalOrderQty : g.totalOrderQty;
+    g.notSupplied=Math.max(0, compareBase-g.totalSuppliedQty);
+    g.supplyRate=compareBase>0 ? (g.totalSuppliedQty/compareBase) : 0;
+    g.status=(compareBase>0 && g.totalSuppliedQty>=compareBase) ? 'done' : 'pending';
+  });
+  return Object.values(groups);
+}
 function renderAdminMyOrders(){
   const t=T[lang];
   const isKo=lang==='ko';
+  const groups=buildMyOrderGroups();
   const countEl=document.getElementById('adminMyOrderCount');
-  if(countEl) countEl.textContent=t.myOrdersCount(myOrders.length);
+  if(countEl) countEl.textContent=t.adminCount(groups.length);
   const thead=document.getElementById('adminMyOrdersThead');
   const tbody=document.getElementById('adminMyOrdersTbody');
   const emptyEl=document.getElementById('adminMyOrdersEmpty');
 
-  const modelTh=MODEL_GROUPS.map(g=>`<th style="padding:9px 12px;text-align:center;color:${g.color}">${g.abbr}</th>`).join('');
-  const specTh=isKo?`<th style="padding:9px 12px">${t.thSpec}</th>`:'';
+  const specTh=isKo?`<th rowspan="2" style="padding:9px 12px">${t.thSpec}</th>`:'';
   thead.innerHTML=`<tr style="border-bottom:1px solid var(--border);color:var(--muted);text-align:left">
-      <th style="padding:9px 12px">${t.adminHDate}</th>
-      <th style="padding:9px 12px">${t.adminHName}</th>
+      <th rowspan="2" style="padding:9px 12px">${t.adminHName}</th>
       ${specTh}
-      <th style="padding:9px 12px">${t.adminHRep}</th>
-      ${modelTh}
-      <th style="padding:9px 16px 9px 12px;text-align:right">${t.adminHQty}</th>
+      <th rowspan="2" style="padding:9px 12px">${t.adminHRep}</th>
+      <th rowspan="2" style="text-align:right;padding:9px 16px 9px 12px;border-left:2px solid var(--border)">${t.colStock}</th>
+      <th colspan="2" style="text-align:center;border-bottom:1px solid var(--border);border-left:2px solid var(--border);font-size:13px;font-weight:700;color:var(--text);padding:6px">${t.colOrder}</th>
+      <th colspan="2" style="text-align:center;border-bottom:1px solid var(--border);border-left:2px solid var(--border);font-size:13px;font-weight:700;color:var(--text);padding:6px">${t.myOrderReqSection}</th>
+      <th rowspan="2" style="text-align:center;border-left:2px solid var(--border);font-size:13px;font-weight:700;color:var(--text);padding:6px">${t.colFinalOrder}</th>
+      <th colspan="2" style="text-align:center;border-bottom:1px solid var(--border);border-left:2px solid var(--border);font-size:13px;font-weight:700;color:var(--text);padding:6px">${t.colSupply}</th>
+      <th colspan="3" style="text-align:center;border-bottom:1px solid var(--border);border-left:2px solid var(--border);font-size:13px;font-weight:700;color:var(--text);padding:6px">${t.grpStatusHdr}</th>
+    </tr>
+    <tr style="border-bottom:1px solid var(--border);color:var(--muted);font-size:10px">
+      <th style="padding:6px 12px;border-left:2px solid var(--border);font-size:10px">${t.colDate}</th>
+      <th style="padding:6px 16px 6px 10px;text-align:right;font-size:10px">${t.colOrder}</th>
+      <th style="padding:6px 10px;text-align:center;border-left:2px solid var(--border);font-size:10px">${t.colSupplyAvailable}</th>
+      <th style="padding:6px 10px;text-align:center;font-size:10px">${t.colDecision}</th>
+      <th style="padding:6px 12px;border-left:2px solid var(--border);font-size:10px">${t.colDate}</th>
+      <th style="padding:6px 16px 6px 10px;text-align:right;font-size:10px">${t.colSupply}</th>
+      <th style="padding:6px 16px 6px 10px;text-align:right;border-left:2px solid var(--border);font-size:10px">${t.colNotSupplied}</th>
+      <th style="padding:6px 16px 6px 10px;text-align:right;font-size:10px">${t.colSupplyRate}</th>
+      <th style="padding:6px 10px;text-align:center;font-size:10px">${t.colStatus}</th>
     </tr>`;
 
-  if(!myOrders.length){
+  if(!groups.length){
     tbody.innerHTML='';
     emptyEl.textContent=t.myOrdersEmpty;
     emptyEl.style.display='block';
     return;
   }
   emptyEl.style.display='none';
-  tbody.innerHTML=myOrders.map(r=>{
-    const name = lang==='ko' ? r.name_ko : (r.name_ru||r.name_ko);
-    const flags=getGroupDotFlags(r.models);
-    const modelTd=flags.map(f=>`<td style="padding:9px 12px;text-align:center">${dot(f)}</td>`).join('');
-    const specTd=isKo?`<td style="padding:9px 12px;color:var(--muted)">${escapeHtml(r.spec)}</td>`:'';
-    return `<tr style="border-bottom:1px solid var(--border)">
-      <td style="padding:9px 12px;color:var(--muted);white-space:nowrap">${escapeHtml(r.date)}</td>
+  const fixedColCount = isKo?4:3;
+
+  tbody.innerHTML=groups.map(g=>{
+    const name=lang==='ko'?g.name_ko:(g.name_ru||g.name_ko);
+    const specTd=isKo?`<td style="padding:9px 12px;color:var(--muted)">${escapeHtml(g.spec)}</td>`:'';
+    const ratePct=(g.supplyRate*100).toFixed(1)+'%';
+    const stockText=g.stockDisplay===null?'-':g.stockDisplay;
+    const finalOrderText=g.finalOrderQty===null?'-':g.finalOrderQty;
+    const repEsc=g.rep.replace(/'/g,"\\'");
+    const decisionCell = g.agreed
+      ? `<span style="color:#22c55e">${t.decisionAgreed}</span>`
+      : (g.supplyAvailable>0 ? `<button class="news-btn-primary" style="padding:4px 10px;font-size:11px" onclick="agreeToAllocation('${repEsc}')">${t.agreeBtn}</button>` : '');
+
+    let html=`<tr style="border-bottom:1px solid var(--border);font-weight:700;background:var(--surface2)">
       <td style="padding:9px 12px">${escapeHtml(name)}</td>
       ${specTd}
-      <td style="padding:9px 12px"><span class="code">${escapeHtml(r.rep)}</span></td>
-      ${modelTd}
-      <td style="padding:9px 16px 9px 12px;text-align:right">${r.qty}</td>
+      <td style="padding:9px 12px"><span class="code">${escapeHtml(g.rep)}</span></td>
+      <td style="padding:9px 16px 9px 12px;text-align:right;border-left:2px solid var(--border);color:var(--muted)">${stockText}</td>
+      <td style="padding:9px 12px;border-left:2px solid var(--border)"></td>
+      <td style="padding:9px 16px 9px 12px;text-align:right">${g.totalOrderQty}</td>
+      <td style="padding:9px 16px 9px 12px;text-align:right;border-left:2px solid var(--border)">${g.supplyAvailable||'-'}</td>
+      <td style="padding:9px 12px;text-align:center">${decisionCell}</td>
+      <td style="padding:9px 12px;text-align:center;border-left:2px solid var(--border)">${finalOrderText}</td>
+      <td style="padding:9px 12px;border-left:2px solid var(--border)"></td>
+      <td style="padding:9px 16px 9px 12px;text-align:right">${g.totalSuppliedQty}</td>
+      <td style="padding:9px 16px 9px 12px;text-align:right;border-left:2px solid var(--border);color:${g.notSupplied>0?'#ef4444':'var(--text)'}">${g.notSupplied}</td>
+      <td style="padding:9px 16px 9px 12px;text-align:right">${ratePct}</td>
+      <td style="padding:9px 12px;text-align:center">${g.status==='done'?`<span style="color:#22c55e">${t.statusDone}</span>`:`<span style="color:#f59e0b">${t.statusPending}</span>`}</td>
     </tr>`;
+
+    const maxLines=Math.max(g.orderLines.length, g.supplyLines.length);
+    for(let i=0;i<maxLines;i++){
+      const ol=g.orderLines[i], sl=g.supplyLines[i];
+      html+=`<tr style="border-bottom:1px solid var(--border);color:var(--muted);font-size:12px">
+        <td colspan="${fixedColCount}"></td>
+        <td style="padding:6px 12px;border-left:2px solid var(--border)">${ol?escapeHtml(ol.date):''}</td>
+        <td style="padding:6px 16px 6px 10px;text-align:right">${ol?ol.qty:''}</td>
+        <td style="border-left:2px solid var(--border)"></td>
+        <td></td><td></td>
+        <td style="border-left:2px solid var(--border)"></td>
+        <td style="padding:6px 12px;border-left:2px solid var(--border)">${sl?escapeHtml(formatShipDate(sl.date)):''}</td>
+        <td style="padding:6px 16px 6px 10px;text-align:right">${sl?sl.qty:''}</td>
+        <td style="border-left:2px solid var(--border)"></td><td></td><td></td>
+      </tr>`;
+    }
+    return html;
   }).join('');
 }
 function switchAdminView(view){
