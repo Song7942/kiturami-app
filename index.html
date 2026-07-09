@@ -1346,7 +1346,7 @@ const T={
        ddTitle:'Выбор модели',ddAllOn:'Снять всё',ddAllOff:'Выбрать все',
        diagTitle:'ALPHA PLUS — Сборочный чертёж',apsDiagTitle:'ALPHA PLUS S — Сборочный чертёж',diagHint:'Нажмите номер → выделение'},
 };
-let lang='ko',searchKw='',activeDiagNum=null,diagBuilt=false,manualClosed=false;
+let lang='ko',searchKw='',activeDiagNum=null,activeDiagRep=null,diagBuilt=false,manualClosed=false;
 let selectedKeys=null,openGroup=null,openSeries=null,multiMode=false;
 let orderSearchKw='',orderQty={};
 
@@ -1756,7 +1756,7 @@ function setDiagHidden(hidden){
 function toggleDiagHide(){ setDiagHidden(!diagHidden); }
 function closeDiagram(){
   document.getElementById('diagramPanel').classList.remove('open');
-  activeDiagNum=null;clearHighlight();
+  activeDiagNum=null;activeDiagRep=null;clearHighlight();
   document.querySelectorAll('.diag-num.active').forEach(b=>b.classList.remove('active'));
 }
 function manualCloseDiagram(){manualClosed=true;closeDiagram();diagBuilt=false;diagTypes=[];}
@@ -2094,7 +2094,7 @@ function openDiagramAndHighlightRow(d, afterFn){
   }
   setTimeout(()=>{
     const btn=document.querySelector(`.diag-num[data-diag="${String(d.diag)}"]`);
-    if(btn) onDiagClick(String(d.diag), btn);
+    if(btn) onDiagClick(String(d.diag), btn, d.rep);
     if(afterFn) afterFn();
   }, needsSwitch?120:0);
   return true;
@@ -2121,8 +2121,8 @@ function onRowClickHighlight(diag, rep, isOrder){
   const d = rows.find(r=>String(r.diag)===String(diag) && r.rep===rep);
   if(!d) return;
   const dn=String(d.diag);
-  if(activeDiagNum===dn){
-    activeDiagNum=null; clearHighlight(); closeDiagram();
+  if(activeDiagNum===dn && activeDiagRep===rep){
+    activeDiagNum=null; activeDiagRep=null; clearHighlight(); closeDiagram();
     return;
   }
   openDiagramAndHighlightRow(d);
@@ -2131,15 +2131,15 @@ document.addEventListener('click', function(e){
   if(!activeDiagNum) return;
   const insideRelevant = e.target.closest('.tbl-body-wrap, .card-list, #diagramPanel, .diag-num, .mb-item, #mbDropdown, .diag-zoom-btn');
   if(!insideRelevant){
-    activeDiagNum=null; clearHighlight(); closeDiagram();
+    activeDiagNum=null; activeDiagRep=null; clearHighlight(); closeDiagram();
   }
 });
-function onDiagClick(dn,btn){
+function onDiagClick(dn,btn,targetRep){
   document.querySelectorAll('.diag-num.active').forEach(b=>b.classList.remove('active'));
-  if(activeDiagNum===dn){activeDiagNum=null;clearHighlight();return;}
-  activeDiagNum=dn;btn.classList.add('active');highlightByDiag(dn);
+  if(activeDiagNum===dn){activeDiagNum=null;activeDiagRep=null;clearHighlight();return;}
+  activeDiagNum=dn;activeDiagRep=targetRep||null;btn.classList.add('active');highlightByDiag(dn,targetRep);
 }
-function highlightByDiag(dn){
+function highlightByDiag(dn,targetRep){
   const onOrder=document.getElementById('pane-order').classList.contains('active');
   const sb=document.getElementById(onOrder?'scrollBodyOrder':'scrollBodyParts');
   let scrolled=false;
@@ -2152,24 +2152,28 @@ function highlightByDiag(dn){
   if(onOrder){
     const rows=getFilteredOrderParts();
     document.querySelectorAll('#orderTbody tr').forEach((tr,i)=>{
-      if(rows[i]&&String(rows[i].diag)===dn){
+      const r=rows[i];
+      const match = r && String(r.diag)===dn && (!targetRep || r.rep===targetRep);
+      if(match){
         tr.classList.add('highlight'); tryScroll(tr);
       } else tr.classList.remove('highlight');
     });
     document.querySelectorAll('#orderCardList .order-card').forEach(c=>{
-      const d=c.querySelector('.pc-diag');const match=d&&d.dataset.diag===dn;c.classList.toggle('highlight',match);
+      const d=c.querySelector('.pc-diag');const match=d&&d.dataset.diag===dn&&(!targetRep||d.dataset.rep===targetRep);c.classList.toggle('highlight',match);
       if(match) tryScroll(c);
     });
     return;
   }
   document.querySelectorAll('#tbody tr').forEach((tr,i)=>{
     const rows=getFilteredParts();
-    if(rows[i]&&String(rows[i].diag)===dn){
+    const r=rows[i];
+    const match = r && String(r.diag)===dn && (!targetRep || r.rep===targetRep);
+    if(match){
       tr.classList.add('highlight'); tryScroll(tr);
     } else tr.classList.remove('highlight');
   });
   document.querySelectorAll('.part-card').forEach(c=>{
-    const d=c.querySelector('.pc-diag');const match=d&&d.dataset.diag===dn;c.classList.toggle('highlight',match);
+    const d=c.querySelector('.pc-diag');const match=d&&d.dataset.diag===dn&&(!targetRep||d.dataset.rep===targetRep);c.classList.toggle('highlight',match);
     if(match) tryScroll(c);
   });
 }
@@ -2239,20 +2243,14 @@ function renderTable(){
     const el=document.createElement('div');el.className='part-card';el.dataset.diag=d.diag;
     el.addEventListener('click',()=>onRowClickHighlight(String(d.diag), d.rep, false));
     const nh=lang==='ko'?`<span class="pc-name">${hl(d.name_ko,kw)}</span></div><div class="pc-spec">${hl(d.spec,kw)}`:`<span class="pc-name">${hl(d.name_ru,kw)}</span>`;
-    el.innerHTML=`<div class="pc-top"><span class="pc-diag" data-diag="${escapeHtml(String(d.diag))}">${T[lang].thDiag} ${hl(d.diag,kw)}</span>${nh}</div><div class="pc-code"><span class="code">${hl(d.rep,kw)}</span></div><div class="model-tags">${applied.map(m=>`<span class="mt" style="color:${m.color};background:${m.color}22;border-color:${m.color}44">${m.group} ${m.label}</span>`).join('')}</div>`;
+    el.innerHTML=`<div class="pc-top"><span class="pc-diag" data-diag="${escapeHtml(String(d.diag))}" data-rep="${escapeHtml(d.rep)}">${T[lang].thDiag} ${hl(d.diag,kw)}</span>${nh}</div><div class="pc-code"><span class="code">${hl(d.rep,kw)}</span></div><div class="model-tags">${applied.map(m=>`<span class="mt" style="color:${m.color};background:${m.color}22;border-color:${m.color}44">${m.group} ${m.label}</span>`).join('')}</div>`;
     frag.appendChild(el);
   });
   cl.insertBefore(frag,noR);
-  if(activeDiagNum)highlightByDiag(activeDiagNum);
+  if(activeDiagNum)highlightByDiag(activeDiagNum,activeDiagRep);
   updatePartsTableScrollbar();
 }
-function onRowClick(tr,dn){
-  const wasHl=tr.classList.contains('highlight');clearHighlight();
-  document.querySelectorAll('.diag-num.active').forEach(b=>b.classList.remove('active'));
-  if(wasHl){activeDiagNum=null;return;}
-  activeDiagNum=String(dn);tr.classList.add('highlight');
-  document.querySelectorAll(`.diag-num[data-diag="${dn}"]`).forEach(b=>{b.classList.add('active');const ds=document.getElementById('diagScroll');if(ds)ds.scrollTo({left:b.offsetLeft-ds.clientWidth/2,behavior:'smooth'});});
-}
+
 
 // ── 품번 조회 ──
 // ── 품번조회 디바운스 ──
@@ -2542,7 +2540,7 @@ function renderOrderTable(){
     return `<div class="order-card" onclick="onRowClickHighlight('${d.diag}','${d.rep.replace(/'/g,"\\'")}',true)">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
         <div style="flex:1;min-width:0">
-          <div class="pc-diag" data-diag="${escapeHtml(String(d.diag))}" style="font-size:11px;color:var(--muted)">${t.thDiag} ${d.diag}</div>
+          <div class="pc-diag" data-diag="${escapeHtml(String(d.diag))}" data-rep="${escapeHtml(d.rep)}" style="font-size:11px;color:var(--muted)">${t.thDiag} ${d.diag}</div>
           <div class="pc-name">${nm}</div>
           ${specHtml}
           <div class="code" style="margin-top:4px">${d.rep}</div>
@@ -2565,7 +2563,7 @@ function renderOrderTable(){
       </div>
     </div>`;
   }).join(''));
-  if(activeDiagNum)highlightByDiag(activeDiagNum);
+  if(activeDiagNum)highlightByDiag(activeDiagNum,activeDiagRep);
   updateOrderTableScrollbar();
 }
 
