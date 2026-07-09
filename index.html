@@ -4016,13 +4016,11 @@ function findMasterRep(articul){
 }
 let globalSuppliedTotals={}; // rep -> 지금까지 관리자가 배분한 누적 수량 (전체 주문 기준)
 async function loadGlobalSuppliedTotals(){
-  const { data, error } = await sb.from('kt_orders').select('items').ilike('target_company', currentUser?currentUser.company:'');
+  const { data, error } = await sb.from('kt_order_allocations').select('*').ilike('target_company', currentUser?currentUser.company:'');
   if(error){ console.error(error); globalSuppliedTotals={}; return; }
   const totals={};
-  (data||[]).forEach(o=>{
-    (o.items||[]).forEach(it=>{
-      if(it.supplied) totals[it.rep]=(totals[it.rep]||0)+(it.supplied||0);
-    });
+  (data||[]).forEach(a=>{
+    totals[a.rep]=(totals[a.rep]||0)+(a.allocated||0);
   });
   globalSuppliedTotals=totals;
 }
