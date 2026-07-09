@@ -963,6 +963,48 @@ input[type="text"]::placeholder{color:var(--muted)}
 
 <!-- 내 정보 수정 모달 -->
 <!-- 관리자 - 회원 정보 수정 모달 -->
+<!-- 출고내역 - 수정 모달 -->
+<div id="editShipmentModal" class="news-modal" onclick="closeEditShipmentModalBg(event)">
+  <div class="news-modal-inner" onclick="event.stopPropagation()" style="max-width:420px">
+    <div class="news-modal-hdr">
+      <span id="i18n-editshiptitle">출고내역 수정</span>
+      <button class="news-modal-close" onclick="closeEditShipmentModal()">✕</button>
+    </div>
+    <div style="padding:20px;overflow-y:auto">
+      <input type="hidden" id="emsId">
+      <div style="margin-bottom:12px">
+        <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" id="i18n-editship-master">대표품번(미변경)</label>
+        <input type="text" id="emsMaster" oninput="onEmsMasterInput()" style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)">
+      </div>
+      <div style="margin-bottom:12px">
+        <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" id="i18n-editship-rep">품번</label>
+        <input type="text" id="emsRep" oninput="onEmsRepInput()" style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)">
+      </div>
+      <div style="margin-bottom:12px;font-size:12px;color:var(--muted);background:var(--surface2);border-radius:6px;padding:8px 10px">
+        <span id="i18n-editship-name">품명</span>: <b id="emsNameDisplay" style="color:var(--text)"></b><br>
+        <span id="i18n-editship-spec">규격</span>: <b id="emsSpecDisplay" style="color:var(--text)"></b>
+      </div>
+      <div style="margin-bottom:12px;position:relative">
+        <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" id="i18n-editship-client">거래처명</label>
+        <input type="text" id="emsClient" autocomplete="off" oninput="onEmsClientInput()" onfocus="onEmsClientInput()" onblur="setTimeout(()=>{const l=document.getElementById('emsClientList');if(l)l.style.display='none';},150)" style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)">
+        <div id="emsClientList" class="supplier-suggest" style="display:none"></div>
+      </div>
+      <div style="margin-bottom:12px">
+        <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" id="i18n-editship-date">일자</label>
+        <input type="date" id="emsDate" style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)">
+      </div>
+      <div style="margin-bottom:16px">
+        <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" id="i18n-editship-qty">출고수량</label>
+        <input type="number" min="0" id="emsQty" style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)">
+      </div>
+      <div id="editShipmentErr" style="color:#ef4444;font-size:12px;min-height:16px;margin-bottom:8px"></div>
+      <button class="news-btn-primary" style="width:100%;padding:11px;font-size:14px" onclick="saveEditShipment()">
+        <span id="i18n-editship-save">저장</span>
+      </button>
+    </div>
+  </div>
+</div>
+
 <div id="editMemberModal" class="news-modal" onclick="closeEditMemberModalBg(event)">
   <div class="news-modal-inner" onclick="event.stopPropagation()" style="max-width:420px">
     <div class="news-modal-hdr">
@@ -1173,6 +1215,8 @@ const T={
        tabShipments:'출고내역',shipUpload:'엑셀 업데이트',shipThRep:'품번',shipThClient:'거래처명',shipThDate:'일자',shipThQty:'출고',
        shipUploadOk:n=>`출고내역 ${n}건이 추가되었습니다.`,shipUploadFail:'업로드에 실패했습니다. 양식을 확인해주세요.',shipUploadEmpty:'파일에서 유효한 데이터를 찾지 못했습니다. 양식을 확인해주세요.',
        shipIndividual:'개인',
+       editShipTitle:'출고내역 수정',editShipMaster:'대표품번(미변경)',editShipRep:'품번',editShipName:'품명',editShipSpec:'규격',editShipClient:'거래처명',editShipDate:'일자',editShipQty:'출고수량',editShipSave:'저장',
+       shipEditErrFill:'품번, 거래처명, 일자, 출고수량을 모두 입력해주세요.',shipDeleteConfirm:'이 출고내역을 삭제하시겠습니까? 삭제하면 되돌릴 수 없습니다.',
        priceTemplate:'양식 다운로드',priceUpload:'엑셀 업데이트',priceHRep:'대표품번',priceHPrice:'가격',priceHUpdated:'업데이트일시',priceEmpty:'등록된 가격 데이터가 없습니다.',priceCount:n=>`총 ${n}건`,
        priceUploadOk:n=>`가격 ${n}건이 업데이트되었습니다.`,priceUploadFail:'업로드에 실패했습니다. 양식을 확인해주세요.',priceUploadEmpty:'파일에서 유효한 데이터를 찾지 못했습니다. 양식을 확인해주세요.',priceSearchPh:'대표품번으로 검색…',
        adminHNewQty:'신규 주문수량',adminHStock:'재고수량',reqOriginalQtyLabel:'신규 주문수량',reqRequestedQtyLabel:'변경신청 수량',reqRepLabel:'대표품번 (미변경)',
@@ -1231,6 +1275,8 @@ const T={
        tabShipments:'Отгрузки',shipUpload:'Обновить Excel',shipThRep:'Артикул',shipThClient:'Клиент',shipThDate:'Дата',shipThQty:'Отгружено',
        shipUploadOk:n=>`Добавлено записей: ${n}.`,shipUploadFail:'Ошибка загрузки. Проверьте шаблон.',shipUploadEmpty:'В файле не найдено данных. Проверьте шаблон.',
        shipIndividual:'Частное лицо',
+       editShipTitle:'Изменить отгрузку',editShipMaster:'Осн. артикул (неизм.)',editShipRep:'Артикул',editShipName:'Название',editShipSpec:'Спецификация',editShipClient:'Клиент',editShipDate:'Дата',editShipQty:'Отгружено',editShipSave:'Сохранить',
+       shipEditErrFill:'Заполните артикул, клиента, дату и количество.',shipDeleteConfirm:'Удалить эту запись отгрузки? Это необратимо.',
        priceTemplate:'Скачать шаблон',priceUpload:'Обновить Excel',priceHRep:'Артикул',priceHPrice:'Цена',priceHUpdated:'Обновлено',priceEmpty:'Данных о ценах пока нет.',priceCount:n=>`Всего: ${n}`,
        priceUploadOk:n=>`Обновлено позиций: ${n}.`,priceUploadFail:'Ошибка загрузки. Проверьте шаблон.',priceUploadEmpty:'В файле не найдено данных. Проверьте шаблон.',priceSearchPh:'Поиск по артикулу…',
        adminHNewQty:'Новое кол-во',adminHStock:'Остаток',reqOriginalQtyLabel:'Исходное кол-во',reqRequestedQtyLabel:'Запрошено',reqRepLabel:'Артикул (неизм.)',
@@ -1368,6 +1414,15 @@ function setLang(l){
   setTxtIfExists('i18n-myinfo-region', t.myInfoRegion);
   setTxtIfExists('i18n-editmember-country', t.editMemberCountry);
   setTxtIfExists('i18n-editmember-region', t.editMemberRegion);
+  setTxtIfExists('i18n-editshiptitle', t.editShipTitle);
+  setTxtIfExists('i18n-editship-master', t.editShipMaster);
+  setTxtIfExists('i18n-editship-rep', t.editShipRep);
+  setTxtIfExists('i18n-editship-name', t.editShipName);
+  setTxtIfExists('i18n-editship-spec', t.editShipSpec);
+  setTxtIfExists('i18n-editship-client', t.editShipClient);
+  setTxtIfExists('i18n-editship-date', t.editShipDate);
+  setTxtIfExists('i18n-editship-qty', t.editShipQty);
+  setTxtIfExists('i18n-editship-save', t.editShipSave);
   setTxtIfExists('i18n-myinfo-email', t.myInfoEmail);
   setTxtIfExists('i18n-myinfo-pwhint', t.myInfoPwHint);
   setTxtIfExists('i18n-myinfo-save', t.myInfoSave);
@@ -3706,6 +3761,85 @@ async function handleShipmentsUpload(event){
   };
   reader.readAsArrayBuffer(file);
 }
+function updateEmsNameSpec(masterRep){
+  const info=masterRep?getPNInfo(masterRep):null;
+  document.getElementById('emsNameDisplay').textContent = info ? (lang==='ko'?info.name_ko:(info.name_ru||info.name_ko)) : '';
+  document.getElementById('emsSpecDisplay').textContent = info ? (info.spec||'') : '';
+}
+function onEmsRepInput(){
+  const repVal=document.getElementById('emsRep').value.trim();
+  const masterInput=document.getElementById('emsMaster');
+  if(!repVal) return;
+  const master=findMasterRep(repVal);
+  if(master){ masterInput.value=master; updateEmsNameSpec(master); }
+}
+function onEmsMasterInput(){
+  const masterVal=document.getElementById('emsMaster').value.trim();
+  const repInput=document.getElementById('emsRep');
+  if(!masterVal) return;
+  // 대표품번을 직접 입력하면, 품번칸이 비어있을 때는 같은 값으로 채워줍니다(별도 변형 품번이 없으면 대표품번 자체가 품번).
+  if(!repInput.value.trim()) repInput.value=masterVal;
+  const master=findMasterRep(masterVal)||masterVal;
+  updateEmsNameSpec(master);
+}
+function onEmsClientInput(){
+  const list=document.getElementById('emsClientList');
+  const kw=document.getElementById('emsClient').value.trim().toLowerCase();
+  const uniqueClients=[...new Set((shipmentsData||[]).map(s=>s.client_name).filter(Boolean))];
+  let matches;
+  if(!kw) matches=uniqueClients.slice(0,10);
+  else matches=uniqueClients.filter(c=>c.toLowerCase().includes(kw)).slice(0,10);
+  if(!matches.length){ list.style.display='none'; list.innerHTML=''; return; }
+  list.innerHTML=matches.map(c=>`<div class="supplier-suggest-item" onmousedown="selectEmsClient('${c.replace(/'/g,"\\'")}')">${escapeHtml(displayClientName(c))}</div>`).join('');
+  list.style.display='block';
+}
+function selectEmsClient(name){
+  document.getElementById('emsClient').value=name;
+  document.getElementById('emsClientList').style.display='none';
+}
+function openEditShipmentModal(id){
+  const r=shipmentsData.find(x=>x.id===id);
+  if(!r) return;
+  const master=findMasterRep(r.rep)||'';
+  document.getElementById('emsId').value=r.id;
+  document.getElementById('emsMaster').value=master;
+  document.getElementById('emsRep').value=r.rep||'';
+  document.getElementById('emsClient').value=r.client_name||'';
+  document.getElementById('emsDate').value=r.ship_date||'';
+  document.getElementById('emsQty').value=r.qty||0;
+  updateEmsNameSpec(master||r.rep);
+  document.getElementById('editShipmentErr').textContent='';
+  document.getElementById('editShipmentModal').classList.add('show');
+}
+function closeEditShipmentModal(){ document.getElementById('editShipmentModal').classList.remove('show'); }
+function closeEditShipmentModalBg(e){ if(e.target===document.getElementById('editShipmentModal')) closeEditShipmentModal(); }
+async function saveEditShipment(){
+  const t=T[lang];
+  const errEl=document.getElementById('editShipmentErr');
+  errEl.textContent='';
+  const id=Number(document.getElementById('emsId').value);
+  const rep=document.getElementById('emsRep').value.trim();
+  const client=document.getElementById('emsClient').value.trim();
+  const shipDate=document.getElementById('emsDate').value;
+  const qty=Number(document.getElementById('emsQty').value);
+
+  if(!rep || !client || !shipDate || isNaN(qty) || qty<0){ errEl.textContent=t.shipEditErrFill; return; }
+
+  const { error } = await sb.from('kt_shipments').update({ rep, client_name: client, ship_date: shipDate, qty }).eq('id', id);
+  if(error){ errEl.textContent=(error.message||error.code); return; }
+  await loadShipments();
+  renderShipmentsList();
+  closeEditShipmentModal();
+  alert(t.myInfoSaved);
+}
+async function deleteShipment(id){
+  const t=T[lang];
+  if(!confirm(t.shipDeleteConfirm)) return;
+  const { error } = await sb.from('kt_shipments').delete().eq('id', id);
+  if(error){ alert(t.reqFail+'\n\n['+(error.message||error.code)+']'); return; }
+  await loadShipments();
+  renderShipmentsList();
+}
 function renderShipmentsList(){
   const t=T[lang];
   const isKo=lang==='ko';
@@ -3722,12 +3856,12 @@ function renderShipmentsList(){
   if(lastUpdatedEl) lastUpdatedEl.textContent = latest ? t.invLastUpdated(formatNewsDate(new Date(latest).getTime())) : '';
 
   const cols = isKo
-    ? [t.adminHName, t.thSpec, t.invHMaster, t.shipThRep, t.shipThClient, t.shipThDate, t.shipThQty]
-    : [t.adminHName, t.invHMaster, t.shipThRep, t.shipThClient, t.shipThDate, t.shipThQty];
-  const widths = isKo ? ['20%','16%','16%','12%','16%','12%','8%'] : ['24%','18%','14%','20%','12%','12%'];
+    ? [t.adminHName, t.thSpec, t.invHMaster, t.shipThRep, t.shipThClient, t.shipThDate, t.shipThQty, '']
+    : [t.adminHName, t.invHMaster, t.shipThRep, t.shipThClient, t.shipThDate, t.shipThQty, ''];
+  const widths = isKo ? ['17%','14%','14%','11%','14%','11%','7%','12%'] : ['21%','16%','13%','18%','11%','10%','11%'];
   const colgroupHtml=widths.map(w=>`<col style="width:${w}">`).join('');
   ['ship-hdr-col','ship-body-col'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=colgroupHtml;});
-  document.getElementById('shipmentsThead').innerHTML=`<tr>${cols.map((c,i)=>`<th${i===cols.length-1?' style="text-align:right;padding-right:16px"':''}>${c}</th>`).join('')}</tr>`;
+  document.getElementById('shipmentsThead').innerHTML=`<tr>${cols.map((c,i)=>`<th${i===cols.length-2?' style="text-align:right;padding-right:16px"':''}${i===cols.length-1?' style="text-align:center"':''}>${c}</th>`).join('')}</tr>`;
 
   const tbody=document.getElementById('shipmentsTbody');
   const cardList=document.getElementById('shipmentsCardList');
@@ -3751,6 +3885,10 @@ function renderShipmentsList(){
     <td style="padding:9px 12px">${escapeHtml(displayClientName(r.client_name))}</td>
     <td style="padding:9px 12px;color:var(--muted)">${escapeHtml(formatShipDate(r.ship_date))}</td>
     <td style="padding:9px 16px 9px 12px;text-align:right;font-weight:700">${r.qty}</td>
+    <td style="padding:9px 12px;text-align:center;white-space:nowrap">
+      <button class="news-btn-secondary" style="padding:5px 9px;font-size:11px" onclick="openEditShipmentModal(${r.id})">${t.signupEdit}</button>
+      <button class="news-btn-secondary" style="padding:5px 9px;font-size:11px" onclick="deleteShipment(${r.id})">${t.signupDelete}</button>
+    </td>
   </tr>`;
   }).join('');
   if(cardList) cardList.innerHTML=rows.map(r=>{
@@ -3770,6 +3908,10 @@ function renderShipmentsList(){
     <div style="display:flex;justify-content:space-between;margin-top:6px;padding-top:8px;border-top:1px solid var(--border);font-size:12px">
       <span style="color:var(--muted)">${t.shipThDate}: <b style="color:var(--text)">${escapeHtml(formatShipDate(r.ship_date))}</b></span>
       <span style="color:var(--muted)">${t.shipThQty}: <b style="color:var(--text)">${r.qty}</b></span>
+    </div>
+    <div style="display:flex;gap:6px;margin-top:10px">
+      <button class="news-btn-secondary" style="flex:1;padding:6px;font-size:12px" onclick="openEditShipmentModal(${r.id})">${t.signupEdit}</button>
+      <button class="news-btn-secondary" style="flex:1;padding:6px;font-size:12px" onclick="deleteShipment(${r.id})">${t.signupDelete}</button>
     </div>
   </div>`;
   }).join('');
