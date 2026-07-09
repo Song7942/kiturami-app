@@ -1383,10 +1383,10 @@ function switchTab(tab){
   const el=getScrollBody(); if(el) el.scrollTop=0;
   const btn=document.getElementById('toTopBtn'); if(btn) btn.classList.remove('show');
   if(tab==='pn') renderPN();
-  if(tab==='order'){ mountModelDiag('order'); syncDiagram(); Promise.all([loadMyOrderTotals(), loadInventory(), loadGlobalSuppliedTotals(), loadReceivedOrderTotals()]).then(renderOrderTable); renderOrderTable(); }
+  if(tab==='order'){ mountModelDiag('order'); syncDiagram(); refreshCurrentUser().then(()=>Promise.all([loadMyOrderTotals(), loadInventory(), loadGlobalSuppliedTotals(), loadReceivedOrderTotals()])).then(renderOrderTable); renderOrderTable(); }
   if(tab==='parts'){ mountModelDiag('parts'); syncDiagram(); renderTable(); }
-  if(tab==='inventory'){ Promise.all([loadInventory(), loadGlobalSuppliedTotals()]).then(renderInventoryList); }
-  if(tab==='shipments'){ loadShipments().then(renderShipmentsList); }
+  if(tab==='inventory'){ refreshCurrentUser().then(()=>Promise.all([loadInventory(), loadGlobalSuppliedTotals()])).then(renderInventoryList); }
+  if(tab==='shipments'){ refreshCurrentUser().then(()=>loadShipments()).then(renderShipmentsList); }
   if(tab==='price'){ loadPrices().then(renderPriceList); }
 }
 
@@ -3092,6 +3092,7 @@ async function openAdminModal(){
   document.getElementById('adminOrderTbody').innerHTML='';
   document.getElementById('adminOrderEmpty').style.display='none';
   switchAdminView('orders');
+  await refreshCurrentUser();
   await loadInventory();
   await loadShipments();
   await loadOrderAllocations();
@@ -4781,6 +4782,23 @@ async function doSignup(){
   setTimeout(()=>showAuth('login'), 1800);
 }
 
+// 로그아웃 없이도 회사명/구매처 등 최신 정보를 세션에 반영합니다.
+// (관리자가 다른 화면에서 회원 정보를 수정하거나, 구매처 SQL을 직접 바꾼 경우에도 다음 탭 전환 시 바로 반영됩니다.)
+async function refreshCurrentUser(){
+  if(!currentUser) return;
+  try{
+    const { data, error } = await sb.from('kt_users').select('id,company,is_admin,supplier_company,status').ilike('id', currentUser.id).limit(1);
+    if(error || !data || !data[0]) return;
+    const found=data[0];
+    if(found.status && found.status!=='approved'){
+      // 승인 상태가 아니게 되면(예: 구매처가 바뀌어 재승인 대기 상태가 됨) 즉시 로그아웃합니다.
+      doLogout();
+      return;
+    }
+    currentUser = { id:found.id, company:found.company, is_admin: !!found.is_admin, supplier_company: found.supplier_company||null };
+    sessionStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(currentUser));
+  }catch(e){ console.error(e); }
+}
 async function doLogin(){
   const t = AUTH_T[authLang];
   const id = document.getElementById('loginId').value.trim();
