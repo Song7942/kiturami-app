@@ -1072,6 +1072,11 @@ input[type="text"]::placeholder{color:var(--muted)}
         <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" id="i18n-myinfo-company">회사명</label>
         <input type="text" id="miCompany" disabled style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--muted)">
       </div>
+      <div id="miSupplierWrap" style="margin-bottom:12px;position:relative">
+        <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" id="i18n-myinfo-supplier">구매처(거래처) 회사명</label>
+        <input type="text" id="miSupplier" autocomplete="off" oninput="this.value=this.value.toUpperCase();onMiSupplierInput()" onfocus="onMiSupplierFocus()" onblur="setTimeout(()=>{const l=document.getElementById('miSupplierList');if(l)l.style.display='none';},150)" style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)">
+        <div id="miSupplierList" class="supplier-suggest" style="display:none"></div>
+      </div>
       <div style="margin-bottom:12px">
         <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" id="i18n-myinfo-id">아이디</label>
         <input type="text" id="miId" disabled style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--muted)">
@@ -1266,6 +1271,9 @@ const T={
        myInfoErrPwShort:'비밀번호는 4자 이상 입력해주세요.',myInfoErrPwMismatch:'새 비밀번호가 일치하지 않습니다.',
        myInfoErrCountry:'목록에서 국가를 선택해주세요.',myInfoErrPhone:'전화번호 형식이 올바르지 않습니다.',
        myInfoCountry:'국가',myInfoRegion:'지역(시/도)',editMemberCountry:'국가',editMemberRegion:'지역(시/도)',
+       myInfoSupplier:'구매처(거래처) 회사명',
+       myInfoSupplierChangeConfirm:sup=>`구매처를 "${sup}"로 변경하시겠습니까?\n변경하면 다시 승인을 받아야 하며, 승인 전까지는 로그인이 제한됩니다.`,
+       myInfoSupplierChanged:sup=>`구매처가 "${sup}"로 변경되었습니다. 해당 구매처의 승인 후 다시 로그인하실 수 있습니다.`,
        pnPh:'대표품번, 호환품번, 최종품번으로 검색…',
        pnH0:'품명',pnH0s:'규격',pnH1:'대표품번 (미변경)',pnH2:'호환품번 (변경)',pnH3:'최종품번 (변경, 현시점)',
        pnNoResult:'검색 결과가 없습니다.',
@@ -1329,6 +1337,9 @@ const T={
        myInfoErrPwShort:'Пароль должен быть не менее 4 символов.',myInfoErrPwMismatch:'Новые пароли не совпадают.',
        myInfoErrCountry:'Выберите страну из списка.',myInfoErrPhone:'Неверный формат номера телефона.',
        myInfoCountry:'Страна',myInfoRegion:'Регион/область',editMemberCountry:'Страна',editMemberRegion:'Регион/область',
+       myInfoSupplier:'Компания-поставщик',
+       myInfoSupplierChangeConfirm:sup=>`Изменить поставщика на "${sup}"?\nПотребуется повторное одобрение, вход будет ограничен до одобрения.`,
+       myInfoSupplierChanged:sup=>`Поставщик изменён на "${sup}". Вход будет доступен после одобрения этой компанией.`,
        pnPh:'Поиск по артикулу…',
        pnH0:'Наименование',pnH0s:'',pnH1:'Осн. артикул (неизм.)',pnH2:'Артикул замены',pnH3:'Актуальный артикул',
        pnNoResult:'Результаты не найдены.',
@@ -1421,6 +1432,7 @@ function setLang(l){
   setTxtIfExists('i18n-myinfo-phone', t.myInfoPhone);
   setTxtIfExists('i18n-myinfo-country', t.myInfoCountry);
   setTxtIfExists('i18n-myinfo-region', t.myInfoRegion);
+  setTxtIfExists('i18n-myinfo-supplier', t.myInfoSupplier);
   setTxtIfExists('i18n-editmember-country', t.editMemberCountry);
   setTxtIfExists('i18n-editmember-region', t.editMemberRegion);
   setTxtIfExists('i18n-editshiptitle', t.editShipTitle);
@@ -4789,10 +4801,14 @@ async function doLogin(){
 
 async function openMyInfoModal(){
   if(!currentUser) return;
-  const { data, error } = await sb.from('kt_users').select('company,id,contact_name,country,region,phone,email').eq('id', currentUser.id).limit(1);
+  const { data, error } = await sb.from('kt_users').select('company,id,contact_name,country,region,phone,email,supplier_company').eq('id', currentUser.id).limit(1);
   const row = (data && data[0]) || {};
   document.getElementById('miCompany').value = row.company || currentUser.company || '';
   document.getElementById('miId').value = row.id || currentUser.id || '';
+  document.getElementById('miSupplier').value = row.supplier_company || '';
+  document.getElementById('miSupplier').dataset.original = row.supplier_company || '';
+  const miSupplierWrap=document.getElementById('miSupplierWrap');
+  if(miSupplierWrap) miSupplierWrap.style.display = (String(row.company||'').toUpperCase()==='KITURAMI') ? 'none' : 'block';
   document.getElementById('miContactName').value = row.contact_name || '';
   document.getElementById('miRegion').value = row.region || '';
   const { country, digits } = splitStoredPhone(row.phone, row.country);
@@ -4802,6 +4818,24 @@ async function openMyInfoModal(){
   document.getElementById('miNewPw2').value = '';
   document.getElementById('myInfoErr').textContent = '';
   document.getElementById('myInfoModal').classList.add('show');
+}
+async function onMiSupplierFocus(){
+  await loadAllCompanyNames();
+  renderMiSupplierSuggest();
+}
+function onMiSupplierInput(){ renderMiSupplierSuggest(); }
+function renderMiSupplierSuggest(){
+  const list=document.getElementById('miSupplierList');
+  const kw=document.getElementById('miSupplier').value.trim().toLowerCase();
+  if(!kw || !_allCompanyNames){ list.style.display='none'; list.innerHTML=''; return; }
+  const matches=_allCompanyNames.filter(c=>c.toLowerCase().includes(kw)).slice(0,8);
+  if(!matches.length){ list.style.display='none'; list.innerHTML=''; return; }
+  list.innerHTML=matches.map(c=>`<div class="supplier-suggest-item" onmousedown="selectMiSupplier('${c.replace(/'/g,"\\'")}')">${escapeHtml(c)}</div>`).join('');
+  list.style.display='block';
+}
+function selectMiSupplier(name){
+  document.getElementById('miSupplier').value=name;
+  document.getElementById('miSupplierList').style.display='none';
 }
 function closeMyInfoModal(){ document.getElementById('myInfoModal').classList.remove('show'); }
 function closeMyInfoModalBg(e){ if(e.target===document.getElementById('myInfoModal')) closeMyInfoModal(); }
@@ -4815,15 +4849,24 @@ async function saveMyInfo(){
   const email=document.getElementById('miEmail').value.trim();
   const newPw=document.getElementById('miNewPw').value;
   const newPw2=document.getElementById('miNewPw2').value;
+  const isTopSupplier=String(document.getElementById('miCompany').value||'').toUpperCase()==='KITURAMI';
+  const supplierInput=document.getElementById('miSupplier');
+  const supplierCompany=supplierInput.value.trim();
+  const originalSupplier=supplierInput.dataset.original||'';
 
   const { callingCode, digits, phone } = readE164FromModal('mi');
 
-  if(!contactName || !country || !region || !digits || !email){ errEl.textContent=t.myInfoErrFill; return; }
+  if(!contactName || !country || !region || !digits || !email || (!isTopSupplier && !supplierCompany)){ errEl.textContent=t.myInfoErrFill; return; }
   if(!callingCode){ errEl.textContent=t.myInfoErrCountry||'목록에서 국가를 선택해주세요.'; return; }
   if(digits.length < 4 || digits.length > (15-String(callingCode).length)){ errEl.textContent=t.myInfoErrPhone||'전화번호 형식이 올바르지 않습니다.'; return; }
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ errEl.textContent=t.myInfoErrEmail; return; }
 
+  const supplierChanged = !isTopSupplier && supplierCompany.toUpperCase()!==originalSupplier.toUpperCase();
+  if(supplierChanged && !confirm(t.myInfoSupplierChangeConfirm(supplierCompany))) return;
+
   const payload = { contact_name: contactName, country, region, phone, email };
+  if(!isTopSupplier) payload.supplier_company = supplierCompany;
+  if(supplierChanged) payload.status = 'pending'; // 구매처가 바뀌면, 새 구매처의 승인을 다시 받아야 합니다.
   if(newPw || newPw2){
     if(newPw.length < 4){ errEl.textContent=t.myInfoErrPwShort; return; }
     if(newPw !== newPw2){ errEl.textContent=t.myInfoErrPwMismatch; return; }
@@ -4832,10 +4875,16 @@ async function saveMyInfo(){
 
   const { error } = await sb.from('kt_users').update(payload).eq('id', currentUser.id);
   if(error){ errEl.textContent=(error.message||error.code); return; }
-  alert(t.myInfoSaved);
   closeMyInfoModal();
+  if(supplierChanged){
+    alert(t.myInfoSupplierChanged(supplierCompany));
+    doLogout();
+  } else {
+    alert(t.myInfoSaved);
+  }
 }
 function doLogout(){
+  currentUser=null;
   sessionStorage.removeItem(AUTH_SESSION_KEY);
   document.getElementById('appRoot').style.display='none';
   document.getElementById('authOverlay').style.display='flex';
