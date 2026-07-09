@@ -4186,6 +4186,17 @@ async function handleInventoryUpload(event){
       // 헤더가 여러 행/열에 흩어져 있는 실제 리포트 양식(예: 회계 시스템 export)도
       // 처리할 수 있도록, 표 형태(JSON) 대신 배열 형태로 읽어서 직접 열 위치를 탐색합니다.
       const aoa=XLSX.utils.sheet_to_json(sheet,{header:1, defval:''});
+
+      // 파일 상단 제목 줄에 적힌 날짜(예: "...за 7 июля 2026 г.")를 재고 업데이트 일시로 사용합니다.
+      // (파일 안에 날짜가 없으면 업로드한 시점의 현재 시각을 그대로 사용합니다.)
+      let reportDate=null;
+      for(let r=0;r<Math.min(6, aoa.length);r++){
+        const v=(aoa[r]||[]).join(' ');
+        const found=parseReportDate(v);
+        if(found){ reportDate=found; break; }
+      }
+      const updatedAt = reportDate ? new Date(reportDate+'T00:00:00').toISOString() : new Date().toISOString();
+
       const repKeys=['Артикул','대표품번','품번','rep','REP'];
       const qtyKeys=['Количество','재고수량','수량','Остаток','Дебет','qty','QTY'];
 
@@ -4194,9 +4205,9 @@ async function handleInventoryUpload(event){
         for(let r=fromRow;r<Math.min(fromRow+40, aoa.length);r++){
           const v=aoa[r]&&aoa[r][col];
           if(v!==undefined && v!=='' && !isNaN(Number(v))) count++;
-          if(count>=3) return true;
+          if(count>=1) return true;
         }
-        return count>=3;
+        return count>=1;
       }
 
       let colRep=-1, colQty=-1;
@@ -4248,7 +4259,7 @@ async function handleInventoryUpload(event){
         if(repKeys.includes(repRaw)) continue; // 헤더행 자체는 제외
         let qty=Number(row[colQty]);
         if(isNaN(qty)) qty=0;
-        rows.push({ rep: repRaw, qty, updated_at:new Date().toISOString() });
+        rows.push({ rep: repRaw, qty, updated_at:updatedAt });
       }
       if(!rows.length){ alert(t.invUploadEmpty); event.target.value=''; return; }
       // 같은 품번이 파일 안에 여러 번 나올 수 있어(예: 카테고리별로 반복 등장),
