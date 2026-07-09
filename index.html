@@ -1230,8 +1230,8 @@ const T={
        adminHNewQty:'신규 주문수량',adminHStock:'재고수량',reqOriginalQtyLabel:'신규 주문수량',reqRequestedQtyLabel:'변경신청 수량',reqRepLabel:'대표품번 (미변경)',
        grpExisting:'기존',grpNew:'신규',grpCumulative:'누적',grpTotal:'합계',grpDecision:'공급 결정',grpProgress:'진행여부',
        statusDone:'출고완료',statusPending:'준비중',
-       colOrder:'주문',colSupply:'공급',colStock:'재고',colSupplyRate:'공급율',colNotSupplied:'미공급',colAllocation:'배분',colPreparing:'준비중',colShipped:'출고완료',
-       colDate:'일시',colStatus:'완료여부',grpStatusHdr:'공급현황',colFinalOrder:'최종주문',colDecision:'의사결정',decisionAgreed:'동의',myOrderReqSection:'구매처의 요청사항',agreeBtn:'동의',colSupplyAvailable:'공급가능',
+       colOrder:'주문',colSupply:'출고',colStock:'재고',colSupplyRate:'출고율',colNotSupplied:'미출고',colAllocation:'배분',colPreparing:'준비중',colShipped:'출고완료',
+       colDate:'날짜',colStatus:'완료여부',grpStatusHdr:'출고현황',colFinalOrder:'최종주문',colDecision:'의사결정',decisionAgreed:'동의',myOrderReqSection:'구매처의 요청사항',agreeBtn:'동의',colSupplyAvailable:'공급가능',colShippedQty:'수량',
        invHBase:'기초재고',invHPostAlloc:'배분후 재고',
        orderSubmit:'주문 제출',orderSubmitting:'제출 중…',orderSubmitOk:'주문이 접수되었습니다.',orderSubmitFail:'주문 제출에 실패했습니다. 잠시 후 다시 시도해주세요.',orderSubmitEmpty:'주문수량을 입력한 품목이 없습니다.',orderPrevQty:'기존 주문수량',orderStock:'내 창고 재고',orderReceived:'접수받은 주문수량',orderNoSupplier:'주문을 보낼 구매처가 지정되어 있지 않습니다.',
        reqActionHeader:'취소/변경',reqCancelBtn:'취소<br>신청',reqChangeBtn:'수량변경<br>신청',
@@ -1296,8 +1296,8 @@ const T={
        adminHNewQty:'Новое кол-во',adminHStock:'Остаток',reqOriginalQtyLabel:'Исходное кол-во',reqRequestedQtyLabel:'Запрошено',reqRepLabel:'Артикул (неизм.)',
        grpExisting:'Ранее',grpNew:'Новое',grpCumulative:'Всего',grpTotal:'Итого',grpDecision:'Решение о поставке',grpProgress:'Статус',
        statusDone:'Отгружено',statusPending:'В процессе',
-       colOrder:'Заказ',colSupply:'Поставка',colStock:'Остаток',colSupplyRate:'% поставки',colNotSupplied:'Не поставлено',colAllocation:'Выделено',colPreparing:'Готовится',colShipped:'Отгружено',
-       colDate:'Дата',colStatus:'Статус',grpStatusHdr:'Статус поставки',colFinalOrder:'Финальный заказ',colDecision:'Решение',decisionAgreed:'Согласен',myOrderReqSection:'Предложение поставщика',agreeBtn:'Согласиться',colSupplyAvailable:'Доступно',
+       colOrder:'Заказ',colSupply:'Отгрузка',colStock:'Остаток',colSupplyRate:'% отгрузки',colNotSupplied:'Не отгружено',colAllocation:'Выделено',colPreparing:'Готовится',colShipped:'Отгружено',
+       colDate:'Дата',colStatus:'Статус',grpStatusHdr:'Статус отгрузки',colFinalOrder:'Финальный заказ',colDecision:'Решение',decisionAgreed:'Согласен',myOrderReqSection:'Предложение поставщика',agreeBtn:'Согласиться',colSupplyAvailable:'Доступно',colShippedQty:'Кол-во',
        invHBase:'Начальный остаток',invHPostAlloc:'Остаток после выделения',
        orderSubmit:'Отправить заказ',orderSubmitting:'Отправка…',orderSubmitOk:'Заказ принят.',orderSubmitFail:'Не удалось отправить заказ. Попробуйте позже.',orderSubmitEmpty:'Не указано количество ни для одного товара.',orderPrevQty:'Ранее заказано',orderStock:'Мой склад',orderReceived:'Получено заказов',orderNoSupplier:'Поставщик для заказа не указан.',
        reqActionHeader:'Отмена/Изменение',reqCancelBtn:'Запросить<br>отмену',reqChangeBtn:'Изменить<br>кол-во',
@@ -3054,7 +3054,7 @@ function renderAdminOrders(){
       <th style="padding:6px 10px;text-align:center;font-size:10px">${t.colAllocation}</th>
       <th style="padding:6px 10px;text-align:center;font-size:10px">${t.colDecision}</th>
       <th style="padding:6px 12px;border-left:2px solid var(--border);font-size:10px">${t.colDate}</th>
-      <th style="padding:6px 16px 6px 10px;text-align:right;font-size:10px">${t.colSupply}</th>
+      <th style="padding:6px 16px 6px 10px;text-align:right;font-size:10px">${t.colShippedQty}</th>
       <th style="padding:6px 16px 6px 10px;text-align:right;border-left:2px solid var(--border);font-size:10px">${t.colNotSupplied}</th>
       <th style="padding:6px 16px 6px 10px;text-align:right;font-size:10px">${t.colSupplyRate}</th>
       <th style="padding:6px 10px;text-align:center;font-size:10px">${t.colStatus}</th>
@@ -3112,7 +3112,7 @@ function renderAdminOrders(){
         <td style="border-left:2px solid var(--border)"></td>
         <td></td><td></td>
         <td style="border-left:2px solid var(--border)"></td>
-        <td style="padding:6px 12px;border-left:2px solid var(--border)">${sl?escapeHtml(formatShipDate(sl.date)):''}</td>
+        <td style="padding:6px 12px;border-left:2px solid var(--border)">${sl?escapeHtml(sl.date):''}</td>
         <td style="padding:6px 16px 6px 10px;text-align:right">${sl?sl.qty:''}</td>
         <td style="border-left:2px solid var(--border)"></td><td></td><td></td>
       </tr>`;
@@ -3374,7 +3374,7 @@ function renderAdminMyOrders(){
       <th style="padding:6px 10px;text-align:center;border-left:2px solid var(--border);font-size:10px">${t.colSupplyAvailable}</th>
       <th style="padding:6px 10px;text-align:center;font-size:10px">${t.colDecision}</th>
       <th style="padding:6px 12px;border-left:2px solid var(--border);font-size:10px">${t.colDate}</th>
-      <th style="padding:6px 16px 6px 10px;text-align:right;font-size:10px">${t.colSupply}</th>
+      <th style="padding:6px 16px 6px 10px;text-align:right;font-size:10px">${t.colShippedQty}</th>
       <th style="padding:6px 16px 6px 10px;text-align:right;border-left:2px solid var(--border);font-size:10px">${t.colNotSupplied}</th>
       <th style="padding:6px 16px 6px 10px;text-align:right;font-size:10px">${t.colSupplyRate}</th>
       <th style="padding:6px 10px;text-align:center;font-size:10px">${t.colStatus}</th>
@@ -3425,9 +3425,9 @@ function renderAdminMyOrders(){
         <td style="padding:6px 12px;border-left:2px solid var(--border)">${ol?escapeHtml(ol.date):''}</td>
         <td style="padding:6px 16px 6px 10px;text-align:right">${ol?ol.qty:''}</td>
         <td style="border-left:2px solid var(--border)"></td>
-        <td></td><td></td>
+        <td></td>
         <td style="border-left:2px solid var(--border)"></td>
-        <td style="padding:6px 12px;border-left:2px solid var(--border)">${sl?escapeHtml(formatShipDate(sl.date)):''}</td>
+        <td style="padding:6px 12px;border-left:2px solid var(--border)">${sl?escapeHtml(sl.date):''}</td>
         <td style="padding:6px 16px 6px 10px;text-align:right">${sl?sl.qty:''}</td>
         <td style="border-left:2px solid var(--border)"></td><td></td><td></td>
       </tr>`;
@@ -3462,8 +3462,9 @@ function downloadAdminOrders(){
   const header=[
     t.adminHCompany,t.adminHUser,t.adminHName,...(isKo?[t.thSpec]:[]),t.adminHRep,
     `${t.colOrder} ${t.colDate}`, `${t.colOrder} ${t.colOrder}`,
-    `${t.grpDecision} ${t.colStock}`, `${t.grpDecision} ${t.colAllocation}`,
-    `${t.colSupply} ${t.colDate}`, `${t.colSupply} ${t.colSupply}`,
+    `${t.grpDecision} ${t.colStock}`, `${t.grpDecision} ${t.colAllocation}`, `${t.grpDecision} ${t.colDecision}`,
+    t.colFinalOrder,
+    `${t.colSupply} ${t.colDate}`, `${t.colSupply} ${t.colShippedQty}`,
     t.colNotSupplied, t.colSupplyRate, t.colStatus
   ];
   const rows=[];
@@ -3472,7 +3473,8 @@ function downloadAdminOrders(){
     rows.push([
       g.company, g.user_id, name, ...(isKo?[g.spec]:[]), g.rep,
       '', g.totalOrderQty,
-      (g.stockDisplay===null?'':g.stockDisplay), g.allocated,
+      (g.stockDisplay===null?'':g.stockDisplay), g.allocated, (g.agreed?t.decisionAgreed:''),
+      (g.finalOrderQty===null?'':g.finalOrderQty),
       '', g.totalSuppliedQty,
       g.notSupplied, (g.supplyRate*100).toFixed(1)+'%',
       g.status==='done'?t.statusDone:t.statusPending
@@ -3483,8 +3485,9 @@ function downloadAdminOrders(){
       rows.push([
         '', '', '', ...(isKo?['']:[]), '',
         ol?ol.date:'', ol?ol.qty:'',
-        '', '',
-        sl?formatShipDate(sl.date):'', sl?sl.qty:'',
+        '', '', '',
+        '',
+        sl?sl.date:'', sl?sl.qty:'',
         '', '', ''
       ]);
     }
