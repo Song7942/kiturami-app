@@ -1223,6 +1223,7 @@ const T={
        grpExisting:'기존',grpNew:'신규',grpCumulative:'누적',grpTotal:'합계',grpDecision:'공급 결정',grpProgress:'진행여부',
        statusDone:'출고완료',statusPending:'준비중',
        colOrder:'주문',colSupply:'공급',colStock:'재고',colSupplyRate:'공급율',colNotSupplied:'미공급',colAllocation:'배분',colPreparing:'준비중',colShipped:'출고완료',
+       colDate:'일시',colStatus:'완료여부',grpStatusHdr:'공급현황',
        invHBase:'기초재고',invHPostAlloc:'배분후 재고',
        orderSubmit:'주문 제출',orderSubmitting:'제출 중…',orderSubmitOk:'주문이 접수되었습니다.',orderSubmitFail:'주문 제출에 실패했습니다. 잠시 후 다시 시도해주세요.',orderSubmitEmpty:'주문수량을 입력한 품목이 없습니다.',orderPrevQty:'기존 주문수량',orderStock:'내 창고 재고',orderReceived:'접수받은 주문수량',orderNoSupplier:'주문을 보낼 구매처가 지정되어 있지 않습니다.',
        reqActionHeader:'취소/변경',reqCancelBtn:'취소<br>신청',reqChangeBtn:'수량변경<br>신청',
@@ -1283,6 +1284,7 @@ const T={
        grpExisting:'Ранее',grpNew:'Новое',grpCumulative:'Всего',grpTotal:'Итого',grpDecision:'Решение о поставке',grpProgress:'Статус',
        statusDone:'Отгружено',statusPending:'В процессе',
        colOrder:'Заказ',colSupply:'Поставка',colStock:'Остаток',colSupplyRate:'% поставки',colNotSupplied:'Не поставлено',colAllocation:'Выделено',colPreparing:'Готовится',colShipped:'Отгружено',
+       colDate:'Дата',colStatus:'Статус',grpStatusHdr:'Статус поставки',
        invHBase:'Начальный остаток',invHPostAlloc:'Остаток после выделения',
        orderSubmit:'Отправить заказ',orderSubmitting:'Отправка…',orderSubmitOk:'Заказ принят.',orderSubmitFail:'Не удалось отправить заказ. Попробуйте позже.',orderSubmitEmpty:'Не указано количество ни для одного товара.',orderPrevQty:'Ранее заказано',orderStock:'Мой склад',orderReceived:'Получено заказов',orderNoSupplier:'Поставщик для заказа не указан.',
        reqActionHeader:'Отмена/Изменение',reqCancelBtn:'Запросить<br>отмену',reqChangeBtn:'Изменить<br>кол-во',
@@ -2900,163 +2902,169 @@ async function loadAdminOrders(){
   });
   adminOrderRows=rows;
 }
-function computeAdminOrderBreakdown(){
+let orderAllocations={}; // key: company+'||'+rep -> 배분(수정 가능한 임시 할당) 수량
+async function loadOrderAllocations(){
+  const { data, error } = await sb.from('kt_order_allocations').select('*').ilike('target_company', currentUser?currentUser.company:'');
+  if(error){ console.error(error); orderAllocations={}; return; }
+  orderAllocations={};
+  (data||[]).forEach(a=>{ orderAllocations[a.company+'||'+a.rep]=a.allocated||0; });
+}
+async function updateGroupAllocation(company, rep, value){
+  const t=T[lang];
+  const newVal=Math.max(0, parseInt(value,10)||0);
+  const { error } = await sb.from('kt_order_allocations').upsert(
+    [{ target_company: currentUser.company, company, rep, allocated:newVal }],
+    { onConflict:'target_company,company,rep' }
+  );
+  if(error){ alert(t.reqFail+'\n\n['+(error.message||error.code)+']'); return; }
+  orderAllocations[company+'||'+rep]=newVal;
+  renderAdminOrders();
+}
+const CYR_TO_LAT={а:'a',б:'b',в:'v',г:'g',д:'d',е:'e',ё:'e',ж:'zh',з:'z',и:'i',й:'y',к:'k',л:'l',м:'m',н:'n',о:'o',п:'p',р:'r',с:'s',т:'t',у:'u',ф:'f',х:'h',ц:'ts',ч:'ch',ш:'sh',щ:'sch',ъ:'',ы:'y',ь:'',э:'e',ю:'yu',я:'ya'};
+function translit(str){
+  return String(str||'').toLowerCase().split('').map(ch=>CYR_TO_LAT[ch]!==undefined?CYR_TO_LAT[ch]:ch).join('');
+}
+function normalizeClientName(name){
+  let s=translit(name);
+  s=s.replace(/\b(ooo|oao|zao|ip|too|osoo|llc|ltd|inc|co|corp|gmbh|usd|kzt|rub|chastnoe|lico)\b/g,'');
+  s=s.replace(/[^a-z0-9]/g,'');
+  return s;
+}
+function isSameClient(clientName, company){
+  const a=normalizeClientName(clientName);
+  const b=normalizeClientName(company);
+  if(!a || !b) return false;
+  return a.includes(b) || b.includes(a);
+}
+const toDateOnly=iso=>String(iso||'').slice(0,10);
+
+// 회사+대표품번 기준으로 묶어서, 누계(주문총량/공급총량/미공급/공급율/완료여부)와
+// 개별 주문·출고 내역(일자+수량)을 나란히 나열하는 형태로 재구성합니다.
+function buildAdminOrderGroups(){
   const masterRepTotals=computeMasterRepTotals(); // 재고 엑셀의 대표품번 기준 합산 수량(기초재고)
-  const globalSuppliedByRep={};
-  adminOrderRows.forEach(r=>{ globalSuppliedByRep[r.rep]=(globalSuppliedByRep[r.rep]||0)+(r.supplied||0); });
-
-  // 거래처명은 러시아어 등 다른 표기로 적혀있을 수 있어, 로마자로 변환하고 법인형태 표기를 지운 뒤 비교합니다.
-  const CYR_TO_LAT={а:'a',б:'b',в:'v',г:'g',д:'d',е:'e',ё:'e',ж:'zh',з:'z',и:'i',й:'y',к:'k',л:'l',м:'m',н:'n',о:'o',п:'p',р:'r',с:'s',т:'t',у:'u',ф:'f',х:'h',ц:'ts',ч:'ch',ш:'sh',щ:'sch',ъ:'',ы:'y',ь:'',э:'e',ю:'yu',я:'ya'};
-  function translit(str){
-    return String(str||'').toLowerCase().split('').map(ch=>CYR_TO_LAT[ch]!==undefined?CYR_TO_LAT[ch]:ch).join('');
-  }
-  function normalizeClientName(name){
-    let s=translit(name);
-    s=s.replace(/\b(ooo|oao|zao|ip|too|osoo|llc|ltd|inc|co|corp|gmbh|usd|kzt|rub|chastnoe|lico)\b/g,'');
-    s=s.replace(/[^a-z0-9]/g,'');
-    return s;
-  }
-  function isSameClient(clientName, company){
-    const a=normalizeClientName(clientName);
-    const b=normalizeClientName(company);
-    if(!a || !b) return false;
-    return a.includes(b) || b.includes(a);
-  }
-  const toDateOnly=iso=>String(iso||'').slice(0,10);
-
-  // 주문/공급 현황은 "이 주문이 접수된 시점 기준" 스냅샷입니다.
-  // - 기존 주문/공급: 이 주문보다 먼저 있었던 같은 회사·같은 품번의 주문 수량 / 그 시점까지의 출고 수량
-  // - 신규 주문: 이번 주문 수량
-  // - 합계 주문/공급: 이 주문 날짜까지 누적된 주문·출고 수량
-  // 예) 7/8에 5개 주문, 7/9에 5개 추가 주문, 7/9에 10개 출고 → 7/8 건은 "그 시점엔 출고 전"이라 공급 0,
-  //     7/9 건은 누적 주문 10 = 누적 출고 10으로 일치되어 출고완료로 표시됩니다.
-  adminOrderRows.forEach((row)=>{
-    const rowTime=new Date(row.createdAt).getTime();
-    const rowDateOnly=toDateOnly(row.createdAt);
-    let existingOrderQty=0;
-    adminOrderRows.forEach((r2)=>{
-      if(r2===row) return;
-      if(r2.company===row.company && r2.rep===row.rep && new Date(r2.createdAt).getTime()<rowTime){
-        existingOrderQty+=r2.qty||0;
-      }
-    });
-    const newOrderQty=row.qty||0;
-    const totalOrderQty=existingOrderQty+newOrderQty;
-
-    let suppliedUpToDate=0, suppliedBeforeDate=0;
-    (shipmentsData||[]).forEach(s=>{
-      if(findMasterRep(s.rep)!==row.rep) return;
-      if(!isSameClient(s.client_name, row.company)) return;
-      const shipDateOnly=toDateOnly(s.ship_date);
-      if(shipDateOnly<=rowDateOnly) suppliedUpToDate+=s.qty||0;
-      if(shipDateOnly<rowDateOnly) suppliedBeforeDate+=s.qty||0;
-    });
-
-    row.existingOrderQty=existingOrderQty;      // 기존-주문
-    row.existingSupplied=suppliedBeforeDate;    // 기존-공급 (이 주문 이전까지의 출고)
-    row.newOrderQty=newOrderQty;                // 신규-주문
-    row.totalOrderQty=totalOrderQty;            // 합계-주문
-    row.totalSupplied=suppliedUpToDate;         // 합계-공급 (이 주문 날짜까지의 출고)
-    row.notSupplied=Math.max(0, totalOrderQty-row.totalSupplied); // 합계-미공급
-    row.totalSupplyRate = totalOrderQty>0 ? (row.totalSupplied/totalOrderQty) : 0; // 합계-공급율
-
-    const baseStock = masterRepTotals[row.rep]!==undefined ? masterRepTotals[row.rep] : null; // 공급결정-재고(배분후 재고)
-    row.stockDisplay = baseStock===null ? null : Math.max(0, baseStock-(globalSuppliedByRep[row.rep]||0));
-    const decisionSupplied=row.totalSupplied+(row.supplied||0);
-    row.decisionSupplyRate = totalOrderQty>0 ? (decisionSupplied/totalOrderQty) : 0; // 공급결정-공급율
-
-    row.progressStatus = (totalOrderQty>0 && decisionSupplied>=totalOrderQty) ? 'done' : 'pending';
-    row.inProgressQty = row.supplied||0;
-    row.shippedQty = null;
+  const globalAllocByRep={};
+  Object.keys(orderAllocations).forEach(k=>{
+    const rep=k.split('||')[1];
+    globalAllocByRep[rep]=(globalAllocByRep[rep]||0)+(orderAllocations[k]||0);
   });
+
+  const groups={};
+  adminOrderRows.forEach(r=>{
+    const key=r.company+'||'+r.rep;
+    if(!groups[key]){
+      groups[key]={ company:r.company, user_id:r.user_id, rep:r.rep, name_ko:r.name_ko, name_ru:r.name_ru, spec:r.spec, orderLines:[] };
+    }
+    groups[key].orderLines.push({ date: toDateOnly(r.createdAt), qty: r.qty||0 });
+  });
+
+  Object.values(groups).forEach(g=>{
+    g.orderLines.sort((a,b)=> a.date<b.date?-1:(a.date>b.date?1:0));
+    g.totalOrderQty=g.orderLines.reduce((s,l)=>s+l.qty,0);
+
+    g.supplyLines=(shipmentsData||[])
+      .filter(s=>findMasterRep(s.rep)===g.rep && isSameClient(s.client_name, g.company))
+      .map(s=>({date:s.ship_date, qty:s.qty||0}))
+      .sort((a,b)=> (a.date||'')<(b.date||'')?-1:((a.date||'')>(b.date||'')?1:0));
+    g.totalSuppliedQty=g.supplyLines.reduce((s,l)=>s+l.qty,0);
+
+    g.notSupplied=Math.max(0, g.totalOrderQty-g.totalSuppliedQty);
+    g.supplyRate=g.totalOrderQty>0 ? (g.totalSuppliedQty/g.totalOrderQty) : 0;
+    g.status=(g.totalOrderQty>0 && g.supplyRate>=1) ? 'done' : 'pending';
+
+    g.allocated=orderAllocations[g.company+'||'+g.rep]||0;
+    const baseStock=masterRepTotals[g.rep]!==undefined ? masterRepTotals[g.rep] : null;
+    g.stockDisplay=baseStock===null ? null : Math.max(0, baseStock-(globalAllocByRep[g.rep]||0));
+  });
+  return Object.values(groups);
 }
 function renderAdminOrders(){
   const t=T[lang];
-  document.getElementById('adminOrderCount').textContent=t.adminCount(adminOrderRows.length);
+  const isKo=lang==='ko';
+  const groups=buildAdminOrderGroups();
+  document.getElementById('adminOrderCount').textContent=t.adminCount(groups.length);
   const thead=document.getElementById('adminOrderThead');
   const tbody=document.getElementById('adminOrderTbody');
   const emptyEl=document.getElementById('adminOrderEmpty');
 
-  const isKo=lang==='ko';
   const specTh=isKo?`<th id="i18n-adminh-spec" rowspan="2" style="padding:9px 12px">${t.thSpec}</th>`:'';
   thead.innerHTML=`<tr style="border-bottom:1px solid var(--border);color:var(--muted);text-align:left">
-      <th id="i18n-adminh-date" rowspan="2" style="padding:9px 12px">${t.adminHDate}</th>
       <th id="i18n-adminh-company" rowspan="2" style="padding:9px 12px">${t.adminHCompany}</th>
       <th id="i18n-adminh-user" rowspan="2" style="padding:9px 12px">${t.adminHUser}</th>
       <th id="i18n-adminh-name" rowspan="2" style="padding:9px 12px">${t.adminHName}</th>
       ${specTh}
       <th id="i18n-adminh-rep" rowspan="2" style="padding:9px 12px">${t.adminHRep}</th>
-      <th colspan="2" style="text-align:center;border-bottom:1px solid var(--border);font-size:13px;font-weight:700;color:var(--text);padding:6px">${t.grpExisting}</th>
-      <th colspan="1" style="text-align:center;border-bottom:1px solid var(--border);border-left:2px solid var(--border);font-size:13px;font-weight:700;color:var(--text);padding:6px">${t.grpNew}</th>
-      <th colspan="4" style="text-align:center;border-bottom:1px solid var(--border);border-left:2px solid var(--border);font-size:13px;font-weight:700;color:var(--text);padding:6px">${t.grpTotal}</th>
-      <th colspan="3" style="text-align:center;border-bottom:1px solid var(--border);border-left:2px solid var(--border);font-size:13px;font-weight:700;color:var(--text);padding:6px">${t.grpDecision}</th>
-      <th rowspan="2" style="text-align:center;border-left:2px solid var(--border);font-size:13px;font-weight:700;color:var(--text);padding:6px">${t.grpProgress}</th>
+      <th colspan="2" style="text-align:center;border-bottom:1px solid var(--border);border-left:2px solid var(--border);font-size:13px;font-weight:700;color:var(--text);padding:6px">${t.colOrder}</th>
+      <th colspan="2" style="text-align:center;border-bottom:1px solid var(--border);border-left:2px solid var(--border);font-size:13px;font-weight:700;color:var(--text);padding:6px">${t.grpDecision}</th>
+      <th colspan="2" style="text-align:center;border-bottom:1px solid var(--border);border-left:2px solid var(--border);font-size:13px;font-weight:700;color:var(--text);padding:6px">${t.colSupply}</th>
+      <th colspan="3" style="text-align:center;border-bottom:1px solid var(--border);border-left:2px solid var(--border);font-size:13px;font-weight:700;color:var(--text);padding:6px">${t.grpStatusHdr}</th>
     </tr>
     <tr style="border-bottom:1px solid var(--border);color:var(--muted);font-size:10px">
+      <th style="padding:6px 12px;border-left:2px solid var(--border);font-size:10px">${t.colDate}</th>
       <th style="padding:6px 16px 6px 10px;text-align:right;font-size:10px">${t.colOrder}</th>
-      <th style="padding:6px 16px 6px 10px;text-align:right;font-size:10px">${t.colSupply}</th>
-      <th style="padding:6px 16px 6px 10px;text-align:right;border-left:2px solid var(--border);font-size:10px">${t.colOrder}</th>
-      <th style="padding:6px 16px 6px 10px;text-align:right;border-left:2px solid var(--border);font-size:10px">${t.colOrder}</th>
-      <th style="padding:6px 16px 6px 10px;text-align:right;font-size:10px">${t.colSupply}</th>
-      <th style="padding:6px 16px 6px 10px;text-align:right;font-size:10px">${t.colNotSupplied}</th>
-      <th style="padding:6px 16px 6px 10px;text-align:right;font-size:10px">${t.colSupplyRate}</th>
       <th style="padding:6px 16px 6px 10px;text-align:right;border-left:2px solid var(--border);font-size:10px">${t.colStock}</th>
       <th style="padding:6px 10px;text-align:center;font-size:10px">${t.colAllocation}</th>
+      <th style="padding:6px 12px;border-left:2px solid var(--border);font-size:10px">${t.colDate}</th>
+      <th style="padding:6px 16px 6px 10px;text-align:right;font-size:10px">${t.colSupply}</th>
+      <th style="padding:6px 16px 6px 10px;text-align:right;border-left:2px solid var(--border);font-size:10px">${t.colNotSupplied}</th>
       <th style="padding:6px 16px 6px 10px;text-align:right;font-size:10px">${t.colSupplyRate}</th>
+      <th style="padding:6px 10px;text-align:center;font-size:10px">${t.colStatus}</th>
     </tr>`;
 
-  if(!adminOrderRows.length){
+  if(!groups.length){
     tbody.innerHTML='';
     emptyEl.textContent=t.adminEmpty;
     emptyEl.style.display='block';
     return;
   }
   emptyEl.style.display='none';
-  computeAdminOrderBreakdown();
-  tbody.innerHTML=adminOrderRows.map(r=>{
-    const name = lang==='ko' ? r.name_ko : (r.name_ru||r.name_ko);
-    const specTd=isKo?`<td style="padding:9px 12px;color:var(--muted)">${escapeHtml(r.spec)}</td>`:'';
-    const stockText = r.stockDisplay===null ? '-' : r.stockDisplay;
-    const totalRatePct = (r.totalSupplyRate*100).toFixed(1)+'%';
-    const decisionRatePct = (r.decisionSupplyRate*100).toFixed(1)+'%';
-    const shippedText = r.shippedQty===null ? '' : r.shippedQty;
-    const repEsc=r.rep.replace(/'/g,"\\'");
-    return `<tr style="border-bottom:1px solid var(--border)">
-      <td style="padding:9px 12px;color:var(--muted);white-space:nowrap">${escapeHtml(r.date)}</td>
-      <td style="padding:9px 12px">${escapeHtml(r.company)}</td>
-      <td style="padding:9px 12px">${escapeHtml(r.user_id)}</td>
+  const fixedColCount = isKo?5:4;
+
+  tbody.innerHTML=groups.map(g=>{
+    const name=lang==='ko'?g.name_ko:(g.name_ru||g.name_ko);
+    const specTd=isKo?`<td style="padding:9px 12px;color:var(--muted)">${escapeHtml(g.spec)}</td>`:'';
+    const ratePct=(g.supplyRate*100).toFixed(1)+'%';
+    const repEsc=g.rep.replace(/'/g,"\\'");
+    const companyEsc=g.company.replace(/'/g,"\\'");
+    const stockText=g.stockDisplay===null?'-':g.stockDisplay;
+
+    // 누계(굵은 글씨) 행
+    let html=`<tr style="border-bottom:1px solid var(--border);font-weight:700;background:var(--surface2)">
+      <td style="padding:9px 12px">${escapeHtml(g.company)}</td>
+      <td style="padding:9px 12px">${escapeHtml(g.user_id)}</td>
       <td style="padding:9px 12px">${escapeHtml(name)}</td>
       ${specTd}
-      <td style="padding:9px 12px"><span class="code">${escapeHtml(r.rep)}</span></td>
-      <td style="padding:9px 16px 9px 12px;text-align:right;color:var(--muted)">${r.existingOrderQty}</td>
-      <td style="padding:9px 16px 9px 12px;text-align:right;color:var(--muted)">${r.existingSupplied}</td>
-      <td style="padding:9px 16px 9px 12px;text-align:right;border-left:2px solid var(--border)">${r.newOrderQty}</td>
-      <td style="padding:9px 16px 9px 12px;text-align:right;font-weight:700;border-left:2px solid var(--border)">${r.totalOrderQty}</td>
-      <td style="padding:9px 16px 9px 12px;text-align:right;font-weight:700">${r.totalSupplied}</td>
-      <td style="padding:9px 16px 9px 12px;text-align:right;font-weight:700;color:${r.notSupplied>0?'#ef4444':'var(--text)'}">${r.notSupplied}</td>
-      <td style="padding:9px 16px 9px 12px;text-align:right;font-weight:700">${totalRatePct}</td>
-      <td style="padding:9px 16px 9px 12px;text-align:right;color:var(--muted);border-left:2px solid var(--border)">${stockText}</td>
+      <td style="padding:9px 12px"><span class="code">${escapeHtml(g.rep)}</span></td>
+      <td style="padding:9px 12px;border-left:2px solid var(--border)"></td>
+      <td style="padding:9px 16px 9px 12px;text-align:right">${g.totalOrderQty}</td>
+      <td style="padding:9px 16px 9px 12px;text-align:right;border-left:2px solid var(--border);color:var(--muted)">${stockText}</td>
       <td style="padding:9px 12px;text-align:center">
-        <input type="number" min="0" value="${r.supplied}" class="admin-supply-input" style="width:60px;text-align:center;padding:4px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text)"
-          onchange="updateSupplyQty(${r.orderId},'${repEsc}',this.value)">
+        <input type="number" min="0" value="${g.allocated}" class="admin-supply-input" style="width:60px;text-align:center;padding:4px;border:1px solid var(--border);border-radius:5px;background:var(--surface);color:var(--text);font-weight:600"
+          onchange="updateGroupAllocation('${companyEsc}','${repEsc}',this.value)">
       </td>
-      <td style="padding:9px 16px 9px 12px;text-align:right;font-weight:700;color:${r.decisionSupplyRate>=1?'#22c55e':(r.decisionSupplyRate>=0.5?'#f59e0b':'#ef4444')}">${decisionRatePct}</td>
-      <td style="padding:9px 12px;text-align:center;border-left:2px solid var(--border)">${r.progressStatus==='done'?`<span style="color:#22c55e;font-weight:700">${t.statusDone}</span>`:`<span style="color:#f59e0b;font-weight:700">${t.statusPending}</span>`}</td>
+      <td style="padding:9px 12px;border-left:2px solid var(--border)"></td>
+      <td style="padding:9px 16px 9px 12px;text-align:right">${g.totalSuppliedQty}</td>
+      <td style="padding:9px 16px 9px 12px;text-align:right;border-left:2px solid var(--border);color:${g.notSupplied>0?'#ef4444':'var(--text)'}">${g.notSupplied}</td>
+      <td style="padding:9px 16px 9px 12px;text-align:right">${ratePct}</td>
+      <td style="padding:9px 12px;text-align:center">${g.status==='done'?`<span style="color:#22c55e">${t.statusDone}</span>`:`<span style="color:#f59e0b">${t.statusPending}</span>`}</td>
     </tr>`;
+
+    // 상세 내역: 개별 주문일자·수량과 개별 출고일자·수량을 나란히 나열(가는 글씨)
+    const maxLines=Math.max(g.orderLines.length, g.supplyLines.length);
+    for(let i=0;i<maxLines;i++){
+      const ol=g.orderLines[i], sl=g.supplyLines[i];
+      html+=`<tr style="border-bottom:1px solid var(--border);color:var(--muted);font-size:12px">
+        <td colspan="${fixedColCount}"></td>
+        <td style="padding:6px 12px;border-left:2px solid var(--border)">${ol?escapeHtml(ol.date):''}</td>
+        <td style="padding:6px 16px 6px 10px;text-align:right">${ol?ol.qty:''}</td>
+        <td style="border-left:2px solid var(--border)"></td>
+        <td></td>
+        <td style="padding:6px 12px;border-left:2px solid var(--border)">${sl?escapeHtml(formatShipDate(sl.date)):''}</td>
+        <td style="padding:6px 16px 6px 10px;text-align:right">${sl?sl.qty:''}</td>
+        <td style="border-left:2px solid var(--border)"></td><td></td><td></td>
+      </tr>`;
+    }
+    return html;
   }).join('');
-}
-async function updateSupplyQty(orderId, rep, value){
-  const t=T[lang];
-  const newSupply=Math.max(0, parseInt(value,10)||0);
-  const { data: orderData, error: selErr } = await sb.from('kt_orders').select('*').eq('id', orderId).limit(1);
-  if(selErr || !orderData || !orderData[0]){ alert(t.reqFail); await loadAdminOrders(); renderAdminOrders(); return; }
-  const order=orderData[0];
-  const items=(order.items||[]).map(it=> it.rep===rep ? Object.assign({}, it, {supplied:newSupply}) : it);
-  const { error: updErr } = await sb.from('kt_orders').update({ items }).eq('id', orderId);
-  if(updErr){ alert(t.reqFail+'\n\n['+(updErr.message||updErr.code)+']'); }
-  await loadAdminOrders();
-  await loadGlobalSuppliedTotals();
-  renderAdminOrders();
 }
 async function openAdminModal(){
   if(!currentUser) return;
@@ -3067,6 +3075,7 @@ async function openAdminModal(){
   switchAdminView('orders');
   await loadInventory();
   await loadShipments();
+  await loadOrderAllocations();
   await loadAdminOrders();
   renderAdminOrders();
   await loadMyOrders();
@@ -3277,29 +3286,43 @@ function closeAdminModalBg(e){
 }
 function downloadAdminOrders(){
   const t=T[lang];
-  if(!adminOrderRows.length){ alert(t.adminEmpty); return; }
+  const groups=buildAdminOrderGroups();
+  if(!groups.length){ alert(t.adminEmpty); return; }
   const isKo=lang==='ko';
-  computeAdminOrderBreakdown();
   const header=[
-    t.adminHDate,t.adminHCompany,t.adminHUser,t.adminHName,...(isKo?[t.thSpec]:[]),t.adminHRep,
-    `${t.grpExisting} ${t.colOrder}`, `${t.grpExisting} ${t.colSupply}`,
-    `${t.grpNew} ${t.colOrder}`,
-    `${t.grpTotal} ${t.colOrder}`, `${t.grpTotal} ${t.colSupply}`, `${t.grpTotal} ${t.colNotSupplied}`, `${t.grpTotal} ${t.colSupplyRate}`,
-    `${t.grpDecision} ${t.colStock}`, `${t.grpDecision} ${t.colAllocation}`, `${t.grpDecision} ${t.colSupplyRate}`,
-    t.grpProgress
+    t.adminHCompany,t.adminHUser,t.adminHName,...(isKo?[t.thSpec]:[]),t.adminHRep,
+    `${t.colOrder} ${t.colDate}`, `${t.colOrder} ${t.colOrder}`,
+    `${t.grpDecision} ${t.colStock}`, `${t.grpDecision} ${t.colAllocation}`,
+    `${t.colSupply} ${t.colDate}`, `${t.colSupply} ${t.colSupply}`,
+    t.colNotSupplied, t.colSupplyRate, t.colStatus
   ];
-  const rows=adminOrderRows.map(r=>[
-    r.date, r.company, r.user_id, (lang==='ko'?r.name_ko:(r.name_ru||r.name_ko)), ...(isKo?[r.spec]:[]), r.rep,
-    r.existingOrderQty, r.existingSupplied,
-    r.newOrderQty,
-    r.totalOrderQty, r.totalSupplied, r.notSupplied, (r.totalSupplyRate*100).toFixed(1)+'%',
-    (r.stockDisplay===null?'':r.stockDisplay), r.supplied, (r.decisionSupplyRate*100).toFixed(1)+'%',
-    r.progressStatus==='done' ? t.statusDone : t.statusPending
-  ]);
+  const rows=[];
+  groups.forEach(g=>{
+    const name=lang==='ko'?g.name_ko:(g.name_ru||g.name_ko);
+    rows.push([
+      g.company, g.user_id, name, ...(isKo?[g.spec]:[]), g.rep,
+      '', g.totalOrderQty,
+      (g.stockDisplay===null?'':g.stockDisplay), g.allocated,
+      '', g.totalSuppliedQty,
+      g.notSupplied, (g.supplyRate*100).toFixed(1)+'%',
+      g.status==='done'?t.statusDone:t.statusPending
+    ]);
+    const maxLines=Math.max(g.orderLines.length, g.supplyLines.length);
+    for(let i=0;i<maxLines;i++){
+      const ol=g.orderLines[i], sl=g.supplyLines[i];
+      rows.push([
+        '', '', '', ...(isKo?['']:[]), '',
+        ol?ol.date:'', ol?ol.qty:'',
+        '', '',
+        sl?formatShipDate(sl.date):'', sl?sl.qty:'',
+        '', '', ''
+      ]);
+    }
+  });
   const ws=XLSX.utils.aoa_to_sheet([header, ...rows]);
   const wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, lang==='ko'?'전체주문내역':'Все заказы');
-  XLSX.writeFile(wb, `KITURAMI_전체주문내역_${new Date().toISOString().slice(0,10)}.xlsx`);
+  XLSX.utils.book_append_sheet(wb, ws, lang==='ko'?'회원및주문관리':'Заказы');
+  XLSX.writeFile(wb, `KITURAMI_주문내역_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
 function refreshAdminTexts(){
   const t=T[lang];
