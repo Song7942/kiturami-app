@@ -2836,7 +2836,7 @@ async function loadAdminOrders(){
     const dateStr=formatNewsDate(new Date(o.created_at).getTime());
     (o.items||[]).forEach(it=>{
       rows.push({
-        orderId: o.id, date: dateStr, company: o.company||'', user_id: o.user_id||'',
+        orderId: o.id, date: dateStr, createdAt: o.created_at, company: o.company||'', user_id: o.user_id||'',
         diag: it.diag||'', name_ko: it.name_ko||'', name_ru: it.name_ru||'', spec: it.spec||'', rep: it.rep||'', qty: it.qty||0,
         supplied: it.supplied||0,
         modelNames: getAppliedModelGroupNames(it.models), models: it.models||null
@@ -2846,11 +2846,11 @@ async function loadAdminOrders(){
   adminOrderRows=rows;
 }
 function computeAdminOrderBreakdown(){
+  const masterRepTotals=computeMasterRepTotals(); // 재고 엑셀의 대표품번 기준 합산 수량(기초재고)
   const globalSuppliedByRep={};
   adminOrderRows.forEach(r=>{ globalSuppliedByRep[r.rep]=(globalSuppliedByRep[r.rep]||0)+(r.supplied||0); });
-  const masterRepTotals=computeMasterRepTotals(); // 재고 엑셀의 대표품번 기준 합산 수량(기초재고)
-  // 기존 공급량은 실제 출고내역(kt_shipments)에서, "이 주문을 넣은 회사"로 나간 것만 골라서 대표품번 기준으로 합산합니다.
-  // (거래처명은 러시아어 등 다른 표기로 적혀있을 수 있어, 로마자로 변환하고 법인형태 표기를 지운 뒤 비교합니다.)
+
+  // 거래처명은 러시아어 등 다른 표기로 적혀있을 수 있어, 로마자로 변환하고 법인형태 표기를 지운 뒤 비교합니다.
   const CYR_TO_LAT={а:'a',б:'b',в:'v',г:'g',д:'d',е:'e',ё:'e',ж:'zh',з:'z',и:'i',й:'y',к:'k',л:'l',м:'m',н:'n',о:'o',п:'p',р:'r',с:'s',т:'t',у:'u',ф:'f',х:'h',ц:'ts',ч:'ch',ш:'sh',щ:'sch',ъ:'',ы:'y',ь:'',э:'e',ю:'yu',я:'ya'};
   function translit(str){
     return String(str||'').toLowerCase().split('').map(ch=>CYR_TO_LAT[ch]!==undefined?CYR_TO_LAT[ch]:ch).join('');
@@ -2867,40 +2867,51 @@ function computeAdminOrderBreakdown(){
     if(!a || !b) return false;
     return a.includes(b) || b.includes(a);
   }
-  function getShippedForCompany(rep, company){
-    let sum=0;
-    (shipmentsData||[]).forEach(s=>{
-      if(findMasterRep(s.rep)!==rep) return;
-      if(!isSameClient(s.client_name, company)) return;
-      sum+=s.qty||0;
-    });
-    return sum;
-  }
-  adminOrderRows.forEach((row,idx)=>{
+  const toDateOnly=iso=>String(iso||'').slice(0,10);
+
+  // 주문/공급 현황은 "이 주문이 접수된 시점 기준" 스냅샷입니다.
+  // - 기존 주문/공급: 이 주문보다 먼저 있었던 같은 회사·같은 품번의 주문 수량 / 그 시점까지의 출고 수량
+  // - 신규 주문: 이번 주문 수량
+  // - 합계 주문/공급: 이 주문 날짜까지 누적된 주문·출고 수량
+  // 예) 7/8에 5개 주문, 7/9에 5개 추가 주문, 7/9에 10개 출고 → 7/8 건은 "그 시점엔 출고 전"이라 공급 0,
+  //     7/9 건은 누적 주문 10 = 누적 출고 10으로 일치되어 출고완료로 표시됩니다.
+  adminOrderRows.forEach((row)=>{
+    const rowTime=new Date(row.createdAt).getTime();
+    const rowDateOnly=toDateOnly(row.createdAt);
     let existingOrderQty=0;
-    adminOrderRows.forEach((r2,idx2)=>{
-      if(idx2===idx) return;
-      if(r2.company===row.company && r2.rep===row.rep){
+    adminOrderRows.forEach((r2)=>{
+      if(r2===row) return;
+      if(r2.company===row.company && r2.rep===row.rep && new Date(r2.createdAt).getTime()<rowTime){
         existingOrderQty+=r2.qty||0;
       }
     });
-    const existingSupplied=getShippedForCompany(row.rep, row.company); // 기존-공급: 이 회사로 나간 출고내역 기준
+    const newOrderQty=row.qty||0;
+    const totalOrderQty=existingOrderQty+newOrderQty;
+
+    let suppliedUpToDate=0, suppliedBeforeDate=0;
+    (shipmentsData||[]).forEach(s=>{
+      if(findMasterRep(s.rep)!==row.rep) return;
+      if(!isSameClient(s.client_name, row.company)) return;
+      const shipDateOnly=toDateOnly(s.ship_date);
+      if(shipDateOnly<=rowDateOnly) suppliedUpToDate+=s.qty||0;
+      if(shipDateOnly<rowDateOnly) suppliedBeforeDate+=s.qty||0;
+    });
+
     row.existingOrderQty=existingOrderQty;      // 기존-주문
-    row.existingSupplied=existingSupplied;      // 기존-공급
-    row.newOrderQty=row.qty||0;                 // 신규-주문
-    row.totalOrderQty=existingOrderQty+row.newOrderQty;               // 합계-주문
-    row.totalSupplied=existingSupplied;                                // 합계-공급 (이번 배분 반영 전 상태)
-    row.notSupplied=Math.max(0, row.totalOrderQty-row.totalSupplied); // 합계-미공급
-    row.totalSupplyRate = row.totalOrderQty>0 ? (row.totalSupplied/row.totalOrderQty) : 0; // 합계-공급율
+    row.existingSupplied=suppliedBeforeDate;    // 기존-공급 (이 주문 이전까지의 출고)
+    row.newOrderQty=newOrderQty;                // 신규-주문
+    row.totalOrderQty=totalOrderQty;            // 합계-주문
+    row.totalSupplied=suppliedUpToDate;         // 합계-공급 (이 주문 날짜까지의 출고)
+    row.notSupplied=Math.max(0, totalOrderQty-row.totalSupplied); // 합계-미공급
+    row.totalSupplyRate = totalOrderQty>0 ? (row.totalSupplied/totalOrderQty) : 0; // 합계-공급율
 
     const baseStock = masterRepTotals[row.rep]!==undefined ? masterRepTotals[row.rep] : null; // 공급결정-재고(배분후 재고)
     row.stockDisplay = baseStock===null ? null : Math.max(0, baseStock-(globalSuppliedByRep[row.rep]||0));
-    row.decisionSupplyRate = row.totalOrderQty>0 ? ((existingSupplied+(row.supplied||0))/row.totalOrderQty) : 0; // 공급결정-공급율
+    const decisionSupplied=row.totalSupplied+(row.supplied||0);
+    row.decisionSupplyRate = totalOrderQty>0 ? (decisionSupplied/totalOrderQty) : 0; // 공급결정-공급율
 
-    // 진행여부: 합계 주문보다 공급이 적으면 준비중, 주문만큼(또는 그 이상) 채워지면 출고완료
-    const decisionSupplied = existingSupplied + (row.supplied||0);
-    row.progressStatus = (row.totalOrderQty>0 && decisionSupplied>=row.totalOrderQty) ? 'done' : 'pending';
-    row.inProgressQty = row.supplied||0; // (참고용, 하위 호환)
+    row.progressStatus = (totalOrderQty>0 && decisionSupplied>=totalOrderQty) ? 'done' : 'pending';
+    row.inProgressQty = row.supplied||0;
     row.shippedQty = null;
   });
 }
