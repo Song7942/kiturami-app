@@ -244,6 +244,11 @@ input[type="text"]::placeholder{color:var(--muted)}
 .model-tags{display:flex;flex-wrap:wrap;gap:5px;margin-left:29px}
 .mt{font-size:12px;font-weight:600;padding:3px 7px;border-radius:4px;border:1px solid}
 .code{font-family:'Courier New',monospace;font-size:10px;color:var(--tag-text);background:var(--tag-bg);padding:1px 5px;border-radius:3px}
+/* 관리자 - 회원 및 주문관리 표: 확대/축소해도 헤더 글자가 어색하게 줄바꿈되지 않도록, 품명/규격을 제외한 모든 칸은 줄바꿈을 막습니다. */
+#adminOrderThead th, #adminMyOrdersThead th{white-space:nowrap}
+#adminOrderTbody td, #adminMyOrdersTbody td{white-space:nowrap}
+#adminOrderTbody td.wrap-ok, #adminMyOrdersTbody td.wrap-ok{white-space:normal}
+#adminOrdersView table, #adminMyOrdersView table{table-layout:auto}
 #pane-order .code, #pane-parts .code, #pane-inventory .code{background:none;padding:1px 0;color:var(--text);font-weight:600}
 .part-card .code, .order-card .code{font-size:13px}
 .no-result{text-align:center;padding:30px 20px;color:var(--muted);font-size:13px}
@@ -3069,7 +3074,7 @@ function renderAdminOrders(){
 
   tbody.innerHTML=groups.map(g=>{
     const name=lang==='ko'?g.name_ko:(g.name_ru||g.name_ko);
-    const specTd=isKo?`<td style="padding:9px 12px;color:var(--muted)">${escapeHtml(g.spec)}</td>`:'';
+    const specTd=isKo?`<td class="wrap-ok" style="padding:9px 12px;color:var(--muted)">${escapeHtml(g.spec)}</td>`:'';
     const ratePct=(g.supplyRate*100).toFixed(1)+'%';
     const repEsc=g.rep.replace(/'/g,"\\'");
     const companyEsc=g.company.replace(/'/g,"\\'");
@@ -3080,7 +3085,7 @@ function renderAdminOrders(){
     let html=`<tr style="border-bottom:1px solid var(--border);font-weight:700;background:var(--surface2)">
       <td style="padding:9px 12px">${escapeHtml(g.company)}</td>
       <td style="padding:9px 12px">${escapeHtml(g.user_id)}</td>
-      <td style="padding:9px 12px">${escapeHtml(name)}</td>
+      <td class="wrap-ok" style="padding:9px 12px">${escapeHtml(name)}</td>
       ${specTd}
       <td style="padding:9px 12px"><span class="code">${escapeHtml(g.rep)}</span></td>
       <td style="padding:9px 12px;border-left:2px solid var(--border)"></td>
@@ -3389,7 +3394,7 @@ function renderAdminMyOrders(){
 
   tbody.innerHTML=groups.map(g=>{
     const name=lang==='ko'?g.name_ko:(g.name_ru||g.name_ko);
-    const specTd=isKo?`<td style="padding:9px 12px;color:var(--muted)">${escapeHtml(g.spec)}</td>`:'';
+    const specTd=isKo?`<td class="wrap-ok" style="padding:9px 12px;color:var(--muted)">${escapeHtml(g.spec)}</td>`:'';
     const ratePct=(g.supplyRate*100).toFixed(1)+'%';
     const stockText=g.stockDisplay===null?'-':g.stockDisplay;
     const finalOrderText=g.finalOrderQty===null?'-':g.finalOrderQty;
@@ -3399,7 +3404,7 @@ function renderAdminMyOrders(){
       : (g.supplyAvailable>0 ? `<button class="news-btn-primary" style="padding:4px 10px;font-size:11px" onclick="agreeToAllocation('${repEsc}')">${t.agreeBtn}</button>` : '');
 
     let html=`<tr style="border-bottom:1px solid var(--border);font-weight:700;background:var(--surface2)">
-      <td style="padding:9px 12px">${escapeHtml(name)}</td>
+      <td class="wrap-ok" style="padding:9px 12px">${escapeHtml(name)}</td>
       ${specTd}
       <td style="padding:9px 12px"><span class="code">${escapeHtml(g.rep)}</span></td>
       <td style="padding:9px 16px 9px 12px;text-align:right;border-left:2px solid var(--border);color:var(--muted)">${stockText}</td>
