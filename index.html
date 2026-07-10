@@ -2255,6 +2255,7 @@ function renderTable(){
   cl.insertBefore(frag,noR);
   if(activeDiagNum)highlightByDiag(activeDiagNum,activeDiagRep);
   updatePartsTableScrollbar();
+  scheduleSplitTableResync('pn-hdr-col','pn-body-col','tbody');
 }
 
 
@@ -2571,6 +2572,7 @@ function renderOrderTable(){
   }).join(''));
   if(activeDiagNum)highlightByDiag(activeDiagNum,activeDiagRep);
   updateOrderTableScrollbar();
+  scheduleSplitTableResync('order-hdr-col','order-body-col','orderTbody');
 }
 
 function setOrderQty(input){
@@ -4101,18 +4103,20 @@ async function deleteShipment(id){
 // 그래서 %로 맞추는 대신, 실제로 렌더링된 본문 셀의 픽셀 너비를 측정해서 헤더에 그대로 강제 적용합니다.
 function syncSplitTableColumnWidths(hdrColId, bodyColId, tbodyId){
   requestAnimationFrame(()=>{
-    const tbody=document.getElementById(tbodyId);
-    const firstRow=tbody && tbody.querySelector('tr');
-    const hdrColEl=document.getElementById(hdrColId);
-    const bodyColEl=document.getElementById(bodyColId);
-    if(!firstRow || !hdrColEl || !bodyColEl) return;
-    const cells=[...firstRow.children].filter(td=>!td.hasAttribute('colspan'));
-    const hdrCols=[...hdrColEl.children];
-    const bodyCols=[...bodyColEl.children];
-    if(cells.length!==hdrCols.length || cells.length!==bodyCols.length) return; // 셀 개수가 안 맞으면(로딩 중 등) 건너뜁니다.
-    cells.forEach((td,i)=>{
-      const w=td.getBoundingClientRect().width;
-      if(w>0){ hdrCols[i].style.width=w+'px'; bodyCols[i].style.width=w+'px'; }
+    requestAnimationFrame(()=>{
+      const tbody=document.getElementById(tbodyId);
+      const firstRow=tbody && tbody.querySelector('tr');
+      const hdrColEl=document.getElementById(hdrColId);
+      const bodyColEl=document.getElementById(bodyColId);
+      if(!firstRow || !hdrColEl || !bodyColEl) return;
+      const cells=[...firstRow.children].filter(td=>!td.hasAttribute('colspan'));
+      const hdrCols=[...hdrColEl.children];
+      const bodyCols=[...bodyColEl.children];
+      if(cells.length!==hdrCols.length || cells.length!==bodyCols.length) return; // 셀 개수가 안 맞으면(로딩 중 등) 건너뜁니다.
+      cells.forEach((td,i)=>{
+        const w=td.getBoundingClientRect().width;
+        if(w>0){ hdrCols[i].style.width=w+'px'; bodyCols[i].style.width=w+'px'; }
+      });
     });
   });
 }
@@ -4123,13 +4127,22 @@ function scheduleSplitTableResync(hdrColId, bodyColId, tbodyId){
   }
   syncSplitTableColumnWidths(hdrColId, bodyColId, tbodyId);
 }
+function resyncAllSplitTables(){
+  _splitTableResyncTargets.forEach(t=>syncSplitTableColumnWidths(t.hdrColId, t.bodyColId, t.tbodyId));
+}
 let _splitTableResyncTimer=null;
-window.addEventListener('resize', ()=>{
+function scheduleResyncAll(){
   clearTimeout(_splitTableResyncTimer);
-  _splitTableResyncTimer=setTimeout(()=>{
-    _splitTableResyncTargets.forEach(t=>syncSplitTableColumnWidths(t.hdrColId, t.bodyColId, t.tbodyId));
-  }, 150);
-});
+  _splitTableResyncTimer=setTimeout(resyncAllSplitTables, 120);
+}
+window.addEventListener('resize', scheduleResyncAll);
+// 브라우저 화면 배율(확대/축소)은 resize 이벤트가 항상 발생한다고 보장되지 않아서,
+// 실제 레이아웃 크기 변화를 더 확실히 잡아내는 ResizeObserver도 함께 사용합니다.
+if(typeof ResizeObserver!=='undefined'){
+  const _splitTableRO=new ResizeObserver(()=>{ scheduleResyncAll(); });
+  document.addEventListener('DOMContentLoaded', ()=>{ if(document.body) _splitTableRO.observe(document.body); });
+  if(document.body) _splitTableRO.observe(document.body);
+}
 function renderShipmentsList(){
   const t=T[lang];
   const isKo=lang==='ko';
