@@ -258,16 +258,15 @@ input[type="text"]::placeholder{color:var(--muted)}
 .sticky-col1{position:sticky;left:0;z-index:2;background:var(--bg)}
 .pn-hdr-wrap .sticky-col1{z-index:3;background:var(--surface2)}
   .pn-hdr-wrap{background:var(--surface);border:1px solid var(--border);border-radius:10px 10px 0 0;border-bottom:none;overflow:hidden}
-  .pn-hdr-wrap table{border-collapse:collapse;table-layout:fixed;width:100%;min-width:max-content}
-  .pn-hdr-wrap th{background:var(--surface2);padding:7px 12px;font-size:11px;font-weight:600;color:var(--muted);text-align:left;border-bottom:1px solid var(--border);border-right:1px solid var(--border);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pn-hdr-wrap table{border-collapse:collapse;table-layout:auto;width:auto;min-width:100%}
+  .pn-hdr-wrap th{background:var(--surface2);padding:7px 10px;font-size:11px;font-weight:600;color:var(--muted);text-align:left;border-bottom:1px solid var(--border);border-right:1px solid var(--border);white-space:normal;word-break:keep-all;line-height:1.3}
   .pn-hdr-wrap th:last-child{border-right:none}
   .pn-body-wrap{border:1px solid var(--border);border-radius:0 0 10px 10px;border-top:none;background:var(--surface)}
-  .pn-body-wrap table{width:100%;min-width:max-content;table-layout:fixed;border-collapse:collapse}
+  .pn-body-wrap table{width:auto;min-width:100%;table-layout:auto;border-collapse:collapse}
   .pn-body-wrap tbody tr{border-bottom:1px solid var(--border)}
   .pn-body-wrap tbody tr:last-child{border-bottom:none}
   .pn-body-wrap tbody tr:hover{background:var(--row-hover)}
-  .pn-body-wrap td{padding:7px 12px;font-size:12px;vertical-align:middle;border-right:1px solid var(--border);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .pn-body-wrap td.wrap-ok{white-space:normal;overflow:visible;text-overflow:clip}
+  .pn-body-wrap td{padding:7px 10px;font-size:12px;vertical-align:middle;border-right:1px solid var(--border);white-space:normal;word-break:keep-all;line-height:1.3}
   .pn-body-wrap td:last-child{border-right:none}
 .pn-tbl-wrap table{width:100%;border-collapse:collapse}
 .pn-tbl-wrap thead th{background:var(--surface2);padding:7px 12px;font-size:11px;font-weight:600;color:var(--muted);text-align:left;border-bottom:1px solid var(--border);border-right:1px solid var(--border);white-space:nowrap}
@@ -680,7 +679,7 @@ input[type="text"]::placeholder{color:var(--muted)}
         </button>
       </div>
       <!-- 테이블 헤더 고정 -->
-      <div class="pn-hdr-wrap">
+      <div class="pn-hdr-wrap" id="pnHdrWrap">
         <table>
           <colgroup id="pn-hdr-col"></colgroup>
           <thead id="pn-thead"><tr>
@@ -719,7 +718,7 @@ input[type="text"]::placeholder{color:var(--muted)}
         </label>
       </div>
       <div id="invLastUpdated" style="padding:2px 4px 6px;font-size:11px;color:var(--muted)"></div>
-      <div class="pn-hdr-wrap">
+      <div class="pn-hdr-wrap" id="invHdrWrap">
         <table>
           <colgroup id="inv-hdr-col"></colgroup>
           <thead id="inventoryThead"></thead>
@@ -753,7 +752,7 @@ input[type="text"]::placeholder{color:var(--muted)}
         </label>
       </div>
       <div id="shipLastUpdated" style="padding:2px 4px 6px;font-size:11px;color:var(--muted)"></div>
-      <div class="pn-hdr-wrap">
+      <div class="pn-hdr-wrap" id="shipHdrWrap">
         <table>
           <colgroup id="ship-hdr-col"></colgroup>
           <thead id="shipmentsThead"></thead>
@@ -1236,7 +1235,7 @@ const T={
        adminHNewQty:'신규 주문수량',adminHStock:'재고수량',reqOriginalQtyLabel:'신규 주문수량',reqRequestedQtyLabel:'변경신청 수량',reqRepLabel:'대표품번 (미변경)',
        grpExisting:'기존',grpNew:'신규',grpCumulative:'누적',grpTotal:'합계',grpDecision:'공급 결정',grpProgress:'진행여부',
        statusDone:'완료',statusPending:'준비중',statusPartial:'일부완료',
-       colOrder:'주문',colSupply:'출고',colStock:'재고',colSupplyRate:'출고율',colNotSupplied:'미출고',colAllocation:'배분',colPreparing:'준비중',colShipped:'출고완료',
+       colOrder:'주문',grpOrderStatus:'주문현황',colSupply:'출고',colStock:'재고',colSupplyRate:'출고율',colNotSupplied:'미출고',colAllocation:'배분',colPreparing:'준비중',colShipped:'출고완료',
        colDate:'날짜',colStatus:'완료여부',grpStatusHdr:'출고현황',colFinalOrder:'최종주문',colDecision:'의사결정',decisionAgreed:'동의',myOrderReqSection:'구매처의 요청사항',agreeBtn:'동의',colSupplyAvailable:'공급가능',colShippedQty:'수량',colImmediateSupply:'즉시공급',colFutureSupply:'향후공급',
        invHBase:'기초재고',invHPostAlloc:'배분후 재고',
        orderSubmit:'주문 제출',orderSubmitting:'제출 중…',orderSubmitOk:'주문이 접수되었습니다.',orderSubmitFail:'주문 제출에 실패했습니다. 잠시 후 다시 시도해주세요.',orderSubmitEmpty:'주문수량을 입력한 품목이 없습니다.',orderPrevQty:'기존 주문수량',orderStock:'내 창고 재고',orderReceived:'접수받은 주문수량',orderNoSupplier:'주문을 보낼 구매처가 지정되어 있지 않습니다.',
@@ -1302,7 +1301,7 @@ const T={
        adminHNewQty:'Новое кол-во',adminHStock:'Остаток',reqOriginalQtyLabel:'Исходное кол-во',reqRequestedQtyLabel:'Запрошено',reqRepLabel:'Артикул (неизм.)',
        grpExisting:'Ранее',grpNew:'Новое',grpCumulative:'Всего',grpTotal:'Итого',grpDecision:'Решение о поставке',grpProgress:'Статус',
        statusDone:'Завершено',statusPending:'В процессе',statusPartial:'Частично',
-       colOrder:'Заказ',colSupply:'Отгрузка',colStock:'Остаток',colSupplyRate:'% отгрузки',colNotSupplied:'Не отгружено',colAllocation:'Выделено',colPreparing:'Готовится',colShipped:'Отгружено',
+       colOrder:'Заказ',grpOrderStatus:'Статус заказа',colSupply:'Отгрузка',colStock:'Остаток',colSupplyRate:'% отгрузки',colNotSupplied:'Не отгружено',colAllocation:'Выделено',colPreparing:'Готовится',colShipped:'Отгружено',
        colDate:'Дата',colStatus:'Статус',grpStatusHdr:'Статус отгрузки',colFinalOrder:'Финальный заказ',colDecision:'Решение',decisionAgreed:'Согласен',myOrderReqSection:'Предложение поставщика',agreeBtn:'Согласиться',colSupplyAvailable:'Доступно',colShippedQty:'Кол-во',colImmediateSupply:'Сразу',colFutureSupply:'Позже',
        invHBase:'Начальный остаток',invHPostAlloc:'Остаток после выделения',
        orderSubmit:'Отправить заказ',orderSubmitting:'Отправка…',orderSubmitOk:'Заказ принят.',orderSubmitFail:'Не удалось отправить заказ. Попробуйте позже.',orderSubmitEmpty:'Не указано количество ни для одного товара.',orderPrevQty:'Ранее заказано',orderStock:'Мой склад',orderReceived:'Получено заказов',orderNoSupplier:'Поставщик для заказа не указан.',
@@ -2255,7 +2254,6 @@ function renderTable(){
   cl.insertBefore(frag,noR);
   if(activeDiagNum)highlightByDiag(activeDiagNum,activeDiagRep);
   updatePartsTableScrollbar();
-  scheduleSplitTableResync('pn-hdr-col','pn-body-col','tbody');
 }
 
 
@@ -2294,6 +2292,7 @@ function renderPNChunk(startFrom=0){
   }).join('');
   if(startFrom===0) tbody.innerHTML=rows;
   else tbody.insertAdjacentHTML('beforeend', rows);
+  if(startFrom===0) scheduleSplitTableResync('pn-hdr-col','pn-body-col','pnTbody');
 
   // ── 모바일 카드 (좌우 스크롤 없이 한 화면에서 모든 정보 확인) ──
   const cards=chunk.map(r=>{
@@ -2339,9 +2338,7 @@ function renderPN(){
 
   // colgroup & 헤더 업데이트
   const isKo=lang==='ko';
-  const cols=isKo
-    ? '<col style="width:160px"><col style="width:130px"><col style="width:170px"><col style="width:250px"><col style="width:150px">'
-    : '<col style="width:200px"><col style="width:170px"><col style="width:250px"><col style="width:150px">';
+  const cols = isKo ? '<col><col><col><col><col>' : '<col><col><col><col>';
   ['pn-hdr-col','pn-body-col'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=cols;});
 
   const thead=document.getElementById('pn-thead');
@@ -3070,13 +3067,13 @@ function renderAdminOrders(){
       <th id="i18n-adminh-name" rowspan="2" style="padding:9px 12px">${t.adminHName}</th>
       ${specTh}
       <th id="i18n-adminh-rep" rowspan="2" style="padding:9px 12px">${t.adminHRep}</th>
-      <th colspan="2" style="text-align:center;border-bottom:1px solid var(--border);border-left:2px solid var(--border);font-size:13px;font-weight:700;color:var(--text);padding:6px">${t.colOrder}</th>
+      <th colspan="2" style="text-align:center;border-bottom:1px solid var(--border);border-left:2px solid var(--border);font-size:13px;font-weight:700;color:var(--text);padding:6px">${t.grpOrderStatus}</th>
       <th colspan="4" style="text-align:center;border-bottom:1px solid var(--border);border-left:2px solid var(--border);font-size:13px;font-weight:700;color:var(--text);padding:6px">${t.grpDecision}</th>
       <th colspan="5" style="text-align:center;border-bottom:1px solid var(--border);border-left:2px solid var(--border);font-size:13px;font-weight:700;color:var(--text);padding:6px">${t.grpStatusHdr}</th>
     </tr>
     <tr style="border-bottom:1px solid var(--border);color:var(--muted);font-size:10px">
       <th style="padding:6px 12px;border-left:2px solid var(--border);font-size:10px">${t.colDate}</th>
-      <th style="padding:6px 16px 6px 10px;text-align:right;font-size:10px">${t.colOrder}</th>
+      <th style="padding:6px 16px 6px 10px;text-align:right;font-size:10px">${t.colShippedQty}</th>
       <th style="padding:6px 16px 6px 10px;text-align:right;border-left:2px solid var(--border);font-size:10px">${t.colStock}</th>
       <th style="padding:6px 10px;text-align:center;font-size:10px">${t.colImmediateSupply}</th>
       <th style="padding:6px 10px;text-align:center;font-size:10px">${t.colFutureSupply}</th>
@@ -3389,13 +3386,13 @@ function renderAdminMyOrders(){
       ${specTh}
       <th rowspan="2" style="padding:9px 12px">${t.adminHRep}</th>
       <th rowspan="2" style="text-align:right;padding:9px 16px 9px 12px;border-left:2px solid var(--border)">${t.colStock}</th>
-      <th colspan="2" style="text-align:center;border-bottom:1px solid var(--border);border-left:2px solid var(--border);font-size:13px;font-weight:700;color:var(--text);padding:6px">${t.colOrder}</th>
+      <th colspan="2" style="text-align:center;border-bottom:1px solid var(--border);border-left:2px solid var(--border);font-size:13px;font-weight:700;color:var(--text);padding:6px">${t.grpOrderStatus}</th>
       <th colspan="3" style="text-align:center;border-bottom:1px solid var(--border);border-left:2px solid var(--border);font-size:13px;font-weight:700;color:var(--text);padding:6px">${t.myOrderReqSection}</th>
       <th colspan="5" style="text-align:center;border-bottom:1px solid var(--border);border-left:2px solid var(--border);font-size:13px;font-weight:700;color:var(--text);padding:6px">${t.grpStatusHdr}</th>
     </tr>
     <tr style="border-bottom:1px solid var(--border);color:var(--muted);font-size:10px">
       <th style="padding:6px 12px;border-left:2px solid var(--border);font-size:10px">${t.colDate}</th>
-      <th style="padding:6px 16px 6px 10px;text-align:right;font-size:10px">${t.colOrder}</th>
+      <th style="padding:6px 16px 6px 10px;text-align:right;font-size:10px">${t.colShippedQty}</th>
       <th style="padding:6px 10px;text-align:center;border-left:2px solid var(--border);font-size:10px">${t.colImmediateSupply}</th>
       <th style="padding:6px 10px;text-align:center;font-size:10px">${t.colFutureSupply}</th>
       <th style="padding:6px 10px;text-align:center;font-size:10px">${t.colDecision}</th>
@@ -3485,7 +3482,7 @@ function downloadAdminMyOrders(){
   const isKo=lang==='ko';
   const header=[
     t.adminHName,...(isKo?[t.thSpec]:[]),t.adminHRep,t.colStock,
-    `${t.colOrder} ${t.colDate}`, `${t.colOrder} ${t.colOrder}`,
+    `${t.grpOrderStatus} ${t.colDate}`, `${t.grpOrderStatus} ${t.colShippedQty}`,
     `${t.myOrderReqSection} ${t.colImmediateSupply}`, `${t.myOrderReqSection} ${t.colFutureSupply}`, `${t.myOrderReqSection} ${t.colDecision}`,
     `${t.grpStatusHdr} ${t.colDate}`, `${t.grpStatusHdr} ${t.colShippedQty}`,
     t.colNotSupplied, t.colSupplyRate, t.colStatus
@@ -3525,7 +3522,7 @@ function downloadAdminOrders(){
   const isKo=lang==='ko';
   const header=[
     t.adminHCompany,t.adminHUser,t.adminHName,...(isKo?[t.thSpec]:[]),t.adminHRep,
-    `${t.colOrder} ${t.colDate}`, `${t.colOrder} ${t.colOrder}`,
+    `${t.grpOrderStatus} ${t.colDate}`, `${t.grpOrderStatus} ${t.colShippedQty}`,
     `${t.grpDecision} ${t.colStock}`, `${t.grpDecision} ${t.colImmediateSupply}`, `${t.grpDecision} ${t.colFutureSupply}`, `${t.grpDecision} ${t.colDecision}`,
     `${t.grpStatusHdr} ${t.colDate}`, `${t.grpStatusHdr} ${t.colShippedQty}`,
     t.colNotSupplied, t.colSupplyRate, t.colStatus
@@ -4161,8 +4158,7 @@ function renderShipmentsList(){
   const cols = isKo
     ? [t.adminHName, t.thSpec, t.invHMaster, t.shipThRep, t.shipThClient, t.shipThDate, t.shipThQty, '']
     : [t.adminHName, t.invHMaster, t.shipThRep, t.shipThClient, t.shipThDate, t.shipThQty, ''];
-  const widths = isKo ? ['17%','14%','14%','11%','14%','11%','7%','12%'] : ['21%','16%','13%','18%','11%','10%','11%'];
-  const colgroupHtml=widths.map(w=>`<col style="width:${w}">`).join('');
+  const colgroupHtml=cols.map(()=>`<col>`).join('');
   ['ship-hdr-col','ship-body-col'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=colgroupHtml;});
   document.getElementById('shipmentsThead').innerHTML=`<tr>${cols.map((c,i)=>`<th${i===cols.length-2?' style="text-align:right;padding-right:16px"':''}${i===cols.length-1?' style="text-align:center"':''}>${c}</th>`).join('')}</tr>`;
 
@@ -4334,8 +4330,7 @@ function renderInventoryList(){
   const cols = isKo
     ? [t.adminHName, t.thSpec, t.invHMaster, t.invHRep, t.invHBase, t.invHPostAlloc, t.invHSupplierStock]
     : [t.adminHName, t.invHMaster, t.invHRep, t.invHBase, t.invHPostAlloc, t.invHSupplierStock];
-  const widths = isKo ? ['18%','14%','18%','16%','11%','11%','12%'] : ['22%','20%','20%','12%','12%','14%'];
-  const colgroupHtml = widths.map(w=>`<col style="width:${w}">`).join('');
+  const colgroupHtml = cols.map(()=>`<col>`).join('');
   ['inv-hdr-col','inv-body-col'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=colgroupHtml;});
   document.getElementById('inventoryThead').innerHTML=`<tr>${cols.map((c,i)=>{
     const rightAlign = (i===cols.length-1 || i===cols.length-2);
@@ -4650,6 +4645,16 @@ function refreshPriceTexts(){
 initScroll();mountModelDiag('parts');renderModelBar();renderTable();renderPN();renderOrderTable();initDiagScrollbar();
 updatePartsTableScrollbar=setupHTableScroll('scrollBodyParts','tblHeaderWrap','tblScrollbar','tblScrollbarThumb');
 updateOrderTableScrollbar=setupHTableScroll('scrollBodyOrder','orderTblHeaderWrap','orderTblScrollbar','orderTblScrollbarThumb');
+// 재고관리/출고내역은 브라우저 기본 스크롤바를 쓰지만, 가로로 스크롤할 때 헤더도 같이 움직이도록 동기화합니다.
+function setupSimpleHeaderScrollSync(scrollId, headerId){
+  const sb=document.getElementById(scrollId);
+  const hw=document.getElementById(headerId);
+  if(!sb||!hw) return;
+  sb.addEventListener('scroll', ()=>{ hw.scrollLeft=sb.scrollLeft; });
+}
+setupSimpleHeaderScrollSync('scrollBodyInventory','invHdrWrap');
+setupSimpleHeaderScrollSync('scrollBodyShipments','shipHdrWrap');
+setupSimpleHeaderScrollSync('scrollBodyPN','pnHdrWrap');
 updatePartsTableScrollbar();updateOrderTableScrollbar();
 // ══════════════════════════════════════════
 // 인증 (로그인 / 회원가입 / 아이디·비밀번호 찾기)
