@@ -266,7 +266,8 @@ input[type="text"]::placeholder{color:var(--muted)}
   .pn-body-wrap tbody tr{border-bottom:1px solid var(--border)}
   .pn-body-wrap tbody tr:last-child{border-bottom:none}
   .pn-body-wrap tbody tr:hover{background:var(--row-hover)}
-  .pn-body-wrap td{padding:7px 12px;font-size:12px;vertical-align:middle;border-right:1px solid var(--border)}
+  .pn-body-wrap td{padding:7px 12px;font-size:12px;vertical-align:middle;border-right:1px solid var(--border);white-space:nowrap}
+  .pn-body-wrap td.wrap-ok{white-space:normal}
   .pn-body-wrap td:last-child{border-right:none}
 .pn-tbl-wrap table{width:100%;border-collapse:collapse}
 .pn-tbl-wrap thead th{background:var(--surface2);padding:7px 12px;font-size:11px;font-weight:600;color:var(--muted);text-align:left;border-bottom:1px solid var(--border);border-right:1px solid var(--border);white-space:nowrap}
@@ -4131,9 +4132,9 @@ function renderShipmentsList(){
     const masterRep=findMasterRep(r.rep)||'';
     const pnInfo=masterRep?getPNInfo(masterRep):null;
     const nameText=pnInfo ? (isKo?pnInfo.name_ko:(pnInfo.name_ru||pnInfo.name_ko)) : '';
-    const specTd=isKo?`<td style="padding:9px 12px;color:var(--muted)">${escapeHtml(pnInfo?pnInfo.spec:'')}</td>`:'';
+    const specTd=isKo?`<td class="wrap-ok" style="padding:9px 12px;color:var(--muted)">${escapeHtml(pnInfo?pnInfo.spec:'')}</td>`:'';
     return `<tr>
-    <td style="padding:9px 12px;font-weight:500">${escapeHtml(nameText)}</td>
+    <td class="wrap-ok" style="padding:9px 12px;font-weight:500">${escapeHtml(nameText)}</td>
     ${specTd}
     <td style="padding:9px 12px">${masterRep?`<span class="code">${escapeHtml(masterRep)}</span>`:''}</td>
     <td style="padding:9px 12px"><span class="code">${escapeHtml(r.rep)}</span></td>
@@ -4310,12 +4311,12 @@ function renderInventoryList(){
     const supplierStockText = g.master && supplierMasterTotals[g.master]!==undefined ? supplierMasterTotals[g.master] : '-';
     const pnInfo = g.master ? getPNInfo(g.master) : null;
     const nameText = pnInfo ? (isKo ? pnInfo.name_ko : (pnInfo.name_ru||pnInfo.name_ko)) : '';
-    const specTd = isKo ? `<td style="padding:9px 12px;color:var(--muted)">${escapeHtml(pnInfo?pnInfo.spec:'')}</td>` : '';
+    const specTd = isKo ? `<td class="wrap-ok" style="padding:9px 12px;color:var(--muted)">${escapeHtml(pnInfo?pnInfo.spec:'')}</td>` : '';
     const specHtml = isKo && pnInfo && pnInfo.spec ? `<div style="color:var(--muted);font-size:11px;margin-top:2px">${escapeHtml(pnInfo.spec)}</div>` : '';
     let html='';
     if(g.master && items.length>1){
       html+=`<tr style="background:var(--surface2)">
-        <td class="sticky-col1" style="padding:9px 12px;font-weight:600;background:var(--surface2)">${escapeHtml(nameText)}</td>
+        <td class="sticky-col1 wrap-ok" style="padding:9px 12px;font-weight:600;background:var(--surface2)">${escapeHtml(nameText)}</td>
         ${specTd}
         <td style="padding:9px 12px"><span class="code">${escapeHtml(g.master)}</span></td>
         <td style="padding:9px 12px"></td>
@@ -4338,7 +4339,7 @@ function renderInventoryList(){
     } else {
       const it=items[0];
       html+=`<tr>
-        <td class="sticky-col1" style="padding:9px 12px;font-weight:600">${escapeHtml(nameText)}</td>
+        <td class="sticky-col1 wrap-ok" style="padding:9px 12px;font-weight:600">${escapeHtml(nameText)}</td>
         ${specTd}
         <td style="padding:9px 12px">${g.master?`<span class="code">${escapeHtml(g.master)}</span>`:''}</td>
         <td style="padding:9px 12px"><span class="code">${escapeHtml(it.articul)}</span></td>
