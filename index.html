@@ -4096,6 +4096,40 @@ async function deleteShipment(id){
   await loadShipments();
   renderShipmentsList();
 }
+// 헤더 표와 본문 표가 따로 있는 화면(재고관리/출고내역 등)은, 두 표가 각자 %로 너비를 계산하다 보니
+// 화면 배율(확대/축소)에 따라 반올림 오차가 생겨서 열이 미세하게 어긋날 수 있습니다.
+// 그래서 %로 맞추는 대신, 실제로 렌더링된 본문 셀의 픽셀 너비를 측정해서 헤더에 그대로 강제 적용합니다.
+function syncSplitTableColumnWidths(hdrColId, bodyColId, tbodyId){
+  requestAnimationFrame(()=>{
+    const tbody=document.getElementById(tbodyId);
+    const firstRow=tbody && tbody.querySelector('tr');
+    const hdrColEl=document.getElementById(hdrColId);
+    const bodyColEl=document.getElementById(bodyColId);
+    if(!firstRow || !hdrColEl || !bodyColEl) return;
+    const cells=[...firstRow.children].filter(td=>!td.hasAttribute('colspan'));
+    const hdrCols=[...hdrColEl.children];
+    const bodyCols=[...bodyColEl.children];
+    if(cells.length!==hdrCols.length || cells.length!==bodyCols.length) return; // 셀 개수가 안 맞으면(로딩 중 등) 건너뜁니다.
+    cells.forEach((td,i)=>{
+      const w=td.getBoundingClientRect().width;
+      if(w>0){ hdrCols[i].style.width=w+'px'; bodyCols[i].style.width=w+'px'; }
+    });
+  });
+}
+let _splitTableResyncTargets=[];
+function scheduleSplitTableResync(hdrColId, bodyColId, tbodyId){
+  if(!_splitTableResyncTargets.some(t=>t.tbodyId===tbodyId)){
+    _splitTableResyncTargets.push({hdrColId, bodyColId, tbodyId});
+  }
+  syncSplitTableColumnWidths(hdrColId, bodyColId, tbodyId);
+}
+let _splitTableResyncTimer=null;
+window.addEventListener('resize', ()=>{
+  clearTimeout(_splitTableResyncTimer);
+  _splitTableResyncTimer=setTimeout(()=>{
+    _splitTableResyncTargets.forEach(t=>syncSplitTableColumnWidths(t.hdrColId, t.bodyColId, t.tbodyId));
+  }, 150);
+});
 function renderShipmentsList(){
   const t=T[lang];
   const isKo=lang==='ko';
@@ -4171,6 +4205,7 @@ function renderShipmentsList(){
     </div>
   </div>`;
   }).join('');
+  scheduleSplitTableResync('ship-hdr-col','ship-body-col','shipmentsTbody');
 }
 async function loadInventory(){
   const myCompany=currentUser?currentUser.company:'';
@@ -4368,6 +4403,7 @@ function renderInventoryList(){
   });
   tbody.innerHTML=rowsHtml.join('');
   if(cardList) cardList.innerHTML=cardsHtml.join('');
+  scheduleSplitTableResync('inv-hdr-col','inv-body-col','inventoryTbody');
 }
 function downloadInventoryTemplate(){
   const header=['Артикул', 'Количество'];
