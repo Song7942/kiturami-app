@@ -3024,7 +3024,8 @@ function buildAdminOrderGroups(){
     g.totalSuppliedQty=g.supplyLines.reduce((s,l)=>s+l.qty,0);
 
     const allocInfo=orderAllocations[g.company+'||'+g.rep]||{allocated:0, agreed:false};
-    g.allocated=allocInfo.allocated;
+    g.allocated=allocInfo.allocated; // 즉시공급
+    g.futureSupply=Math.max(0, g.totalOrderQty-g.allocated); // 향후공급
     g.agreed=allocInfo.agreed;
 
     g.notSupplied=Math.max(0, g.totalOrderQty-g.totalSuppliedQty);
@@ -3053,14 +3054,15 @@ function renderAdminOrders(){
       ${specTh}
       <th id="i18n-adminh-rep" rowspan="2" style="padding:9px 12px">${t.adminHRep}</th>
       <th colspan="2" style="text-align:center;border-bottom:1px solid var(--border);border-left:2px solid var(--border);font-size:13px;font-weight:700;color:var(--text);padding:6px">${t.colOrder}</th>
-      <th colspan="3" style="text-align:center;border-bottom:1px solid var(--border);border-left:2px solid var(--border);font-size:13px;font-weight:700;color:var(--text);padding:6px">${t.grpDecision}</th>
+      <th colspan="4" style="text-align:center;border-bottom:1px solid var(--border);border-left:2px solid var(--border);font-size:13px;font-weight:700;color:var(--text);padding:6px">${t.grpDecision}</th>
       <th colspan="5" style="text-align:center;border-bottom:1px solid var(--border);border-left:2px solid var(--border);font-size:13px;font-weight:700;color:var(--text);padding:6px">${t.grpStatusHdr}</th>
     </tr>
     <tr style="border-bottom:1px solid var(--border);color:var(--muted);font-size:10px">
       <th style="padding:6px 12px;border-left:2px solid var(--border);font-size:10px">${t.colDate}</th>
       <th style="padding:6px 16px 6px 10px;text-align:right;font-size:10px">${t.colOrder}</th>
       <th style="padding:6px 16px 6px 10px;text-align:right;border-left:2px solid var(--border);font-size:10px">${t.colStock}</th>
-      <th style="padding:6px 10px;text-align:center;font-size:10px">${t.colAllocation}</th>
+      <th style="padding:6px 10px;text-align:center;font-size:10px">${t.colImmediateSupply}</th>
+      <th style="padding:6px 10px;text-align:center;font-size:10px">${t.colFutureSupply}</th>
       <th style="padding:6px 10px;text-align:center;font-size:10px">${t.colDecision}</th>
       <th style="padding:6px 12px;border-left:2px solid var(--border);font-size:10px">${t.colDate}</th>
       <th style="padding:6px 16px 6px 10px;text-align:right;font-size:10px">${t.colShippedQty}</th>
@@ -3100,6 +3102,7 @@ function renderAdminOrders(){
         <input type="number" min="0" value="${g.allocated}" class="admin-supply-input" style="width:60px;text-align:center;padding:4px;border:1px solid var(--border);border-radius:5px;background:var(--surface);color:var(--text);font-weight:600"
           onchange="updateGroupAllocation('${companyEsc}','${repEsc}',this.value)">
       </td>
+      <td style="padding:9px 16px 9px 12px;text-align:right">${g.futureSupply||'-'}</td>
       <td style="padding:9px 12px;text-align:center">${g.agreed?`<span style="color:#22c55e">${t.decisionAgreed}</span>`:''}</td>
       <td style="padding:9px 12px;border-left:2px solid var(--border)"></td>
       <td style="padding:9px 16px 9px 12px;text-align:right">${g.totalSuppliedQty}</td>
@@ -3117,7 +3120,7 @@ function renderAdminOrders(){
         <td style="padding:6px 12px;border-left:2px solid var(--border)">${ol?escapeHtml(ol.date):''}</td>
         <td style="padding:6px 16px 6px 10px;text-align:right">${ol?ol.qty:''}</td>
         <td style="border-left:2px solid var(--border)"></td>
-        <td></td><td></td>
+        <td></td><td></td><td></td>
         <td style="padding:6px 12px;border-left:2px solid var(--border)">${sl?escapeHtml(sl.date):''}</td>
         <td style="padding:6px 16px 6px 10px;text-align:right">${sl?sl.qty:''}</td>
         <td></td><td></td><td></td>
@@ -3504,7 +3507,7 @@ function downloadAdminOrders(){
   const header=[
     t.adminHCompany,t.adminHUser,t.adminHName,...(isKo?[t.thSpec]:[]),t.adminHRep,
     `${t.colOrder} ${t.colDate}`, `${t.colOrder} ${t.colOrder}`,
-    `${t.grpDecision} ${t.colStock}`, `${t.grpDecision} ${t.colAllocation}`, `${t.grpDecision} ${t.colDecision}`,
+    `${t.grpDecision} ${t.colStock}`, `${t.grpDecision} ${t.colImmediateSupply}`, `${t.grpDecision} ${t.colFutureSupply}`, `${t.grpDecision} ${t.colDecision}`,
     `${t.grpStatusHdr} ${t.colDate}`, `${t.grpStatusHdr} ${t.colShippedQty}`,
     t.colNotSupplied, t.colSupplyRate, t.colStatus
   ];
@@ -3514,7 +3517,7 @@ function downloadAdminOrders(){
     rows.push([
       g.company, g.user_id, name, ...(isKo?[g.spec]:[]), g.rep,
       '', g.totalOrderQty,
-      (g.stockDisplay===null?'':g.stockDisplay), g.allocated, (g.agreed?t.decisionAgreed:''),
+      (g.stockDisplay===null?'':g.stockDisplay), g.allocated, g.futureSupply, (g.agreed?t.decisionAgreed:''),
       '', g.totalSuppliedQty,
       g.notSupplied, (g.supplyRate*100).toFixed(1)+'%',
       g.status==='done'?t.statusDone:t.statusPending
@@ -3525,7 +3528,7 @@ function downloadAdminOrders(){
       rows.push([
         '', '', '', ...(isKo?['']:[]), '',
         ol?ol.date:'', ol?ol.qty:'',
-        '', '', '',
+        '', '', '', '',
         sl?sl.date:'', sl?sl.qty:'',
         '', '', ''
       ]);
