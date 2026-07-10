@@ -498,7 +498,7 @@ input[type="text"]::placeholder{color:var(--muted)}
   </button>
   <button class="news-btn" id="adminBtn" onclick="openAdminModal()" style="display:none">
     <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z"/></svg>
-    <span id="i18n-adminbtn">관리자</span>
+    <span id="i18n-adminbtn">회원관리</span>
   </button>
   <div class="lang-sw">
     <button class="lang-btn active" onclick="setLang('ko')">🇰🇷 KO</button>
@@ -929,24 +929,15 @@ input[type="text"]::placeholder{color:var(--muted)}
 <div id="adminModal" class="news-modal" onclick="closeAdminModalBg(event)">
   <div class="news-modal-inner" onclick="event.stopPropagation()" style="max-width:1300px;width:95vw;max-height:90vh">
     <div class="news-modal-hdr">
-      <span id="i18n-admintitle">회원 및 주문관리</span>
+      <span id="i18n-admintitle">회원관리</span>
       <button class="news-modal-close" onclick="closeAdminModal()">✕</button>
     </div>
     <div class="news-tabs">
-      <button class="news-tab active" id="adminTabOrders" onclick="switchAdminView('orders')">
-        <span id="i18n-admintab-orders">내가 받은 주문내역</span>
-      </button>
-      <button class="news-tab" id="adminTabMyOrders" onclick="switchAdminView('myorders')">
-        <span id="i18n-admintab-myorders">내가 신청한 주문내역</span>
-      </button>
-      <button class="news-tab" id="adminTabRequests" onclick="switchAdminView('requests')">
-        <span id="i18n-admintab-requests">취소·변경 요청</span> <span id="adminReqBadge" style="display:none;background:#f59e0b;color:#1a1a00;border-radius:9px;padding:1px 6px;font-size:10px;font-weight:800;margin-left:4px"></span>
-      </button>
-      <button class="news-tab" id="adminTabSignups" onclick="switchAdminView('signups')">
+      <button class="news-tab active" id="adminTabSignups" onclick="switchAdminView('signups')">
         <span id="i18n-admintab-signups">회원관리 및 가입승인</span> <span id="adminSignupBadge" style="display:none;background:#ef4444;color:#fff;border-radius:9px;padding:1px 6px;font-size:10px;font-weight:800;margin-left:4px"></span>
       </button>
     </div>
-    <div id="adminOrdersView" style="display:flex;flex-direction:column;flex:1;min-height:0">
+    <div id="adminOrdersView" style="display:none;flex-direction:column;flex:1;min-height:0">
       <div style="padding:12px 16px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:10px;border-bottom:1px solid var(--border)">
         <span id="adminOrderCount" style="font-size:11px;color:var(--muted)"></span>
         <button class="news-btn-primary" onclick="downloadAdminOrders()">
@@ -1292,7 +1283,7 @@ const T={
        newsEmpty:'등록된 글이 없습니다.',newsTitlePh:'제목을 입력하세요',newsContentPh:'내용을 입력하세요',newsReplyPh:'답변/댓글을 입력하세요',newsDeleteBtn:'삭제',
        newsAttach:'📎 자료 첨부',newsAttachDownload:'첨부파일 다운로드',newsAttachFail:'파일 업로드에 실패했습니다.',
        newsDeleteConfirm:'이 글을 삭제할까요?',newsReplyDeleteConfirm:'이 답변을 삭제할까요?',newsRepliesLabel:n=>`답변 ${n}개`,newsFillAll:'제목과 내용을 모두 입력해주세요.',newsFillReply:'내용을 입력해주세요.',
-       adminBtn:'관리자',adminTitle:'회원 및 주문관리',adminXls:'엑셀 다운로드',adminEmpty:'등록된 주문이 없습니다.',adminCount:n=>`총 ${n}건`,
+       adminBtn:'회원관리',adminTitle:'회원관리',adminXls:'엑셀 다운로드',adminEmpty:'등록된 주문이 없습니다.',adminCount:n=>`총 ${n}건`,
        adminTabOrders:'내가 받은 주문내역',adminTabMyOrders:'내가 신청한 주문내역',adminTabRequests:'취소·변경 요청',adminTabSignups:'회원관리 및 가입승인',
        signupEmpty:'등록된 회원이 없습니다.',signupApprove:'승인',signupReject:'거부',signupDelete:'삭제',signupEdit:'수정',
        editMemberTitle:'회원 정보 수정',editMemberId:'아이디',editMemberCompany:'회사명',editMemberContact:'담당자명',editMemberPhone:'휴대폰',editMemberEmail:'이메일',
@@ -1358,7 +1349,7 @@ const T={
        newsEmpty:'Записей пока нет.',newsTitlePh:'Введите заголовок',newsContentPh:'Введите содержание',newsReplyPh:'Введите ответ/комментарий',newsDeleteBtn:'Удалить',
        newsAttach:'📎 Прикрепить файл',newsAttachDownload:'Скачать вложение',newsAttachFail:'Не удалось загрузить файл.',
        newsDeleteConfirm:'Удалить эту запись?',newsReplyDeleteConfirm:'Удалить этот ответ?',newsRepliesLabel:n=>`Ответов: ${n}`,newsFillAll:'Пожалуйста, заполните заголовок и содержание.',newsFillReply:'Пожалуйста, введите текст.',
-       adminBtn:'Админ',adminTitle:'Управление участниками и заказами',adminXls:'Скачать Excel',adminEmpty:'Заказов пока нет.',adminCount:n=>`Всего: ${n}`,
+       adminBtn:'Участники',adminTitle:'Управление участниками',adminXls:'Скачать Excel',adminEmpty:'Заказов пока нет.',adminCount:n=>`Всего: ${n}`,
        adminTabOrders:'Полученные заказы',adminTabMyOrders:'Мои заявки',adminTabRequests:'Запросы отмены/изменения',adminTabSignups:'Управление участниками и одобрение',
        signupEmpty:'Нет зарегистрированных участников.',signupApprove:'Одобрить',signupReject:'Отклонить',signupDelete:'Удалить',signupEdit:'Изменить',
        editMemberTitle:'Изменить участника',editMemberId:'Логин',editMemberCompany:'Компания',editMemberContact:'Контактное лицо',editMemberPhone:'Мобильный',editMemberEmail:'Email',
@@ -1431,7 +1422,7 @@ function switchTab(tab){
   if(tab==='order'){ mountModelDiag('order'); syncDiagram(); refreshCurrentUser().then(()=>Promise.all([loadMyOrderTotals(), loadInventory(), loadGlobalSuppliedTotals(), loadReceivedOrderTotals()])).then(renderOrderTable); renderOrderTable(); }
   if(tab==='parts'){ mountModelDiag('parts'); syncDiagram(); renderTable(); }
   if(tab==='inventory'){ refreshCurrentUser().then(()=>Promise.all([loadInventory(), loadGlobalSuppliedTotals()])).then(renderInventoryList); }
-  if(tab==='ordermgmt'){ refreshCurrentUser().then(()=>renderOrderMgmtTab()); }
+  if(tab==='ordermgmt'){ refreshCurrentUser().then(()=>Promise.all([loadInventory(), loadShipments(), loadOrderAllocations(), loadAdminOrders(), loadMyOrderAllocations(), loadShipmentsToMe(), loadMyCompanyOrders(), loadOrderRequests()])).then(()=>renderOrderMgmtTab()); }
   if(tab==='shipments'){ refreshCurrentUser().then(()=>loadShipments()).then(renderShipmentsList); }
   if(tab==='price'){ loadPrices().then(renderPriceList); }
 }
@@ -3245,21 +3236,8 @@ async function openAdminModal(){
   if(!currentUser) return;
   document.getElementById('adminModal').classList.add('show');
   refreshAdminTexts();
-  document.getElementById('adminOrderTbody').innerHTML='';
-  document.getElementById('adminOrderEmpty').style.display='none';
-  switchAdminView('orders');
+  switchAdminView('signups');
   await refreshCurrentUser();
-  await loadInventory();
-  await loadShipments();
-  await loadOrderAllocations();
-  await loadAdminOrders();
-  renderAdminOrders();
-  await loadMyOrderAllocations();
-  await loadShipmentsToMe();
-  await loadMyCompanyOrders();
-  renderAdminMyOrders();
-  await loadOrderRequests();
-  renderOrderRequests();
   await loadPendingSignups();
   renderPendingSignups();
   const resetWrap=document.getElementById("resetAllMembersWrap");
@@ -3555,14 +3533,15 @@ function renderAdminMyOrders(){
   }).join('');
 }
 function switchAdminView(view){
-  document.getElementById('adminTabOrders').classList.toggle('active', view==='orders');
-  document.getElementById('adminTabMyOrders').classList.toggle('active', view==='myorders');
-  document.getElementById('adminTabRequests').classList.toggle('active', view==='requests');
-  document.getElementById('adminTabSignups').classList.toggle('active', view==='signups');
-  document.getElementById('adminOrdersView').style.display = view==='orders' ? 'flex' : 'none';
-  document.getElementById('adminMyOrdersView').style.display = view==='myorders' ? 'flex' : 'none';
-  document.getElementById('adminRequestsView').style.display = view==='requests' ? 'block' : 'none';
-  document.getElementById('adminSignupsView').style.display = view==='signups' ? 'block' : 'none';
+  // 관리자 화면은 이제 회원관리 단일 뷰만 사용합니다.
+  // (adminOrdersView/adminMyOrdersView는 주문관리 탭의 렌더 소스로만 남겨두고 항상 숨김)
+  const tabSignups=document.getElementById('adminTabSignups');
+  if(tabSignups) tabSignups.classList.add('active');
+  document.getElementById('adminOrdersView').style.display = 'none';
+  document.getElementById('adminMyOrdersView').style.display = 'none';
+  const reqView=document.getElementById('adminRequestsView');
+  if(reqView) reqView.style.display = 'none';
+  document.getElementById('adminSignupsView').style.display = 'block';
 }
 function closeAdminModal(){
   document.getElementById('adminModal').classList.remove('show');
