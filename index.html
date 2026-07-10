@@ -586,7 +586,7 @@ input[type="text"]::placeholder{color:var(--muted)}
       </div>
       <!-- 테이블 헤더 (고정) - 데스크탑만 -->
       <div class="tbl-header-wrap" id="tblHeaderWrap" style="display:none">
-        <table><thead id="thead-fixed"></thead></table>
+        <table><colgroup id="parts-hdr-col"></colgroup><thead id="thead-fixed"></thead></table>
       </div>
       <div class="tbl-scrollbar" id="tblScrollbar" style="display:none">
         <div class="tbl-scrollbar-thumb" id="tblScrollbarThumb"></div>
@@ -601,7 +601,7 @@ input[type="text"]::placeholder{color:var(--muted)}
       </div>
       <!-- 데스크탑: tbody만 -->
       <div class="tbl-body-wrap" id="tblBodyWrap" style="display:none;margin:0 12px">
-        <table><tbody id="tbody"></tbody></table>
+        <table><colgroup id="parts-body-col"></colgroup><tbody id="tbody"></tbody></table>
       </div>
       <div class="tbl-footer" id="tblFooter" style="display:none;margin:0 12px 8px">
         <span id="footerLeft"></span><span>KITURAMI ALPHA PLUS / NEO</span>
@@ -2309,6 +2309,10 @@ function renderHeader(){
   // 고정 헤더 + 바디 테이블에 동일한 컬럼 적용
   const headerHtml=`<tr>${r1}</tr><tr>${r2}</tr>`;
   document.getElementById('thead-fixed').innerHTML=headerHtml;
+  // 헤더/본문 colgroup을 동일 개수로 만들어 픽셀 단위 열 폭 동기화 대상에 포함시킵니다.
+  const partsFixedCols=(lang==='ko'?4:3);
+  const partsColsHtml=Array(partsFixedCols+od.length).fill('<col>').join('');
+  ['parts-hdr-col','parts-body-col'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=partsColsHtml;});
   // tbl-header-wrap 표시
   const hw=document.getElementById('tblHeaderWrap');
   const bw=document.getElementById('tblBodyWrap');
@@ -2343,6 +2347,7 @@ function renderTable(){
   cl.insertBefore(frag,noR);
   if(activeDiagNum)highlightByDiag(activeDiagNum,activeDiagRep);
   updatePartsTableScrollbar();
+  scheduleSplitTableResync('parts-hdr-col','parts-body-col','tbody');
 }
 
 
@@ -4179,18 +4184,35 @@ function syncSplitTableColumnWidths(hdrColId, bodyColId, tbodyId){
   requestAnimationFrame(()=>{
     requestAnimationFrame(()=>{
       const tbody=document.getElementById(tbodyId);
-      const firstRow=tbody && tbody.querySelector('tr');
       const hdrColEl=document.getElementById(hdrColId);
       const bodyColEl=document.getElementById(bodyColId);
-      if(!firstRow || !hdrColEl || !bodyColEl) return;
-      const cells=[...firstRow.children].filter(td=>!td.hasAttribute('colspan'));
+      if(!tbody || !hdrColEl || !bodyColEl) return;
+      const hdrTable=hdrColEl.closest('table');
+      const bodyTable=bodyColEl.closest('table');
+      if(!hdrTable || !bodyTable) return;
+      // colspan이 없는 기준 행을 찾습니다 (첫 행이 colspan을 쓰는 그룹행이면 다음 행으로).
+      const rows=[...tbody.querySelectorAll(':scope > tr')];
+      const refRow=rows.find(r=>[...r.children].every(td=>!td.hasAttribute('colspan')));
+      if(!refRow) return;
+      const cells=[...refRow.children];
       const hdrCols=[...hdrColEl.children];
       const bodyCols=[...bodyColEl.children];
       if(cells.length!==hdrCols.length || cells.length!==bodyCols.length) return; // 셀 개수가 안 맞으면(로딩 중 등) 건너뜁니다.
-      cells.forEach((td,i)=>{
-        const w=td.getBoundingClientRect().width;
-        if(w>0){ hdrCols[i].style.width=w+'px'; bodyCols[i].style.width=w+'px'; }
-      });
+      // 1) 본문 테이블을 잠시 자연 폭(auto)으로 되돌려 실제 내용 기준 열 폭을 측정합니다.
+      bodyCols.forEach(c=>{c.style.width='';});
+      bodyTable.style.tableLayout='auto';
+      bodyTable.style.width='';
+      void bodyTable.offsetWidth; // 강제 리플로우
+      const widths=cells.map(td=>td.getBoundingClientRect().width);
+      const total=widths.reduce((a,b)=>a+b,0);
+      if(!(total>0)) return;
+      // 2) 측정된 폭을 헤더/본문 양쪽 colgroup에 픽셀로 고정하고, 두 테이블을
+      //    동일한 전체 폭 + table-layout:fixed 로 맞춰 확대/축소·스크롤에도 절대 안 틀어지게 합니다.
+      widths.forEach((w,i)=>{ bodyCols[i].style.width=w+'px'; hdrCols[i].style.width=w+'px'; });
+      bodyTable.style.tableLayout='fixed';
+      hdrTable.style.tableLayout='fixed';
+      bodyTable.style.width=total+'px';
+      hdrTable.style.width=total+'px';
     });
   });
 }
