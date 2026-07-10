@@ -249,6 +249,9 @@ input[type="text"]::placeholder{color:var(--muted)}
 #adminOrderTbody td, #adminMyOrdersTbody td{white-space:nowrap}
 #adminOrderTbody td.wrap-ok, #adminMyOrdersTbody td.wrap-ok{white-space:normal}
 #adminOrdersView table, #adminMyOrdersView table{table-layout:auto}
+#ordermgmtReceivedView table, #ordermgmtMineView table{table-layout:auto}
+#ordermgmtReceivedThead th, #ordermgmtMineThead th{white-space:nowrap}
+#ordermgmtReceivedTbody td, #ordermgmtMineTbody td{white-space:nowrap}
 #pane-order .code, #pane-parts .code, #pane-inventory .code{background:none;padding:1px 0;color:var(--text);font-weight:600}
 .part-card .code, .order-card .code{font-size:13px}
 .no-result{text-align:center;padding:30px 20px;color:var(--muted);font-size:13px}
@@ -510,11 +513,12 @@ input[type="text"]::placeholder{color:var(--muted)}
   </div>
 </header>
 <div class="tabs">
-  <button class="tab-btn" onclick="switchTab('order')" id="tab-order">📦 주문</button>
   <button class="tab-btn active" onclick="switchTab('parts')" id="tab-parts">🔧 부품 검색</button>
   <button class="tab-btn"        onclick="switchTab('pn')"    id="tab-pn">🔄 품번 조회</button>
+  <button class="tab-btn" onclick="switchTab('order')" id="tab-order">📦 주문</button>
+  <button class="tab-btn" style="display:none" onclick="switchTab('ordermgmt')" id="tab-ordermgmt"><span id="i18n-tab-ordermgmt">📋 주문관리</span></button>
   <button class="tab-btn" style="display:none" onclick="switchTab('inventory')" id="tab-inventory">📊 재고관리</button>
-  <button class="tab-btn" style="display:none" onclick="switchTab('shipments')" id="tab-shipments"><span id="i18n-tab-shipments">🚚 출고내역</span></button>
+  <button class="tab-btn" style="display:none" onclick="switchTab('shipments')" id="tab-shipments"><span id="i18n-tab-shipments">🚚 출고관리</span></button>
   <button class="tab-btn" style="display:none" onclick="switchTab('price')"     id="tab-price">💲 가격정보</button>
 </div>
 
@@ -737,7 +741,43 @@ input[type="text"]::placeholder{color:var(--muted)}
     </div>
   </div>
 
-  <!-- 출고내역 -->
+  <!-- 주문관리 탭 -->
+  <div class="tab-pane" id="pane-ordermgmt" style="display:flex;flex-direction:column;flex:1;min-height:0">
+    <div class="fixed-top" style="flex-shrink:0;background:var(--surface);border-bottom:1px solid var(--border)">
+      <div style="display:flex;gap:0;background:var(--surface);border-bottom:1px solid var(--border)">
+        <button class="news-tab active" id="ordermgmtTabReceived" onclick="switchOrderMgmtView('received')" style="flex:1;padding:10px;font-size:12px;font-weight:600;color:var(--muted);background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;font-family:'Inter',sans-serif">
+          <span id="i18n-ordermgmt-received">내가 받은 주문내역</span>
+        </button>
+        <button class="news-tab" id="ordermgmtTabMine" onclick="switchOrderMgmtView('mine')" style="flex:1;padding:10px;font-size:12px;font-weight:600;color:var(--muted);background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;font-family:'Inter',sans-serif">
+          <span id="i18n-ordermgmt-mine">내가 신청한 주문내역</span>
+        </button>
+      </div>
+    </div>
+    <div id="ordermgmtReceivedView" style="display:flex;flex-direction:column;flex:1;min-height:0;overflow:auto;padding:0 16px 16px">
+      <div style="padding:12px 0;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:10px;border-bottom:1px solid var(--border);margin-bottom:4px">
+        <span id="ordermgmtReceivedCount" style="font-size:11px;color:var(--muted)"></span>
+        <button class="news-btn-primary" onclick="downloadAdminOrders()"><span id="i18n-ordermgmt-dl">엑셀 다운로드</span></button>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:8px">
+        <thead id="ordermgmtReceivedThead"></thead>
+        <tbody id="ordermgmtReceivedTbody"></tbody>
+      </table>
+      <div class="news-empty" id="ordermgmtReceivedEmpty" style="display:none"></div>
+    </div>
+    <div id="ordermgmtMineView" style="display:none;flex-direction:column;flex:1;min-height:0;overflow:auto;padding:0 16px 16px">
+      <div style="padding:12px 0;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:10px;border-bottom:1px solid var(--border);margin-bottom:4px">
+        <span id="ordermgmtMineCount" style="font-size:11px;color:var(--muted)"></span>
+        <button class="news-btn-primary" onclick="downloadAdminMyOrders()"><span id="i18n-ordermgmt-mydl">엑셀 다운로드</span></button>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:8px">
+        <thead id="ordermgmtMineThead"></thead>
+        <tbody id="ordermgmtMineTbody"></tbody>
+      </table>
+      <div class="news-empty" id="ordermgmtMineEmpty" style="display:none"></div>
+    </div>
+  </div>
+
+  <!-- 출고관리 -->
   <div class="tab-pane" id="pane-shipments">
     <div class="fixed-top">
       <div class="search-bar">
@@ -1225,7 +1265,7 @@ const T={
        tabParts:'🔧 부품 검색',tabPN:'🔄 품번 조회',tabOrder:'📦 주문',tabInventory:'📊 재고관리',tabPrice:'💲 가격정보',orderDl:'엑셀 다운로드',orderMailBanner:'주문 접수 이메일: song@krb.co.kr',orderPh:'도면번호, 품명, 대표품번으로 검색…',orderQty:'주문수량',logoutBtn:'로그아웃',
        invTemplate:'양식 다운로드',invUpload:'엑셀 업데이트',invHMaster:'대표품번(미변경)',invHRep:'재고품번',invHQty:'재고수량',invHUpdated:'업데이트 일시',invEmpty:'등록된 재고 데이터가 없습니다.',invCount:n=>`총 ${n}건`,
        invUploadOk:n=>`재고 ${n}건이 업데이트되었습니다.`,invUploadFail:'업로드에 실패했습니다. 양식을 확인해주세요.',invUploadEmpty:'파일에서 유효한 데이터를 찾지 못했습니다. 양식을 확인해주세요.',invSearchPh:'대표품번으로 검색…',invLastUpdated:d=>`최근 업데이트: ${d}`,dmZoomHint:'손가락으로 확대/이동',invHSupplierStock:'구매처 재고',
-       tabShipments:'출고내역',shipUpload:'엑셀 업데이트',shipThRep:'품번',shipThClient:'거래처명',shipThDate:'일자',shipThQty:'출고',
+       tabShipments:'출고관리',tabOrderMgmt:'📋 주문관리',tabOrderMgmtReceived:'내가 받은 주문내역',tabOrderMgmtMine:'내가 신청한 주문내역',shipUpload:'엑셀 업데이트',shipThRep:'품번',shipThClient:'거래처명',shipThDate:'일자',shipThQty:'출고',
        shipUploadOk:n=>`출고내역 ${n}건이 추가되었습니다.`,shipUploadFail:'업로드에 실패했습니다. 양식을 확인해주세요.',shipUploadEmpty:'파일에서 유효한 데이터를 찾지 못했습니다. 양식을 확인해주세요.',
        shipIndividual:'개인',
        editShipTitle:'출고내역 수정',editShipMaster:'대표품번(미변경)',editShipRep:'품번',editShipName:'품명',editShipSpec:'규격',editShipClient:'거래처명',editShipDate:'일자',editShipQty:'출고수량',editShipSave:'저장',
@@ -1235,7 +1275,7 @@ const T={
        adminHNewQty:'신규 주문수량',adminHStock:'재고수량',reqOriginalQtyLabel:'신규 주문수량',reqRequestedQtyLabel:'변경신청 수량',reqRepLabel:'대표품번 (미변경)',
        grpExisting:'기존',grpNew:'신규',grpCumulative:'누적',grpTotal:'합계',grpDecision:'공급 결정',grpProgress:'진행여부',
        statusDone:'완료',statusPending:'준비중',statusPartial:'일부완료',
-       colOrder:'주문',grpOrderStatus:'주문현황',colSupply:'출고',colStock:'재고',colSupplyRate:'출고율',colNotSupplied:'미출고',colAllocation:'배분',colPreparing:'준비중',colShipped:'출고완료',
+       colOrder:'수량',grpOrderStatus:'주문현황',colSupply:'출고',colStock:'재고',colSupplyRate:'출고율',colNotSupplied:'미출고',colAllocation:'배분',colPreparing:'준비중',colShipped:'출고완료',
        colDate:'날짜',colStatus:'완료여부',grpStatusHdr:'출고현황',colFinalOrder:'최종주문',colDecision:'의사결정',decisionAgreed:'동의',myOrderReqSection:'구매처의 요청사항',agreeBtn:'동의',colSupplyAvailable:'공급가능',colShippedQty:'수량',colImmediateSupply:'즉시공급',colFutureSupply:'향후공급',
        invHBase:'기초재고',invHPostAlloc:'배분후 재고',
        orderSubmit:'주문 제출',orderSubmitting:'제출 중…',orderSubmitOk:'주문이 접수되었습니다.',orderSubmitFail:'주문 제출에 실패했습니다. 잠시 후 다시 시도해주세요.',orderSubmitEmpty:'주문수량을 입력한 품목이 없습니다.',orderPrevQty:'기존 주문수량',orderStock:'내 창고 재고',orderReceived:'접수받은 주문수량',orderNoSupplier:'주문을 보낼 구매처가 지정되어 있지 않습니다.',
@@ -1291,7 +1331,7 @@ const T={
        tabParts:'🔧 Поиск деталей',tabPN:'🔄 Артикулы',tabOrder:'📦 Заказ',tabInventory:'📊 Склад',tabPrice:'💲 Цены',orderDl:'Скачать Excel',orderMailBanner:'Email для приёма заказов: song@krb.co.kr',orderPh:'Поиск по №чертежа, названию, артикулу…',orderQty:'Кол-во',logoutBtn:'Выйти',
        invTemplate:'Скачать шаблон',invUpload:'Обновить Excel',invHMaster:'Осн. артикул (неизм.)',invHRep:'Артикул склада',invHQty:'Остаток',invHUpdated:'Обновлено',invEmpty:'Данных о складе пока нет.',invCount:n=>`Всего: ${n}`,
        invUploadOk:n=>`Обновлено позиций: ${n}.`,invUploadFail:'Ошибка загрузки. Проверьте шаблон.',invUploadEmpty:'В файле не найдено данных. Проверьте шаблон.',invSearchPh:'Поиск по артикулу…',invLastUpdated:d=>`Последнее обновление: ${d}`,dmZoomHint:'Растяните пальцами, чтобы увеличить',invHSupplierStock:'Остаток поставщика',
-       tabShipments:'Отгрузки',shipUpload:'Обновить Excel',shipThRep:'Артикул',shipThClient:'Клиент',shipThDate:'Дата',shipThQty:'Отгружено',
+       tabShipments:'Управление отгрузками',tabOrderMgmt:'📋 Управление заказами',tabOrderMgmtReceived:'Полученные заказы',tabOrderMgmtMine:'Мои заявки',shipUpload:'Обновить Excel',shipThRep:'Артикул',shipThClient:'Клиент',shipThDate:'Дата',shipThQty:'Отгружено',
        shipUploadOk:n=>`Добавлено записей: ${n}.`,shipUploadFail:'Ошибка загрузки. Проверьте шаблон.',shipUploadEmpty:'В файле не найдено данных. Проверьте шаблон.',
        shipIndividual:'Частное лицо',
        editShipTitle:'Изменить отгрузку',editShipMaster:'Осн. артикул (неизм.)',editShipRep:'Артикул',editShipName:'Название',editShipSpec:'Спецификация',editShipClient:'Клиент',editShipDate:'Дата',editShipQty:'Отгружено',editShipSave:'Сохранить',
@@ -1301,7 +1341,7 @@ const T={
        adminHNewQty:'Новое кол-во',adminHStock:'Остаток',reqOriginalQtyLabel:'Исходное кол-во',reqRequestedQtyLabel:'Запрошено',reqRepLabel:'Артикул (неизм.)',
        grpExisting:'Ранее',grpNew:'Новое',grpCumulative:'Всего',grpTotal:'Итого',grpDecision:'Решение о поставке',grpProgress:'Статус',
        statusDone:'Завершено',statusPending:'В процессе',statusPartial:'Частично',
-       colOrder:'Заказ',grpOrderStatus:'Статус заказа',colSupply:'Отгрузка',colStock:'Остаток',colSupplyRate:'% отгрузки',colNotSupplied:'Не отгружено',colAllocation:'Выделено',colPreparing:'Готовится',colShipped:'Отгружено',
+       colOrder:'Кол-во',grpOrderStatus:'Статус заказа',colSupply:'Отгрузка',colStock:'Остаток',colSupplyRate:'% отгрузки',colNotSupplied:'Не отгружено',colAllocation:'Выделено',colPreparing:'Готовится',colShipped:'Отгружено',
        colDate:'Дата',colStatus:'Статус',grpStatusHdr:'Статус отгрузки',colFinalOrder:'Финальный заказ',colDecision:'Решение',decisionAgreed:'Согласен',myOrderReqSection:'Предложение поставщика',agreeBtn:'Согласиться',colSupplyAvailable:'Доступно',colShippedQty:'Кол-во',colImmediateSupply:'Сразу',colFutureSupply:'Позже',
        invHBase:'Начальный остаток',invHPostAlloc:'Остаток после выделения',
        orderSubmit:'Отправить заказ',orderSubmitting:'Отправка…',orderSubmitOk:'Заказ принят.',orderSubmitFail:'Не удалось отправить заказ. Попробуйте позже.',orderSubmitEmpty:'Не указано количество ни для одного товара.',orderPrevQty:'Ранее заказано',orderStock:'Мой склад',orderReceived:'Получено заказов',orderNoSupplier:'Поставщик для заказа не указан.',
@@ -1391,8 +1431,66 @@ function switchTab(tab){
   if(tab==='order'){ mountModelDiag('order'); syncDiagram(); refreshCurrentUser().then(()=>Promise.all([loadMyOrderTotals(), loadInventory(), loadGlobalSuppliedTotals(), loadReceivedOrderTotals()])).then(renderOrderTable); renderOrderTable(); }
   if(tab==='parts'){ mountModelDiag('parts'); syncDiagram(); renderTable(); }
   if(tab==='inventory'){ refreshCurrentUser().then(()=>Promise.all([loadInventory(), loadGlobalSuppliedTotals()])).then(renderInventoryList); }
+  if(tab==='ordermgmt'){ refreshCurrentUser().then(()=>renderOrderMgmtTab()); }
   if(tab==='shipments'){ refreshCurrentUser().then(()=>loadShipments()).then(renderShipmentsList); }
   if(tab==='price'){ loadPrices().then(renderPriceList); }
+}
+
+function switchOrderMgmtView(view){
+  document.getElementById('ordermgmtTabReceived').classList.toggle('active', view==='received');
+  document.getElementById('ordermgmtTabMine').classList.toggle('active', view==='mine');
+  // active 탭 하이라이트
+  const recBtn=document.getElementById('ordermgmtTabReceived');
+  const mineBtn=document.getElementById('ordermgmtTabMine');
+  recBtn.style.color = view==='received' ? 'var(--accent)' : 'var(--muted)';
+  recBtn.style.borderBottomColor = view==='received' ? 'var(--accent)' : 'transparent';
+  mineBtn.style.color = view==='mine' ? 'var(--accent)' : 'var(--muted)';
+  mineBtn.style.borderBottomColor = view==='mine' ? 'var(--accent)' : 'transparent';
+  document.getElementById('ordermgmtReceivedView').style.display = view==='received' ? 'flex' : 'none';
+  document.getElementById('ordermgmtMineView').style.display = view==='mine' ? 'flex' : 'none';
+  if(view==='received') renderOrderMgmtReceived();
+  if(view==='mine') renderOrderMgmtMine();
+}
+
+function renderOrderMgmtTab(){
+  const activeView = document.getElementById('ordermgmtTabReceived').classList.contains('active') ? 'received' : 'mine';
+  switchOrderMgmtView(activeView);
+}
+
+function renderOrderMgmtReceived(){
+  // adminOrderThead/adminOrderTbody의 렌더링을 재활용
+  const t=T[lang];
+  renderAdminOrders(); // 기존 adminOrders 렌더 함수 호출 (헤더/바디 공용)
+  // 렌더된 내용을 ordermgmt 영역으로 복사
+  const srcThead=document.getElementById('adminOrderThead');
+  const srcTbody=document.getElementById('adminOrderTbody');
+  const dstThead=document.getElementById('ordermgmtReceivedThead');
+  const dstTbody=document.getElementById('ordermgmtReceivedTbody');
+  const emptyEl=document.getElementById('ordermgmtReceivedEmpty');
+  const countEl=document.getElementById('ordermgmtReceivedCount');
+  const srcEmpty=document.getElementById('adminOrderEmpty');
+  const srcCount=document.getElementById('adminOrderCount');
+  if(dstThead) dstThead.innerHTML=srcThead?srcThead.innerHTML:'';
+  if(dstTbody) dstTbody.innerHTML=srcTbody?srcTbody.innerHTML:'';
+  if(emptyEl && srcEmpty){ emptyEl.textContent=srcEmpty.textContent; emptyEl.style.display=srcEmpty.style.display; }
+  if(countEl && srcCount) countEl.textContent=srcCount.textContent;
+}
+
+function renderOrderMgmtMine(){
+  // adminMyOrders 렌더 함수 재활용
+  renderAdminMyOrders();
+  const srcThead=document.getElementById('adminMyOrdersThead');
+  const srcTbody=document.getElementById('adminMyOrdersTbody');
+  const dstThead=document.getElementById('ordermgmtMineThead');
+  const dstTbody=document.getElementById('ordermgmtMineTbody');
+  const emptyEl=document.getElementById('ordermgmtMineEmpty');
+  const countEl=document.getElementById('ordermgmtMineCount');
+  const srcEmpty=document.getElementById('adminMyOrdersEmpty');
+  const srcCount=document.getElementById('adminMyOrderCount');
+  if(dstThead) dstThead.innerHTML=srcThead?srcThead.innerHTML:'';
+  if(dstTbody) dstTbody.innerHTML=srcTbody?srcTbody.innerHTML:'';
+  if(emptyEl && srcEmpty){ emptyEl.textContent=srcEmpty.textContent; emptyEl.style.display=srcEmpty.style.display; }
+  if(countEl && srcCount) countEl.textContent=srcCount.textContent;
 }
 
 // ── 모델바+분해도 공용 위젯 이동 (주문 ↔ 부품검색) ──
@@ -4546,6 +4644,9 @@ function refreshInventoryTexts(){
   setTxt('i18n-invupload', t.invUpload);
   setTxt('i18n-shipupload', t.shipUpload);
   setTxt('i18n-tab-shipments', '🚚 '+t.tabShipments);
+  setTxt('i18n-tab-ordermgmt', t.tabOrderMgmt);
+  setTxt('i18n-ordermgmt-received', t.tabOrderMgmtReceived);
+  setTxt('i18n-ordermgmt-mine', t.tabOrderMgmtMine);
   const sEl=document.getElementById('invSearchInput'); if(sEl) sEl.placeholder=t.invSearchPh;
   if(document.getElementById('pane-inventory').classList.contains('active')) renderInventoryList();
 }
@@ -5214,9 +5315,11 @@ function enterApp(user){
   const tabInv=document.getElementById('tab-inventory');
   const tabShip=document.getElementById('tab-shipments');
   const tabPrice=document.getElementById('tab-price');
+  const tabOrderMgmt=document.getElementById('tab-ordermgmt');
   if(tabInv) tabInv.style.display = 'block';
   if(tabShip) tabShip.style.display = 'block';
   if(tabPrice) tabPrice.style.display = user.is_admin ? 'block' : 'none';
+  if(tabOrderMgmt) tabOrderMgmt.style.display = 'block';
   Promise.all([loadMyOrderTotals(), loadInventory(), loadGlobalSuppliedTotals(), loadReceivedOrderTotals()]).then(()=>{ if(document.getElementById('pane-order').classList.contains('active')) renderOrderTable(); });
   loadNewsPosts();
 }
