@@ -259,15 +259,15 @@ input[type="text"]::placeholder{color:var(--muted)}
 .pn-hdr-wrap .sticky-col1{z-index:3;background:var(--surface2)}
   .pn-hdr-wrap{background:var(--surface);border:1px solid var(--border);border-radius:10px 10px 0 0;border-bottom:none;overflow:hidden}
   .pn-hdr-wrap table{border-collapse:collapse;table-layout:fixed;width:100%;min-width:max-content}
-  .pn-hdr-wrap th{background:var(--surface2);padding:7px 12px;font-size:11px;font-weight:600;color:var(--muted);text-align:left;border-bottom:1px solid var(--border);border-right:1px solid var(--border);white-space:nowrap}
+  .pn-hdr-wrap th{background:var(--surface2);padding:7px 12px;font-size:11px;font-weight:600;color:var(--muted);text-align:left;border-bottom:1px solid var(--border);border-right:1px solid var(--border);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .pn-hdr-wrap th:last-child{border-right:none}
   .pn-body-wrap{border:1px solid var(--border);border-radius:0 0 10px 10px;border-top:none;background:var(--surface)}
   .pn-body-wrap table{width:100%;min-width:max-content;table-layout:fixed;border-collapse:collapse}
   .pn-body-wrap tbody tr{border-bottom:1px solid var(--border)}
   .pn-body-wrap tbody tr:last-child{border-bottom:none}
   .pn-body-wrap tbody tr:hover{background:var(--row-hover)}
-  .pn-body-wrap td{padding:7px 12px;font-size:12px;vertical-align:middle;border-right:1px solid var(--border);white-space:nowrap}
-  .pn-body-wrap td.wrap-ok{white-space:normal}
+  .pn-body-wrap td{padding:7px 12px;font-size:12px;vertical-align:middle;border-right:1px solid var(--border);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pn-body-wrap td.wrap-ok{white-space:normal;overflow:visible;text-overflow:clip}
   .pn-body-wrap td:last-child{border-right:none}
 .pn-tbl-wrap table{width:100%;border-collapse:collapse}
 .pn-tbl-wrap thead th{background:var(--surface2);padding:7px 12px;font-size:11px;font-weight:600;color:var(--muted);text-align:left;border-bottom:1px solid var(--border);border-right:1px solid var(--border);white-space:nowrap}
