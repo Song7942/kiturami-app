@@ -1234,7 +1234,7 @@ const T={
        priceUploadOk:n=>`가격 ${n}건이 업데이트되었습니다.`,priceUploadFail:'업로드에 실패했습니다. 양식을 확인해주세요.',priceUploadEmpty:'파일에서 유효한 데이터를 찾지 못했습니다. 양식을 확인해주세요.',priceSearchPh:'대표품번으로 검색…',
        adminHNewQty:'신규 주문수량',adminHStock:'재고수량',reqOriginalQtyLabel:'신규 주문수량',reqRequestedQtyLabel:'변경신청 수량',reqRepLabel:'대표품번 (미변경)',
        grpExisting:'기존',grpNew:'신규',grpCumulative:'누적',grpTotal:'합계',grpDecision:'공급 결정',grpProgress:'진행여부',
-       statusDone:'출고완료',statusPending:'준비중',
+       statusDone:'완료',statusPending:'준비중',statusPartial:'일부완료',
        colOrder:'주문',colSupply:'출고',colStock:'재고',colSupplyRate:'출고율',colNotSupplied:'미출고',colAllocation:'배분',colPreparing:'준비중',colShipped:'출고완료',
        colDate:'날짜',colStatus:'완료여부',grpStatusHdr:'출고현황',colFinalOrder:'최종주문',colDecision:'의사결정',decisionAgreed:'동의',myOrderReqSection:'구매처의 요청사항',agreeBtn:'동의',colSupplyAvailable:'공급가능',colShippedQty:'수량',colImmediateSupply:'즉시공급',colFutureSupply:'향후공급',
        invHBase:'기초재고',invHPostAlloc:'배분후 재고',
@@ -1300,7 +1300,7 @@ const T={
        priceUploadOk:n=>`Обновлено позиций: ${n}.`,priceUploadFail:'Ошибка загрузки. Проверьте шаблон.',priceUploadEmpty:'В файле не найдено данных. Проверьте шаблон.',priceSearchPh:'Поиск по артикулу…',
        adminHNewQty:'Новое кол-во',adminHStock:'Остаток',reqOriginalQtyLabel:'Исходное кол-во',reqRequestedQtyLabel:'Запрошено',reqRepLabel:'Артикул (неизм.)',
        grpExisting:'Ранее',grpNew:'Новое',grpCumulative:'Всего',grpTotal:'Итого',grpDecision:'Решение о поставке',grpProgress:'Статус',
-       statusDone:'Отгружено',statusPending:'В процессе',
+       statusDone:'Завершено',statusPending:'В процессе',statusPartial:'Частично',
        colOrder:'Заказ',colSupply:'Отгрузка',colStock:'Остаток',colSupplyRate:'% отгрузки',colNotSupplied:'Не отгружено',colAllocation:'Выделено',colPreparing:'Готовится',colShipped:'Отгружено',
        colDate:'Дата',colStatus:'Статус',grpStatusHdr:'Статус отгрузки',colFinalOrder:'Финальный заказ',colDecision:'Решение',decisionAgreed:'Согласен',myOrderReqSection:'Предложение поставщика',agreeBtn:'Согласиться',colSupplyAvailable:'Доступно',colShippedQty:'Кол-во',colImmediateSupply:'Сразу',colFutureSupply:'Позже',
        invHBase:'Начальный остаток',invHPostAlloc:'Остаток после выделения',
@@ -2996,6 +2996,18 @@ const toDateOnly=iso=>{
 
 // 회사+대표품번 기준으로 묶어서, 누계(주문총량/공급총량/미공급/공급율/완료여부)와
 // 개별 주문·출고 내역(일자+수량)을 나란히 나열하는 형태로 재구성합니다.
+function statusLabelHtml(status){
+  const t=T[lang];
+  if(status==='done') return `<span style="color:#22c55e">${t.statusDone}</span>`;
+  if(status==='partial') return `<span style="color:#3b82f6">${t.statusPartial}</span>`;
+  return `<span style="color:#f59e0b">${t.statusPending}</span>`;
+}
+function statusLabelText(status){
+  const t=T[lang];
+  if(status==='done') return t.statusDone;
+  if(status==='partial') return t.statusPartial;
+  return t.statusPending;
+}
 function buildAdminOrderGroups(){
   const masterRepTotals=computeMasterRepTotals(); // 재고 엑셀의 대표품번 기준 합산 수량(기초재고)
   const globalAllocByRep={};
@@ -3030,7 +3042,9 @@ function buildAdminOrderGroups(){
 
     g.notSupplied=Math.max(0, g.totalOrderQty-g.totalSuppliedQty);
     g.supplyRate=g.totalOrderQty>0 ? (g.totalSuppliedQty/g.totalOrderQty) : 0;
-    g.status=(g.totalOrderQty>0 && g.totalSuppliedQty>=g.totalOrderQty) ? 'done' : 'pending';
+    if(g.totalOrderQty>0 && g.totalSuppliedQty>=g.totalOrderQty) g.status='done';
+    else if(g.totalSuppliedQty>0) g.status='partial'; // 일부라도 출고되었으면 일부완료
+    else g.status='pending';
 
     const baseStock=masterRepTotals[g.rep]!==undefined ? masterRepTotals[g.rep] : null;
     g.stockDisplay=baseStock===null ? null : Math.max(0, baseStock-(globalAllocByRep[g.rep]||0));
@@ -3108,7 +3122,7 @@ function renderAdminOrders(){
       <td style="padding:9px 16px 9px 12px;text-align:right">${g.totalSuppliedQty}</td>
       <td style="padding:9px 16px 9px 12px;text-align:right;color:${g.notSupplied>0?'#ef4444':'var(--text)'}">${g.notSupplied}</td>
       <td style="padding:9px 16px 9px 12px;text-align:right">${ratePct}</td>
-      <td style="padding:9px 12px;text-align:center">${g.status==='done'?`<span style="color:#22c55e">${t.statusDone}</span>`:`<span style="color:#f59e0b">${t.statusPending}</span>`}</td>
+      <td style="padding:9px 12px;text-align:center">${statusLabelHtml(g.status)}</td>
     </tr>`;
 
     // 상세 내역: 개별 주문일자·수량과 개별 출고일자·수량을 나란히 나열(가는 글씨)
@@ -3350,7 +3364,9 @@ function buildMyOrderGroups(){
 
     g.notSupplied=Math.max(0, g.totalOrderQty-g.totalSuppliedQty);
     g.supplyRate=g.totalOrderQty>0 ? (g.totalSuppliedQty/g.totalOrderQty) : 0;
-    g.status=(g.totalOrderQty>0 && g.totalSuppliedQty>=g.totalOrderQty) ? 'done' : 'pending';
+    if(g.totalOrderQty>0 && g.totalSuppliedQty>=g.totalOrderQty) g.status='done';
+    else if(g.totalSuppliedQty>0) g.status='partial'; // 일부라도 출고되었으면 일부완료
+    else g.status='pending';
   });
   return Object.values(groups);
 }
@@ -3420,7 +3436,7 @@ function renderAdminMyOrders(){
       <td style="padding:9px 16px 9px 12px;text-align:right">${g.totalSuppliedQty}</td>
       <td style="padding:9px 16px 9px 12px;text-align:right;color:${g.notSupplied>0?'#ef4444':'var(--text)'}">${g.notSupplied}</td>
       <td style="padding:9px 16px 9px 12px;text-align:right">${ratePct}</td>
-      <td style="padding:9px 12px;text-align:center">${g.status==='done'?`<span style="color:#22c55e">${t.statusDone}</span>`:`<span style="color:#f59e0b">${t.statusPending}</span>`}</td>
+      <td style="padding:9px 12px;text-align:center">${statusLabelHtml(g.status)}</td>
     </tr>`;
 
     const maxLines=Math.max(g.orderLines.length, g.supplyLines.length);
@@ -3480,7 +3496,7 @@ function downloadAdminMyOrders(){
       g.immediateSupply, g.futureSupply, (g.agreed?t.decisionAgreed:''),
       '', g.totalSuppliedQty,
       g.notSupplied, (g.supplyRate*100).toFixed(1)+'%',
-      g.status==='done'?t.statusDone:t.statusPending
+      statusLabelText(g.status)
     ]);
     const maxLines=Math.max(g.orderLines.length, g.supplyLines.length);
     for(let i=0;i<maxLines;i++){
@@ -3520,7 +3536,7 @@ function downloadAdminOrders(){
       (g.stockDisplay===null?'':g.stockDisplay), g.allocated, g.futureSupply, (g.agreed?t.decisionAgreed:''),
       '', g.totalSuppliedQty,
       g.notSupplied, (g.supplyRate*100).toFixed(1)+'%',
-      g.status==='done'?t.statusDone:t.statusPending
+      statusLabelText(g.status)
     ]);
     const maxLines=Math.max(g.orderLines.length, g.supplyLines.length);
     for(let i=0;i<maxLines;i++){
