@@ -618,10 +618,11 @@ input[type="text"]::placeholder{color:var(--muted)}
           <input type="text" id="orderSearchInput" placeholder="도면번호, 품명, 대표품번으로 검색…">
         </div>
         <div class="count-badge" id="orderCountBadge"></div>
-        <button class="dl-btn" onclick="openMyOrdersModal()" style="background:var(--surface2);border-color:var(--border);color:var(--text)">
-          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z"/></svg>
-          <span id="i18n-myorders">내 주문내역</span>
+        <button class="dl-btn" onclick="document.getElementById('orderUploadInput').click()" style="background:var(--surface2);border-color:var(--border);color:var(--text)">
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <span id="i18n-orderupload">엑셀 업로드</span>
         </button>
+        <input type="file" id="orderUploadInput" accept=".xlsx,.xls" style="display:none" onchange="handleOrderUpload(event)">
         <button class="dl-btn" id="orderSubmitBtn" onclick="submitOrder()" style="background:var(--accent);border-color:var(--accent);color:#fff">
           <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
           <span id="i18n-ordersubmit">주문 제출</span>
@@ -715,6 +716,10 @@ input[type="text"]::placeholder{color:var(--muted)}
           <span id="i18n-invupload">엑셀 업데이트</span>
           <input type="file" id="invFileInput" accept=".xlsx,.xls" style="display:none" onchange="handleInventoryUpload(event)">
         </label>
+        <button class="dl-btn" onclick="downloadInventoryData()">
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span id="i18n-invdownload">엑셀 다운로드</span>
+        </button>
       </div>
       <div id="invLastUpdated" style="padding:2px 4px 6px;font-size:11px;color:var(--muted)"></div>
       <div class="pn-hdr-wrap" id="invHdrWrap">
@@ -749,6 +754,10 @@ input[type="text"]::placeholder{color:var(--muted)}
           <span id="i18n-shipupload">엑셀 업데이트</span>
           <input type="file" id="shipFileInput" accept=".xlsx,.xls" style="display:none" onchange="handleShipmentsUpload(event)">
         </label>
+        <button class="dl-btn" onclick="downloadShipmentsData()">
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span id="i18n-shipdownload">엑셀 다운로드</span>
+        </button>
       </div>
       <div id="shipLastUpdated" style="padding:2px 4px 6px;font-size:11px;color:var(--muted)"></div>
       <div class="pn-hdr-wrap" id="shipHdrWrap">
@@ -887,21 +896,17 @@ input[type="text"]::placeholder{color:var(--muted)}
 <!-- 관리자: 전체 주문내역 모달 -->
 <!-- ══ 탭: 주문관리 (내가 받은 / 내가 신청한 주문내역) ══ -->
 <div class="tab-pane" id="pane-adminOrders">
-  <div class="fixed-top">
-    <div class="search-bar" style="gap:8px">
-      <div style="display:flex;gap:6px;flex:1">
-        <button class="news-tab active" id="adminTabOrders" onclick="switchAdminView('orders')" style="flex:1;text-align:center">
-          <span id="i18n-admintab-orders">내가 받은 주문내역</span>
-        </button>
-        <button class="news-tab" id="adminTabMyOrders" onclick="switchAdminView('myorders')" style="flex:1;text-align:center">
-          <span id="i18n-admintab-myorders">내가 신청한 주문내역</span>
-        </button>
-      </div>
+  <div class="scroll-body" id="scrollBodyAdminOrders" style="padding:8px 12px 72px">
+    <div style="display:flex;gap:6px;margin-bottom:10px;border-bottom:1px solid var(--border)">
+      <button class="news-tab active" id="adminTabOrders" onclick="switchAdminView('orders')" style="flex:1;text-align:center">
+        <span id="i18n-admintab-orders">내가 받은 주문내역</span>
+      </button>
+      <button class="news-tab" id="adminTabMyOrders" onclick="switchAdminView('myorders')" style="flex:1;text-align:center">
+        <span id="i18n-admintab-myorders">내가 신청한 주문내역</span>
+      </button>
     </div>
-  </div>
-  <div class="scroll-body" id="scrollBodyAdminOrders" style="padding:0 12px 72px">
     <div id="adminOrdersView" style="display:flex;flex-direction:column;flex:1;min-height:0">
-      <div style="padding:10px 4px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:10px">
+      <div style="padding:0 4px 10px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:10px">
         <span id="adminOrderCount" style="font-size:11px;color:var(--muted)"></span>
         <button class="news-btn-primary" onclick="downloadAdminOrders()">
           <span id="i18n-adminxls">엑셀 다운로드</span>
@@ -937,19 +942,15 @@ input[type="text"]::placeholder{color:var(--muted)}
 
 <!-- ══ 탭: 회원관리 (취소·변경 요청 / 회원관리 및 가입승인) ══ -->
 <div class="tab-pane" id="pane-memberManagement">
-  <div class="fixed-top">
-    <div class="search-bar" style="gap:8px">
-      <div style="display:flex;gap:6px;flex:1">
-        <button class="news-tab active" id="adminTabRequests" onclick="switchAdminView('requests')" style="flex:1;text-align:center">
-          <span id="i18n-admintab-requests">취소·변경 요청</span> <span id="adminReqBadge" style="display:none;background:#f59e0b;color:#1a1a00;border-radius:9px;padding:1px 6px;font-size:10px;font-weight:800;margin-left:4px"></span>
-        </button>
-        <button class="news-tab" id="adminTabSignups" onclick="switchAdminView('signups')" style="flex:1;text-align:center">
-          <span id="i18n-admintab-signups">회원관리 및 가입승인</span> <span id="adminSignupBadge" style="display:none;background:#ef4444;color:#fff;border-radius:9px;padding:1px 6px;font-size:10px;font-weight:800;margin-left:4px"></span>
-        </button>
-      </div>
+  <div class="scroll-body" id="scrollBodyMemberManagement" style="padding:8px 12px 72px">
+    <div style="display:flex;gap:6px;margin-bottom:10px;border-bottom:1px solid var(--border)">
+      <button class="news-tab active" id="adminTabRequests" onclick="switchAdminView('requests')" style="flex:1;text-align:center">
+        <span id="i18n-admintab-requests">취소·변경 요청</span> <span id="adminReqBadge" style="display:none;background:#f59e0b;color:#1a1a00;border-radius:9px;padding:1px 6px;font-size:10px;font-weight:800;margin-left:4px"></span>
+      </button>
+      <button class="news-tab" id="adminTabSignups" onclick="switchAdminView('signups')" style="flex:1;text-align:center">
+        <span id="i18n-admintab-signups">회원관리 및 가입승인</span> <span id="adminSignupBadge" style="display:none;background:#ef4444;color:#fff;border-radius:9px;padding:1px 6px;font-size:10px;font-weight:800;margin-left:4px"></span>
+      </button>
     </div>
-  </div>
-  <div class="scroll-body" id="scrollBodyMemberManagement" style="padding:0 12px 72px">
     <div id="adminRequestsView" style="display:flex;flex-direction:column;flex:1;min-height:0">
       <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:8px">
         <thead id="adminRequestsThead"></thead>
@@ -1290,6 +1291,7 @@ const T={
        groupChangeInvalid:'현재 미출고 수량보다 적은 유효한 수량을 입력해주세요.',
        adminHDate:'주문일시',adminHCompany:'회사',adminHUser:'아이디',adminHDiag:'도면번호',adminHName:'품명',adminHRep:'대표품번',adminHQty:'수량',adminHModel:'기본모델명',
        myOrders:'내 주문내역',myOrdersTitle:'내 주문내역',myOrdersXls:'엑셀 다운로드',myOrdersEmpty:'제출한 주문이 없습니다.',myOrdersCount:n=>`총 ${n}건`,myOrdersOrderLabel:n=>`주문 #${n}`,
+       orderUpload:'엑셀 업로드',orderUploadNotFound:'파일에서 품번 열을 찾지 못했습니다. 양식을 확인해주세요.',orderUploadDone:n=>`${n}개 품목의 주문수량을 불러왔습니다.`,orderUploadFail:'업로드 중 오류가 발생했습니다.',
        myInfoBtn:'내 정보',myInfoTitle:'내 정보 수정',myInfoCompany:'회사명',myInfoId:'아이디',myInfoContact:'담당자명',myInfoPhone:'휴대폰',myInfoEmail:'이메일',
        myInfoPwHint:'비밀번호를 변경하려면 입력하세요 (선택사항)',myInfoSave:'저장',myInfoSaved:'저장되었습니다.',
        myInfoErrFill:'담당자명, 휴대폰, 이메일을 모두 입력해주세요.',myInfoErrEmail:'이메일 주소 형식이 올바르지 않습니다.',
@@ -1362,6 +1364,7 @@ const T={
        groupChangeInvalid:'Введите корректное количество, меньше текущего неотгруженного.',
        adminHDate:'Дата заказа',adminHCompany:'Компания',adminHUser:'Логин',adminHDiag:'№чертежа',adminHName:'Название',adminHRep:'Артикул',adminHQty:'Кол-во',adminHModel:'Модель',
        myOrders:'Мои заказы',myOrdersTitle:'Мои заказы',myOrdersXls:'Скачать Excel',myOrdersEmpty:'Вы ещё не отправляли заказов.',myOrdersCount:n=>`Всего: ${n}`,myOrdersOrderLabel:n=>`Заказ #${n}`,
+       orderUpload:'Загрузить Excel',orderUploadNotFound:'Не найден столбец с артикулами. Проверьте формат файла.',orderUploadDone:n=>`Количество загружено для ${n} позиций.`,orderUploadFail:'Ошибка при загрузке файла.',
        myInfoBtn:'Мой профиль',myInfoTitle:'Изменить профиль',myInfoCompany:'Компания',myInfoId:'Логин',myInfoContact:'Контактное лицо',myInfoPhone:'Мобильный',myInfoEmail:'Email',
        myInfoPwHint:'Введите, чтобы изменить пароль (необязательно)',myInfoSave:'Сохранить',myInfoSaved:'Сохранено.',
        myInfoErrFill:'Заполните контактное лицо, мобильный и email.',myInfoErrEmail:'Неверный формат email.',
@@ -2638,6 +2641,70 @@ async function submitOrder(){
   }
 }
 
+async function handleOrderUpload(event){
+  const t=T[lang];
+  const file=event.target.files[0];
+  if(!file) return;
+  const reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      const data=new Uint8Array(e.target.result);
+      const wb=XLSX.read(data,{type:'array'});
+      const sheet=wb.Sheets[wb.SheetNames[0]];
+      const aoa=XLSX.utils.sheet_to_json(sheet,{header:1, defval:''});
+
+      // 품번 목록(대소문자 무시)을 미리 만들어서, 어느 열이 품번 열인지 빠르게 찾습니다.
+      const knownReps=new Set(PARTS.map(p=>p.rep.toUpperCase()));
+      function looksLikeRepColumn(col){
+        let count=0, checked=0;
+        for(let r=0;r<aoa.length;r++){
+          const v=aoa[r]&&aoa[r][col];
+          if(v===undefined||v===''||v===null) continue;
+          checked++;
+          if(knownReps.has(String(v).trim().toUpperCase())) count++;
+          if(count>=1) return true;
+        }
+        return checked>0 && count>=1;
+      }
+      function columnHasNumbers(col){
+        for(let r=0;r<aoa.length;r++){
+          const v=aoa[r]&&aoa[r][col];
+          if(v!==undefined && v!=='' && !isNaN(Number(v))) return true;
+        }
+        return false;
+      }
+
+      let colRep=-1, colQty=-1;
+      const maxCols=Math.max(0,...aoa.map(row=>row?row.length:0));
+      for(let c=0;c<maxCols;c++){
+        if(looksLikeRepColumn(c) && columnHasNumbers(c+1)){ colRep=c; colQty=c+1; break; }
+      }
+      if(colRep===-1){ alert(t.orderUploadNotFound); event.target.value=''; return; }
+
+      let matchedCount=0;
+      for(let r=0;r<aoa.length;r++){
+        const row=aoa[r]||[];
+        const repRaw=String(row[colRep]||'').trim();
+        if(!repRaw) continue;
+        const qtyRaw=row[colQty];
+        const qty=parseInt(qtyRaw,10);
+        if(isNaN(qty) || qty<=0) continue;
+        const repUpper=repRaw.toUpperCase();
+        const matches=PARTS.filter(p=>p.rep.toUpperCase()===repUpper);
+        if(!matches.length) continue;
+        matches.forEach(d=>{ orderQty[orderKey(d)]=qty; });
+        matchedCount++;
+      }
+      renderOrderTable();
+      alert(t.orderUploadDone(matchedCount));
+    }catch(err){
+      console.error(err);
+      alert(t.orderUploadFail);
+    }
+    event.target.value='';
+  };
+  reader.readAsArrayBuffer(file);
+}
 function downloadOrder(){
   const t=T[lang];
   const rows=getFilteredOrderParts().map(d=>({d,qty:orderQty[orderKey(d)]||0})).filter(r=>r.qty>0);
@@ -4127,6 +4194,7 @@ function refreshMyOrdersTexts(){
   const t=T[lang];
   const setTxt=(id,val)=>{const el=document.getElementById(id);if(el)el.textContent=val;};
   setTxt('i18n-myorders', t.myOrders);
+  setTxt('i18n-orderupload', t.orderUpload);
   setTxt('i18n-myorderstitle', t.myOrdersTitle);
   setTxt('i18n-myordersxls', t.myOrdersXls);
   setTxt('i18n-myoh-date', t.adminHDate);
@@ -4652,6 +4720,41 @@ function renderInventoryList(){
   if(cardList) cardList.innerHTML=cardsHtml.join('');
   scheduleSplitTableResync('inv-hdr-col','inv-body-col','inventoryTbody');
 }
+function downloadInventoryData(){
+  const t=T[lang];
+  const isKo=lang==='ko';
+  const keys=Object.keys(inventoryData);
+  if(!keys.length){ alert(t.invEmpty); return; }
+  const header=[t.adminHName, ...(isKo?[t.thSpec]:[]), t.invHMaster, t.invHRep, t.invHQty, t.invHUpdated];
+  const rows=keys.map(rep=>{
+    const info=getPNInfo(rep);
+    const name=info?(lang==='ko'?info.name_ko:(info.name_ru||info.name_ko)):'';
+    const spec=info?info.spec:'';
+    const row=inventoryData[rep];
+    return [name, ...(isKo?[spec]:[]), rep, rep, row.qty, row.updated_at?formatShipDate(row.updated_at):''];
+  });
+  const ws=XLSX.utils.aoa_to_sheet([header, ...rows]);
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, lang==='ko'?'재고관리':'Склад');
+  XLSX.writeFile(wb, `KITURAMI_재고관리_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+function downloadShipmentsData(){
+  const t=T[lang];
+  const isKo=lang==='ko';
+  if(!shipmentsData.length){ alert(t.invEmpty); return; }
+  const header=[t.adminHName, ...(isKo?[t.thSpec]:[]), t.invHMaster, t.shipThRep, t.shipThClient, t.shipThDate, t.shipThQty];
+  const rows=shipmentsData.map(r=>{
+    const masterRep=findMasterRep(r.rep)||'';
+    const info=masterRep?getPNInfo(masterRep):null;
+    const name=info?(lang==='ko'?info.name_ko:(info.name_ru||info.name_ko)):'';
+    const spec=info?info.spec:'';
+    return [name, ...(isKo?[spec]:[]), masterRep, r.rep, displayClientName(r.client_name), r.ship_date||'', r.qty];
+  });
+  const ws=XLSX.utils.aoa_to_sheet([header, ...rows]);
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, lang==='ko'?'출고관리':'Отгрузки');
+  XLSX.writeFile(wb, `KITURAMI_출고관리_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
 function downloadInventoryTemplate(){
   const header=['Артикул', 'Количество'];
   const example=[['AS491100057', 100],['AS555100021', 50]];
@@ -4783,6 +4886,8 @@ function refreshInventoryTexts(){
   const setTxt=(id,val)=>{const el=document.getElementById(id);if(el)el.textContent=val;};
   const tabEl=document.getElementById('tab-inventory'); if(tabEl) tabEl.textContent=t.tabInventory;
   setTxt('i18n-invupload', t.invUpload);
+  setTxt('i18n-invdownload', t.orderDl);
+  setTxt('i18n-shipdownload', t.orderDl);
   setTxt('i18n-shipupload', t.shipUpload);
   setTxt('i18n-tab-shipments', '🚚 '+t.tabShipments);
   setTxt('i18n-tab-adminorders', '🗂️ '+t.tabAdminOrders);
@@ -5454,7 +5559,7 @@ function enterApp(user){
   const tabAdminOrders=document.getElementById('tab-adminOrders');
   if(tabAdminOrders) tabAdminOrders.style.display = 'flex';
   const tabMemberMgmt=document.getElementById('tab-memberManagement');
-  if(tabMemberMgmt) tabMemberMgmt.style.display = (user.is_admin) ? 'flex' : 'none';
+  if(tabMemberMgmt) tabMemberMgmt.style.display = 'flex';
   const tabInv=document.getElementById('tab-inventory');
   const tabShip=document.getElementById('tab-shipments');
   const tabPrice=document.getElementById('tab-price');
