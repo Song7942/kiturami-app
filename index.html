@@ -249,14 +249,6 @@ input[type="text"]::placeholder{color:var(--muted)}
 #adminOrderTbody td, #adminMyOrdersTbody td{white-space:nowrap}
 #adminOrderTbody td.wrap-ok, #adminMyOrdersTbody td.wrap-ok{white-space:normal}
 #adminOrdersView table, #adminMyOrdersView table{table-layout:auto}
-#ordermgmtReceivedView table, #ordermgmtMineView table{table-layout:fixed;width:100%}
-#ordermgmtReceivedThead th, #ordermgmtMineThead th{white-space:normal;word-break:keep-all;overflow-wrap:anywhere;padding-left:6px!important;padding-right:6px!important}
-#ordermgmtReceivedTbody td, #ordermgmtMineTbody td{white-space:normal;overflow-wrap:anywhere;padding-left:6px!important;padding-right:8px!important}
-/* 새 소식 배지 (회원관리 버튼 / 주문관리 탭) */
-#adminBtnBadge, #ordermgmtTabBadge{display:none;background:#ef4444;color:#fff;border-radius:9px;padding:1px 6px;font-size:10px;font-weight:800;margin-left:4px;vertical-align:middle}
-#adminBtnBadge.show, #ordermgmtTabBadge.show{display:inline-block!important}
-/* 모바일에서는 주문관리 표 대신 카드형 목록을 보여줍니다 */
-@media(max-width:768px){ #pane-ordermgmt table{display:none} }
 #pane-order .code, #pane-parts .code, #pane-inventory .code{background:none;padding:1px 0;color:var(--text);font-weight:600}
 .part-card .code, .order-card .code{font-size:13px}
 .no-result{text-align:center;padding:30px 20px;color:var(--muted);font-size:13px}
@@ -501,10 +493,7 @@ input[type="text"]::placeholder{color:var(--muted)}
     <span id="i18n-newsbtn">News</span>
     <span id="newsUnreadDot" style="display:none;position:absolute;top:2px;right:2px;width:8px;height:8px;border-radius:50%;background:#ef4444;box-shadow:0 0 0 2px var(--bg)"></span>
   </button>
-  <button class="news-btn" id="adminBtn" onclick="openAdminModal()" style="display:none">
-    <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z"/></svg>
-    <span id="i18n-adminbtn">회원관리</span><span id="adminBtnBadge"></span>
-  </button>
+  
   <div class="lang-sw">
     <button class="lang-btn active" onclick="setLang('ko')">🇰🇷 KO</button>
     <button class="lang-btn"        onclick="setLang('ru')">🇷🇺 RU</button>
@@ -521,7 +510,7 @@ input[type="text"]::placeholder{color:var(--muted)}
   <button class="tab-btn active" onclick="switchTab('parts')" id="tab-parts">🔧 부품 검색</button>
   <button class="tab-btn"        onclick="switchTab('pn')"    id="tab-pn">🔄 품번 조회</button>
   <button class="tab-btn" onclick="switchTab('order')" id="tab-order">📦 주문</button>
-  <button class="tab-btn" style="display:none" onclick="switchTab('ordermgmt')" id="tab-ordermgmt"><span id="i18n-tab-ordermgmt">📋 주문관리</span><span id="ordermgmtTabBadge"></span></button>
+  <button class="tab-btn" style="display:none" onclick="openAdminModal()" id="tab-adminOrders"><span id="i18n-tab-adminorders">🗂️ 주문관리</span></button>
   <button class="tab-btn" style="display:none" onclick="switchTab('inventory')" id="tab-inventory">📊 재고관리</button>
   <button class="tab-btn" style="display:none" onclick="switchTab('shipments')" id="tab-shipments"><span id="i18n-tab-shipments">🚚 출고관리</span></button>
   <button class="tab-btn" style="display:none" onclick="switchTab('price')"     id="tab-price">💲 가격정보</button>
@@ -591,7 +580,7 @@ input[type="text"]::placeholder{color:var(--muted)}
       </div>
       <!-- 테이블 헤더 (고정) - 데스크탑만 -->
       <div class="tbl-header-wrap" id="tblHeaderWrap" style="display:none">
-        <table><colgroup id="parts-hdr-col"></colgroup><thead id="thead-fixed"></thead></table>
+        <table><thead id="thead-fixed"></thead></table>
       </div>
       <div class="tbl-scrollbar" id="tblScrollbar" style="display:none">
         <div class="tbl-scrollbar-thumb" id="tblScrollbarThumb"></div>
@@ -606,7 +595,7 @@ input[type="text"]::placeholder{color:var(--muted)}
       </div>
       <!-- 데스크탑: tbody만 -->
       <div class="tbl-body-wrap" id="tblBodyWrap" style="display:none;margin:0 12px">
-        <table><colgroup id="parts-body-col"></colgroup><tbody id="tbody"></tbody></table>
+        <table><tbody id="tbody"></tbody></table>
       </div>
       <div class="tbl-footer" id="tblFooter" style="display:none;margin:0 12px 8px">
         <span id="footerLeft"></span><span>KITURAMI ALPHA PLUS / NEO</span>
@@ -746,47 +735,7 @@ input[type="text"]::placeholder{color:var(--muted)}
     </div>
   </div>
 
-  <!-- 주문관리 탭 -->
-  <div class="tab-pane" id="pane-ordermgmt">
-    <div class="fixed-top" style="flex-shrink:0;background:var(--surface);border-bottom:1px solid var(--border)">
-      <div style="display:flex;gap:0;background:var(--surface);border-bottom:1px solid var(--border)">
-        <button class="news-tab active" id="ordermgmtTabReceived" onclick="switchOrderMgmtView('received')" style="flex:1;padding:10px;font-size:12px;font-weight:600;color:var(--muted);background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;font-family:'Inter',sans-serif">
-          <span id="i18n-ordermgmt-received">내가 받은 주문내역</span>
-        </button>
-        <button class="news-tab" id="ordermgmtTabMine" onclick="switchOrderMgmtView('mine')" style="flex:1;padding:10px;font-size:12px;font-weight:600;color:var(--muted);background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;font-family:'Inter',sans-serif">
-          <span id="i18n-ordermgmt-mine">내가 신청한 주문내역</span>
-        </button>
-      </div>
-    </div>
-    <div id="ordermgmtReceivedView" style="display:flex;flex-direction:column;flex:1;min-height:0;overflow:auto;padding:0 16px 16px">
-      <div style="padding:12px 0;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:10px;border-bottom:1px solid var(--border);margin-bottom:4px">
-        <span id="ordermgmtReceivedCount" style="font-size:11px;color:var(--muted)"></span>
-        <button class="news-btn-primary" onclick="downloadAdminOrders()"><span id="i18n-ordermgmt-dl">엑셀 다운로드</span></button>
-      </div>
-      <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:8px">
-        <colgroup id="ordermgmtReceivedCols"></colgroup>
-        <thead id="ordermgmtReceivedThead"></thead>
-        <tbody id="ordermgmtReceivedTbody"></tbody>
-      </table>
-      <div class="card-list" id="ordermgmtReceivedCards" style="margin:8px 0;border:none;background:transparent"></div>
-      <div class="news-empty" id="ordermgmtReceivedEmpty" style="display:none"></div>
-    </div>
-    <div id="ordermgmtMineView" style="display:none;flex-direction:column;flex:1;min-height:0;overflow:auto;padding:0 16px 16px">
-      <div style="padding:12px 0;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:10px;border-bottom:1px solid var(--border);margin-bottom:4px">
-        <span id="ordermgmtMineCount" style="font-size:11px;color:var(--muted)"></span>
-        <button class="news-btn-primary" onclick="downloadAdminMyOrders()"><span id="i18n-ordermgmt-mydl">엑셀 다운로드</span></button>
-      </div>
-      <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:8px">
-        <colgroup id="ordermgmtMineCols"></colgroup>
-        <thead id="ordermgmtMineThead"></thead>
-        <tbody id="ordermgmtMineTbody"></tbody>
-      </table>
-      <div class="card-list" id="ordermgmtMineCards" style="margin:8px 0;border:none;background:transparent"></div>
-      <div class="news-empty" id="ordermgmtMineEmpty" style="display:none"></div>
-    </div>
-  </div>
-
-  <!-- 출고관리 -->
+  <!-- 출고내역 -->
   <div class="tab-pane" id="pane-shipments">
     <div class="fixed-top">
       <div class="search-bar">
@@ -938,15 +887,29 @@ input[type="text"]::placeholder{color:var(--muted)}
 <div id="adminModal" class="news-modal" onclick="closeAdminModalBg(event)">
   <div class="news-modal-inner" onclick="event.stopPropagation()" style="max-width:1300px;width:95vw;max-height:90vh">
     <div class="news-modal-hdr">
-      <span id="i18n-admintitle">회원관리</span>
+      <span id="i18n-admintitle">회원 및 주문관리</span>
       <button class="news-modal-close" onclick="closeAdminModal()">✕</button>
     </div>
-    <div class="news-tabs">
-      <button class="news-tab active" id="adminTabSignups" onclick="switchAdminView('signups')">
+    <div class="news-tabs" style="align-items:flex-end">
+      <div style="display:flex;flex-direction:column;align-items:stretch">
+        <span id="i18n-admingroup-orders" style="font-size:10px;color:var(--muted);padding:2px 4px 4px;font-weight:700">주문관리</span>
+        <div style="display:flex">
+          <button class="news-tab active" id="adminTabOrders" onclick="switchAdminView('orders')">
+            <span id="i18n-admintab-orders">내가 받은 주문내역</span>
+          </button>
+          <button class="news-tab" id="adminTabMyOrders" onclick="switchAdminView('myorders')">
+            <span id="i18n-admintab-myorders">내가 신청한 주문내역</span>
+          </button>
+        </div>
+      </div>
+      <button class="news-tab" id="adminTabRequests" onclick="switchAdminView('requests')">
+        <span id="i18n-admintab-requests">취소·변경 요청</span> <span id="adminReqBadge" style="display:none;background:#f59e0b;color:#1a1a00;border-radius:9px;padding:1px 6px;font-size:10px;font-weight:800;margin-left:4px"></span>
+      </button>
+      <button class="news-tab" id="adminTabSignups" onclick="switchAdminView('signups')">
         <span id="i18n-admintab-signups">회원관리 및 가입승인</span> <span id="adminSignupBadge" style="display:none;background:#ef4444;color:#fff;border-radius:9px;padding:1px 6px;font-size:10px;font-weight:800;margin-left:4px"></span>
       </button>
     </div>
-    <div id="adminOrdersView" style="display:none;flex-direction:column;flex:1;min-height:0">
+    <div id="adminOrdersView" style="display:flex;flex-direction:column;flex:1;min-height:0">
       <div style="padding:12px 16px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:10px;border-bottom:1px solid var(--border)">
         <span id="adminOrderCount" style="font-size:11px;color:var(--muted)"></span>
         <button class="news-btn-primary" onclick="downloadAdminOrders()">
@@ -1265,7 +1228,7 @@ const T={
        tabParts:'🔧 부품 검색',tabPN:'🔄 품번 조회',tabOrder:'📦 주문',tabInventory:'📊 재고관리',tabPrice:'💲 가격정보',orderDl:'엑셀 다운로드',orderMailBanner:'주문 접수 이메일: song@krb.co.kr',orderPh:'도면번호, 품명, 대표품번으로 검색…',orderQty:'주문수량',logoutBtn:'로그아웃',
        invTemplate:'양식 다운로드',invUpload:'엑셀 업데이트',invHMaster:'대표품번(미변경)',invHRep:'재고품번',invHQty:'재고수량',invHUpdated:'업데이트 일시',invEmpty:'등록된 재고 데이터가 없습니다.',invCount:n=>`총 ${n}건`,
        invUploadOk:n=>`재고 ${n}건이 업데이트되었습니다.`,invUploadFail:'업로드에 실패했습니다. 양식을 확인해주세요.',invUploadEmpty:'파일에서 유효한 데이터를 찾지 못했습니다. 양식을 확인해주세요.',invSearchPh:'대표품번으로 검색…',invLastUpdated:d=>`최근 업데이트: ${d}`,dmZoomHint:'손가락으로 확대/이동',invHSupplierStock:'구매처 재고',
-       tabShipments:'출고관리',tabOrderMgmt:'📋 주문관리',tabOrderMgmtReceived:'내가 받은 주문내역',tabOrderMgmtMine:'내가 신청한 주문내역',shipUpload:'엑셀 업데이트',shipThRep:'품번',shipThClient:'거래처명',shipThDate:'일자',shipThQty:'출고',
+       tabShipments:'출고관리',tabAdminOrders:'주문관리',shipUpload:'엑셀 업데이트',shipThRep:'품번',shipThClient:'거래처명',shipThDate:'일자',shipThQty:'출고',
        shipUploadOk:n=>`출고내역 ${n}건이 추가되었습니다.`,shipUploadFail:'업로드에 실패했습니다. 양식을 확인해주세요.',shipUploadEmpty:'파일에서 유효한 데이터를 찾지 못했습니다. 양식을 확인해주세요.',
        shipIndividual:'개인',
        editShipTitle:'출고내역 수정',editShipMaster:'대표품번(미변경)',editShipRep:'품번',editShipName:'품명',editShipSpec:'규격',editShipClient:'거래처명',editShipDate:'일자',editShipQty:'출고수량',editShipSave:'저장',
@@ -1275,8 +1238,8 @@ const T={
        adminHNewQty:'신규 주문수량',adminHStock:'재고수량',reqOriginalQtyLabel:'신규 주문수량',reqRequestedQtyLabel:'변경신청 수량',reqRepLabel:'대표품번 (미변경)',
        grpExisting:'기존',grpNew:'신규',grpCumulative:'누적',grpTotal:'합계',grpDecision:'공급 결정',grpProgress:'진행여부',
        statusDone:'완료',statusPending:'준비중',statusPartial:'일부완료',
-       colOrder:'수량',grpOrderStatus:'주문현황',colSupply:'출고',colStock:'재고',colSupplyRate:'출고율',colNotSupplied:'미출고',colAllocation:'배분',colPreparing:'준비중',colShipped:'출고완료',
-       colDate:'날짜',colStatus:'완료여부',grpStatusHdr:'출고현황',colFinalOrder:'최종주문',colDecision:'의사결정',decisionAgreed:'동의',myOrderReqSection:'구매처의 요청사항',agreeBtn:'동의',colSupplyAvailable:'공급가능',colShippedQty:'수량',colImmediateSupply:'즉시공급',colFutureSupply:'향후공급',allocExceedStock:n=>`즉시공급 수량은 재고를 초과할 수 없습니다. (최대 ${n})`,shipEmpty:'등록된 출고 데이터가 없습니다.',shipSearchPh:'품번, 거래처명으로 검색…',
+       colOrder:'주문',grpOrderStatus:'주문현황',colSupply:'출고',colStock:'재고',colSupplyRate:'출고율',colNotSupplied:'미출고',colAllocation:'배분',colPreparing:'준비중',colShipped:'출고완료',
+       colDate:'날짜',colStatus:'완료여부',grpStatusHdr:'출고현황',colFinalOrder:'최종주문',colDecision:'의사결정',decisionAgreed:'동의',myOrderReqSection:'구매처의 요청사항',agreeBtn:'동의',colSupplyAvailable:'공급가능',colShippedQty:'수량',colImmediateSupply:'즉시공급',colFutureSupply:'향후공급',
        invHBase:'기초재고',invHPostAlloc:'배분후 재고',
        orderSubmit:'주문 제출',orderSubmitting:'제출 중…',orderSubmitOk:'주문이 접수되었습니다.',orderSubmitFail:'주문 제출에 실패했습니다. 잠시 후 다시 시도해주세요.',orderSubmitEmpty:'주문수량을 입력한 품목이 없습니다.',orderPrevQty:'기존 주문수량',orderStock:'내 창고 재고',orderReceived:'접수받은 주문수량',orderNoSupplier:'주문을 보낼 구매처가 지정되어 있지 않습니다.',
        reqActionHeader:'취소/변경',reqCancelBtn:'취소<br>신청',reqChangeBtn:'수량변경<br>신청',
@@ -1292,8 +1255,8 @@ const T={
        newsEmpty:'등록된 글이 없습니다.',newsTitlePh:'제목을 입력하세요',newsContentPh:'내용을 입력하세요',newsReplyPh:'답변/댓글을 입력하세요',newsDeleteBtn:'삭제',
        newsAttach:'📎 자료 첨부',newsAttachDownload:'첨부파일 다운로드',newsAttachFail:'파일 업로드에 실패했습니다.',
        newsDeleteConfirm:'이 글을 삭제할까요?',newsReplyDeleteConfirm:'이 답변을 삭제할까요?',newsRepliesLabel:n=>`답변 ${n}개`,newsFillAll:'제목과 내용을 모두 입력해주세요.',newsFillReply:'내용을 입력해주세요.',
-       adminBtn:'회원관리',adminTitle:'회원관리',adminXls:'엑셀 다운로드',adminEmpty:'등록된 주문이 없습니다.',adminCount:n=>`총 ${n}건`,
-       adminTabOrders:'내가 받은 주문내역',adminTabMyOrders:'내가 신청한 주문내역',adminTabRequests:'취소·변경 요청',adminTabSignups:'회원관리 및 가입승인',
+       adminBtn:'관리자',adminTitle:'회원 및 주문관리',adminXls:'엑셀 다운로드',adminEmpty:'등록된 주문이 없습니다.',adminCount:n=>`총 ${n}건`,
+       adminTabOrders:'내가 받은 주문내역',adminTabMyOrders:'내가 신청한 주문내역',adminTabRequests:'취소·변경 요청',adminTabSignups:'회원관리 및 가입승인',adminGroupOrders:'주문관리',
        signupEmpty:'등록된 회원이 없습니다.',signupApprove:'승인',signupReject:'거부',signupDelete:'삭제',signupEdit:'수정',
        editMemberTitle:'회원 정보 수정',editMemberId:'아이디',editMemberCompany:'회사명',editMemberContact:'담당자명',editMemberPhone:'휴대폰',editMemberEmail:'이메일',
        editMemberPwHint:'비밀번호를 재설정하려면 입력하세요 (선택사항)',editMemberSave:'저장',
@@ -1308,6 +1271,12 @@ const T={
        reqEmpty:'대기중인 요청이 없습니다.',reqTypeCancel:'취소 신청',reqTypeChange:n=>`수량변경 신청 → ${n}`,
        reqApprove:'승인',reqReject:'거부',
        reqApproveConfirm:'이 요청을 승인하고 주문에 반영할까요?',reqRejectConfirm:'이 요청을 거부할까요?',
+       grpCancelReceive:'취소 및 변경 접수',grpCancelRequest:'취소 및 변경 신청',
+       colChangeHistory:'변경이력',colCancelChangeAction:'취소/변경',colRequestedQty:'신청수량',colChangeResult:'신청결과',
+       changeHistoryLabel:'변경',reqTypeCancel:'취소',reqTypeChange:'변경',cancelBtn:'취소',changeBtn:'변경',cannotBtn:'불가',
+       groupCancelConfirm:(rep,q)=>`${rep}의 미출고분 ${q}개 전체 취소를 신청하시겠습니까? 구매처의 동의가 있어야 반영됩니다.`,
+       groupChangePrompt:(rep,q)=>`${rep}의 새로운 미출고 수량을 입력하세요 (현재 미출고 ${q}개, 이보다 적은 수를 입력해야 합니다). 구매처의 동의가 있어야 반영됩니다.`,
+       groupChangeInvalid:'현재 미출고 수량보다 적은 유효한 수량을 입력해주세요.',
        adminHDate:'주문일시',adminHCompany:'회사',adminHUser:'아이디',adminHDiag:'도면번호',adminHName:'품명',adminHRep:'대표품번',adminHQty:'수량',adminHModel:'기본모델명',
        myOrders:'내 주문내역',myOrdersTitle:'내 주문내역',myOrdersXls:'엑셀 다운로드',myOrdersEmpty:'제출한 주문이 없습니다.',myOrdersCount:n=>`총 ${n}건`,myOrdersOrderLabel:n=>`주문 #${n}`,
        myInfoBtn:'내 정보',myInfoTitle:'내 정보 수정',myInfoCompany:'회사명',myInfoId:'아이디',myInfoContact:'담당자명',myInfoPhone:'휴대폰',myInfoEmail:'이메일',
@@ -1331,7 +1300,7 @@ const T={
        tabParts:'🔧 Поиск деталей',tabPN:'🔄 Артикулы',tabOrder:'📦 Заказ',tabInventory:'📊 Склад',tabPrice:'💲 Цены',orderDl:'Скачать Excel',orderMailBanner:'Email для приёма заказов: song@krb.co.kr',orderPh:'Поиск по №чертежа, названию, артикулу…',orderQty:'Кол-во',logoutBtn:'Выйти',
        invTemplate:'Скачать шаблон',invUpload:'Обновить Excel',invHMaster:'Осн. артикул (неизм.)',invHRep:'Артикул склада',invHQty:'Остаток',invHUpdated:'Обновлено',invEmpty:'Данных о складе пока нет.',invCount:n=>`Всего: ${n}`,
        invUploadOk:n=>`Обновлено позиций: ${n}.`,invUploadFail:'Ошибка загрузки. Проверьте шаблон.',invUploadEmpty:'В файле не найдено данных. Проверьте шаблон.',invSearchPh:'Поиск по артикулу…',invLastUpdated:d=>`Последнее обновление: ${d}`,dmZoomHint:'Растяните пальцами, чтобы увеличить',invHSupplierStock:'Остаток поставщика',
-       tabShipments:'Управление отгрузками',tabOrderMgmt:'📋 Управление заказами',tabOrderMgmtReceived:'Полученные заказы',tabOrderMgmtMine:'Мои заявки',shipUpload:'Обновить Excel',shipThRep:'Артикул',shipThClient:'Клиент',shipThDate:'Дата',shipThQty:'Отгружено',
+       tabShipments:'Отгрузки',tabAdminOrders:'Управление заказами',shipUpload:'Обновить Excel',shipThRep:'Артикул',shipThClient:'Клиент',shipThDate:'Дата',shipThQty:'Отгружено',
        shipUploadOk:n=>`Добавлено записей: ${n}.`,shipUploadFail:'Ошибка загрузки. Проверьте шаблон.',shipUploadEmpty:'В файле не найдено данных. Проверьте шаблон.',
        shipIndividual:'Частное лицо',
        editShipTitle:'Изменить отгрузку',editShipMaster:'Осн. артикул (неизм.)',editShipRep:'Артикул',editShipName:'Название',editShipSpec:'Спецификация',editShipClient:'Клиент',editShipDate:'Дата',editShipQty:'Отгружено',editShipSave:'Сохранить',
@@ -1341,8 +1310,8 @@ const T={
        adminHNewQty:'Новое кол-во',adminHStock:'Остаток',reqOriginalQtyLabel:'Исходное кол-во',reqRequestedQtyLabel:'Запрошено',reqRepLabel:'Артикул (неизм.)',
        grpExisting:'Ранее',grpNew:'Новое',grpCumulative:'Всего',grpTotal:'Итого',grpDecision:'Решение о поставке',grpProgress:'Статус',
        statusDone:'Завершено',statusPending:'В процессе',statusPartial:'Частично',
-       colOrder:'Кол-во',grpOrderStatus:'Статус заказа',colSupply:'Отгрузка',colStock:'Остаток',colSupplyRate:'% отгрузки',colNotSupplied:'Не отгружено',colAllocation:'Выделено',colPreparing:'Готовится',colShipped:'Отгружено',
-       colDate:'Дата',colStatus:'Статус',grpStatusHdr:'Статус отгрузки',colFinalOrder:'Финальный заказ',colDecision:'Решение',decisionAgreed:'Согласен',myOrderReqSection:'Предложение поставщика',agreeBtn:'Согласиться',colSupplyAvailable:'Доступно',colShippedQty:'Кол-во',colImmediateSupply:'Сразу',colFutureSupply:'Позже',allocExceedStock:n=>`Количество немедленной поставки не может превышать остаток. (макс. ${n})`,shipEmpty:'Данных об отгрузках пока нет.',shipSearchPh:'Поиск по артикулу или клиенту…',
+       colOrder:'Заказ',grpOrderStatus:'Статус заказа',colSupply:'Отгрузка',colStock:'Остаток',colSupplyRate:'% отгрузки',colNotSupplied:'Не отгружено',colAllocation:'Выделено',colPreparing:'Готовится',colShipped:'Отгружено',
+       colDate:'Дата',colStatus:'Статус',grpStatusHdr:'Статус отгрузки',colFinalOrder:'Финальный заказ',colDecision:'Решение',decisionAgreed:'Согласен',myOrderReqSection:'Предложение поставщика',agreeBtn:'Согласиться',colSupplyAvailable:'Доступно',colShippedQty:'Кол-во',colImmediateSupply:'Сразу',colFutureSupply:'Позже',
        invHBase:'Начальный остаток',invHPostAlloc:'Остаток после выделения',
        orderSubmit:'Отправить заказ',orderSubmitting:'Отправка…',orderSubmitOk:'Заказ принят.',orderSubmitFail:'Не удалось отправить заказ. Попробуйте позже.',orderSubmitEmpty:'Не указано количество ни для одного товара.',orderPrevQty:'Ранее заказано',orderStock:'Мой склад',orderReceived:'Получено заказов',orderNoSupplier:'Поставщик для заказа не указан.',
        reqActionHeader:'Отмена/Изменение',reqCancelBtn:'Запросить<br>отмену',reqChangeBtn:'Изменить<br>кол-во',
@@ -1358,8 +1327,8 @@ const T={
        newsEmpty:'Записей пока нет.',newsTitlePh:'Введите заголовок',newsContentPh:'Введите содержание',newsReplyPh:'Введите ответ/комментарий',newsDeleteBtn:'Удалить',
        newsAttach:'📎 Прикрепить файл',newsAttachDownload:'Скачать вложение',newsAttachFail:'Не удалось загрузить файл.',
        newsDeleteConfirm:'Удалить эту запись?',newsReplyDeleteConfirm:'Удалить этот ответ?',newsRepliesLabel:n=>`Ответов: ${n}`,newsFillAll:'Пожалуйста, заполните заголовок и содержание.',newsFillReply:'Пожалуйста, введите текст.',
-       adminBtn:'Участники',adminTitle:'Управление участниками',adminXls:'Скачать Excel',adminEmpty:'Заказов пока нет.',adminCount:n=>`Всего: ${n}`,
-       adminTabOrders:'Полученные заказы',adminTabMyOrders:'Мои заявки',adminTabRequests:'Запросы отмены/изменения',adminTabSignups:'Управление участниками и одобрение',
+       adminBtn:'Админ',adminTitle:'Управление участниками и заказами',adminXls:'Скачать Excel',adminEmpty:'Заказов пока нет.',adminCount:n=>`Всего: ${n}`,
+       adminTabOrders:'Полученные заказы',adminTabMyOrders:'Мои заявки',adminTabRequests:'Запросы отмены/изменения',adminTabSignups:'Управление участниками и одобрение',adminGroupOrders:'Управление заказами',
        signupEmpty:'Нет зарегистрированных участников.',signupApprove:'Одобрить',signupReject:'Отклонить',signupDelete:'Удалить',signupEdit:'Изменить',
        editMemberTitle:'Изменить участника',editMemberId:'Логин',editMemberCompany:'Компания',editMemberContact:'Контактное лицо',editMemberPhone:'Мобильный',editMemberEmail:'Email',
        editMemberPwHint:'Введите, чтобы сбросить пароль (необязательно)',editMemberSave:'Сохранить',
@@ -1374,6 +1343,12 @@ const T={
        reqEmpty:'Нет ожидающих запросов.',reqTypeCancel:'Запрос отмены',reqTypeChange:n=>`Запрос изменения → ${n}`,
        reqApprove:'Одобрить',reqReject:'Отклонить',
        reqApproveConfirm:'Одобрить этот запрос и применить к заказу?',reqRejectConfirm:'Отклонить этот запрос?',
+       grpCancelReceive:'Заявки на отмену/изменение',grpCancelRequest:'Отмена/изменение',
+       colChangeHistory:'История изменений',colCancelChangeAction:'Отмена/изм.',colRequestedQty:'Запрошено',colChangeResult:'Результат',
+       changeHistoryLabel:'Изменено',reqTypeCancel:'Отмена',reqTypeChange:'Изменение',cancelBtn:'Отменить',changeBtn:'Изменить',cannotBtn:'Нельзя',
+       groupCancelConfirm:(rep,q)=>`Запросить отмену всех ${q} неотгруженных единиц ${rep}? Требуется согласие поставщика.`,
+       groupChangePrompt:(rep,q)=>`Введите новое количество неотгруженных единиц для ${rep} (сейчас ${q}, нужно меньше). Требуется согласие поставщика.`,
+       groupChangeInvalid:'Введите корректное количество, меньше текущего неотгруженного.',
        adminHDate:'Дата заказа',adminHCompany:'Компания',adminHUser:'Логин',adminHDiag:'№чертежа',adminHName:'Название',adminHRep:'Артикул',adminHQty:'Кол-во',adminHModel:'Модель',
        myOrders:'Мои заказы',myOrdersTitle:'Мои заказы',myOrdersXls:'Скачать Excel',myOrdersEmpty:'Вы ещё не отправляли заказов.',myOrdersCount:n=>`Всего: ${n}`,myOrdersOrderLabel:n=>`Заказ #${n}`,
        myInfoBtn:'Мой профиль',myInfoTitle:'Изменить профиль',myInfoCompany:'Компания',myInfoId:'Логин',myInfoContact:'Контактное лицо',myInfoPhone:'Мобильный',myInfoEmail:'Email',
@@ -1431,198 +1406,8 @@ function switchTab(tab){
   if(tab==='order'){ mountModelDiag('order'); syncDiagram(); refreshCurrentUser().then(()=>Promise.all([loadMyOrderTotals(), loadInventory(), loadGlobalSuppliedTotals(), loadReceivedOrderTotals()])).then(renderOrderTable); renderOrderTable(); }
   if(tab==='parts'){ mountModelDiag('parts'); syncDiagram(); renderTable(); }
   if(tab==='inventory'){ refreshCurrentUser().then(()=>Promise.all([loadInventory(), loadGlobalSuppliedTotals()])).then(renderInventoryList); }
-  if(tab==='ordermgmt'){ refreshCurrentUser().then(()=>Promise.all([loadInventory(), loadShipments(), loadOrderAllocations(), loadAdminOrders(), loadMyOrderAllocations(), loadShipmentsToMe(), loadMyCompanyOrders(), loadOrderRequests()])).then(()=>{ renderOrderMgmtTab(); markOrderMgmtSeen(); }); }
-  else { updateOrderMgmtBadge(); }
   if(tab==='shipments'){ refreshCurrentUser().then(()=>loadShipments()).then(renderShipmentsList); }
   if(tab==='price'){ loadPrices().then(renderPriceList); }
-}
-
-function switchOrderMgmtView(view){
-  document.getElementById('ordermgmtTabReceived').classList.toggle('active', view==='received');
-  document.getElementById('ordermgmtTabMine').classList.toggle('active', view==='mine');
-  // active 탭 하이라이트
-  const recBtn=document.getElementById('ordermgmtTabReceived');
-  const mineBtn=document.getElementById('ordermgmtTabMine');
-  recBtn.style.color = view==='received' ? 'var(--accent)' : 'var(--muted)';
-  recBtn.style.borderBottomColor = view==='received' ? 'var(--accent)' : 'transparent';
-  mineBtn.style.color = view==='mine' ? 'var(--accent)' : 'var(--muted)';
-  mineBtn.style.borderBottomColor = view==='mine' ? 'var(--accent)' : 'transparent';
-  document.getElementById('ordermgmtReceivedView').style.display = view==='received' ? 'flex' : 'none';
-  document.getElementById('ordermgmtMineView').style.display = view==='mine' ? 'flex' : 'none';
-  if(view==='received') renderOrderMgmtReceived();
-  if(view==='mine') renderOrderMgmtMine();
-}
-
-function renderOrderMgmtTab(){
-  const activeView = document.getElementById('ordermgmtTabReceived').classList.contains('active') ? 'received' : 'mine';
-  switchOrderMgmtView(activeView);
-}
-
-function renderOrderMgmtReceived(){
-  // adminOrderThead/adminOrderTbody의 렌더링을 재활용
-  const t=T[lang];
-  renderAdminOrders(); // 기존 adminOrders 렌더 함수 호출 (헤더/바디 공용)
-  // 렌더된 내용을 ordermgmt 영역으로 복사
-  const srcThead=document.getElementById('adminOrderThead');
-  const srcTbody=document.getElementById('adminOrderTbody');
-  const dstThead=document.getElementById('ordermgmtReceivedThead');
-  const dstTbody=document.getElementById('ordermgmtReceivedTbody');
-  const emptyEl=document.getElementById('ordermgmtReceivedEmpty');
-  const countEl=document.getElementById('ordermgmtReceivedCount');
-  const srcEmpty=document.getElementById('adminOrderEmpty');
-  const srcCount=document.getElementById('adminOrderCount');
-  if(dstThead) dstThead.innerHTML=srcThead?srcThead.innerHTML:'';
-  if(dstTbody) dstTbody.innerHTML=srcTbody?srcTbody.innerHTML:'';
-  if(emptyEl && srcEmpty){ emptyEl.textContent=srcEmpty.textContent; emptyEl.style.display=srcEmpty.style.display; }
-  if(countEl && srcCount) countEl.textContent=srcCount.textContent;
-  // 확대/축소해도 표가 한 화면에 맞도록 열 폭을 비율(%)로 고정합니다.
-  const colsEl=document.getElementById('ordermgmtReceivedCols');
-  if(colsEl){
-    const w=(lang==='ko')
-      ? [8,6,11,8,8,6.5,4.5,5,6,6,6,6.5,4.5,5,4.5,4.5]
-      : [9,7,13,9,7,5,5.5,6.5,6.5,6.5,7,5,6,5.5,5.5];
-    const total=w.reduce((a,b)=>a+b,0);
-    colsEl.innerHTML=w.map(x=>`<col style="width:${(x/total*100).toFixed(2)}%">`).join('');
-  }
-  renderOrderMgmtReceivedCards();
-}
-
-function renderOrderMgmtMine(){
-  // adminMyOrders 렌더 함수 재활용
-  renderAdminMyOrders();
-  const srcThead=document.getElementById('adminMyOrdersThead');
-  const srcTbody=document.getElementById('adminMyOrdersTbody');
-  const dstThead=document.getElementById('ordermgmtMineThead');
-  const dstTbody=document.getElementById('ordermgmtMineTbody');
-  const emptyEl=document.getElementById('ordermgmtMineEmpty');
-  const countEl=document.getElementById('ordermgmtMineCount');
-  const srcEmpty=document.getElementById('adminMyOrdersEmpty');
-  const srcCount=document.getElementById('adminMyOrderCount');
-  if(dstThead) dstThead.innerHTML=srcThead?srcThead.innerHTML:'';
-  if(dstTbody) dstTbody.innerHTML=srcTbody?srcTbody.innerHTML:'';
-  if(emptyEl && srcEmpty){ emptyEl.textContent=srcEmpty.textContent; emptyEl.style.display=srcEmpty.style.display; }
-  if(countEl && srcCount) countEl.textContent=srcCount.textContent;
-  // 확대/축소해도 표가 한 화면에 맞도록 열 폭을 비율(%)로 고정합니다.
-  const colsEl=document.getElementById('ordermgmtMineCols');
-  if(colsEl){
-    const w=(lang==='ko')
-      ? [12,9,9,5.5,7,4.5,6,6,7,7,4.5,5.5,5.5,5.5]
-      : [14,10,6,7.5,5,6.5,6.5,8,7.5,5,6,6,6];
-    const total=w.reduce((a,b)=>a+b,0);
-    colsEl.innerHTML=w.map(x=>`<col style="width:${(x/total*100).toFixed(2)}%">`).join('');
-  }
-  renderOrderMgmtMineCards();
-}
-
-// ── 주문관리 모바일 카드 목록 ──
-function renderOrderMgmtReceivedCards(){
-  const el=document.getElementById('ordermgmtReceivedCards');
-  if(!el) return;
-  const t=T[lang];
-  const isKo=lang==='ko';
-  const groups=buildAdminOrderGroups();
-  if(!groups.length){ el.innerHTML=''; return; }
-  el.innerHTML=groups.map(g=>{
-    const name=isKo?g.name_ko:(g.name_ru||g.name_ko);
-    const specHtml=isKo && g.spec?`<div class="pc-spec" style="margin:2px 0 0">${escapeHtml(g.spec)}</div>`:'';
-    const stockText=g.stockDisplay===null?'-':g.stockDisplay;
-    const ratePct=(g.supplyRate*100).toFixed(1)+'%';
-    const repEsc=g.rep.replace(/'/g,"\\'");
-    const companyEsc=g.company.replace(/'/g,"\\'");
-    const orderLinesTxt=g.orderLines.map(l=>`${escapeHtml(l.date)} · ${l.qty}`).join(' &nbsp;|&nbsp; ');
-    const supplyLinesTxt=g.supplyLines.map(l=>`${escapeHtml(l.date||'')} · ${l.qty}`).join(' &nbsp;|&nbsp; ');
-    const agreedHtml=g.agreed?`<span style="display:inline-block;background:rgba(34,197,94,.18);color:#22c55e;padding:3px 10px;border-radius:6px;font-weight:700;font-size:11px">${t.decisionAgreed}</span>`:'';
-    return `<div class="order-card">
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
-      <span style="font-size:12px;font-weight:700;color:var(--accent2)">${escapeHtml(g.company)} · ${escapeHtml(g.user_id)}</span>
-      <span>${statusLabelHtml(g.status)}</span>
-    </div>
-    <div class="pc-name" style="white-space:normal;margin-top:4px">${escapeHtml(name)}</div>
-    ${specHtml}
-    <div style="margin-top:3px"><span class="code">${escapeHtml(g.rep)}</span></div>
-    <div style="display:flex;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:12px">
-      <span style="color:var(--muted)">${t.grpOrderStatus}: <b style="color:var(--text)">${g.totalOrderQty}</b></span>
-      <span style="color:var(--muted)">${t.colStock}: <b style="color:var(--text)">${stockText}</b></span>
-    </div>
-    ${orderLinesTxt?`<div style="font-size:11px;color:var(--muted);margin-top:3px">${orderLinesTxt}</div>`:''}
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:12px">
-      <span style="color:var(--muted)">${t.colImmediateSupply}: <input type="number" min="0" value="${g.allocated}" style="width:64px;text-align:center;padding:5px;border:1px solid var(--border);border-radius:5px;background:var(--surface);color:var(--text);font-weight:600" onchange="updateGroupAllocation('${companyEsc}','${repEsc}',this.value)"></span>
-      <span style="color:var(--muted)">${t.colFutureSupply}: <b style="color:var(--text)">${g.futureSupply||'-'}</b></span>
-      ${agreedHtml}
-    </div>
-    <div style="display:flex;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:12px">
-      <span style="color:var(--muted)">${t.grpStatusHdr}: <b style="color:var(--text)">${g.totalSuppliedQty}</b></span>
-      <span style="color:var(--muted)">${t.colNotSupplied}: <b style="color:${g.notSupplied>0?'#ef4444':'var(--text)'}">${g.notSupplied}</b></span>
-      <span style="color:var(--muted)">${t.colSupplyRate}: <b style="color:var(--text)">${ratePct}</b></span>
-    </div>
-    ${supplyLinesTxt?`<div style="font-size:11px;color:var(--muted);margin-top:3px">${supplyLinesTxt}</div>`:''}
-  </div>`;
-  }).join('');
-}
-function renderOrderMgmtMineCards(){
-  const el=document.getElementById('ordermgmtMineCards');
-  if(!el) return;
-  const t=T[lang];
-  const isKo=lang==='ko';
-  const groups=buildMyOrderGroups();
-  if(!groups.length){ el.innerHTML=''; return; }
-  el.innerHTML=groups.map(g=>{
-    const name=isKo?g.name_ko:(g.name_ru||g.name_ko);
-    const specHtml=isKo && g.spec?`<div class="pc-spec" style="margin:2px 0 0">${escapeHtml(g.spec)}</div>`:'';
-    const stockText=g.stockDisplay===null?'-':g.stockDisplay;
-    const ratePct=(g.supplyRate*100).toFixed(1)+'%';
-    const repEsc=g.rep.replace(/'/g,"\\'");
-    const orderLinesTxt=g.orderLines.map(l=>`${escapeHtml(l.date)} · ${l.qty}`).join(' &nbsp;|&nbsp; ');
-    const supplyLinesTxt=g.supplyLines.map(l=>`${escapeHtml(l.date||'')} · ${l.qty}`).join(' &nbsp;|&nbsp; ');
-    const decisionHtml=g.agreed
-      ? `<span style="display:inline-block;background:rgba(34,197,94,.18);color:#22c55e;padding:3px 10px;border-radius:6px;font-weight:700;font-size:11px">${t.decisionAgreed}</span>`
-      : (g.immediateSupply>0?`<button class="news-btn-primary" style="padding:5px 12px;font-size:11px" onclick="agreeToAllocation('${repEsc}')">${t.agreeBtn}</button>`:'');
-    return `<div class="order-card">
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
-      <div class="pc-name" style="white-space:normal">${escapeHtml(name)}</div>
-      <span>${statusLabelHtml(g.status)}</span>
-    </div>
-    ${specHtml}
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:3px;font-size:12px">
-      <span class="code">${escapeHtml(g.rep)}</span>
-      <span style="color:var(--muted)">${t.colStock}: <b style="color:var(--text)">${stockText}</b></span>
-    </div>
-    <div style="display:flex;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:12px">
-      <span style="color:var(--muted)">${t.grpOrderStatus}: <b style="color:var(--text)">${g.totalOrderQty}</b></span>
-    </div>
-    ${orderLinesTxt?`<div style="font-size:11px;color:var(--muted);margin-top:3px">${orderLinesTxt}</div>`:''}
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:12px">
-      <span style="color:var(--muted)">${t.colImmediateSupply}: <b style="color:var(--text)">${g.immediateSupply||'-'}</b></span>
-      <span style="color:var(--muted)">${t.colFutureSupply}: <b style="color:var(--text)">${g.futureSupply||'-'}</b></span>
-      ${decisionHtml}
-    </div>
-    <div style="display:flex;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:12px">
-      <span style="color:var(--muted)">${t.grpStatusHdr}: <b style="color:var(--text)">${g.totalSuppliedQty}</b></span>
-      <span style="color:var(--muted)">${t.colNotSupplied}: <b style="color:${g.notSupplied>0?'#ef4444':'var(--text)'}">${g.notSupplied}</b></span>
-      <span style="color:var(--muted)">${t.colSupplyRate}: <b style="color:var(--text)">${ratePct}</b></span>
-    </div>
-    ${supplyLinesTxt?`<div style="font-size:11px;color:var(--muted);margin-top:3px">${supplyLinesTxt}</div>`:''}
-  </div>`;
-  }).join('');
-}
-
-// ── 주문관리 새 소식 배지 ──
-function ordermgmtSeenKey(){ return 'kt_ordermgmt_seen_'+(currentUser?(currentUser.id||currentUser.company||''):''); }
-async function updateOrderMgmtBadge(){
-  const badge=document.getElementById('ordermgmtTabBadge');
-  if(!badge || !currentUser){ if(badge) badge.classList.remove('show'); return; }
-  try{
-    const since=localStorage.getItem(ordermgmtSeenKey())||'1970-01-01T00:00:00Z';
-    const { data, error } = await sb.from('kt_orders').select('id,created_at').ilike('target_company', currentUser.company).gt('created_at', since);
-    const n=(!error && data)?data.length:0;
-    if(n>0){ badge.textContent=n>99?'99+':String(n); badge.classList.add('show'); }
-    else badge.classList.remove('show');
-  }catch(e){ console.error(e); }
-}
-function markOrderMgmtSeen(){
-  try{ localStorage.setItem(ordermgmtSeenKey(), new Date().toISOString()); }catch(e){}
-  const badge=document.getElementById('ordermgmtTabBadge');
-  if(badge) badge.classList.remove('show');
 }
 
 // ── 모델바+분해도 공용 위젯 이동 (주문 ↔ 부품검색) ──
@@ -2450,10 +2235,6 @@ function renderHeader(){
   // 고정 헤더 + 바디 테이블에 동일한 컬럼 적용
   const headerHtml=`<tr>${r1}</tr><tr>${r2}</tr>`;
   document.getElementById('thead-fixed').innerHTML=headerHtml;
-  // 헤더/본문 colgroup을 동일 개수로 만들어 픽셀 단위 열 폭 동기화 대상에 포함시킵니다.
-  const partsFixedCols=(lang==='ko'?4:3);
-  const partsColsHtml=Array(partsFixedCols+od.length).fill('<col>').join('');
-  ['parts-hdr-col','parts-body-col'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=partsColsHtml;});
   // tbl-header-wrap 표시
   const hw=document.getElementById('tblHeaderWrap');
   const bw=document.getElementById('tblBodyWrap');
@@ -2488,7 +2269,6 @@ function renderTable(){
   cl.insertBefore(frag,noR);
   if(activeDiagNum)highlightByDiag(activeDiagNum,activeDiagRep);
   updatePartsTableScrollbar();
-  scheduleSplitTableResync('parts-hdr-col','parts-body-col','tbody');
 }
 
 
@@ -3159,6 +2939,63 @@ async function loadAdminOrders(){
   });
   adminOrderRows=rows;
 }
+// ══════════════════════════════════════════
+// 그룹(회사+대표품번) 단위 취소·변경 신청 (미출고분에 한함)
+// ══════════════════════════════════════════
+let groupChangeRequests={}; // key: company+'||'+rep -> 최신 요청(pending/agreed/rejected 상관없이 가장 최근 것)
+let myGroupChangeRequests={}; // 내가 신청한 것들(rep -> 최신 요청)
+async function loadGroupChangeRequests(){
+  if(!currentUser){ groupChangeRequests={}; return; }
+  const { data, error } = await sb.from('kt_group_change_requests').select('*').ilike('target_company', currentUser.company).order('id', { ascending:false });
+  if(error){ console.error(error); groupChangeRequests={}; return; }
+  groupChangeRequests={};
+  (data||[]).forEach(r=>{
+    const key=r.company+'||'+r.rep;
+    if(!groupChangeRequests[key]) groupChangeRequests[key]=r; // id 내림차순이라 처음 것이 가장 최근 요청
+  });
+}
+async function loadMyGroupChangeRequests(){
+  if(!currentUser || !currentUser.supplier_company){ myGroupChangeRequests={}; return; }
+  const { data, error } = await sb.from('kt_group_change_requests').select('*').ilike('target_company', currentUser.supplier_company).ilike('company', currentUser.company).order('id', { ascending:false });
+  if(error){ console.error(error); myGroupChangeRequests={}; return; }
+  myGroupChangeRequests={};
+  (data||[]).forEach(r=>{
+    if(!myGroupChangeRequests[r.rep]) myGroupChangeRequests[r.rep]=r;
+  });
+}
+async function submitCancelRequest(rep, notSuppliedQty){
+  const t=T[lang];
+  if(!confirm(t.groupCancelConfirm(rep, notSuppliedQty))) return;
+  const { error } = await sb.from('kt_group_change_requests').insert({
+    target_company: currentUser.supplier_company, company: currentUser.company, rep,
+    request_type:'cancel', requested_qty:0, status:'pending'
+  });
+  if(error){ alert(t.reqFail+'\n\n['+(error.message||error.code)+']'); return; }
+  await loadMyGroupChangeRequests();
+  renderAdminMyOrders();
+}
+async function submitChangeRequest(rep, notSuppliedQty){
+  const t=T[lang];
+  const input=prompt(t.groupChangePrompt(rep, notSuppliedQty), String(Math.max(0,notSuppliedQty-1)));
+  if(input===null) return;
+  const newQty=parseInt(input,10);
+  if(isNaN(newQty) || newQty<0 || newQty>=notSuppliedQty){ alert(t.groupChangeInvalid); return; }
+  const { error } = await sb.from('kt_group_change_requests').insert({
+    target_company: currentUser.supplier_company, company: currentUser.company, rep,
+    request_type:'change', requested_qty:newQty, status:'pending'
+  });
+  if(error){ alert(t.reqFail+'\n\n['+(error.message||error.code)+']'); return; }
+  await loadMyGroupChangeRequests();
+  renderAdminMyOrders();
+}
+async function resolveGroupChangeRequest(reqId, decision){
+  const t=T[lang];
+  if(!confirm(decision==='agreed'?t.reqApproveConfirm:t.reqRejectConfirm)) return;
+  const { error } = await sb.from('kt_group_change_requests').update({ status:decision, resolved_at:new Date().toISOString() }).eq('id', reqId);
+  if(error){ alert(t.reqFail+'\n\n['+(error.message||error.code)+']'); return; }
+  await loadGroupChangeRequests();
+  renderAdminOrders();
+}
 let orderAllocations={}; // key: company+'||'+rep -> {allocated, agreed} (내가 받은 주문내역: 내가 이 회사에게 제안한 배분/공급가능 수량과 그 회사의 동의 여부)
 async function loadOrderAllocations(){
   const { data, error } = await sb.from('kt_order_allocations').select('*').ilike('target_company', currentUser?currentUser.company:'');
@@ -3168,24 +3005,7 @@ async function loadOrderAllocations(){
 }
 async function updateGroupAllocation(company, rep, value){
   const t=T[lang];
-  let newVal=Math.max(0, parseInt(value,10)||0);
-  // 즉시공급 수량은 재고를 초과할 수 없습니다.
-  // (같은 품번에 대해 다른 회사에 이미 배분한 수량을 뺀 잔여 재고 기준)
-  const _mrTotals=computeMasterRepTotals();
-  const _baseStock=_mrTotals[rep];
-  if(_baseStock!==undefined){
-    let _otherAlloc=0;
-    Object.keys(orderAllocations).forEach(k=>{
-      const _i=k.lastIndexOf('||');
-      const _c=k.slice(0,_i), _r=k.slice(_i+2);
-      if(_r===rep && _c!==company) _otherAlloc+=(orderAllocations[k].allocated||0);
-    });
-    const _maxAllowed=Math.max(0, _baseStock-_otherAlloc);
-    if(newVal>_maxAllowed){
-      alert(t.allocExceedStock(_maxAllowed));
-      newVal=_maxAllowed;
-    }
-  }
+  const newVal=Math.max(0, parseInt(value,10)||0);
   // 배분 수량을 새로 입력/수정하면 새로운 제안이므로, 상대방의 동의 상태는 다시 초기화합니다.
   const { error } = await sb.from('kt_order_allocations').upsert(
     [{ target_company: currentUser.company, company, rep, allocated:newVal, agreed:false }],
@@ -3194,7 +3014,6 @@ async function updateGroupAllocation(company, rep, value){
   if(error){ alert(t.reqFail+'\n\n['+(error.message||error.code)+']'); return; }
   orderAllocations[company+'||'+rep]={allocated:newVal, agreed:false};
   renderAdminOrders();
-  if(document.getElementById('pane-ordermgmt').classList.contains('active')) renderOrderMgmtReceived();
 }
 let myOrderAllocations={}; // key: rep -> {allocated, agreed} (내가 신청한 주문내역: 내 구매처가 나에게 제안한 공급가능 수량과 내 동의 여부)
 async function loadMyOrderAllocations(){
@@ -3211,7 +3030,6 @@ async function agreeToAllocation(rep){
   if(error){ alert(t.reqFail+'\n\n['+(error.message||error.code)+']'); return; }
   await loadMyOrderAllocations();
   renderAdminMyOrders();
-  if(document.getElementById('pane-ordermgmt').classList.contains('active')) renderOrderMgmtMine();
 }
 let shipmentsToMe=[]; // 내 구매처가 나에게 보낸 출고내역(구매처의 kt_shipments 중 거래처명이 나와 일치하는 것)
 async function loadShipmentsToMe(){
@@ -3281,13 +3099,23 @@ function buildAdminOrderGroups(){
 
   Object.values(groups).forEach(g=>{
     g.orderLines.sort((a,b)=> a.date<b.date?-1:(a.date>b.date?1:0));
-    g.totalOrderQty=g.orderLines.reduce((s,l)=>s+l.qty,0);
+    g.rawOrderQty=g.orderLines.reduce((s,l)=>s+l.qty,0); // 원래 접수된 주문 합계(변경이력 비교 기준)
 
     g.supplyLines=(shipmentsData||[])
       .filter(s=>findMasterRep(s.rep)===g.rep && isSameClient(s.client_name, g.company))
       .map(s=>({date:s.ship_date, qty:s.qty||0}))
       .sort((a,b)=> (a.date||'')<(b.date||'')?-1:((a.date||'')>(b.date||'')?1:0));
     g.totalSuppliedQty=g.supplyLines.reduce((s,l)=>s+l.qty,0);
+
+    // 취소/변경 신청이 동의되면, 그 신청 수량이 최종 주문 수량이 됩니다(미출고분에 한해서만 조정 가능했으므로 출고분은 그대로 유지).
+    const changeReq=groupChangeRequests[g.company+'||'+g.rep]||null;
+    g.changeRequest=changeReq;
+    if(changeReq && changeReq.status==='agreed'){
+      g.totalOrderQty = changeReq.request_type==='cancel' ? g.totalSuppliedQty : (g.totalSuppliedQty+changeReq.requested_qty);
+    } else {
+      g.totalOrderQty=g.rawOrderQty;
+    }
+    g.changeHistory = g.totalOrderQty!==g.rawOrderQty; // 변경이력: 원래 주문수량과 달라졌으면 "변경"
 
     const allocInfo=orderAllocations[g.company+'||'+g.rep]||{allocated:0, agreed:false};
     g.allocated=allocInfo.allocated; // 즉시공급
@@ -3324,6 +3152,8 @@ function renderAdminOrders(){
       <th colspan="2" style="text-align:center;border-bottom:1px solid var(--border);border-left:2px solid var(--border);font-size:13px;font-weight:700;color:var(--text);padding:6px">${t.grpOrderStatus}</th>
       <th colspan="4" style="text-align:center;border-bottom:1px solid var(--border);border-left:2px solid var(--border);font-size:13px;font-weight:700;color:var(--text);padding:6px">${t.grpDecision}</th>
       <th colspan="5" style="text-align:center;border-bottom:1px solid var(--border);border-left:2px solid var(--border);font-size:13px;font-weight:700;color:var(--text);padding:6px">${t.grpStatusHdr}</th>
+      <th colspan="3" style="text-align:center;border-bottom:1px solid var(--border);border-left:2px solid var(--border);font-size:13px;font-weight:700;color:var(--text);padding:6px">${t.grpCancelReceive}</th>
+      <th rowspan="2" style="text-align:center;border-left:2px solid var(--border);font-size:13px;font-weight:700;color:var(--text);padding:6px">${t.colChangeHistory}</th>
     </tr>
     <tr style="border-bottom:1px solid var(--border);color:var(--muted);font-size:10px">
       <th style="padding:6px 12px;border-left:2px solid var(--border);font-size:10px">${t.colDate}</th>
@@ -3337,6 +3167,9 @@ function renderAdminOrders(){
       <th style="padding:6px 16px 6px 10px;text-align:right;font-size:10px">${t.colNotSupplied}</th>
       <th style="padding:6px 16px 6px 10px;text-align:right;font-size:10px">${t.colSupplyRate}</th>
       <th style="padding:6px 10px;text-align:center;font-size:10px">${t.colStatus}</th>
+      <th style="padding:6px 12px;border-left:2px solid var(--border);font-size:10px">${t.colChangeType}</th>
+      <th style="padding:6px 16px 6px 10px;text-align:right;font-size:10px">${t.colChangeQty}</th>
+      <th style="padding:6px 10px;text-align:center;font-size:10px">${t.colChangeDecision}</th>
     </tr>`;
 
   if(!groups.length){
@@ -3367,16 +3200,24 @@ function renderAdminOrders(){
       <td style="padding:9px 16px 9px 12px;text-align:right">${g.totalOrderQty}</td>
       <td style="padding:9px 16px 9px 12px;text-align:right;border-left:2px solid var(--border);color:var(--muted)">${stockText}</td>
       <td style="padding:9px 12px;text-align:center">
-        <input type="number" min="0" value="${g.allocated}" class="admin-supply-input" style="width:100%;max-width:60px;min-width:36px;box-sizing:border-box;text-align:center;padding:4px;border:1px solid var(--border);border-radius:5px;background:var(--surface);color:var(--text);font-weight:600"
+        <input type="number" min="0" value="${g.allocated}" class="admin-supply-input" style="width:60px;text-align:center;padding:4px;border:1px solid var(--border);border-radius:5px;background:var(--surface);color:var(--text);font-weight:600"
           onchange="updateGroupAllocation('${companyEsc}','${repEsc}',this.value)">
       </td>
       <td style="padding:9px 16px 9px 12px;text-align:right">${g.futureSupply||'-'}</td>
-      <td style="padding:9px 12px;text-align:center">${g.agreed?`<span style="display:inline-block;background:rgba(34,197,94,.18);color:#22c55e;padding:3px 10px;border-radius:6px;font-weight:700">${t.decisionAgreed}</span>`:''}</td>
+      <td style="padding:9px 12px;text-align:center">${g.agreed?`<span style="color:#22c55e">${t.decisionAgreed}</span>`:''}</td>
       <td style="padding:9px 12px;border-left:2px solid var(--border)"></td>
       <td style="padding:9px 16px 9px 12px;text-align:right">${g.totalSuppliedQty}</td>
       <td style="padding:9px 16px 9px 12px;text-align:right;color:${g.notSupplied>0?'#ef4444':'var(--text)'}">${g.notSupplied}</td>
       <td style="padding:9px 16px 9px 12px;text-align:right">${ratePct}</td>
       <td style="padding:9px 12px;text-align:center">${statusLabelHtml(g.status)}</td>
+      <td style="padding:9px 12px;border-left:2px solid var(--border)">${g.changeRequest && g.changeRequest.status==='pending' ? (g.changeRequest.request_type==='cancel'?t.reqTypeCancel:t.reqTypeChange) : ''}</td>
+      <td style="padding:9px 16px 9px 12px;text-align:right">${g.changeRequest && g.changeRequest.status==='pending' ? (g.changeRequest.request_type==='cancel'?0:g.changeRequest.requested_qty) : ''}</td>
+      <td style="padding:9px 12px;text-align:center;white-space:nowrap">${
+        g.changeRequest && g.changeRequest.status==='pending'
+          ? `<button class="news-btn-primary" style="padding:4px 8px;font-size:11px;margin-right:4px" onclick="resolveGroupChangeRequest(${g.changeRequest.id},'agreed')">${t.agreeBtn}</button><button class="news-btn-secondary" style="padding:4px 8px;font-size:11px" onclick="resolveGroupChangeRequest(${g.changeRequest.id},'rejected')">${t.cannotBtn}</button>`
+          : (g.changeRequest && g.changeRequest.status==='agreed' ? `<span style="color:#22c55e">${t.decisionAgreed}</span>` : (g.changeRequest && g.changeRequest.status==='rejected' ? `<span style="color:#ef4444">${t.cannotBtn}</span>` : ''))
+      }</td>
+      <td style="padding:9px 12px;text-align:center;border-left:2px solid var(--border)">${g.changeHistory?`<span style="color:#3b82f6">${t.changeHistoryLabel}</span>`:''}</td>
     </tr>`;
 
     // 상세 내역: 개별 주문일자·수량과 개별 출고일자·수량을 나란히 나열(가는 글씨)
@@ -3392,6 +3233,8 @@ function renderAdminOrders(){
         <td style="padding:6px 12px;border-left:2px solid var(--border)">${sl?escapeHtml(sl.date):''}</td>
         <td style="padding:6px 16px 6px 10px;text-align:right">${sl?sl.qty:''}</td>
         <td></td><td></td><td></td>
+        <td style="border-left:2px solid var(--border)"></td><td></td><td></td>
+        <td style="border-left:2px solid var(--border)"></td>
       </tr>`;
     }
     return html;
@@ -3401,8 +3244,23 @@ async function openAdminModal(){
   if(!currentUser) return;
   document.getElementById('adminModal').classList.add('show');
   refreshAdminTexts();
-  switchAdminView('signups');
+  document.getElementById('adminOrderTbody').innerHTML='';
+  document.getElementById('adminOrderEmpty').style.display='none';
+  switchAdminView('orders');
   await refreshCurrentUser();
+  await loadInventory();
+  await loadShipments();
+  await loadOrderAllocations();
+  await loadGroupChangeRequests();
+  await loadAdminOrders();
+  renderAdminOrders();
+  await loadMyOrderAllocations();
+  await loadShipmentsToMe();
+  await loadMyCompanyOrders();
+  await loadMyGroupChangeRequests();
+  renderAdminMyOrders();
+  await loadOrderRequests();
+  renderOrderRequests();
   await loadPendingSignups();
   renderPendingSignups();
   const resetWrap=document.getElementById("resetAllMembersWrap");
@@ -3419,11 +3277,6 @@ async function loadPendingSignups(){
   if(badge){
     if(pendingCount){ badge.textContent=pendingCount; badge.style.display='inline-block'; }
     else badge.style.display='none';
-  }
-  const btnBadge=document.getElementById('adminBtnBadge');
-  if(btnBadge){
-    if(pendingCount){ btnBadge.textContent=pendingCount>99?'99+':String(pendingCount); btnBadge.classList.add('show'); }
-    else btnBadge.classList.remove('show');
   }
 }
 function renderPendingSignups(){
@@ -3592,7 +3445,22 @@ function buildMyOrderGroups(){
   });
   Object.values(groups).forEach(g=>{
     g.orderLines.sort((a,b)=> a.date<b.date?-1:(a.date>b.date?1:0));
-    g.totalOrderQty=g.orderLines.reduce((s,l)=>s+l.qty,0);
+    g.rawOrderQty=g.orderLines.reduce((s,l)=>s+l.qty,0);
+
+    g.supplyLines=(shipmentsToMe||[])
+      .filter(s=>findMasterRep(s.rep)===g.rep)
+      .map(s=>({date:s.ship_date, qty:s.qty||0}))
+      .sort((a,b)=> (a.date||'')<(b.date||'')?-1:((a.date||'')>(b.date||'')?1:0));
+    g.totalSuppliedQty=g.supplyLines.reduce((s,l)=>s+l.qty,0);
+
+    const changeReq=myGroupChangeRequests[g.rep]||null;
+    g.changeRequest=changeReq;
+    if(changeReq && changeReq.status==='agreed'){
+      g.totalOrderQty = changeReq.request_type==='cancel' ? g.totalSuppliedQty : (g.totalSuppliedQty+changeReq.requested_qty);
+    } else {
+      g.totalOrderQty=g.rawOrderQty;
+    }
+    g.changeHistory = g.totalOrderQty!==g.rawOrderQty;
 
     const baseStock=ownMasterTotals[g.rep];
     g.stockDisplay = baseStock===undefined ? null : baseStock;
@@ -3601,12 +3469,6 @@ function buildMyOrderGroups(){
     g.immediateSupply=allocInfo.allocated; // 즉시공급: 구매처가 지금 배분해준 수량
     g.futureSupply=Math.max(0, g.totalOrderQty-g.immediateSupply); // 향후공급: 주문 수량에서 즉시공급을 뺀 나머지
     g.agreed=allocInfo.agreed;
-
-    g.supplyLines=(shipmentsToMe||[])
-      .filter(s=>findMasterRep(s.rep)===g.rep)
-      .map(s=>({date:s.ship_date, qty:s.qty||0}))
-      .sort((a,b)=> (a.date||'')<(b.date||'')?-1:((a.date||'')>(b.date||'')?1:0));
-    g.totalSuppliedQty=g.supplyLines.reduce((s,l)=>s+l.qty,0);
 
     g.notSupplied=Math.max(0, g.totalOrderQty-g.totalSuppliedQty);
     g.supplyRate=g.totalOrderQty>0 ? (g.totalSuppliedQty/g.totalOrderQty) : 0;
@@ -3635,6 +3497,8 @@ function renderAdminMyOrders(){
       <th colspan="2" style="text-align:center;border-bottom:1px solid var(--border);border-left:2px solid var(--border);font-size:13px;font-weight:700;color:var(--text);padding:6px">${t.grpOrderStatus}</th>
       <th colspan="3" style="text-align:center;border-bottom:1px solid var(--border);border-left:2px solid var(--border);font-size:13px;font-weight:700;color:var(--text);padding:6px">${t.myOrderReqSection}</th>
       <th colspan="5" style="text-align:center;border-bottom:1px solid var(--border);border-left:2px solid var(--border);font-size:13px;font-weight:700;color:var(--text);padding:6px">${t.grpStatusHdr}</th>
+      <th colspan="3" style="text-align:center;border-bottom:1px solid var(--border);border-left:2px solid var(--border);font-size:13px;font-weight:700;color:var(--text);padding:6px">${t.grpCancelRequest}</th>
+      <th rowspan="2" style="text-align:center;border-left:2px solid var(--border);font-size:13px;font-weight:700;color:var(--text);padding:6px">${t.colChangeHistory}</th>
     </tr>
     <tr style="border-bottom:1px solid var(--border);color:var(--muted);font-size:10px">
       <th style="padding:6px 12px;border-left:2px solid var(--border);font-size:10px">${t.colDate}</th>
@@ -3647,6 +3511,9 @@ function renderAdminMyOrders(){
       <th style="padding:6px 16px 6px 10px;text-align:right;font-size:10px">${t.colNotSupplied}</th>
       <th style="padding:6px 16px 6px 10px;text-align:right;font-size:10px">${t.colSupplyRate}</th>
       <th style="padding:6px 10px;text-align:center;font-size:10px">${t.colStatus}</th>
+      <th style="padding:6px 12px;border-left:2px solid var(--border);font-size:10px">${t.colCancelChangeAction}</th>
+      <th style="padding:6px 16px 6px 10px;text-align:right;font-size:10px">${t.colRequestedQty}</th>
+      <th style="padding:6px 10px;text-align:center;font-size:10px">${t.colChangeResult}</th>
     </tr>`;
 
   if(!groups.length){
@@ -3665,7 +3532,7 @@ function renderAdminMyOrders(){
     const stockText=g.stockDisplay===null?'-':g.stockDisplay;
     const repEsc=g.rep.replace(/'/g,"\\'");
     const decisionCell = g.agreed
-      ? `<span style="display:inline-block;background:rgba(34,197,94,.18);color:#22c55e;padding:4px 12px;border-radius:6px;font-weight:700">${t.decisionAgreed}</span>`
+      ? `<span style="color:#22c55e">${t.decisionAgreed}</span>`
       : (g.immediateSupply>0 ? `<button class="news-btn-primary" style="padding:4px 10px;font-size:11px" onclick="agreeToAllocation('${repEsc}')">${t.agreeBtn}</button>` : '');
 
     let html=`<tr style="border-bottom:1px solid var(--border);font-weight:700;background:var(--surface2)">
@@ -3683,6 +3550,18 @@ function renderAdminMyOrders(){
       <td style="padding:9px 16px 9px 12px;text-align:right;color:${g.notSupplied>0?'#ef4444':'var(--text)'}">${g.notSupplied}</td>
       <td style="padding:9px 16px 9px 12px;text-align:right">${ratePct}</td>
       <td style="padding:9px 12px;text-align:center">${statusLabelHtml(g.status)}</td>
+      <td style="padding:9px 12px;border-left:2px solid var(--border);white-space:nowrap">${(()=>{
+        const req=g.changeRequest;
+        if(req && req.status==='pending') return `<span style="color:#f59e0b">${req.request_type==='cancel'?t.reqTypeCancel:t.reqTypeChange}</span>`;
+        if(g.notSupplied<=0) return '';
+        return `<button class="news-btn-secondary" style="padding:4px 8px;font-size:11px;margin-right:4px" onclick="submitCancelRequest('${repEsc}',${g.notSupplied})">${t.cancelBtn}</button><button class="news-btn-secondary" style="padding:4px 8px;font-size:11px" onclick="submitChangeRequest('${repEsc}',${g.notSupplied})">${t.changeBtn}</button>`;
+      })()}</td>
+      <td style="padding:9px 16px 9px 12px;text-align:right">${g.changeRequest && g.changeRequest.status==='pending' ? (g.changeRequest.request_type==='cancel'?0:g.changeRequest.requested_qty) : ''}</td>
+      <td style="padding:9px 12px;text-align:center">${
+        g.changeRequest && g.changeRequest.status==='agreed' ? `<span style="color:#22c55e">${t.decisionAgreed}</span>`
+        : (g.changeRequest && g.changeRequest.status==='rejected' ? `<span style="color:#ef4444">${t.cannotBtn}</span>` : '')
+      }</td>
+      <td style="padding:9px 12px;text-align:center;border-left:2px solid var(--border)">${g.changeHistory?`<span style="color:#3b82f6">${t.changeHistoryLabel}</span>`:''}</td>
     </tr>`;
 
     const maxLines=Math.max(g.orderLines.length, g.supplyLines.length);
@@ -3697,21 +3576,22 @@ function renderAdminMyOrders(){
         <td style="padding:6px 12px;border-left:2px solid var(--border)">${sl?escapeHtml(sl.date):''}</td>
         <td style="padding:6px 16px 6px 10px;text-align:right">${sl?sl.qty:''}</td>
         <td></td><td></td><td></td>
+        <td style="border-left:2px solid var(--border)"></td><td></td><td></td>
+        <td style="border-left:2px solid var(--border)"></td>
       </tr>`;
     }
     return html;
   }).join('');
 }
 function switchAdminView(view){
-  // 관리자 화면은 이제 회원관리 단일 뷰만 사용합니다.
-  // (adminOrdersView/adminMyOrdersView는 주문관리 탭의 렌더 소스로만 남겨두고 항상 숨김)
-  const tabSignups=document.getElementById('adminTabSignups');
-  if(tabSignups) tabSignups.classList.add('active');
-  document.getElementById('adminOrdersView').style.display = 'none';
-  document.getElementById('adminMyOrdersView').style.display = 'none';
-  const reqView=document.getElementById('adminRequestsView');
-  if(reqView) reqView.style.display = 'none';
-  document.getElementById('adminSignupsView').style.display = 'block';
+  document.getElementById('adminTabOrders').classList.toggle('active', view==='orders');
+  document.getElementById('adminTabMyOrders').classList.toggle('active', view==='myorders');
+  document.getElementById('adminTabRequests').classList.toggle('active', view==='requests');
+  document.getElementById('adminTabSignups').classList.toggle('active', view==='signups');
+  document.getElementById('adminOrdersView').style.display = view==='orders' ? 'flex' : 'none';
+  document.getElementById('adminMyOrdersView').style.display = view==='myorders' ? 'flex' : 'none';
+  document.getElementById('adminRequestsView').style.display = view==='requests' ? 'block' : 'none';
+  document.getElementById('adminSignupsView').style.display = view==='signups' ? 'block' : 'none';
 }
 function closeAdminModal(){
   document.getElementById('adminModal').classList.remove('show');
@@ -4349,35 +4229,18 @@ function syncSplitTableColumnWidths(hdrColId, bodyColId, tbodyId){
   requestAnimationFrame(()=>{
     requestAnimationFrame(()=>{
       const tbody=document.getElementById(tbodyId);
+      const firstRow=tbody && tbody.querySelector('tr');
       const hdrColEl=document.getElementById(hdrColId);
       const bodyColEl=document.getElementById(bodyColId);
-      if(!tbody || !hdrColEl || !bodyColEl) return;
-      const hdrTable=hdrColEl.closest('table');
-      const bodyTable=bodyColEl.closest('table');
-      if(!hdrTable || !bodyTable) return;
-      // colspan이 없는 기준 행을 찾습니다 (첫 행이 colspan을 쓰는 그룹행이면 다음 행으로).
-      const rows=[...tbody.querySelectorAll(':scope > tr')];
-      const refRow=rows.find(r=>[...r.children].every(td=>!td.hasAttribute('colspan')));
-      if(!refRow) return;
-      const cells=[...refRow.children];
+      if(!firstRow || !hdrColEl || !bodyColEl) return;
+      const cells=[...firstRow.children].filter(td=>!td.hasAttribute('colspan'));
       const hdrCols=[...hdrColEl.children];
       const bodyCols=[...bodyColEl.children];
       if(cells.length!==hdrCols.length || cells.length!==bodyCols.length) return; // 셀 개수가 안 맞으면(로딩 중 등) 건너뜁니다.
-      // 1) 본문 테이블을 잠시 자연 폭(auto)으로 되돌려 실제 내용 기준 열 폭을 측정합니다.
-      bodyCols.forEach(c=>{c.style.width='';});
-      bodyTable.style.tableLayout='auto';
-      bodyTable.style.width='';
-      void bodyTable.offsetWidth; // 강제 리플로우
-      const widths=cells.map(td=>td.getBoundingClientRect().width);
-      const total=widths.reduce((a,b)=>a+b,0);
-      if(!(total>0)) return;
-      // 2) 측정된 폭을 헤더/본문 양쪽 colgroup에 픽셀로 고정하고, 두 테이블을
-      //    동일한 전체 폭 + table-layout:fixed 로 맞춰 확대/축소·스크롤에도 절대 안 틀어지게 합니다.
-      widths.forEach((w,i)=>{ bodyCols[i].style.width=w+'px'; hdrCols[i].style.width=w+'px'; });
-      bodyTable.style.tableLayout='fixed';
-      hdrTable.style.tableLayout='fixed';
-      bodyTable.style.width=total+'px';
-      hdrTable.style.width=total+'px';
+      cells.forEach((td,i)=>{
+        const w=td.getBoundingClientRect().width;
+        if(w>0){ hdrCols[i].style.width=w+'px'; bodyCols[i].style.width=w+'px'; }
+      });
     });
   });
 }
@@ -4431,7 +4294,7 @@ function renderShipmentsList(){
   const emptyEl=document.getElementById('shipmentsNoResult');
   if(!rows.length){
     tbody.innerHTML=''; if(cardList) cardList.innerHTML='';
-    emptyEl.textContent=t.shipEmpty; emptyEl.style.display='block';
+    emptyEl.textContent=t.invEmpty; emptyEl.style.display='block';
     return;
   }
   emptyEl.style.display='none';
@@ -4810,11 +4673,9 @@ function refreshInventoryTexts(){
   setTxt('i18n-invupload', t.invUpload);
   setTxt('i18n-shipupload', t.shipUpload);
   setTxt('i18n-tab-shipments', '🚚 '+t.tabShipments);
-  setTxt('i18n-tab-ordermgmt', t.tabOrderMgmt);
-  setTxt('i18n-ordermgmt-received', t.tabOrderMgmtReceived);
-  setTxt('i18n-ordermgmt-mine', t.tabOrderMgmtMine);
+  setTxt('i18n-tab-adminorders', '🗂️ '+t.tabAdminOrders);
+  setTxt('i18n-admingroup-orders', t.adminGroupOrders);
   const sEl=document.getElementById('invSearchInput'); if(sEl) sEl.placeholder=t.invSearchPh;
-  const shEl=document.getElementById('shipSearchInput'); if(shEl) shEl.placeholder=t.shipSearchPh;
   if(document.getElementById('pane-inventory').classList.contains('active')) renderInventoryList();
 }
 
@@ -5477,20 +5338,16 @@ function enterApp(user){
   if(info) info.textContent = user.id;
   const lb2 = document.getElementById('logoutBtn');
   if(lb2) lb2.textContent = T[lang].logoutBtn;
-  const adminBtn = document.getElementById('adminBtn');
-  if(adminBtn) adminBtn.style.display = 'flex';
+  const tabAdminOrders=document.getElementById('tab-adminOrders');
+  if(tabAdminOrders) tabAdminOrders.style.display = 'flex';
   const tabInv=document.getElementById('tab-inventory');
   const tabShip=document.getElementById('tab-shipments');
   const tabPrice=document.getElementById('tab-price');
-  const tabOrderMgmt=document.getElementById('tab-ordermgmt');
   if(tabInv) tabInv.style.display = 'block';
   if(tabShip) tabShip.style.display = 'block';
   if(tabPrice) tabPrice.style.display = user.is_admin ? 'block' : 'none';
-  if(tabOrderMgmt) tabOrderMgmt.style.display = 'block';
   Promise.all([loadMyOrderTotals(), loadInventory(), loadGlobalSuppliedTotals(), loadReceivedOrderTotals()]).then(()=>{ if(document.getElementById('pane-order').classList.contains('active')) renderOrderTable(); });
   loadNewsPosts();
-  loadPendingSignups();
-  updateOrderMgmtBadge();
 }
 
 function authInit(){
