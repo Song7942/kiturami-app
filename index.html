@@ -817,84 +817,6 @@ input[type="text"]::placeholder{color:var(--muted)}
       </div>
     </div>
   </div>
-</main>
-
-<!-- 분해도 확대 모달 -->
-<div id="diagModal" onclick="closeDiagModal(event)">
-  <div class="dm-inner" id="dmInner">
-    <div id="dmZoomWrap">
-      <img id="dmImg" src="" alt="">
-      <div class="dm-nums" id="dmNums"></div>
-    </div>
-    <div class="dm-label" id="dmLabel"></div>
-    <div class="dm-zoom-hint" id="dmZoomHint">👆 <span id="i18n-dmzoomhint">손가락으로 확대/이동</span></div>
-    <button class="dm-close" onclick="closeDiagModal()">✕</button>
-  </div>
-</div>
-
-<!-- News (공지/질문답변) 모달 -->
-<div id="newsModal" class="news-modal" onclick="closeNewsModalBg(event)">
-  <div class="news-modal-inner" onclick="event.stopPropagation()">
-    <div class="news-modal-hdr">
-      <span id="i18n-newstitle">News</span>
-      <button class="news-modal-close" onclick="closeNewsModal()">✕</button>
-    </div>
-    <div class="news-tabs">
-      <button class="news-tab active" id="newsTabNotice" onclick="switchNewsTab('notice')">
-        <span id="i18n-newstab-notice">공지사항</span>
-      </button>
-      <button class="news-tab" id="newsTabQna" onclick="switchNewsTab('qna')">
-        <span id="i18n-newstab-qna">질문·답변</span>
-      </button>
-    </div>
-
-    <!-- 목록 뷰 -->
-    <div id="newsListView">
-      <div class="news-list-toolbar">
-        <span id="newsListCount" class="news-list-count"></span>
-        <button class="news-btn-primary" id="newsWriteBtn" onclick="openNewsWrite()">
-          <span id="i18n-newswrite">+ 글쓰기</span>
-        </button>
-      </div>
-      <div class="news-list" id="newsList"></div>
-    </div>
-
-    <!-- 글쓰기 뷰 -->
-    <div id="newsWriteView" style="display:none">
-      <input type="text" id="newsWriteTitle" class="news-input" placeholder="제목을 입력하세요">
-      <textarea id="newsWriteContent" class="news-textarea" placeholder="내용을 입력하세요" rows="8"></textarea>
-      <div style="margin-top:8px">
-        <label class="news-btn-secondary" style="cursor:pointer;display:inline-block">
-          <span id="i18n-newsattach">📎 자료 첨부</span>
-          <input type="file" id="newsWriteFile" style="display:none" onchange="onNewsFileChosen(event)">
-        </label>
-        <span id="newsWriteFileName" style="font-size:11px;color:var(--muted);margin-left:8px"></span>
-      </div>
-      <div class="news-write-actions">
-        <button class="news-btn-secondary" onclick="cancelNewsWrite()"><span id="i18n-newscancel">취소</span></button>
-        <button class="news-btn-primary" onclick="submitNewsPost()"><span id="i18n-newssubmit">등록</span></button>
-      </div>
-    </div>
-
-    <!-- 상세 뷰 -->
-    <div id="newsDetailView" style="display:none">
-      <button class="news-back-btn" onclick="backToNewsList()">← <span id="i18n-newsback">목록으로</span></button>
-      <div class="news-detail-title" id="newsDetailTitle"></div>
-      <div class="news-detail-meta" id="newsDetailMeta"></div>
-      <div class="news-detail-content" id="newsDetailContent"></div>
-      <div id="newsDetailAttachment"></div>
-      <div id="newsDetailDeleteWrap"></div>
-      <div class="news-replies" id="newsReplies"></div>
-      <div class="news-reply-form">
-        <textarea id="newsReplyInput" class="news-textarea" placeholder="답변/댓글을 입력하세요" rows="3"></textarea>
-        <button class="news-btn-primary" onclick="submitNewsReply()"><span id="i18n-newsreplybtn">등록</span></button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- 관리자: 전체 주문내역 모달 -->
-<!-- ══ 탭: 주문관리 (내가 받은 / 내가 신청한 주문내역) ══ -->
 <div class="tab-pane" id="pane-adminOrders">
   <div class="scroll-body" id="scrollBodyAdminOrders" style="padding:8px 12px 72px">
     <div style="display:flex;gap:6px;margin-bottom:10px;border-bottom:1px solid var(--border)">
@@ -984,6 +906,84 @@ input[type="text"]::placeholder{color:var(--muted)}
   </div>
 </div>
 
+</main>
+
+<!-- 분해도 확대 모달 -->
+<div id="diagModal" onclick="closeDiagModal(event)">
+  <div class="dm-inner" id="dmInner">
+    <div id="dmZoomWrap">
+      <img id="dmImg" src="" alt="">
+      <div class="dm-nums" id="dmNums"></div>
+    </div>
+    <div class="dm-label" id="dmLabel"></div>
+    <div class="dm-zoom-hint" id="dmZoomHint">👆 <span id="i18n-dmzoomhint">손가락으로 확대/이동</span></div>
+    <button class="dm-close" onclick="closeDiagModal()">✕</button>
+  </div>
+</div>
+
+<!-- News (공지/질문답변) 모달 -->
+<div id="newsModal" class="news-modal" onclick="closeNewsModalBg(event)">
+  <div class="news-modal-inner" onclick="event.stopPropagation()">
+    <div class="news-modal-hdr">
+      <span id="i18n-newstitle">News</span>
+      <button class="news-modal-close" onclick="closeNewsModal()">✕</button>
+    </div>
+    <div class="news-tabs">
+      <button class="news-tab active" id="newsTabNotice" onclick="switchNewsTab('notice')">
+        <span id="i18n-newstab-notice">공지사항</span>
+      </button>
+      <button class="news-tab" id="newsTabQna" onclick="switchNewsTab('qna')">
+        <span id="i18n-newstab-qna">질문·답변</span>
+      </button>
+    </div>
+
+    <!-- 목록 뷰 -->
+    <div id="newsListView">
+      <div class="news-list-toolbar">
+        <span id="newsListCount" class="news-list-count"></span>
+        <button class="news-btn-primary" id="newsWriteBtn" onclick="openNewsWrite()">
+          <span id="i18n-newswrite">+ 글쓰기</span>
+        </button>
+      </div>
+      <div class="news-list" id="newsList"></div>
+    </div>
+
+    <!-- 글쓰기 뷰 -->
+    <div id="newsWriteView" style="display:none">
+      <input type="text" id="newsWriteTitle" class="news-input" placeholder="제목을 입력하세요">
+      <textarea id="newsWriteContent" class="news-textarea" placeholder="내용을 입력하세요" rows="8"></textarea>
+      <div style="margin-top:8px">
+        <label class="news-btn-secondary" style="cursor:pointer;display:inline-block">
+          <span id="i18n-newsattach">📎 자료 첨부</span>
+          <input type="file" id="newsWriteFile" style="display:none" onchange="onNewsFileChosen(event)">
+        </label>
+        <span id="newsWriteFileName" style="font-size:11px;color:var(--muted);margin-left:8px"></span>
+      </div>
+      <div class="news-write-actions">
+        <button class="news-btn-secondary" onclick="cancelNewsWrite()"><span id="i18n-newscancel">취소</span></button>
+        <button class="news-btn-primary" onclick="submitNewsPost()"><span id="i18n-newssubmit">등록</span></button>
+      </div>
+    </div>
+
+    <!-- 상세 뷰 -->
+    <div id="newsDetailView" style="display:none">
+      <button class="news-back-btn" onclick="backToNewsList()">← <span id="i18n-newsback">목록으로</span></button>
+      <div class="news-detail-title" id="newsDetailTitle"></div>
+      <div class="news-detail-meta" id="newsDetailMeta"></div>
+      <div class="news-detail-content" id="newsDetailContent"></div>
+      <div id="newsDetailAttachment"></div>
+      <div id="newsDetailDeleteWrap"></div>
+      <div class="news-replies" id="newsReplies"></div>
+      <div class="news-reply-form">
+        <textarea id="newsReplyInput" class="news-textarea" placeholder="답변/댓글을 입력하세요" rows="3"></textarea>
+        <button class="news-btn-primary" onclick="submitNewsReply()"><span id="i18n-newsreplybtn">등록</span></button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 관리자: 전체 주문내역 모달 -->
+<!-- ══ 탭: 주문관리 (내가 받은 / 내가 신청한 주문내역) ══ -->
 <!-- 내 정보 수정 모달 -->
 <!-- 관리자 - 회원 정보 수정 모달 -->
 <!-- 출고내역 - 수정 모달 -->
