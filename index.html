@@ -865,22 +865,7 @@ input[type="text"]::placeholder{color:var(--muted)}
 <!-- ══ 탭: 회원관리 (취소·변경 요청 / 회원관리 및 가입승인) ══ -->
 <div class="tab-pane" id="pane-memberManagement">
   <div class="scroll-body" id="scrollBodyMemberManagement" style="padding:8px 12px 72px">
-    <div style="display:flex;gap:6px;margin-bottom:10px;border-bottom:1px solid var(--border)">
-      <button class="news-tab active" id="adminTabRequests" onclick="switchAdminView('requests')" style="flex:1;text-align:center">
-        <span id="i18n-admintab-requests">취소·변경 요청</span> <span id="adminReqBadge" style="display:none;background:#f59e0b;color:#1a1a00;border-radius:9px;padding:1px 6px;font-size:10px;font-weight:800;margin-left:4px"></span>
-      </button>
-      <button class="news-tab" id="adminTabSignups" onclick="switchAdminView('signups')" style="flex:1;text-align:center">
-        <span id="i18n-admintab-signups">회원관리 및 가입승인</span> <span id="adminSignupBadge" style="display:none;background:#ef4444;color:#fff;border-radius:9px;padding:1px 6px;font-size:10px;font-weight:800;margin-left:4px"></span>
-      </button>
-    </div>
-    <div id="adminRequestsView" style="display:flex;flex-direction:column;flex:1;min-height:0">
-      <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:8px">
-        <thead id="adminRequestsThead"></thead>
-        <tbody id="adminRequestsList"></tbody>
-      </table>
-      <div class="news-empty" id="adminRequestsEmpty" style="display:none"></div>
-    </div>
-    <div id="adminSignupsView" style="display:none;flex-direction:column;flex:1;min-height:0">
+    <div id="adminSignupsView" style="display:flex;flex-direction:column;flex:1;min-height:0">
       <div id="resetAllMembersWrap" style="display:none;margin:8px 0 12px;text-align:right">
         <button class="news-btn-secondary" style="color:#ef4444;border-color:#ef4444;margin-right:8px" onclick="resetAllOrderData()">
           <span id="i18n-resetallorders">주문·재고·출고 초기화</span>
@@ -889,18 +874,21 @@ input[type="text"]::placeholder{color:var(--muted)}
           <span id="i18n-resetallmembers">전체 회원 초기화</span>
         </button>
       </div>
-      <table style="width:100%;border-collapse:collapse;font-size:13px">
-        <thead><tr style="border-bottom:1px solid var(--border);color:var(--muted);text-align:left">
-          <th style="padding:9px 12px" id="i18n-signup-th-company">회사명</th>
-          <th style="padding:9px 12px" id="i18n-signup-th-contact">담당자명</th>
-          <th style="padding:9px 12px" id="i18n-signup-th-phone">휴대폰</th>
-          <th style="padding:9px 12px" id="i18n-signup-th-email">이메일</th>
-          <th style="padding:9px 12px" id="i18n-signup-th-id">아이디</th>
-          <th style="padding:9px 12px;text-align:center" id="i18n-signup-th-status">상태</th>
-          <th style="padding:9px 12px;text-align:center" colspan="3"></th>
-        </tr></thead>
-        <tbody id="adminSignupsList"></tbody>
-      </table>
+      <div class="pn-body-wrap" style="display:none">
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead><tr style="border-bottom:1px solid var(--border);color:var(--muted);text-align:left">
+            <th style="padding:9px 12px" id="i18n-signup-th-company">회사명</th>
+            <th style="padding:9px 12px" id="i18n-signup-th-contact">담당자명</th>
+            <th style="padding:9px 12px" id="i18n-signup-th-phone">휴대폰</th>
+            <th style="padding:9px 12px" id="i18n-signup-th-email">이메일</th>
+            <th style="padding:9px 12px" id="i18n-signup-th-id">아이디</th>
+            <th style="padding:9px 12px;text-align:center" id="i18n-signup-th-status">상태</th>
+            <th style="padding:9px 12px;text-align:center" colspan="3"></th>
+          </tr></thead>
+          <tbody id="adminSignupsList"></tbody>
+        </table>
+      </div>
+      <div class="card-list" id="adminSignupsCardList"></div>
       <div class="news-empty" id="adminSignupsEmpty" style="display:none"></div>
     </div>
   </div>
@@ -1409,7 +1397,6 @@ function scrollToTop(){const el=getScrollBody();if(el)el.scrollTo({top:0,behavio
 
 // ── 탭 ──
 function switchTab(tab){
-  if(tab==='price' && !(currentUser && currentUser.is_admin)) return;
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
   document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active'));
   document.getElementById('tab-'+tab).classList.add('active');
@@ -3391,10 +3378,7 @@ async function loadAdminOrdersTab(){
 }
 async function loadMemberManagementTab(){
   if(!currentUser) return;
-  switchAdminView('requests');
   await refreshCurrentUser();
-  await loadOrderRequests();
-  renderOrderRequests();
   await loadPendingSignups();
   renderPendingSignups();
   const resetWrap=document.getElementById("resetAllMembersWrap");
@@ -3444,6 +3428,31 @@ function renderPendingSignups(){
     <td style="padding:9px 12px;text-align:center"><button class="news-btn-secondary" onclick="openEditMemberModal('${idEsc}')">${t.signupEdit}</button></td>
     <td style="padding:9px 12px;text-align:center"><button class="news-btn-secondary" onclick="deleteMember('${idEsc}')">${t.signupDelete}</button></td>
   </tr>`;
+  }).join('');
+
+  // 모바일 카드
+  const cardList=document.getElementById('adminSignupsCardList');
+  if(cardList) cardList.innerHTML=companyMembers.map(u=>{
+    const idEsc=u.id.replace(/'/g,"\\'");
+    const approveBtn=u.status==='pending' ? `<button class="news-btn-primary" style="padding:5px 10px;font-size:12px" onclick="approveSignup('${idEsc}')">${t.signupApprove}</button>` : '';
+    const rejectBtn=u.status==='pending' ? `<button class="news-btn-secondary" style="padding:5px 10px;font-size:12px" onclick="rejectSignup('${idEsc}')">${t.signupReject}</button>` : '';
+    return `<div class="order-card">
+      <div style="display:flex;justify-content:space-between;align-items:start">
+        <div class="pc-name">${escapeHtml(u.company)}</div>
+        ${statusLabel(u.status)}
+      </div>
+      <div style="margin-top:6px;font-size:12px;color:var(--muted);display:flex;flex-direction:column;gap:2px">
+        <div>${t.signupThContact}: <span style="color:var(--text)">${escapeHtml(u.contact_name||'-')}</span></div>
+        <div>${t.signupThPhone}: <span style="color:var(--text)">${escapeHtml(u.phone||'-')}</span></div>
+        <div>${t.signupThEmail}: <span style="color:var(--text)">${escapeHtml(u.email||'-')}</span></div>
+        <div>ID: <span class="code">${escapeHtml(u.id)}</span></div>
+      </div>
+      <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
+        ${approveBtn}${rejectBtn}
+        <button class="news-btn-secondary" style="padding:5px 10px;font-size:12px" onclick="openEditMemberModal('${idEsc}')">${t.signupEdit}</button>
+        <button class="news-btn-secondary" style="padding:5px 10px;font-size:12px" onclick="deleteMember('${idEsc}')">${t.signupDelete}</button>
+      </div>
+    </div>`;
   }).join('');
 }
 async function approveSignup(id){
@@ -3773,12 +3782,8 @@ function renderAdminMyOrders(){
 function switchAdminView(view){
   document.getElementById('adminTabOrders').classList.toggle('active', view==='orders');
   document.getElementById('adminTabMyOrders').classList.toggle('active', view==='myorders');
-  document.getElementById('adminTabRequests').classList.toggle('active', view==='requests');
-  document.getElementById('adminTabSignups').classList.toggle('active', view==='signups');
   document.getElementById('adminOrdersView').style.display = view==='orders' ? 'flex' : 'none';
   document.getElementById('adminMyOrdersView').style.display = view==='myorders' ? 'flex' : 'none';
-  document.getElementById('adminRequestsView').style.display = view==='requests' ? 'block' : 'none';
-  document.getElementById('adminSignupsView').style.display = view==='signups' ? 'block' : 'none';
 }
 function downloadAdminMyOrders(){
   const t=T[lang];
@@ -3896,7 +3901,7 @@ function refreshAdminTexts(){
   setTxt('i18n-editmember-pwhint', t.editMemberPwHint);
   setTxt('i18n-editmember-save', t.editMemberSave);
   if(document.getElementById('pane-adminOrders').classList.contains('active')){ renderAdminOrders(); renderAdminMyOrders(); }
-  if(document.getElementById('pane-memberManagement').classList.contains('active')){ renderOrderRequests(); renderPendingSignups(); }
+  if(document.getElementById('pane-memberManagement').classList.contains('active')){ renderPendingSignups(); }
 }
 
 // ══════════════════════════════════════════
@@ -5565,7 +5570,7 @@ function enterApp(user){
   const tabPrice=document.getElementById('tab-price');
   if(tabInv) tabInv.style.display = 'block';
   if(tabShip) tabShip.style.display = 'block';
-  if(tabPrice) tabPrice.style.display = user.is_admin ? 'block' : 'none';
+  if(tabPrice) tabPrice.style.display = 'block';
   Promise.all([loadMyOrderTotals(), loadInventory(), loadGlobalSuppliedTotals(), loadReceivedOrderTotals()]).then(()=>{ if(document.getElementById('pane-order').classList.contains('active')) renderOrderTable(); });
   loadNewsPosts();
 }
