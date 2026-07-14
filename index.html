@@ -783,115 +783,65 @@ input[type="text"]::placeholder{color:var(--muted)}
   <!-- 가격정보 (관리자 전용) -->
   <div class="tab-pane" id="pane-price">
     <div class="fixed-top">
+      <div class="news-tabs" style="margin:4px 0 6px">
+        <button class="news-tab active" id="priceTabCalc" onclick="switchPriceView('calc')"><span id="i18n-pricetab-calc">계산식</span></button>
+        <button class="news-tab" id="priceTabSupply" onclick="switchPriceView('supply')"><span id="i18n-pricetab-supply">공급가</span></button>
+      </div>
+      <!-- 계산식 상단: 환율/GP 파라미터 -->
+      <div id="priceParamsBar" style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;padding:4px 4px 8px">
+        <div><div style="font-size:10px;color:var(--muted)">기준환율(KRW/RUB)</div><input type="number" step="0.01" id="prmRubRate" style="width:90px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)"></div>
+        <div><div style="font-size:10px;color:var(--muted)">기준환율(KRW/USD)</div><input type="number" step="0.01" id="prmUsdRate" style="width:90px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)"></div>
+        <div><div style="font-size:10px;color:var(--muted)">러시아 기준 GP(%)</div><input type="number" step="0.1" id="prmRuGp" style="width:70px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)"></div>
+        <div><div style="font-size:10px;color:var(--muted)">카자흐스탄 기준 GP(%)</div><input type="number" step="0.1" id="prmKzGp" style="width:70px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)"></div>
+        <button class="dl-btn" onclick="savePriceSettings()" style="background:var(--accent);border-color:var(--accent);color:#fff"><span id="i18n-prm-save">저장</span></button>
+        <div id="priceRateInfo" style="font-size:11px;color:var(--muted);flex:1;min-width:200px"></div>
+      </div>
       <div class="search-bar">
         <div class="search-wrap">
           <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-          <input type="text" id="priceSearchInput" placeholder="대표품번으로 검색…" oninput="renderPriceList()">
+          <input type="text" id="priceSearchInput" placeholder="품명, 대표품번으로 검색…" oninput="renderPriceActive()">
         </div>
         <div class="count-badge" id="priceCountBadge"></div>
-        <button class="dl-btn" onclick="downloadPriceTemplate()" style="background:var(--surface2);border-color:var(--border);color:var(--text)">
-          <span id="i18n-pricetemplate">양식 다운로드</span>
-        </button>
-        <label class="dl-btn" style="cursor:pointer;background:var(--accent2);border-color:var(--accent2);color:#fff">
-          <span id="i18n-priceupload">엑셀 업데이트</span>
-          <input type="file" id="priceFileInput" accept=".xlsx,.xls" style="display:none" onchange="handlePriceUpload(event)">
+        <label class="dl-btn" id="priceUploadWrap" style="cursor:pointer;background:var(--accent2);border-color:var(--accent2);color:#fff">
+          <span id="i18n-priceupload">엑셀 업로드</span>
+          <input type="file" id="priceFileInput" accept=".xlsx,.xls" style="display:none" onchange="handlePriceCalcUpload(event)">
         </label>
+        <button class="dl-btn" onclick="downloadPriceActive()" style="background:var(--surface2);border-color:var(--border);color:var(--text)">
+          <span id="i18n-pricedl">엑셀 다운로드</span>
+        </button>
       </div>
       <div id="priceLastUpdated" style="padding:2px 4px 6px;font-size:11px;color:var(--muted)"></div>
-      <div class="pn-hdr-wrap">
+      <!-- 계산식 헤더 -->
+      <div class="pn-hdr-wrap" id="priceCalcHdrWrap">
         <table>
-          <colgroup><col style="width:60%"><col style="width:40%"></colgroup>
-          <thead><tr>
-            <th id="i18n-priceh-rep">대표품번</th>
-            <th id="i18n-priceh-price" style="text-align:right;padding-right:16px">가격</th>
-          </tr></thead>
+          <colgroup id="pricecalc-hdr-col"></colgroup>
+          <thead id="priceCalcThead"></thead>
+        </table>
+      </div>
+      <!-- 공급가 헤더 -->
+      <div class="pn-hdr-wrap" id="priceSupplyHdrWrap" style="display:none">
+        <table>
+          <colgroup id="pricesupply-hdr-col"></colgroup>
+          <thead id="priceSupplyThead"></thead>
         </table>
       </div>
     </div>
     <div class="scroll-body" id="scrollBodyPrice" style="padding:0 12px 72px">
-      <div class="pn-body-wrap">
+      <div class="pn-body-wrap" id="priceCalcBodyWrap">
         <table>
-          <colgroup><col style="width:60%"><col style="width:40%"></colgroup>
-          <tbody id="priceTbody"></tbody>
+          <colgroup id="pricecalc-body-col"></colgroup>
+          <tbody id="priceCalcTbody"></tbody>
         </table>
-        <div id="priceNoResult" class="no-result" style="display:none"></div>
       </div>
+      <div class="pn-body-wrap" id="priceSupplyBodyWrap" style="display:none">
+        <table>
+          <colgroup id="pricesupply-body-col"></colgroup>
+          <tbody id="priceSupplyTbody"></tbody>
+        </table>
+      </div>
+      <div id="priceNoResult" class="no-result" style="display:none"></div>
     </div>
   </div>
-<div class="tab-pane" id="pane-adminOrders">
-  <div class="scroll-body" id="scrollBodyAdminOrders" style="padding:8px 12px 72px">
-    <div style="display:flex;gap:6px;margin-bottom:10px;border-bottom:1px solid var(--border)">
-      <button class="news-tab active" id="adminTabOrders" onclick="switchAdminView('orders')" style="flex:1;text-align:center">
-        <span id="i18n-admintab-orders">주문 접수</span>
-      </button>
-      <button class="news-tab" id="adminTabMyOrders" onclick="switchAdminView('myorders')" style="flex:1;text-align:center">
-        <span id="i18n-admintab-myorders">주문</span>
-      </button>
-    </div>
-    <div id="adminOrdersView" style="display:flex;flex-direction:column;flex:1;min-height:0">
-      <div style="padding:0 4px 10px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:10px">
-        <span id="adminOrderCount" style="font-size:11px;color:var(--muted)"></span>
-        <button class="news-btn-primary" onclick="downloadAdminOrders()">
-          <span id="i18n-adminxls">엑셀 다운로드</span>
-        </button>
-      </div>
-      <div class="pn-body-wrap">
-        <table style="width:100%;border-collapse:collapse;font-size:13px">
-          <thead id="adminOrderThead"></thead>
-          <tbody id="adminOrderTbody"></tbody>
-        </table>
-      </div>
-      <div class="card-list" id="adminOrderCardList"></div>
-      <div class="news-empty" id="adminOrderEmpty" style="display:none"></div>
-    </div>
-    <div id="adminMyOrdersView" style="display:none;flex-direction:column;flex:1;min-height:0">
-      <div style="padding:10px 4px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:10px">
-        <span id="adminMyOrderCount" style="font-size:11px;color:var(--muted)"></span>
-        <button class="news-btn-primary" onclick="downloadAdminMyOrders()">
-          <span id="i18n-adminmyorderxls">엑셀 다운로드</span>
-        </button>
-      </div>
-      <div class="pn-body-wrap">
-        <table style="width:100%;border-collapse:collapse;font-size:13px">
-          <thead id="adminMyOrdersThead"></thead>
-          <tbody id="adminMyOrdersTbody"></tbody>
-        </table>
-      </div>
-      <div class="card-list" id="adminMyOrderCardList"></div>
-      <div class="news-empty" id="adminMyOrdersEmpty" style="display:none"></div>
-    </div>
-  </div>
-</div>
-
-<!-- ══ 탭: 회원관리 (취소·변경 요청 / 회원관리 및 가입승인) ══ -->
-<div class="tab-pane" id="pane-memberManagement">
-  <div class="scroll-body" id="scrollBodyMemberManagement" style="padding:8px 12px 72px">
-    <div id="adminSignupsView" style="display:flex;flex-direction:column;flex:1;min-height:0">
-      <div id="resetAllMembersWrap" style="display:none;margin:8px 0 12px;text-align:right">
-        <button class="news-btn-secondary" style="color:#ef4444;border-color:#ef4444" onclick="resetAllMembers()">
-          <span id="i18n-resetallmembers">전체 회원 초기화</span>
-        </button>
-      </div>
-      <div class="pn-body-wrap">
-        <table style="width:100%;border-collapse:collapse;font-size:13px">
-          <thead><tr style="border-bottom:1px solid var(--border);color:var(--muted);text-align:left">
-            <th style="padding:9px 12px" id="i18n-signup-th-company">회사명</th>
-            <th style="padding:9px 12px" id="i18n-signup-th-contact">담당자명</th>
-            <th style="padding:9px 12px" id="i18n-signup-th-phone">휴대폰</th>
-            <th style="padding:9px 12px" id="i18n-signup-th-email">이메일</th>
-            <th style="padding:9px 12px" id="i18n-signup-th-id">아이디</th>
-            <th style="padding:9px 12px;text-align:center" id="i18n-signup-th-status">상태</th>
-            <th style="padding:9px 12px;text-align:center" colspan="3"></th>
-          </tr></thead>
-          <tbody id="adminSignupsList"></tbody>
-        </table>
-      </div>
-      <div class="card-list" id="adminSignupsCardList"></div>
-      <div class="news-empty" id="adminSignupsEmpty" style="display:none"></div>
-    </div>
-  </div>
-</div>
-
 
 <!-- ══ 탭: 초기화 (KITURAMI 최상위 관리자 전용) ══ -->
 <div class="tab-pane" id="pane-reset">
@@ -1449,7 +1399,7 @@ function switchTab(tab){
   if(tab==='parts'){ mountModelDiag('parts'); syncDiagram(); renderTable(); }
   if(tab==='inventory'){ refreshCurrentUser().then(()=>Promise.all([loadInventory(), loadGlobalSuppliedTotals()])).then(renderInventoryList); }
   if(tab==='shipments'){ refreshCurrentUser().then(()=>loadShipments()).then(renderShipmentsList); }
-  if(tab==='price'){ loadPrices().then(renderPriceList); }
+  if(tab==='price'){ Promise.all([loadPriceSettings(), loadPriceCalc(), loadPrices()]).then(async()=>{ const updated=await autoUpdateRatesIfNewMonth(); fillParamInputs(); renderPriceActive(); }); }
   if(tab==='adminOrders'){ loadAdminOrdersTab(); }
   if(tab==='memberManagement'){ loadMemberManagementTab(); }
 }
@@ -5003,9 +4953,12 @@ function refreshInventoryTexts(){
 }
 
 // ══════════════════════════════════════════
-// 가격정보 (관리자 전용)
+// 가격정보 (KITURAMI 전용) — 계산식 / 공급가
 // ══════════════════════════════════════════
-let priceData={}; // rep -> {price, updated_at}
+let priceData={}; // rep -> {price, updated_at}  (주문 탭 RUB 가격 소스)
+let priceCalcData=[]; // 계산식 행 목록
+let priceSettings={ rub_rate:20.02, usd_rate:1450, ru_gp:0.2, kz_gp:0.3, rate_month:'', updated_at:null };
+let priceView='calc';
 
 async function loadPrices(){
   const { data, error } = await sb.from('kt_prices').select('*').order('rep');
@@ -5013,38 +4966,229 @@ async function loadPrices(){
   priceData={};
   (data||[]).forEach(row=>{ priceData[row.rep]={ price:row.price, updated_at:row.updated_at }; });
 }
-function renderPriceList(){
-  const t=T[lang];
+async function loadPriceSettings(){
+  const { data, error } = await sb.from('kt_price_settings').select('*').eq('id',1).maybeSingle();
+  if(error){ console.error(error); return; }
+  if(data){ priceSettings={ rub_rate:Number(data.rub_rate)||20.02, usd_rate:Number(data.usd_rate)||1450, ru_gp:Number(data.ru_gp)||0.2, kz_gp:Number(data.kz_gp)||0.3, rate_month:data.rate_month||'', updated_at:data.updated_at }; }
+}
+async function loadPriceCalc(){
+  // 2,000행 규모 → 1,000행씩 페이지 로딩
+  let all=[], from=0;
+  while(true){
+    const { data, error } = await sb.from('kt_price_calc').select('*').order('row_no').range(from, from+999);
+    if(error){ console.error(error); break; }
+    all=all.concat(data||[]);
+    if(!data || data.length<1000) break;
+    from+=1000;
+  }
+  priceCalcData=all;
+}
+
+// ── 계산 로직 (엑셀 계산식 시트와 동일) ──
+function ceil1(x){ return Math.ceil(x*10)/10; } // 소수 1자리 올림 (ROUNDUP(x,1))
+function calcPriceRow(r){
+  const ruGp=priceSettings.ru_gp, kzGp=priceSettings.kz_gp;
+  const ruCost=(r.ru_cost!=null&&r.ru_cost!=='')?Number(r.ru_cost):null;
+  let ruSupply=(r.ru_supply_krw!=null&&r.ru_supply_krw!=='')?Number(r.ru_supply_krw):null;
+  // 새 원가가 있고 공급가가 없으면: 공급가 = 원가/(1-기준GP), 소수점 이하 올림
+  if((ruSupply==null||ruSupply===0) && ruCost!=null && ruCost>0 && ruGp<1) ruSupply=Math.ceil(ruCost/(1-ruGp));
+  const ruRub=(ruSupply!=null&&ruSupply>0&&priceSettings.rub_rate>0)?ceil1(ruSupply/priceSettings.rub_rate):null;
+  const ruGpVal=(ruSupply!=null&&ruSupply>0)?((ruSupply-(ruCost||0))/ruSupply):null;
+  // 카자흐스탄 원가 = 러시아 원가 (엑셀 K열 =G열)
+  const kzCost=ruCost;
+  let kzSupply=(r.kz_supply_krw!=null&&r.kz_supply_krw!=='')?Number(r.kz_supply_krw):null;
+  if((kzSupply==null||kzSupply===0) && kzCost!=null && kzCost>0 && kzGp<1) kzSupply=Math.ceil(kzCost/(1-kzGp));
+  const kzUsd=(kzSupply!=null&&kzSupply>0&&priceSettings.usd_rate>0)?ceil1(kzSupply/priceSettings.usd_rate):null;
+  const kzGpVal=(kzSupply!=null&&kzSupply>0)?((kzSupply-(kzCost||0))/kzSupply):null;
+  return { ruCost, ruSupply, ruRub, ruGpVal, kzCost, kzSupply, kzUsd, kzGpVal };
+}
+// 대표품번별 최고 공급가 (동일 대표품번에 원가/공급가가 다르면 가장 높은 공급가 채택)
+function buildSupplyByRep(){
+  const map={};
+  priceCalcData.forEach(r=>{
+    if(!r.rep) return;
+    const c=calcPriceRow(r);
+    if(!map[r.rep]) map[r.rep]={ rep:r.rep, name_ko:r.name_ko, spec:r.spec, final:r.final, compats:[], rub:null, usd:null, krwRu:null, krwKz:null };
+    const m=map[r.rep];
+    if(r.compat && !m.compats.includes(r.compat)) m.compats.push(r.compat);
+    if(c.ruSupply!=null && (m.krwRu==null || c.ruSupply>m.krwRu)){ m.krwRu=c.ruSupply; m.rub=c.ruRub; m.name_ko=r.name_ko; m.spec=r.spec; m.final=r.final; }
+    if(c.kzSupply!=null && (m.krwKz==null || c.kzSupply>m.krwKz)){ m.krwKz=c.kzSupply; m.usd=c.kzUsd; }
+  });
+  return map;
+}
+// 주문 탭에서 쓰는 kt_prices(RUB)를 계산식 결과로 동기화
+async function syncKtPricesFromCalc(){
+  const map=buildSupplyByRep();
+  const rows=Object.values(map).filter(m=>m.rub!=null).map(m=>({ rep:m.rep, price:m.rub, updated_at:new Date().toISOString() }));
+  if(!rows.length) return;
+  for(let i=0;i<rows.length;i+=500){
+    const { error } = await sb.from('kt_prices').upsert(rows.slice(i,i+500),{onConflict:'rep'});
+    if(error){ console.error(error); return; }
+  }
+  await loadPrices();
+}
+
+// ── 전월말일 기준환율 자동 갱신 (매월 1회) ──
+// 서울외국환중개 공시환율은 공개 API가 없어, 매월 첫 접속 시 시장환율(open.er-api.com)로 자동 반영합니다.
+// 공시 환율과 차이가 있으면 상단 입력칸에서 직접 수정 후 저장하면 됩니다.
+async function autoUpdateRatesIfNewMonth(){
+  const nowMonth=new Date().toISOString().slice(0,7);
+  if(priceSettings.rate_month===nowMonth) return false;
+  try{
+    const res=await fetch('https://open.er-api.com/v6/latest/KRW');
+    const j=await res.json();
+    if(!j || !j.rates || !j.rates.RUB || !j.rates.USD) throw new Error('rate fetch failed');
+    const rub=Math.round((1/j.rates.RUB)*100)/100; // KRW/RUB
+    const usd=Math.round((1/j.rates.USD)*100)/100; // KRW/USD
+    priceSettings.rub_rate=rub; priceSettings.usd_rate=usd; priceSettings.rate_month=nowMonth;
+    await sb.from('kt_price_settings').upsert({ id:1, rub_rate:rub, usd_rate:usd, ru_gp:priceSettings.ru_gp, kz_gp:priceSettings.kz_gp, rate_month:nowMonth, updated_at:new Date().toISOString() },{onConflict:'id'});
+    await syncKtPricesFromCalc(); // 환율이 바뀌면 공급가 RUB/USD도 자동 반영
+    return true;
+  }catch(e){ console.error('환율 자동갱신 실패:', e); return false; }
+}
+async function savePriceSettings(){
+  const rub=Number(document.getElementById('prmRubRate').value);
+  const usd=Number(document.getElementById('prmUsdRate').value);
+  const ruGp=Number(document.getElementById('prmRuGp').value)/100;
+  const kzGp=Number(document.getElementById('prmKzGp').value)/100;
+  if(!(rub>0)||!(usd>0)||!(ruGp>=0&&ruGp<1)||!(kzGp>=0&&kzGp<1)){ alert('환율과 GP(%) 값을 확인해 주세요. GP는 0~99.9 사이여야 합니다.'); return; }
+  priceSettings.rub_rate=rub; priceSettings.usd_rate=usd; priceSettings.ru_gp=ruGp; priceSettings.kz_gp=kzGp;
+  const { error } = await sb.from('kt_price_settings').upsert({ id:1, rub_rate:rub, usd_rate:usd, ru_gp:ruGp, kz_gp:kzGp, rate_month:priceSettings.rate_month||new Date().toISOString().slice(0,7), updated_at:new Date().toISOString() },{onConflict:'id'});
+  if(error){ alert('저장 실패\n['+(error.message||error.code)+']'); return; }
+  await syncKtPricesFromCalc();
+  renderPriceActive();
+  alert('저장되었습니다. 공급가 RUB/USD가 새 기준으로 다시 계산되었습니다.');
+}
+function fillParamInputs(){
+  const g=(id)=>document.getElementById(id);
+  if(g('prmRubRate')) g('prmRubRate').value=priceSettings.rub_rate;
+  if(g('prmUsdRate')) g('prmUsdRate').value=priceSettings.usd_rate;
+  if(g('prmRuGp')) g('prmRuGp').value=Math.round(priceSettings.ru_gp*1000)/10;
+  if(g('prmKzGp')) g('prmKzGp').value=Math.round(priceSettings.kz_gp*1000)/10;
+  const info=document.getElementById('priceRateInfo');
+  if(info) info.textContent=`기준월 ${priceSettings.rate_month||'-'} · 매월 초 전월말 환율로 자동 갱신됩니다 (수동 수정 가능)`;
+}
+
+// ── 뷰 전환 / 렌더 ──
+function switchPriceView(v){
+  priceView=v;
+  document.getElementById('priceTabCalc').classList.toggle('active', v==='calc');
+  document.getElementById('priceTabSupply').classList.toggle('active', v==='supply');
+  document.getElementById('priceCalcHdrWrap').style.display = v==='calc'?'':'none';
+  document.getElementById('priceCalcBodyWrap').style.display = v==='calc'?'':'none';
+  document.getElementById('priceSupplyHdrWrap').style.display = v==='supply'?'':'none';
+  document.getElementById('priceSupplyBodyWrap').style.display = v==='supply'?'':'none';
+  document.getElementById('priceParamsBar').style.display = v==='calc'?'flex':'none';
+  document.getElementById('priceUploadWrap').style.display = v==='calc'?'':'none';
+  renderPriceActive();
+}
+function renderPriceActive(){ if(priceView==='calc') renderPriceCalc(); else renderPriceSupply(); }
+function fmtN(x){ return (x==null||isNaN(x))?'':Number(x).toLocaleString(); }
+function fmtGp(x){ return (x==null||isNaN(x))?'':(Math.round(x*1000)/10)+'%'; }
+function priceFilterRows(){
   const kwEl=document.getElementById('priceSearchInput');
   const kw=(kwEl?kwEl.value:'').trim().toLowerCase();
-  const reps=Object.keys(priceData).filter(rep=>!kw||rep.toLowerCase().includes(kw)).sort();
-  document.getElementById('priceCountBadge').innerHTML=t.priceCount(reps.length);
-
-  const allUpdates=Object.values(priceData).map(d=>d.updated_at).filter(Boolean);
-  const overallLatest=allUpdates.length?allUpdates.reduce((a,b)=>a>b?a:b):null;
-  const lastUpdatedEl=document.getElementById('priceLastUpdated');
-  if(lastUpdatedEl) lastUpdatedEl.textContent = overallLatest ? t.invLastUpdated(formatNewsDate(new Date(overallLatest).getTime())) : '';
-
-  const tbody=document.getElementById('priceTbody');
+  if(!kw) return priceCalcData;
+  return priceCalcData.filter(r=>(r.rep||'').toLowerCase().includes(kw)||(r.name_ko||'').toLowerCase().includes(kw)||(r.final||'').toLowerCase().includes(kw)||(r.compat||'').toLowerCase().includes(kw));
+}
+function renderPriceCalc(){
+  const rows=priceFilterRows();
+  document.getElementById('priceCountBadge').innerHTML=`총 ${rows.length}건`;
+  const lastEl=document.getElementById('priceLastUpdated');
+  const allUp=priceCalcData.map(r=>r.updated_at).filter(Boolean);
+  if(lastEl) lastEl.textContent = allUp.length? ('업데이트: '+formatNewsDate(new Date(allUp.reduce((a,b)=>a>b?a:b)).getTime())) : '';
+  const thead=document.getElementById('priceCalcThead');
+  thead.innerHTML=`<tr style="border-bottom:1px solid var(--border);color:var(--muted)">
+    <th rowspan="2" style="padding:8px 10px">품명</th><th rowspan="2" style="padding:8px 10px">규격</th>
+    <th rowspan="2" style="padding:8px 10px">대표품번<br>(미변경)</th><th rowspan="2" style="padding:8px 10px">호환품번<br>(변경)</th>
+    <th rowspan="2" style="padding:8px 10px">최종품번<br>(변경, 현시점)</th><th rowspan="2" class="center">출고<br>(18y~)</th>
+    <th colspan="4" class="center" style="border-left:1px solid var(--border)">러시아</th>
+    <th colspan="4" class="center" style="border-left:1px solid var(--border)">카자흐스탄</th></tr>
+    <tr style="border-bottom:1px solid var(--border);color:var(--muted)">
+    <th class="center" style="border-left:1px solid var(--border)">원가<br>KRW</th><th class="center">공급가<br>KRW</th><th class="center">공급가<br>RUB</th><th class="center">GP</th>
+    <th class="center" style="border-left:1px solid var(--border)">원가<br>KRW</th><th class="center">공급가<br>KRW</th><th class="center">공급가<br>USD</th><th class="center">GP</th></tr>`;
+  const cols='<col><col><col><col><col><col style="width:60px"><col style="width:90px"><col style="width:100px"><col style="width:90px"><col style="width:64px"><col style="width:90px"><col style="width:100px"><col style="width:84px"><col style="width:64px">';
+  document.getElementById('pricecalc-hdr-col').innerHTML=cols;
+  document.getElementById('pricecalc-body-col').innerHTML=cols;
+  const tbody=document.getElementById('priceCalcTbody');
   const emptyEl=document.getElementById('priceNoResult');
-  if(!reps.length){ tbody.innerHTML=''; emptyEl.textContent=t.priceEmpty; emptyEl.style.display='block'; return; }
+  if(!rows.length){ tbody.innerHTML=''; emptyEl.textContent='계산식 데이터가 없습니다. 엑셀 업로드로 계산식 시트를 올려주세요.'; emptyEl.style.display='block'; return; }
   emptyEl.style.display='none';
-  tbody.innerHTML=reps.map(rep=>{
-    const d=priceData[rep];
-    return `<tr><td style="padding:9px 12px"><span class="code">${escapeHtml(rep)}</span></td><td style="padding:9px 16px 9px 12px;text-align:right">${Number(d.price).toLocaleString()}</td></tr>`;
+  const inputStyle='width:84px;padding:3px 5px;border:1px solid var(--border);border-radius:5px;background:var(--surface);color:var(--text);text-align:right;font-size:12px';
+  tbody.innerHTML=rows.map(r=>{
+    const c=calcPriceRow(r);
+    return `<tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:6px 10px">${escapeHtml(r.name_ko||'')}</td>
+      <td style="padding:6px 10px;color:var(--muted);font-size:11px">${escapeHtml(r.spec||'')}</td>
+      <td style="padding:6px 10px"><span class="code">${escapeHtml(r.rep||'')}</span></td>
+      <td style="padding:6px 10px"><span class="code">${escapeHtml(r.compat||'')}</span></td>
+      <td style="padding:6px 10px"><span class="code">${escapeHtml(r.final||'')}</span></td>
+      <td class="center" style="color:var(--muted)">${fmtN(r.ship_qty)}</td>
+      <td class="center" style="border-left:1px solid var(--border)"><input type="number" step="any" style="${inputStyle}" value="${c.ruCost!=null?c.ruCost:''}" onchange="onPriceCellEdit(${r.row_no},'ru_cost',this.value)"></td>
+      <td class="center"><input type="number" step="any" style="${inputStyle}" value="${r.ru_supply_krw!=null&&r.ru_supply_krw!==''?Number(r.ru_supply_krw):''}" placeholder="${c.ruSupply!=null?fmtN(c.ruSupply):''}" onchange="onPriceCellEdit(${r.row_no},'ru_supply_krw',this.value)"></td>
+      <td style="text-align:right;padding-right:10px">${fmtN(c.ruRub)}</td>
+      <td class="center" style="color:var(--muted)">${fmtGp(c.ruGpVal)}</td>
+      <td class="center" style="border-left:1px solid var(--border);color:var(--muted)">${fmtN(c.kzCost)}</td>
+      <td class="center"><input type="number" step="any" style="${inputStyle}" value="${r.kz_supply_krw!=null&&r.kz_supply_krw!==''?Number(r.kz_supply_krw):''}" placeholder="${c.kzSupply!=null?fmtN(c.kzSupply):''}" onchange="onPriceCellEdit(${r.row_no},'kz_supply_krw',this.value)"></td>
+      <td style="text-align:right;padding-right:10px">${fmtN(c.kzUsd)}</td>
+      <td class="center" style="color:var(--muted)">${fmtGp(c.kzGpVal)}</td>
+    </tr>`;
   }).join('');
+  scheduleSplitTableResync('pricecalc-hdr-col','pricecalc-body-col','priceCalcTbody');
 }
-function downloadPriceTemplate(){
-  const t=T[lang];
-  const header=[t.priceHRep, t.priceHPrice];
-  const example=[['AS491100057', 15000],['AS555100021', 8000]];
-  const ws=XLSX.utils.aoa_to_sheet([header, ...example]);
-  const wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, lang==='ko'?'가격양식':'Шаблон');
-  XLSX.writeFile(wb, `KITURAMI_가격양식.xlsx`);
+function renderPriceSupply(){
+  const map=buildSupplyByRep();
+  const kwEl=document.getElementById('priceSearchInput');
+  const kw=(kwEl?kwEl.value:'').trim().toLowerCase();
+  let list=Object.values(map).sort((a,b)=>a.rep.localeCompare(b.rep));
+  if(kw) list=list.filter(m=>m.rep.toLowerCase().includes(kw)||(m.name_ko||'').toLowerCase().includes(kw)||(m.final||'').toLowerCase().includes(kw));
+  document.getElementById('priceCountBadge').innerHTML=`총 ${list.length}건`;
+  const thead=document.getElementById('priceSupplyThead');
+  thead.innerHTML=`<tr style="border-bottom:1px solid var(--border);color:var(--muted)">
+    <th style="padding:8px 10px">품명</th><th style="padding:8px 10px">규격</th>
+    <th style="padding:8px 10px">대표품번 (미변경)</th><th style="padding:8px 10px">호환품번 (변경)</th>
+    <th style="padding:8px 10px">최종품번 (변경, 현시점)</th>
+    <th class="center">공급가<br>(RUB)</th><th class="center">공급가<br>(USD)</th></tr>`;
+  const cols='<col><col><col><col><col><col style="width:100px"><col style="width:100px">';
+  document.getElementById('pricesupply-hdr-col').innerHTML=cols;
+  document.getElementById('pricesupply-body-col').innerHTML=cols;
+  const tbody=document.getElementById('priceSupplyTbody');
+  const emptyEl=document.getElementById('priceNoResult');
+  if(!list.length){ tbody.innerHTML=''; emptyEl.textContent='공급가 데이터가 없습니다. 계산식 탭에서 엑셀을 업로드해 주세요.'; emptyEl.style.display='block'; return; }
+  emptyEl.style.display='none';
+  tbody.innerHTML=list.map(m=>`<tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:6px 10px">${escapeHtml(m.name_ko||'')}</td>
+      <td style="padding:6px 10px;color:var(--muted);font-size:11px">${escapeHtml(m.spec||'')}</td>
+      <td style="padding:6px 10px"><span class="code">${escapeHtml(m.rep)}</span></td>
+      <td style="padding:6px 10px"><span class="code">${escapeHtml(m.compats.join(' / '))}</span></td>
+      <td style="padding:6px 10px"><span class="code">${escapeHtml(m.final||'')}</span></td>
+      <td style="text-align:right;padding-right:10px;font-weight:600">${fmtN(m.rub)}</td>
+      <td style="text-align:right;padding-right:10px;font-weight:600">${fmtN(m.usd)}</td>
+    </tr>`).join('');
+  scheduleSplitTableResync('pricesupply-hdr-col','pricesupply-body-col','priceSupplyTbody');
 }
-async function handlePriceUpload(event){
-  const t=T[lang];
+
+// ── 인라인 수정 ──
+async function onPriceCellEdit(rowNo, field, value){
+  const r=priceCalcData.find(x=>x.row_no===rowNo);
+  if(!r) return;
+  const num=value===''?null:Number(value);
+  if(value!=='' && isNaN(num)){ alert('숫자를 입력해 주세요.'); renderPriceCalc(); return; }
+  r[field]=num;
+  // 새 원가 입력 시 공급가가 비어있으면 자동 채움 (원가/(1-기준GP) 올림)
+  if(field==='ru_cost' && num!=null && num>0 && (r.ru_supply_krw==null||r.ru_supply_krw===''||Number(r.ru_supply_krw)===0)){
+    r.ru_supply_krw=Math.ceil(num/(1-priceSettings.ru_gp));
+    if(r.kz_supply_krw==null||r.kz_supply_krw===''||Number(r.kz_supply_krw)===0) r.kz_supply_krw=Math.ceil(num/(1-priceSettings.kz_gp));
+  }
+  r.updated_at=new Date().toISOString();
+  const { error } = await sb.from('kt_price_calc').upsert({ row_no:r.row_no, name_ko:r.name_ko, spec:r.spec, rep:r.rep, compat:r.compat, final:r.final, ship_qty:r.ship_qty, ru_cost:r.ru_cost, ru_supply_krw:r.ru_supply_krw, kz_supply_krw:r.kz_supply_krw, updated_at:r.updated_at },{onConflict:'row_no'});
+  if(error){ alert('저장 실패\n['+(error.message||error.code)+']'); return; }
+  renderPriceCalc();
+  syncKtPricesFromCalc();
+}
+
+// ── 계산식 엑셀 업로드 ──
+async function handlePriceCalcUpload(event){
   const file=event.target.files[0];
   if(!file) return;
   const reader=new FileReader();
@@ -5052,46 +5196,92 @@ async function handlePriceUpload(event){
     try{
       const data=new Uint8Array(e.target.result);
       const wb=XLSX.read(data,{type:'array'});
-      const sheet=wb.Sheets[wb.SheetNames[0]];
-      const json=XLSX.utils.sheet_to_json(sheet,{defval:''});
-      const repKeys=['대표품번','품번','Артикул','rep','REP'];
-      const priceKeys=['가격','단가','Цена','price','PRICE'];
+      const sheetName=wb.SheetNames.includes('계산식')?'계산식':wb.SheetNames[0];
+      const arr=XLSX.utils.sheet_to_json(wb.Sheets[sheetName],{header:1,raw:true,defval:''});
+      // 파라미터: D2=KRW/RUB, F2=KRW/USD, J2=러시아 GP, N2=카자흐스탄 GP
+      const num=v=>{ const n=Number(v); return isNaN(n)?null:n; };
+      const pr=arr[1]||[];
+      const rub=num(pr[3]), usd=num(pr[5]), ruGp=num(pr[9]), kzGp=num(pr[13]);
+      if(rub>0) priceSettings.rub_rate=rub;
+      if(usd>0) priceSettings.usd_rate=usd;
+      if(ruGp!=null&&ruGp>=0&&ruGp<1) priceSettings.ru_gp=ruGp;
+      if(kzGp!=null&&kzGp>=0&&kzGp<1) priceSettings.kz_gp=kzGp;
+      // 데이터: 7행부터, A품명 B규격 C대표 D호환 E최종 F출고 G원가 H공급가KRW ... L KZ공급가KRW
       const rows=[];
-      json.forEach(r=>{
-        let rep=null, price=null;
-        for(const k of repKeys){ if(r[k]!==undefined && String(r[k]).trim()!==''){ rep=String(r[k]).trim(); break; } }
-        for(const k of priceKeys){ if(r[k]!==undefined && String(r[k]).trim()!==''){ price=Number(r[k]); break; } }
-        if(rep && !isNaN(price)) rows.push({ rep, price, updated_at:new Date().toISOString() });
-      });
-      if(!rows.length){ alert(t.priceUploadEmpty); event.target.value=''; return; }
-      // 같은 품번이 중복 등장하면 Postgres upsert가 에러를 내므로, 마지막 값으로 합쳐줍니다.
-      const dedupMap={};
-      rows.forEach(r=>{ dedupMap[r.rep]=r; });
-      const dedupedRows=Object.values(dedupMap);
-      const { error } = await sb.from('kt_prices').upsert(dedupedRows,{onConflict:'rep'});
-      if(error){ console.error(error); alert(t.priceUploadFail+'\n\n['+(error.message||error.code)+']'); event.target.value=''; return; }
-      await loadPrices();
-      renderPriceList();
-      alert(t.priceUploadOk(dedupedRows.length));
-    }catch(err){
-      console.error(err);
-      alert(t.priceUploadFail);
-    }
+      for(let i=6;i<arr.length;i++){
+        const a=arr[i]; if(!a) continue;
+        const rep=String(a[2]||'').trim();
+        const name=String(a[0]||'').trim();
+        if(!rep && !name) continue;
+        const cellNum=v=>{ if(v===''||v==null) return null; if(typeof v==='string'&&v.trim().startsWith('=')) return null; const n=Number(v); return isNaN(n)?null:n; };
+        let ruCost=cellNum(a[6]), ruSupply=cellNum(a[7]), kzSupply=cellNum(a[11]);
+        // 새 원가 + 공급가 없음 → 자동 계산 (원가/(1-기준GP) 올림)
+        if((ruSupply==null||ruSupply===0)&&ruCost!=null&&ruCost>0) ruSupply=Math.ceil(ruCost/(1-priceSettings.ru_gp));
+        if((kzSupply==null||kzSupply===0)&&ruCost!=null&&ruCost>0) kzSupply=Math.ceil(ruCost/(1-priceSettings.kz_gp));
+        rows.push({ row_no:rows.length+1, name_ko:name, spec:String(a[1]||'').trim(), rep, compat:String(a[3]||'').trim(), final:String(a[4]||'').trim(), ship_qty:cellNum(a[5]), ru_cost:ruCost, ru_supply_krw:ruSupply, kz_supply_krw:kzSupply, updated_at:new Date().toISOString() });
+      }
+      if(!rows.length){ alert('업로드할 데이터가 없습니다. 계산식 시트 형식을 확인해 주세요.'); event.target.value=''; return; }
+      if(!confirm(`계산식 데이터 ${rows.length}행을 업로드합니다.\n기존 계산식 데이터는 교체됩니다. 계속하시겠습니까?`)){ event.target.value=''; return; }
+      // 설정 저장
+      await sb.from('kt_price_settings').upsert({ id:1, rub_rate:priceSettings.rub_rate, usd_rate:priceSettings.usd_rate, ru_gp:priceSettings.ru_gp, kz_gp:priceSettings.kz_gp, rate_month:priceSettings.rate_month||new Date().toISOString().slice(0,7), updated_at:new Date().toISOString() },{onConflict:'id'});
+      // 기존 삭제 후 삽입
+      await sb.from('kt_price_calc').delete().not('row_no','is',null);
+      for(let i=0;i<rows.length;i+=500){
+        const { error } = await sb.from('kt_price_calc').insert(rows.slice(i,i+500));
+        if(error){ alert('업로드 실패\n['+(error.message||error.code)+']'); event.target.value=''; return; }
+      }
+      priceCalcData=rows;
+      await syncKtPricesFromCalc();
+      fillParamInputs();
+      renderPriceActive();
+      alert(`계산식 ${rows.length}행이 업로드되었습니다.\n공급가와 주문 탭 가격(RUB)에도 반영되었습니다.`);
+    }catch(err){ console.error(err); alert('업로드 처리 중 오류가 발생했습니다.'); }
     event.target.value='';
   };
   reader.readAsArrayBuffer(file);
 }
+
+// ── 엑셀 다운로드 ──
+function downloadPriceActive(){
+  if(priceView==='calc'){
+    const aoa=[];
+    aoa.push(['','','러시아','','카자흐스탄','','','','','','','','','']);
+    aoa.push(['','','기준환율(KRW/RUB)',priceSettings.rub_rate,'기준환율(KRW/USD)',priceSettings.usd_rate,'','러시아 기준 GP','',priceSettings.ru_gp,'','카자흐스탄 기준 GP','',priceSettings.kz_gp]);
+    aoa.push(['','','최초매매기준율(전월말일)','','최초매매기준율(전월말일)','','','','','','','','','']);
+    aoa.push(['품명','규격','대표품번\n(미변경)','호환품번\n(변경)','최종품번\n(변경, 현시점)','출고\n(18y~)','러시아','','','','카자흐스탄','','','']);
+    aoa.push(['','','','','','','원가','공급가','','GP','원가','공급가','','GP']);
+    aoa.push(['','','','','','','KRW','KRW','RUB','','KRW','KRW','USD','']);
+    priceCalcData.forEach(r=>{
+      const c=calcPriceRow(r);
+      aoa.push([r.name_ko||'',r.spec||'',r.rep||'',r.compat||'',r.final||'',r.ship_qty??'',c.ruCost??'',c.ruSupply??'',c.ruRub??'',c.ruGpVal!=null?Math.round(c.ruGpVal*1000)/1000:'',c.kzCost??'',c.kzSupply??'',c.kzUsd??'',c.kzGpVal!=null?Math.round(c.kzGpVal*1000)/1000:'']);
+    });
+    const ws=XLSX.utils.aoa_to_sheet(aoa);
+    ws['!cols']=[{wch:18},{wch:24},{wch:15},{wch:15},{wch:15},{wch:8},{wch:11},{wch:11},{wch:10},{wch:7},{wch:11},{wch:11},{wch:9},{wch:7}];
+    const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'계산식');
+    XLSX.writeFile(wb,`KITURAMI_가격정보_계산식_${new Date().toISOString().slice(0,10)}.xlsx`);
+  }else{
+    const map=buildSupplyByRep();
+    const list=Object.values(map).sort((a,b)=>a.rep.localeCompare(b.rep));
+    const aoa=[['품명','규격','대표품번 (미변경)','호환품번 (변경)','최종품번 (변경, 현시점)','공급가 (RUB)','공급가 (USD)']];
+    list.forEach(m=>aoa.push([m.name_ko||'',m.spec||'',m.rep,m.compats.join(' / '),m.final||'',m.rub??'',m.usd??'']));
+    const ws=XLSX.utils.aoa_to_sheet(aoa);
+    ws['!cols']=[{wch:18},{wch:24},{wch:16},{wch:22},{wch:16},{wch:12},{wch:12}];
+    const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'공급가');
+    XLSX.writeFile(wb,`KITURAMI_가격정보_공급가_${new Date().toISOString().slice(0,10)}.xlsx`);
+  }
+}
+
 function refreshPriceTexts(){
   const t=T[lang];
   const setTxt=(id,val)=>{const el=document.getElementById(id);if(el)el.textContent=val;};
   const tabEl=document.getElementById('tab-price'); if(tabEl) tabEl.textContent=t.tabPrice;
-  setTxt('i18n-pricetemplate', t.priceTemplate);
-  setTxt('i18n-priceupload', t.priceUpload);
-  setTxt('i18n-priceh-rep', t.priceHRep);
-  setTxt('i18n-priceh-price', t.priceHPrice);
-  setTxt('i18n-priceh-updated', t.priceHUpdated);
-  const sEl=document.getElementById('priceSearchInput'); if(sEl) sEl.placeholder=t.priceSearchPh;
-  if(document.getElementById('pane-price').classList.contains('active')) renderPriceList();
+  setTxt('i18n-pricetab-calc', lang==='ru'?'Формула':'계산식');
+  setTxt('i18n-pricetab-supply', lang==='ru'?'Цены поставки':'공급가');
+  setTxt('i18n-priceupload', lang==='ru'?'Загрузить Excel':'엑셀 업로드');
+  setTxt('i18n-pricedl', lang==='ru'?'Скачать Excel':'엑셀 다운로드');
+  setTxt('i18n-prm-save', lang==='ru'?'Сохранить':'저장');
+  const sEl=document.getElementById('priceSearchInput'); if(sEl) sEl.placeholder=lang==='ru'?'Поиск по названию, артикулу…':'품명, 대표품번으로 검색…';
+  if(document.getElementById('pane-price').classList.contains('active')) renderPriceActive();
 }
 
 initScroll();mountModelDiag('parts');renderModelBar();renderTable();renderPN();renderOrderTable();initDiagScrollbar();
