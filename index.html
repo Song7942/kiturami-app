@@ -231,6 +231,8 @@ input[type="text"]::placeholder{color:var(--muted)}
 
 /* ── 모바일 카드 ── */
 .card-list{border:1px solid var(--border);border-radius:10px;background:var(--surface)}
+.price-row td{overflow:hidden}
+#priceCalcThead th,#priceSupplyThead th{overflow:hidden}
 .part-card{padding:9px 12px;border-bottom:1px solid var(--border)}
 .order-card{padding:10px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;background:var(--surface)}
 .part-card:last-child{border-bottom:none}
@@ -5239,16 +5241,17 @@ function renderPriceCalc(){
   const allUp=priceCalcData.map(r=>r.updated_at).filter(Boolean);
   if(lastEl) lastEl.textContent = allUp.length? ('업데이트: '+formatNewsDate(new Date(allUp.reduce((a,b)=>a>b?a:b)).getTime())) : '';
   const thead=document.getElementById('priceCalcThead');
+  const thS='padding:4px 2px;text-align:center;vertical-align:middle;overflow:hidden;word-break:keep-all';
   thead.innerHTML=`<tr style="border-bottom:1px solid var(--border);color:var(--muted);font-size:11px">
-    <th rowspan="2" style="padding:4px">품명</th><th rowspan="2" style="padding:4px">규격</th>
-    <th rowspan="2" style="padding:4px">대표품번<br>(미변경)</th><th rowspan="2" style="padding:4px">호환품번<br>(변경)</th>
-    <th rowspan="2" style="padding:4px">최종품번<br>(변경, 현시점)</th><th rowspan="2" class="center" style="padding:4px 2px">출고<br>(18y~)</th>
-    <th rowspan="2" class="center" style="padding:4px 2px;border-left:1px solid var(--border)">원가<br>KRW</th>
-    <th colspan="3" class="center" style="padding:2px;border-left:1px solid var(--border)">러시아</th>
-    <th colspan="3" class="center" style="padding:2px;border-left:1px solid var(--border)">카자흐스탄</th></tr>
+    <th rowspan="2" style="${thS}">품명</th><th rowspan="2" style="${thS}">규격</th>
+    <th rowspan="2" style="${thS}">대표품번<br>(미변경)</th><th rowspan="2" style="${thS}">호환품번<br>(변경)</th>
+    <th rowspan="2" style="${thS}">최종품번<br>(변경, 현시점)</th><th rowspan="2" style="${thS}">출고<br>(18y~)</th>
+    <th rowspan="2" style="${thS};border-left:1px solid var(--border)">원가<br>KRW</th>
+    <th colspan="3" style="${thS};border-left:1px solid var(--border)">러시아</th>
+    <th colspan="3" style="${thS};border-left:1px solid var(--border)">카자흐스탄</th></tr>
     <tr style="border-bottom:1px solid var(--border);color:var(--muted);font-size:11px">
-    <th class="center" style="padding:4px 2px;border-left:1px solid var(--border)">공급가<br>KRW</th><th class="center" style="padding:4px 2px">공급가<br>RUB</th><th class="center" style="padding:4px 2px">GP</th>
-    <th class="center" style="padding:4px 2px;border-left:1px solid var(--border)">공급가<br>KRW</th><th class="center" style="padding:4px 2px">공급가<br>USD</th><th class="center" style="padding:4px 2px">GP</th></tr>`;
+    <th style="${thS};border-left:1px solid var(--border)">공급가<br>KRW</th><th style="${thS}">공급가<br>RUB</th><th style="${thS}">GP</th>
+    <th style="${thS};border-left:1px solid var(--border)">공급가<br>KRW</th><th style="${thS}">공급가<br>USD</th><th style="${thS}">GP</th></tr>`;
   const cols='<col><col><col><col><col><col style="width:40px"><col style="width:68px"><col style="width:72px"><col style="width:66px"><col style="width:48px"><col style="width:72px"><col style="width:62px"><col style="width:48px">';
   document.getElementById('pricecalc-hdr-col').innerHTML=cols;
   document.getElementById('pricecalc-body-col').innerHTML=cols;
@@ -5259,7 +5262,7 @@ function renderPriceCalc(){
   const inputStyle='width:100%;max-width:66px;box-sizing:border-box;padding:2px 3px;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:var(--text);text-align:right;font-size:11px';
   tbody.innerHTML=rows.map(r=>{
     const c=calcPriceRow(r);
-    return `<tr style="border-bottom:1px solid var(--border);font-size:11px">
+    return `<tr style="border-bottom:1px solid var(--border);font-size:11px" class="price-row">
       <td style="padding:3px 4px;word-break:break-all">${escapeHtml(r.name_ko||'')}</td>
       <td style="padding:3px 4px;color:var(--muted);font-size:10px;word-break:break-all">${escapeHtml(r.spec||'')}</td>
       <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px">${escapeHtml(r.rep||'')}</span></td>
@@ -5285,11 +5288,12 @@ function renderPriceSupply(){
   if(kw) list=list.filter(m=>m.rep.toLowerCase().includes(kw)||(m.name_ko||'').toLowerCase().includes(kw)||(m.final||'').toLowerCase().includes(kw));
   document.getElementById('priceCountBadge').innerHTML=`총 ${list.length}건`;
   const thead=document.getElementById('priceSupplyThead');
+  const thS2='padding:6px 4px;text-align:center;vertical-align:middle;overflow:hidden;word-break:keep-all';
   thead.innerHTML=`<tr style="border-bottom:1px solid var(--border);color:var(--muted)">
-    <th style="padding:8px 10px">품명</th><th style="padding:8px 10px">규격</th>
-    <th style="padding:8px 10px">대표품번 (미변경)</th><th style="padding:8px 10px">호환품번 (변경)</th>
-    <th style="padding:8px 10px">최종품번 (변경, 현시점)</th>
-    <th class="center">공급가<br>(RUB)</th><th class="center">공급가<br>(USD)</th></tr>`;
+    <th style="${thS2}">품명</th><th style="${thS2}">규격</th>
+    <th style="${thS2}">대표품번<br>(미변경)</th><th style="${thS2}">호환품번<br>(변경)</th>
+    <th style="${thS2}">최종품번<br>(변경, 현시점)</th>
+    <th style="${thS2}">공급가<br>(RUB)</th><th style="${thS2}">공급가<br>(USD)</th></tr>`;
   const cols='<col><col><col><col><col><col style="width:100px"><col style="width:100px">';
   document.getElementById('pricesupply-hdr-col').innerHTML=cols;
   document.getElementById('pricesupply-body-col').innerHTML=cols;
