@@ -5231,10 +5231,13 @@ async function handlePriceCalcUpload(event){
       const wb=XLSX.read(data,{type:'array'});
       const sheetName=wb.SheetNames.includes('계산식')?'계산식':wb.SheetNames[0];
       const arr=XLSX.utils.sheet_to_json(wb.Sheets[sheetName],{header:1,raw:true,defval:''});
-      // 파라미터: D2=KRW/RUB, F2=KRW/USD, J2=러시아 GP, N2=카자흐스탄 GP
+      // 양식 감지: 6행(단위행)에서 USD 위치로 판별 — 신양식(원가 1열): L열(idx11), 구양식(원가 2열): M열(idx12)
+      const unitRow=(arr[5]||[]).map(v=>String(v||'').trim().toUpperCase());
+      const isOldFmt = unitRow[12]==='USD';
+      // 파라미터: D2=KRW/RUB, F2=KRW/USD, J2=러시아 GP, 카자흐 GP는 신양식 M2 / 구양식 N2
       const num=v=>{ const n=Number(v); return isNaN(n)?null:n; };
       const pr=arr[1]||[];
-      const rub=num(pr[3]), usd=num(pr[5]), ruGp=num(pr[9]), kzGp=num(pr[13]);
+      const rub=num(pr[3]), usd=num(pr[5]), ruGp=num(pr[9]), kzGp=isOldFmt?num(pr[13]):num(pr[12]);
       if(rub>0) priceSettings.rub_rate=rub;
       if(usd>0) priceSettings.usd_rate=usd;
       if(ruGp!=null&&ruGp>=0&&ruGp<1) priceSettings.ru_gp=ruGp;
@@ -5247,7 +5250,7 @@ async function handlePriceCalcUpload(event){
         const name=String(a[0]||'').trim();
         if(!rep && !name) continue;
         const cellNum=v=>{ if(v===''||v==null) return null; if(typeof v==='string'&&v.trim().startsWith('=')) return null; const n=Number(v); return isNaN(n)?null:n; };
-        let ruCost=cellNum(a[6]), ruSupply=cellNum(a[7]), kzSupply=cellNum(a[11]);
+        let ruCost=cellNum(a[6]), ruSupply=cellNum(a[7]), kzSupply=cellNum(isOldFmt?a[11]:a[10]);
         // 새 원가 + 공급가 없음 → 자동 계산 (원가/(1-기준GP) 올림)
         if((ruSupply==null||ruSupply===0)&&ruCost!=null&&ruCost>0) ruSupply=Math.ceil(ruCost/(1-priceSettings.ru_gp));
         if((kzSupply==null||kzSupply===0)&&ruCost!=null&&ruCost>0) kzSupply=Math.ceil(ruCost/(1-priceSettings.kz_gp));
@@ -5278,18 +5281,18 @@ async function handlePriceCalcUpload(event){
 function downloadPriceActive(){
   if(priceView==='calc'){
     const aoa=[];
-    aoa.push(['','','러시아','','카자흐스탄','','','','','','','','','']);
-    aoa.push(['','','기준환율(KRW/RUB)',priceSettings.rub_rate,'기준환율(KRW/USD)',priceSettings.usd_rate,'','러시아 기준 GP','',priceSettings.ru_gp,'','카자흐스탄 기준 GP','',priceSettings.kz_gp]);
-    aoa.push(['','','최초매매기준율(전월말일)','','최초매매기준율(전월말일)','','','','','','','','','']);
-    aoa.push(['품명','규격','대표품번\n(미변경)','호환품번\n(변경)','최종품번\n(변경, 현시점)','출고\n(18y~)','러시아','','','','카자흐스탄','','','']);
-    aoa.push(['','','','','','','원가','공급가','','GP','원가','공급가','','GP']);
-    aoa.push(['','','','','','','KRW','KRW','RUB','','KRW','KRW','USD','']);
+    aoa.push(['','','러시아','','카자흐스탄','','','','','','','','']);
+    aoa.push(['','','기준환율(KRW/RUB)',priceSettings.rub_rate,'기준환율(KRW/USD)',priceSettings.usd_rate,'','러시아 기준 GP','',priceSettings.ru_gp,'카자흐스탄 기준 GP','',priceSettings.kz_gp]);
+    aoa.push(['','','최초매매기준율(전월말일)','','최초매매기준율(전월말일)','','','','','','','','']);
+    aoa.push(['품명','규격','대표품번\n(미변경)','호환품번\n(변경)','최종품번\n(변경, 현시점)','출고\n(18y~)','원가','러시아','','','카자흐스탄','','']);
+    aoa.push(['','','','','','','','공급가','','GP','공급가','','GP']);
+    aoa.push(['','','','','','','KRW','KRW','RUB','','KRW','USD','']);
     priceCalcData.forEach(r=>{
       const c=calcPriceRow(r);
-      aoa.push([r.name_ko||'',r.spec||'',r.rep||'',r.compat||'',r.final||'',r.ship_qty??'',c.ruCost??'',c.ruSupply??'',c.ruRub??'',c.ruGpVal!=null?Math.round(c.ruGpVal*1000)/1000:'',c.kzCost??'',c.kzSupply??'',c.kzUsd??'',c.kzGpVal!=null?Math.round(c.kzGpVal*1000)/1000:'']);
+      aoa.push([r.name_ko||'',r.spec||'',r.rep||'',r.compat||'',r.final||'',r.ship_qty??'',c.ruCost??'',c.ruSupply??'',c.ruRub??'',c.ruGpVal!=null?Math.round(c.ruGpVal*1000)/1000:'',c.kzSupply??'',c.kzUsd??'',c.kzGpVal!=null?Math.round(c.kzGpVal*1000)/1000:'']);
     });
     const ws=XLSX.utils.aoa_to_sheet(aoa);
-    ws['!cols']=[{wch:18},{wch:24},{wch:15},{wch:15},{wch:15},{wch:8},{wch:11},{wch:11},{wch:10},{wch:7},{wch:11},{wch:11},{wch:9},{wch:7}];
+    ws['!cols']=[{wch:18},{wch:24},{wch:15},{wch:15},{wch:15},{wch:8},{wch:11},{wch:11},{wch:10},{wch:7},{wch:11},{wch:9},{wch:7}];
     const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'계산식');
     XLSX.writeFile(wb,`KITURAMI_가격정보_계산식_${new Date().toISOString().slice(0,10)}.xlsx`);
   }else{
