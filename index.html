@@ -2388,7 +2388,22 @@ function downloadPN(){
   const kw=document.getElementById('pnInput').value.trim().toLowerCase();let rows=PN_DATA;
   if(kw)rows=rows.filter(r=>r.rep.toLowerCase().includes(kw)||r.compats.some(c=>c.toLowerCase().includes(kw))||r.final.toLowerCase().includes(kw));
   if(!rows.length)return;const t=T[lang];
-  const ws=XLSX.utils.aoa_to_sheet([[t.pnH1,t.pnH2,t.pnH3],...rows.map(r=>[r.rep,r.compats.join(' / '),r.final])]);
+  const isKo=lang==='ko';
+  // 양식: 품명 | 규격(KO만) | 대표품번 (미변경) | 호환품번 (변경) | 최종품번 (변경, 현시점)
+  // 호환품번이 여러 개면 행을 나눠서 출력. 품명/규격은 최종품번 기준(각 행의 name/spec).
+  const header=isKo?[t.pnH0,t.pnH0s,t.pnH1,t.pnH2,t.pnH3]:[t.pnH0,t.pnH1,t.pnH2,t.pnH3];
+  const aoa=[header];
+  rows.forEach(r=>{
+    const name=isKo?(r.name_ko||''):(r.name_ru||r.name_ko||'');
+    const compats=(r.compats&&r.compats.length)?r.compats:[''];
+    compats.forEach(c=>{
+      aoa.push(isKo?[name,r.spec||'',r.rep,c,r.final]:[name,r.rep,c,r.final]);
+    });
+  });
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols']=isKo
+    ? [{wch:22},{wch:30},{wch:18},{wch:18},{wch:22}]
+    : [{wch:34},{wch:18},{wch:18},{wch:22}];
   const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,lang==='ru'?'Артикулы':'품번조회');
   XLSX.writeFile(wb,`KITURAMI_품번조회_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
