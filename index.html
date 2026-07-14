@@ -4584,7 +4584,18 @@ function syncSplitTableColumnWidths(hdrColId, bodyColId, tbodyId, mode){
             Object.keys(occupied).forEach(k=>{ if(occupied[k]>0) occupied[k]--; });
           });
         }
-        const widths=bodyW.map((w,i)=>Math.max(w, hdrW[i]||0));
+        // 열별 최대폭 상한: 품명/규격/품번/출고가 내용 길이만큼 무한정 넓어지지 않도록 제한 (넘치는 내용은 줄바꿈)
+        const FIT_CAPS={
+          priceCalcTbody:[110,105,84,84,84,40,null,null,null,null,null,null,null],
+          priceSupplyTbody:[130,120,92,150,92,null,null]
+        };
+        const caps=FIT_CAPS[tbodyId]||[];
+        const widths=bodyW.map((w,i)=>{
+          let v=Math.max(w, hdrW[i]||0);
+          const cap=caps[i];
+          if(cap!=null && v>cap) v=cap;
+          return v;
+        });
         const total=widths.reduce((a,b)=>a+b,0);
         if(!(total>0)) return;
         // 화면 폭에 맞춤: 자연폭 합이 컨테이너보다 크면 전체를 비율 축소해 가로 스크롤 없이 표시
@@ -5265,7 +5276,7 @@ function renderPriceCalc(){
   const allUp=priceCalcData.map(r=>r.updated_at).filter(Boolean);
   if(lastEl) lastEl.textContent = allUp.length? ('업데이트: '+formatNewsDate(new Date(allUp.reduce((a,b)=>a>b?a:b)).getTime())) : '';
   const thead=document.getElementById('priceCalcThead');
-  const thS='padding:4px 2px;text-align:center;vertical-align:middle;overflow:hidden;word-break:keep-all';
+  const thS='padding:4px 2px;text-align:center;vertical-align:middle;overflow:hidden;word-break:break-all';
   thead.innerHTML=`<tr style="border-bottom:1px solid var(--border);color:var(--muted);font-size:11px">
     <th rowspan="2" style="${thS}">품명</th><th rowspan="2" style="${thS}">규격</th>
     <th rowspan="2" style="${thS}">대표품번<br>(미변경)</th><th rowspan="2" style="${thS}">호환품번<br>(변경)</th>
@@ -5289,9 +5300,9 @@ function renderPriceCalc(){
     return `<tr style="border-bottom:1px solid var(--border);font-size:11px" class="price-row">
       <td style="padding:3px 4px;word-break:break-all">${escapeHtml(r.name_ko||'')}</td>
       <td style="padding:3px 4px;color:var(--muted);font-size:10px;word-break:break-all">${escapeHtml(r.spec||'')}</td>
-      <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px">${escapeHtml(r.rep||'')}</span></td>
-      <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px">${escapeHtml(r.compat||'')}</span></td>
-      <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px">${escapeHtml(r.final||'')}</span></td>
+      <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px;word-break:break-all;white-space:normal">${escapeHtml(r.rep||'')}</span></td>
+      <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px;word-break:break-all;white-space:normal">${escapeHtml(r.compat||'')}</span></td>
+      <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px;word-break:break-all;white-space:normal">${escapeHtml(r.final||'')}</span></td>
       <td class="center" style="padding:3px 2px;color:var(--muted)">${fmtN(r.ship_qty)}</td>
       <td class="center" style="padding:3px 2px;border-left:1px solid var(--border)"><input type="number" step="any" style="${inputStyle}" value="${c.ruCost!=null?c.ruCost:''}" onchange="onPriceCellEdit(${r.row_no},'ru_cost',this.value)"></td>
       <td class="center" style="padding:3px 2px;border-left:1px solid var(--border)"><input type="number" step="any" style="${inputStyle}" value="${r.ru_supply_krw!=null&&r.ru_supply_krw!==''?Number(r.ru_supply_krw):''}" placeholder="${c.ruSupply!=null?fmtN(c.ruSupply):''}" onchange="onPriceCellEdit(${r.row_no},'ru_supply_krw',this.value)"></td>
@@ -5312,7 +5323,7 @@ function renderPriceSupply(){
   if(kw) list=list.filter(m=>m.rep.toLowerCase().includes(kw)||(m.name_ko||'').toLowerCase().includes(kw)||(m.final||'').toLowerCase().includes(kw));
   document.getElementById('priceCountBadge').innerHTML=`총 ${list.length}건`;
   const thead=document.getElementById('priceSupplyThead');
-  const thS2='padding:6px 4px;text-align:center;vertical-align:middle;overflow:hidden;word-break:keep-all';
+  const thS2='padding:6px 4px;text-align:center;vertical-align:middle;overflow:hidden;word-break:break-all';
   thead.innerHTML=`<tr style="border-bottom:1px solid var(--border);color:var(--muted)">
     <th style="${thS2}">품명</th><th style="${thS2}">규격</th>
     <th style="${thS2}">대표품번<br>(미변경)</th><th style="${thS2}">호환품번<br>(변경)</th>
