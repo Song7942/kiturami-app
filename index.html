@@ -4559,8 +4559,32 @@ function syncSplitTableColumnWidths(hdrColId, bodyColId, tbodyId, mode){
         bodyCols.forEach(c=>{c.style.width='';});
         bodyTable.style.tableLayout='auto';
         bodyTable.style.width='';
-        void bodyTable.offsetWidth; // 강제 리플로우 후 자연폭 측정
-        const widths=cells.map(td=>td.getBoundingClientRect().width);
+        hdrCols.forEach(c=>{c.style.width='';});
+        hdrTable.style.tableLayout='auto';
+        hdrTable.style.width='';
+        void bodyTable.offsetWidth; void hdrTable.offsetWidth; // 강제 리플로우 후 자연폭 측정
+        const bodyW=cells.map(td=>td.getBoundingClientRect().width);
+        // 헤더 자연폭도 측정 (rowspan/colspan 고려해 리프 열에 매핑) → 헤더 글자가 잘리지 않도록 max 적용
+        const hdrW=new Array(bodyW.length).fill(0);
+        {
+          const hrows=[...hdrTable.querySelectorAll('thead tr')];
+          const occupied={}; // colIdx -> 남은 rowspan 수
+          hrows.forEach(tr=>{
+            let colIdx=0;
+            [...tr.children].forEach(cell=>{
+              while(occupied[colIdx]>0) colIdx++;
+              const csp=parseInt(cell.getAttribute('colspan')||'1',10);
+              const rsp=parseInt(cell.getAttribute('rowspan')||'1',10);
+              if(csp===1 && colIdx<hdrW.length){
+                hdrW[colIdx]=Math.max(hdrW[colIdx], cell.getBoundingClientRect().width);
+              }
+              if(rsp>1){ for(let k=0;k<csp;k++) occupied[colIdx+k]=(occupied[colIdx+k]||0)+(rsp-1); }
+              colIdx+=csp;
+            });
+            Object.keys(occupied).forEach(k=>{ if(occupied[k]>0) occupied[k]--; });
+          });
+        }
+        const widths=bodyW.map((w,i)=>Math.max(w, hdrW[i]||0));
         const total=widths.reduce((a,b)=>a+b,0);
         if(!(total>0)) return;
         // 화면 폭에 맞춤: 자연폭 합이 컨테이너보다 크면 전체를 비율 축소해 가로 스크롤 없이 표시
