@@ -844,6 +844,81 @@ input[type="text"]::placeholder{color:var(--muted)}
     </div>
   </div>
 
+<div class="tab-pane" id="pane-adminOrders">
+  <div class="scroll-body" id="scrollBodyAdminOrders" style="padding:8px 12px 72px">
+    <div style="display:flex;gap:6px;margin-bottom:10px;border-bottom:1px solid var(--border)">
+      <button class="news-tab active" id="adminTabOrders" onclick="switchAdminView('orders')" style="flex:1;text-align:center">
+        <span id="i18n-admintab-orders">주문 접수</span>
+      </button>
+      <button class="news-tab" id="adminTabMyOrders" onclick="switchAdminView('myorders')" style="flex:1;text-align:center">
+        <span id="i18n-admintab-myorders">주문</span>
+      </button>
+    </div>
+    <div id="adminOrdersView" style="display:flex;flex-direction:column;flex:1;min-height:0">
+      <div style="padding:0 4px 10px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:10px">
+        <span id="adminOrderCount" style="font-size:11px;color:var(--muted)"></span>
+        <button class="news-btn-primary" onclick="downloadAdminOrders()">
+          <span id="i18n-adminxls">엑셀 다운로드</span>
+        </button>
+      </div>
+      <div class="pn-body-wrap">
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead id="adminOrderThead"></thead>
+          <tbody id="adminOrderTbody"></tbody>
+        </table>
+      </div>
+      <div class="card-list" id="adminOrderCardList"></div>
+      <div class="news-empty" id="adminOrderEmpty" style="display:none"></div>
+    </div>
+    <div id="adminMyOrdersView" style="display:none;flex-direction:column;flex:1;min-height:0">
+      <div style="padding:10px 4px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:10px">
+        <span id="adminMyOrderCount" style="font-size:11px;color:var(--muted)"></span>
+        <button class="news-btn-primary" onclick="downloadAdminMyOrders()">
+          <span id="i18n-adminmyorderxls">엑셀 다운로드</span>
+        </button>
+      </div>
+      <div class="pn-body-wrap">
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead id="adminMyOrdersThead"></thead>
+          <tbody id="adminMyOrdersTbody"></tbody>
+        </table>
+      </div>
+      <div class="card-list" id="adminMyOrderCardList"></div>
+      <div class="news-empty" id="adminMyOrdersEmpty" style="display:none"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ 탭: 회원관리 (취소·변경 요청 / 회원관리 및 가입승인) ══ -->
+<div class="tab-pane" id="pane-memberManagement">
+  <div class="scroll-body" id="scrollBodyMemberManagement" style="padding:8px 12px 72px">
+    <div id="adminSignupsView" style="display:flex;flex-direction:column;flex:1;min-height:0">
+      <div id="resetAllMembersWrap" style="display:none;margin:8px 0 12px;text-align:right">
+        <button class="news-btn-secondary" style="color:#ef4444;border-color:#ef4444" onclick="resetAllMembers()">
+          <span id="i18n-resetallmembers">전체 회원 초기화</span>
+        </button>
+      </div>
+      <div class="pn-body-wrap">
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead><tr style="border-bottom:1px solid var(--border);color:var(--muted);text-align:left">
+            <th style="padding:9px 12px" id="i18n-signup-th-company">회사명</th>
+            <th style="padding:9px 12px" id="i18n-signup-th-contact">담당자명</th>
+            <th style="padding:9px 12px" id="i18n-signup-th-phone">휴대폰</th>
+            <th style="padding:9px 12px" id="i18n-signup-th-email">이메일</th>
+            <th style="padding:9px 12px" id="i18n-signup-th-id">아이디</th>
+            <th style="padding:9px 12px;text-align:center" id="i18n-signup-th-status">상태</th>
+            <th style="padding:9px 12px;text-align:center" colspan="3"></th>
+          </tr></thead>
+          <tbody id="adminSignupsList"></tbody>
+        </table>
+      </div>
+      <div class="card-list" id="adminSignupsCardList"></div>
+      <div class="news-empty" id="adminSignupsEmpty" style="display:none"></div>
+    </div>
+  </div>
+</div>
+
+
 <!-- ══ 탭: 초기화 (KITURAMI 최상위 관리자 전용) ══ -->
 <div class="tab-pane" id="pane-reset">
   <div class="scroll-body" id="scrollBodyReset" style="padding:8px 12px 72px">
