@@ -4561,11 +4561,17 @@ function syncSplitTableColumnWidths(hdrColId, bodyColId, tbodyId, mode){
         const widths=cells.map(td=>td.getBoundingClientRect().width);
         const total=widths.reduce((a,b)=>a+b,0);
         if(!(total>0)) return;
-        widths.forEach((w,i)=>{ bodyCols[i].style.width=w+'px'; hdrCols[i].style.width=w+'px'; });
+        // 화면 폭에 맞춤: 자연폭 합이 컨테이너보다 크면 전체를 비율 축소해 가로 스크롤 없이 표시
+        const wrap=bodyTable.parentElement;
+        const avail=wrap?wrap.clientWidth:0;
+        const scale=(avail>0 && total>avail)?(avail/total):1;
+        const finalW=widths.map(w=>w*scale);
+        const finalTotal=Math.min(total, avail>0?avail:total);
+        finalW.forEach((w,i)=>{ bodyCols[i].style.width=w+'px'; hdrCols[i].style.width=w+'px'; });
         bodyTable.style.tableLayout='fixed';
         hdrTable.style.tableLayout='fixed';
-        bodyTable.style.width=total+'px';
-        hdrTable.style.width=total+'px';
+        bodyTable.style.width=finalTotal+'px';
+        hdrTable.style.width=finalTotal+'px';
         return;
       }
       const cells=[...firstRow.children].filter(td=>!td.hasAttribute('colspan'));
@@ -5233,40 +5239,40 @@ function renderPriceCalc(){
   const allUp=priceCalcData.map(r=>r.updated_at).filter(Boolean);
   if(lastEl) lastEl.textContent = allUp.length? ('업데이트: '+formatNewsDate(new Date(allUp.reduce((a,b)=>a>b?a:b)).getTime())) : '';
   const thead=document.getElementById('priceCalcThead');
-  thead.innerHTML=`<tr style="border-bottom:1px solid var(--border);color:var(--muted)">
-    <th rowspan="2" style="padding:8px 10px">품명</th><th rowspan="2" style="padding:8px 10px">규격</th>
-    <th rowspan="2" style="padding:8px 10px">대표품번<br>(미변경)</th><th rowspan="2" style="padding:8px 10px">호환품번<br>(변경)</th>
-    <th rowspan="2" style="padding:8px 10px">최종품번<br>(변경, 현시점)</th><th rowspan="2" class="center">출고<br>(18y~)</th>
-    <th rowspan="2" class="center" style="border-left:1px solid var(--border)">원가<br>KRW</th>
-    <th colspan="3" class="center" style="border-left:1px solid var(--border)">러시아</th>
-    <th colspan="3" class="center" style="border-left:1px solid var(--border)">카자흐스탄</th></tr>
-    <tr style="border-bottom:1px solid var(--border);color:var(--muted)">
-    <th class="center" style="border-left:1px solid var(--border)">공급가<br>KRW</th><th class="center">공급가<br>RUB</th><th class="center">GP</th>
-    <th class="center" style="border-left:1px solid var(--border)">공급가<br>KRW</th><th class="center">공급가<br>USD</th><th class="center">GP</th></tr>`;
-  const cols='<col><col><col><col><col><col style="width:60px"><col style="width:90px"><col style="width:100px"><col style="width:90px"><col style="width:64px"><col style="width:100px"><col style="width:84px"><col style="width:64px">';
+  thead.innerHTML=`<tr style="border-bottom:1px solid var(--border);color:var(--muted);font-size:11px">
+    <th rowspan="2" style="padding:4px">품명</th><th rowspan="2" style="padding:4px">규격</th>
+    <th rowspan="2" style="padding:4px">대표품번<br>(미변경)</th><th rowspan="2" style="padding:4px">호환품번<br>(변경)</th>
+    <th rowspan="2" style="padding:4px">최종품번<br>(변경, 현시점)</th><th rowspan="2" class="center" style="padding:4px 2px">출고<br>(18y~)</th>
+    <th rowspan="2" class="center" style="padding:4px 2px;border-left:1px solid var(--border)">원가<br>KRW</th>
+    <th colspan="3" class="center" style="padding:2px;border-left:1px solid var(--border)">러시아</th>
+    <th colspan="3" class="center" style="padding:2px;border-left:1px solid var(--border)">카자흐스탄</th></tr>
+    <tr style="border-bottom:1px solid var(--border);color:var(--muted);font-size:11px">
+    <th class="center" style="padding:4px 2px;border-left:1px solid var(--border)">공급가<br>KRW</th><th class="center" style="padding:4px 2px">공급가<br>RUB</th><th class="center" style="padding:4px 2px">GP</th>
+    <th class="center" style="padding:4px 2px;border-left:1px solid var(--border)">공급가<br>KRW</th><th class="center" style="padding:4px 2px">공급가<br>USD</th><th class="center" style="padding:4px 2px">GP</th></tr>`;
+  const cols='<col><col><col><col><col><col style="width:40px"><col style="width:68px"><col style="width:72px"><col style="width:66px"><col style="width:48px"><col style="width:72px"><col style="width:62px"><col style="width:48px">';
   document.getElementById('pricecalc-hdr-col').innerHTML=cols;
   document.getElementById('pricecalc-body-col').innerHTML=cols;
   const tbody=document.getElementById('priceCalcTbody');
   const emptyEl=document.getElementById('priceNoResult');
   if(!rows.length){ tbody.innerHTML=''; emptyEl.textContent='계산식 데이터가 없습니다. 엑셀 업로드로 계산식 시트를 올려주세요.'; emptyEl.style.display='block'; return; }
   emptyEl.style.display='none';
-  const inputStyle='width:84px;padding:3px 5px;border:1px solid var(--border);border-radius:5px;background:var(--surface);color:var(--text);text-align:right;font-size:12px';
+  const inputStyle='width:100%;max-width:66px;box-sizing:border-box;padding:2px 3px;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:var(--text);text-align:right;font-size:11px';
   tbody.innerHTML=rows.map(r=>{
     const c=calcPriceRow(r);
-    return `<tr style="border-bottom:1px solid var(--border)">
-      <td style="padding:6px 10px">${escapeHtml(r.name_ko||'')}</td>
-      <td style="padding:6px 10px;color:var(--muted);font-size:11px">${escapeHtml(r.spec||'')}</td>
-      <td style="padding:6px 10px"><span class="code">${escapeHtml(r.rep||'')}</span></td>
-      <td style="padding:6px 10px"><span class="code">${escapeHtml(r.compat||'')}</span></td>
-      <td style="padding:6px 10px"><span class="code">${escapeHtml(r.final||'')}</span></td>
-      <td class="center" style="color:var(--muted)">${fmtN(r.ship_qty)}</td>
-      <td class="center" style="border-left:1px solid var(--border)"><input type="number" step="any" style="${inputStyle}" value="${c.ruCost!=null?c.ruCost:''}" onchange="onPriceCellEdit(${r.row_no},'ru_cost',this.value)"></td>
-      <td class="center" style="border-left:1px solid var(--border)"><input type="number" step="any" style="${inputStyle}" value="${r.ru_supply_krw!=null&&r.ru_supply_krw!==''?Number(r.ru_supply_krw):''}" placeholder="${c.ruSupply!=null?fmtN(c.ruSupply):''}" onchange="onPriceCellEdit(${r.row_no},'ru_supply_krw',this.value)"></td>
-      <td style="text-align:right;padding-right:10px">${fmtN(c.ruRub)}</td>
-      <td class="center" style="color:var(--muted)">${fmtGp(c.ruGpVal)}</td>
-      <td class="center" style="border-left:1px solid var(--border)"><input type="number" step="any" style="${inputStyle}" value="${r.kz_supply_krw!=null&&r.kz_supply_krw!==''?Number(r.kz_supply_krw):''}" placeholder="${c.kzSupply!=null?fmtN(c.kzSupply):''}" onchange="onPriceCellEdit(${r.row_no},'kz_supply_krw',this.value)"></td>
-      <td style="text-align:right;padding-right:10px">${fmtN(c.kzUsd)}</td>
-      <td class="center" style="color:var(--muted)">${fmtGp(c.kzGpVal)}</td>
+    return `<tr style="border-bottom:1px solid var(--border);font-size:11px">
+      <td style="padding:3px 4px;word-break:break-all">${escapeHtml(r.name_ko||'')}</td>
+      <td style="padding:3px 4px;color:var(--muted);font-size:10px;word-break:break-all">${escapeHtml(r.spec||'')}</td>
+      <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px">${escapeHtml(r.rep||'')}</span></td>
+      <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px">${escapeHtml(r.compat||'')}</span></td>
+      <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px">${escapeHtml(r.final||'')}</span></td>
+      <td class="center" style="padding:3px 2px;color:var(--muted)">${fmtN(r.ship_qty)}</td>
+      <td class="center" style="padding:3px 2px;border-left:1px solid var(--border)"><input type="number" step="any" style="${inputStyle}" value="${c.ruCost!=null?c.ruCost:''}" onchange="onPriceCellEdit(${r.row_no},'ru_cost',this.value)"></td>
+      <td class="center" style="padding:3px 2px;border-left:1px solid var(--border)"><input type="number" step="any" style="${inputStyle}" value="${r.ru_supply_krw!=null&&r.ru_supply_krw!==''?Number(r.ru_supply_krw):''}" placeholder="${c.ruSupply!=null?fmtN(c.ruSupply):''}" onchange="onPriceCellEdit(${r.row_no},'ru_supply_krw',this.value)"></td>
+      <td style="text-align:right;padding:3px 4px">${fmtN(c.ruRub)}</td>
+      <td class="center" style="padding:3px 2px;color:var(--muted)">${fmtGp(c.ruGpVal)}</td>
+      <td class="center" style="padding:3px 2px;border-left:1px solid var(--border)"><input type="number" step="any" style="${inputStyle}" value="${r.kz_supply_krw!=null&&r.kz_supply_krw!==''?Number(r.kz_supply_krw):''}" placeholder="${c.kzSupply!=null?fmtN(c.kzSupply):''}" onchange="onPriceCellEdit(${r.row_no},'kz_supply_krw',this.value)"></td>
+      <td style="text-align:right;padding:3px 4px">${fmtN(c.kzUsd)}</td>
+      <td class="center" style="padding:3px 2px;color:var(--muted)">${fmtGp(c.kzGpVal)}</td>
     </tr>`;
   }).join('');
   scheduleSplitTableResync('pricecalc-hdr-col','pricecalc-body-col','priceCalcTbody','fixed');
