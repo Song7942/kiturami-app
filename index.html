@@ -4531,7 +4531,7 @@ async function deleteShipment(id){
 // 헤더 표와 본문 표가 따로 있는 화면(재고관리/출고내역 등)은, 두 표가 각자 %로 너비를 계산하다 보니
 // 화면 배율(확대/축소)에 따라 반올림 오차가 생겨서 열이 미세하게 어긋날 수 있습니다.
 // 그래서 %로 맞추는 대신, 실제로 렌더링된 본문 셀의 픽셀 너비를 측정해서 헤더에 그대로 강제 적용합니다.
-function syncSplitTableColumnWidths(hdrColId, bodyColId, tbodyId){
+function syncSplitTableColumnWidths(hdrColId, bodyColId, tbodyId, mode){
   requestAnimationFrame(()=>{
     requestAnimationFrame(()=>{
       const tbody=document.getElementById(tbodyId);
@@ -4539,9 +4539,36 @@ function syncSplitTableColumnWidths(hdrColId, bodyColId, tbodyId){
       const hdrColEl=document.getElementById(hdrColId);
       const bodyColEl=document.getElementById(bodyColId);
       if(!firstRow || !hdrColEl || !bodyColEl) return;
-      const cells=[...firstRow.children].filter(td=>!td.hasAttribute('colspan'));
       const hdrCols=[...hdrColEl.children];
       const bodyCols=[...bodyColEl.children];
+      if(mode==='fixed'){
+        // 픽셀 고정 모드: 본문 자연폭을 측정해 헤더/본문 둘 다 같은 픽셀 폭 + table-layout:fixed 로 잠급니다.
+        // 확대/축소 시 ResizeObserver가 재측정하므로 배율이 바뀌어도 두 테이블이 항상 동일하게 계산됩니다.
+        const hdrTable=hdrColEl.closest('table');
+        const bodyTable=bodyColEl.closest('table');
+        if(!hdrTable || !bodyTable) return;
+        // 숨겨진 상태(다른 탭/서브탭)에서는 측정값이 0이라 건드리지 않습니다.
+        if(bodyTable.getBoundingClientRect().width===0) return;
+        const rows=[...tbody.querySelectorAll(':scope > tr')];
+        const refRow=rows.find(r=>[...r.children].every(td=>!td.hasAttribute('colspan')));
+        if(!refRow) return;
+        const cells=[...refRow.children];
+        if(cells.length!==hdrCols.length || cells.length!==bodyCols.length) return;
+        bodyCols.forEach(c=>{c.style.width='';});
+        bodyTable.style.tableLayout='auto';
+        bodyTable.style.width='';
+        void bodyTable.offsetWidth; // 강제 리플로우 후 자연폭 측정
+        const widths=cells.map(td=>td.getBoundingClientRect().width);
+        const total=widths.reduce((a,b)=>a+b,0);
+        if(!(total>0)) return;
+        widths.forEach((w,i)=>{ bodyCols[i].style.width=w+'px'; hdrCols[i].style.width=w+'px'; });
+        bodyTable.style.tableLayout='fixed';
+        hdrTable.style.tableLayout='fixed';
+        bodyTable.style.width=total+'px';
+        hdrTable.style.width=total+'px';
+        return;
+      }
+      const cells=[...firstRow.children].filter(td=>!td.hasAttribute('colspan'));
       if(cells.length!==hdrCols.length || cells.length!==bodyCols.length) return; // 셀 개수가 안 맞으면(로딩 중 등) 건너뜁니다.
       cells.forEach((td,i)=>{
         const w=td.getBoundingClientRect().width;
@@ -4551,14 +4578,14 @@ function syncSplitTableColumnWidths(hdrColId, bodyColId, tbodyId){
   });
 }
 let _splitTableResyncTargets=[];
-function scheduleSplitTableResync(hdrColId, bodyColId, tbodyId){
+function scheduleSplitTableResync(hdrColId, bodyColId, tbodyId, mode){
   if(!_splitTableResyncTargets.some(t=>t.tbodyId===tbodyId)){
-    _splitTableResyncTargets.push({hdrColId, bodyColId, tbodyId});
+    _splitTableResyncTargets.push({hdrColId, bodyColId, tbodyId, mode});
   }
-  syncSplitTableColumnWidths(hdrColId, bodyColId, tbodyId);
+  syncSplitTableColumnWidths(hdrColId, bodyColId, tbodyId, mode);
 }
 function resyncAllSplitTables(){
-  _splitTableResyncTargets.forEach(t=>syncSplitTableColumnWidths(t.hdrColId, t.bodyColId, t.tbodyId));
+  _splitTableResyncTargets.forEach(t=>syncSplitTableColumnWidths(t.hdrColId, t.bodyColId, t.tbodyId, t.mode));
 }
 let _splitTableResyncTimer=null;
 function scheduleResyncAll(){
@@ -5174,7 +5201,7 @@ function fillParamInputs(){
   if(g('prmRuGp')) g('prmRuGp').value=Math.round(priceSettings.ru_gp*1000)/10;
   if(g('prmKzGp')) g('prmKzGp').value=Math.round(priceSettings.kz_gp*1000)/10;
   const info=document.getElementById('priceRateInfo');
-  if(info) info.textContent=`기준월 ${priceSettings.rate_month||'-'} · 하나은행 고시 매매기준율 기준, 매월 초 자동 갱신${fxRateSource?' · '+fxRateSource:''} (수동 수정 가능)`;
+  if(info) info.textContent=`기준월 ${priceSettings.rate_month||'-'} · 하나은행 전월말일 최초매매기준율, 매월 자동 갱신${fxRateSource?' · '+fxRateSource:''} (수동 수정 가능)`;
 }
 
 // ── 뷰 전환 / 렌더 ──
@@ -5242,7 +5269,7 @@ function renderPriceCalc(){
       <td class="center" style="color:var(--muted)">${fmtGp(c.kzGpVal)}</td>
     </tr>`;
   }).join('');
-  scheduleSplitTableResync('pricecalc-hdr-col','pricecalc-body-col','priceCalcTbody');
+  scheduleSplitTableResync('pricecalc-hdr-col','pricecalc-body-col','priceCalcTbody','fixed');
 }
 function renderPriceSupply(){
   const map=buildSupplyByRep();
@@ -5273,7 +5300,7 @@ function renderPriceSupply(){
       <td style="text-align:right;padding-right:10px;font-weight:600">${fmtN(m.rub)}</td>
       <td style="text-align:right;padding-right:10px;font-weight:600">${fmtN(m.usd)}</td>
     </tr>`).join('');
-  scheduleSplitTableResync('pricesupply-hdr-col','pricesupply-body-col','priceSupplyTbody');
+  scheduleSplitTableResync('pricesupply-hdr-col','pricesupply-body-col','priceSupplyTbody','fixed');
 }
 
 // ── 인라인 수정 ──
