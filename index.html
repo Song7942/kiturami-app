@@ -4586,9 +4586,12 @@ function syncSplitTableColumnWidths(hdrColId, bodyColId, tbodyId, mode){
         }
         // 열별 최대폭 상한: 품명/규격/품번/출고가 내용 길이만큼 무한정 넓어지지 않도록 제한 (넘치는 내용은 줄바꿈)
         const FIT_CAPS={
-          priceCalcTbody:[110,105,84,84,84,40,null,null,null,null,null,null,null],
-          priceSupplyTbody:[130,120,92,150,92,null,null]
+          //             품명  규격 대표 호환 최종 출고 원가 공KRW RUB  GP  공KRW USD  GP
+          priceCalcTbody:[110, 105, 84,  84,  84,  40,  56,  64,  60,  40,  64,  60,  40],
+          priceSupplyTbody:[130,120, 92, 150, 92,  70,  70]
         };
+        // 화면보다 표가 좁으면 남는 폭을 지정 열(계산식=규격, 공급가=호환품번)에 몰아줌
+        const FIT_FILL={ priceCalcTbody:1, priceSupplyTbody:3 };
         const caps=FIT_CAPS[tbodyId]||[];
         const widths=bodyW.map((w,i)=>{
           let v=Math.max(w, hdrW[i]||0);
@@ -4598,12 +4601,24 @@ function syncSplitTableColumnWidths(hdrColId, bodyColId, tbodyId, mode){
         });
         const total=widths.reduce((a,b)=>a+b,0);
         if(!(total>0)) return;
-        // 화면 폭에 맞춤: 자연폭 합이 컨테이너보다 크면 전체를 비율 축소해 가로 스크롤 없이 표시
+        // 화면 폭에 맞춤: 표가 화면보다 넓으면 비율 축소, 좁으면 남는 폭을 지정 열에 더해 정확히 채움
         const wrap=bodyTable.parentElement;
         const avail=wrap?wrap.clientWidth:0;
-        const scale=(avail>0 && total>avail)?(avail/total):1;
-        const finalW=widths.map(w=>w*scale);
-        const finalTotal=Math.min(total, avail>0?avail:total);
+        let finalW, finalTotal;
+        if(avail>0 && total>avail){
+          const scale=avail/total;
+          finalW=widths.map(w=>w*scale);
+          finalTotal=avail;
+        }else if(avail>0 && total<avail){
+          finalW=widths.slice();
+          const fillIdx=FIT_FILL[tbodyId];
+          if(fillIdx!=null && finalW[fillIdx]!=null){ finalW[fillIdx]+=avail-total; }
+          else { const per=(avail-total)/finalW.length; finalW=finalW.map(w=>w+per); }
+          finalTotal=avail;
+        }else{
+          finalW=widths.slice();
+          finalTotal=total;
+        }
         finalW.forEach((w,i)=>{ bodyCols[i].style.width=w+'px'; hdrCols[i].style.width=w+'px'; });
         bodyTable.style.tableLayout='fixed';
         hdrTable.style.tableLayout='fixed';
@@ -5294,7 +5309,7 @@ function renderPriceCalc(){
   const emptyEl=document.getElementById('priceNoResult');
   if(!rows.length){ tbody.innerHTML=''; emptyEl.textContent='계산식 데이터가 없습니다. 엑셀 업로드로 계산식 시트를 올려주세요.'; emptyEl.style.display='block'; return; }
   emptyEl.style.display='none';
-  const inputStyle='width:100%;max-width:66px;box-sizing:border-box;padding:2px 3px;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:var(--text);text-align:right;font-size:11px';
+  const inputStyle='width:100%;max-width:56px;box-sizing:border-box;padding:2px 2px;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:var(--text);text-align:right;font-size:11px';
   tbody.innerHTML=rows.map(r=>{
     const c=calcPriceRow(r);
     return `<tr style="border-bottom:1px solid var(--border);font-size:11px" class="price-row">
