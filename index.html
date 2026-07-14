@@ -514,6 +514,7 @@ input[type="text"]::placeholder{color:var(--muted)}
   <button class="tab-btn" style="display:none" onclick="switchTab('shipments')" id="tab-shipments"><span id="i18n-tab-shipments">🚚 출고관리</span></button>
   <button class="tab-btn" style="display:none" onclick="switchTab('price')"     id="tab-price">💲 가격정보</button>
   <button class="tab-btn" style="display:none" onclick="switchTab('memberManagement')" id="tab-memberManagement"><span id="i18n-tab-membermgmt">👥 회원관리</span></button>
+  <button class="tab-btn" style="display:none" onclick="switchTab('reset')" id="tab-reset"><span id="i18n-tab-reset">🗑️ 초기화</span></button>
   <button class="tab-btn" style="display:none" onclick="switchTab('parts')" id="tab-parts">🔧 부품 검색</button>
 </div>
 
@@ -867,9 +868,6 @@ input[type="text"]::placeholder{color:var(--muted)}
   <div class="scroll-body" id="scrollBodyMemberManagement" style="padding:8px 12px 72px">
     <div id="adminSignupsView" style="display:flex;flex-direction:column;flex:1;min-height:0">
       <div id="resetAllMembersWrap" style="display:none;margin:8px 0 12px;text-align:right">
-        <button class="news-btn-secondary" style="color:#ef4444;border-color:#ef4444;margin-right:8px" onclick="resetAllOrderData()">
-          <span id="i18n-resetallorders">주문·재고·출고 초기화</span>
-        </button>
         <button class="news-btn-secondary" style="color:#ef4444;border-color:#ef4444" onclick="resetAllMembers()">
           <span id="i18n-resetallmembers">전체 회원 초기화</span>
         </button>
@@ -890,6 +888,35 @@ input[type="text"]::placeholder{color:var(--muted)}
       </div>
       <div class="card-list" id="adminSignupsCardList"></div>
       <div class="news-empty" id="adminSignupsEmpty" style="display:none"></div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══ 탭: 초기화 (KITURAMI 최상위 관리자 전용) ══ -->
+<div class="tab-pane" id="pane-reset">
+  <div class="scroll-body" id="scrollBodyReset" style="padding:8px 12px 72px">
+    <div style="max-width:560px;margin:12px auto;display:flex;flex-direction:column;gap:14px">
+      <div style="border:1px solid #ef4444;border-radius:10px;padding:16px;background:var(--surface)">
+        <div style="font-weight:700;margin-bottom:6px;color:#ef4444"><span id="i18n-reset-all-title">주문&재고&출고 초기화</span></div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:10px"><span id="i18n-reset-all-desc">모든 회원의 주문·재고·출고 데이터를 전부 삭제합니다. 회원 계정은 유지됩니다.</span></div>
+        <button class="news-btn-secondary" style="color:#fff;background:#ef4444;border-color:#ef4444" onclick="resetAllOrderData()"><span id="i18n-reset-all-btn">주문&재고&출고 전체 초기화</span></button>
+      </div>
+      <div style="border:1px solid var(--border);border-radius:10px;padding:16px;background:var(--surface)">
+        <div style="font-weight:700;margin-bottom:6px"><span id="i18n-reset-orders-title">주문 초기화</span></div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:10px"><span id="i18n-reset-orders-desc">주문 수량 데이터(주문·공급결정·취소변경요청)만 삭제합니다. 재고와 출고내역은 유지됩니다.</span></div>
+        <button class="news-btn-secondary" style="color:#ef4444;border-color:#ef4444" onclick="resetOrdersOnly()"><span id="i18n-reset-orders-btn">주문 초기화</span></button>
+      </div>
+      <div style="border:1px solid var(--border);border-radius:10px;padding:16px;background:var(--surface)">
+        <div style="font-weight:700;margin-bottom:6px"><span id="i18n-reset-inv-title">재고 초기화</span></div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:10px"><span id="i18n-reset-inv-desc">재고 데이터만 삭제합니다. 주문과 출고내역은 유지됩니다.</span></div>
+        <button class="news-btn-secondary" style="color:#ef4444;border-color:#ef4444" onclick="resetInventoryOnly()"><span id="i18n-reset-inv-btn">재고 초기화</span></button>
+      </div>
+      <div style="border:1px solid var(--border);border-radius:10px;padding:16px;background:var(--surface)">
+        <div style="font-weight:700;margin-bottom:6px"><span id="i18n-reset-ship-title">출고 초기화</span></div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:10px"><span id="i18n-reset-ship-desc">출고내역 데이터만 삭제합니다. 주문과 재고는 유지됩니다.</span></div>
+        <button class="news-btn-secondary" style="color:#ef4444;border-color:#ef4444" onclick="resetShipmentsOnly()"><span id="i18n-reset-ship-btn">출고 초기화</span></button>
+      </div>
     </div>
   </div>
 </div>
@@ -1264,6 +1291,13 @@ const T={
        resetAllCancelled:'취소되었습니다.',resetAllDone:'전체 회원이 초기화되었습니다.',
        resetOrdersConfirmPrompt:w=>`모든 회원의 주문·재고·출고내역을 전부 지우시겠습니까?\n회원 계정 자체는 유지됩니다. 이 작업은 되돌릴 수 없습니다. 계속하려면 아래에 "${w}"를 정확히 입력하세요.`,
        resetOrdersDone:'주문·재고·출고내역이 전부 초기화되었습니다.',
+       tabReset:'초기화',resetAllTitle:'주문&재고&출고 초기화',resetAllDesc:'모든 회원의 주문·재고·출고 데이터를 전부 삭제합니다. 회원 계정은 유지됩니다.',resetAllBtn:'주문&재고&출고 전체 초기화',
+       resetOnlyOrdersTitle:'주문 초기화',resetOnlyOrdersDesc:'주문 수량 데이터(주문·공급결정·취소변경요청)만 삭제합니다. 재고와 출고내역은 유지됩니다.',resetOnlyOrdersBtn:'주문 초기화',
+       resetOnlyOrdersPrompt:w=>`모든 회원의 주문 수량 데이터를 지우시겠습니까?\n재고와 출고내역은 유지됩니다. 이 작업은 되돌릴 수 없습니다. 계속하려면 아래에 "${w}"를 정확히 입력하세요.`,resetOnlyOrdersDone:'주문 데이터가 초기화되었습니다.',
+       resetOnlyInvTitle:'재고 초기화',resetOnlyInvDesc:'재고 데이터만 삭제합니다. 주문과 출고내역은 유지됩니다.',resetOnlyInvBtn:'재고 초기화',
+       resetOnlyInvPrompt:w=>`모든 회원의 재고 데이터를 지우시겠습니까?\n주문과 출고내역은 유지됩니다. 이 작업은 되돌릴 수 없습니다. 계속하려면 아래에 "${w}"를 정확히 입력하세요.`,resetOnlyInvDone:'재고 데이터가 초기화되었습니다.',
+       resetOnlyShipTitle:'출고 초기화',resetOnlyShipDesc:'출고내역 데이터만 삭제합니다. 주문과 재고는 유지됩니다.',resetOnlyShipBtn:'출고 초기화',
+       resetOnlyShipPrompt:w=>`모든 회원의 출고내역을 지우시겠습니까?\n주문과 재고는 유지됩니다. 이 작업은 되돌릴 수 없습니다. 계속하려면 아래에 "${w}"를 정확히 입력하세요.`,resetOnlyShipDone:'출고내역이 초기화되었습니다.',
        signupApproveConfirm:id=>`${id} 계정의 가입을 승인하시겠습니까?`,signupRejectConfirm:id=>`${id} 계정의 가입을 거부하시겠습니까?`,signupDeleteConfirm:id=>`${id} 계정을 삭제하시겠습니까? 삭제하면 되돌릴 수 없습니다.`,
        signupThCompany:'회사명',signupThId:'아이디',signupThContact:'담당자명',signupThPhone:'휴대폰',signupThEmail:'이메일',signupThStatus:'상태',
        resetAllMembersBtn:'전체 회원 초기화',resetAllOrdersBtn:'주문·재고·출고 초기화',
@@ -1337,6 +1371,13 @@ const T={
        resetAllCancelled:'Отменено.',resetAllDone:'Все участники сброшены.',
        resetOrdersConfirmPrompt:w=>`Удалить все заказы, склад и отгрузки всех участников?\nСами аккаунты останутся. Это необратимо. Введите "${w}", чтобы продолжить.`,
        resetOrdersDone:'Заказы, склад и отгрузки сброшены.',
+       tabReset:'Сброс',resetAllTitle:'Сброс заказов, склада и отгрузок',resetAllDesc:'Удаляет все данные заказов, склада и отгрузок всех участников. Аккаунты сохраняются.',resetAllBtn:'Сбросить всё (заказы & склад & отгрузки)',
+       resetOnlyOrdersTitle:'Сброс заказов',resetOnlyOrdersDesc:'Удаляет только данные заказов (заказы, решения о поставке, запросы на изменение). Склад и отгрузки сохраняются.',resetOnlyOrdersBtn:'Сбросить заказы',
+       resetOnlyOrdersPrompt:w=>`Удалить данные заказов всех участников?\nСклад и отгрузки сохранятся. Это необратимо. Введите "${w}", чтобы продолжить.`,resetOnlyOrdersDone:'Данные заказов сброшены.',
+       resetOnlyInvTitle:'Сброс склада',resetOnlyInvDesc:'Удаляет только данные склада. Заказы и отгрузки сохраняются.',resetOnlyInvBtn:'Сбросить склад',
+       resetOnlyInvPrompt:w=>`Удалить данные склада всех участников?\nЗаказы и отгрузки сохранятся. Это необратимо. Введите "${w}", чтобы продолжить.`,resetOnlyInvDone:'Данные склада сброшены.',
+       resetOnlyShipTitle:'Сброс отгрузок',resetOnlyShipDesc:'Удаляет только данные отгрузок. Заказы и склад сохраняются.',resetOnlyShipBtn:'Сбросить отгрузки',
+       resetOnlyShipPrompt:w=>`Удалить данные отгрузок всех участников?\nЗаказы и склад сохранятся. Это необратимо. Введите "${w}", чтобы продолжить.`,resetOnlyShipDone:'Данные отгрузок сброшены.',
        signupApproveConfirm:id=>`Одобрить регистрацию аккаунта ${id}?`,signupRejectConfirm:id=>`Отклонить регистрацию аккаунта ${id}?`,signupDeleteConfirm:id=>`Удалить аккаунт ${id}? Это необратимо.`,
        signupThCompany:'Компания',signupThId:'Логин',signupThContact:'Контактное лицо',signupThPhone:'Мобильный',signupThEmail:'Email',signupThStatus:'Статус',
        resetAllMembersBtn:'Сбросить всех участников',resetAllOrdersBtn:'Сбросить заказы/склад/отгрузки',
@@ -3511,6 +3552,39 @@ async function resetAllOrderData(){
   renderAdminOrders();
   alert(t.resetOrdersDone);
 }
+async function resetOrdersOnly(){
+  const t=T[lang];
+  const typed = prompt(t.resetOnlyOrdersPrompt(t.resetAllConfirmWord));
+  if(typed===null) return;
+  if(typed.trim()!==t.resetAllConfirmWord){ alert(t.resetAllCancelled); return; }
+  // 주문 수량 관련 데이터만 삭제 (재고/출고는 유지)
+  await sb.from('kt_group_change_requests').delete().not('id','is',null);
+  await sb.from('kt_order_requests').delete().not('id','is',null);
+  await sb.from('kt_order_allocations').delete().not('rep','is',null);
+  const { error } = await sb.from('kt_orders').delete().not('id','is',null);
+  if(error){ alert(t.reqFail+'\n\n['+(error.message||error.code)+']'); return; }
+  alert(t.resetOnlyOrdersDone);
+}
+async function resetInventoryOnly(){
+  const t=T[lang];
+  const typed = prompt(t.resetOnlyInvPrompt(t.resetAllConfirmWord));
+  if(typed===null) return;
+  if(typed.trim()!==t.resetAllConfirmWord){ alert(t.resetAllCancelled); return; }
+  const { error } = await sb.from('kt_inventory').delete().not('rep','is',null);
+  if(error){ alert(t.reqFail+'\n\n['+(error.message||error.code)+']'); return; }
+  await loadInventory();
+  alert(t.resetOnlyInvDone);
+}
+async function resetShipmentsOnly(){
+  const t=T[lang];
+  const typed = prompt(t.resetOnlyShipPrompt(t.resetAllConfirmWord));
+  if(typed===null) return;
+  if(typed.trim()!==t.resetAllConfirmWord){ alert(t.resetAllCancelled); return; }
+  const { error } = await sb.from('kt_shipments').delete().not('id','is',null);
+  if(error){ alert(t.reqFail+'\n\n['+(error.message||error.code)+']'); return; }
+  await loadShipments();
+  alert(t.resetOnlyShipDone);
+}
 async function resetAllMembers(){
   const t=T[lang];
   const typed = prompt(t.resetAllConfirmPrompt(t.resetAllConfirmWord));
@@ -4918,6 +4992,11 @@ function refreshInventoryTexts(){
   setTxt('i18n-tab-shipments', '🚚 '+t.tabShipments);
   setTxt('i18n-tab-adminorders', '🗂️ '+t.tabAdminOrders);
   setTxt('i18n-tab-membermgmt', '👥 '+t.tabMemberMgmt);
+  setTxt('i18n-tab-reset', '🗑️ '+t.tabReset);
+  setTxt('i18n-reset-all-title', t.resetAllTitle); setTxt('i18n-reset-all-desc', t.resetAllDesc); setTxt('i18n-reset-all-btn', t.resetAllBtn);
+  setTxt('i18n-reset-orders-title', t.resetOnlyOrdersTitle); setTxt('i18n-reset-orders-desc', t.resetOnlyOrdersDesc); setTxt('i18n-reset-orders-btn', t.resetOnlyOrdersBtn);
+  setTxt('i18n-reset-inv-title', t.resetOnlyInvTitle); setTxt('i18n-reset-inv-desc', t.resetOnlyInvDesc); setTxt('i18n-reset-inv-btn', t.resetOnlyInvBtn);
+  setTxt('i18n-reset-ship-title', t.resetOnlyShipTitle); setTxt('i18n-reset-ship-desc', t.resetOnlyShipDesc); setTxt('i18n-reset-ship-btn', t.resetOnlyShipBtn);
   setTxt('i18n-admingroup-orders', t.adminGroupOrders);
   const sEl=document.getElementById('invSearchInput'); if(sEl) sEl.placeholder=t.invSearchPh;
   if(document.getElementById('pane-inventory').classList.contains('active')) renderInventoryList();
@@ -5593,6 +5672,8 @@ function enterApp(user){
   if(tabShip) tabShip.style.display = 'block';
   const isKiturami = ((user.company||'').trim().toUpperCase()==='KITURAMI');
   if(tabPrice) tabPrice.style.display = isKiturami ? 'block' : 'none';
+  const tabReset=document.getElementById('tab-reset');
+  if(tabReset) tabReset.style.display = (user.is_admin && !user.supplier_company) ? 'block' : 'none';
   Promise.all([loadMyOrderTotals(), loadInventory(), loadGlobalSuppliedTotals(), loadReceivedOrderTotals(), loadPrices()]).then(()=>{ if(document.getElementById('pane-order').classList.contains('active')) renderOrderTable(); });
   loadNewsPosts();
 }
