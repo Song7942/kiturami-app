@@ -5135,12 +5135,13 @@ function renderPriceCalc(){
     <th rowspan="2" style="padding:8px 10px">품명</th><th rowspan="2" style="padding:8px 10px">규격</th>
     <th rowspan="2" style="padding:8px 10px">대표품번<br>(미변경)</th><th rowspan="2" style="padding:8px 10px">호환품번<br>(변경)</th>
     <th rowspan="2" style="padding:8px 10px">최종품번<br>(변경, 현시점)</th><th rowspan="2" class="center">출고<br>(18y~)</th>
-    <th colspan="4" class="center" style="border-left:1px solid var(--border)">러시아</th>
-    <th colspan="4" class="center" style="border-left:1px solid var(--border)">카자흐스탄</th></tr>
+    <th rowspan="2" class="center" style="border-left:1px solid var(--border)">원가<br>KRW</th>
+    <th colspan="3" class="center" style="border-left:1px solid var(--border)">러시아</th>
+    <th colspan="3" class="center" style="border-left:1px solid var(--border)">카자흐스탄</th></tr>
     <tr style="border-bottom:1px solid var(--border);color:var(--muted)">
-    <th class="center" style="border-left:1px solid var(--border)">원가<br>KRW</th><th class="center">공급가<br>KRW</th><th class="center">공급가<br>RUB</th><th class="center">GP</th>
-    <th class="center" style="border-left:1px solid var(--border)">원가<br>KRW</th><th class="center">공급가<br>KRW</th><th class="center">공급가<br>USD</th><th class="center">GP</th></tr>`;
-  const cols='<col><col><col><col><col><col style="width:60px"><col style="width:90px"><col style="width:100px"><col style="width:90px"><col style="width:64px"><col style="width:90px"><col style="width:100px"><col style="width:84px"><col style="width:64px">';
+    <th class="center" style="border-left:1px solid var(--border)">공급가<br>KRW</th><th class="center">공급가<br>RUB</th><th class="center">GP</th>
+    <th class="center" style="border-left:1px solid var(--border)">공급가<br>KRW</th><th class="center">공급가<br>USD</th><th class="center">GP</th></tr>`;
+  const cols='<col><col><col><col><col><col style="width:60px"><col style="width:90px"><col style="width:100px"><col style="width:90px"><col style="width:64px"><col style="width:100px"><col style="width:84px"><col style="width:64px">';
   document.getElementById('pricecalc-hdr-col').innerHTML=cols;
   document.getElementById('pricecalc-body-col').innerHTML=cols;
   const tbody=document.getElementById('priceCalcTbody');
@@ -5158,11 +5159,10 @@ function renderPriceCalc(){
       <td style="padding:6px 10px"><span class="code">${escapeHtml(r.final||'')}</span></td>
       <td class="center" style="color:var(--muted)">${fmtN(r.ship_qty)}</td>
       <td class="center" style="border-left:1px solid var(--border)"><input type="number" step="any" style="${inputStyle}" value="${c.ruCost!=null?c.ruCost:''}" onchange="onPriceCellEdit(${r.row_no},'ru_cost',this.value)"></td>
-      <td class="center"><input type="number" step="any" style="${inputStyle}" value="${r.ru_supply_krw!=null&&r.ru_supply_krw!==''?Number(r.ru_supply_krw):''}" placeholder="${c.ruSupply!=null?fmtN(c.ruSupply):''}" onchange="onPriceCellEdit(${r.row_no},'ru_supply_krw',this.value)"></td>
+      <td class="center" style="border-left:1px solid var(--border)"><input type="number" step="any" style="${inputStyle}" value="${r.ru_supply_krw!=null&&r.ru_supply_krw!==''?Number(r.ru_supply_krw):''}" placeholder="${c.ruSupply!=null?fmtN(c.ruSupply):''}" onchange="onPriceCellEdit(${r.row_no},'ru_supply_krw',this.value)"></td>
       <td style="text-align:right;padding-right:10px">${fmtN(c.ruRub)}</td>
       <td class="center" style="color:var(--muted)">${fmtGp(c.ruGpVal)}</td>
-      <td class="center" style="border-left:1px solid var(--border);color:var(--muted)">${fmtN(c.kzCost)}</td>
-      <td class="center"><input type="number" step="any" style="${inputStyle}" value="${r.kz_supply_krw!=null&&r.kz_supply_krw!==''?Number(r.kz_supply_krw):''}" placeholder="${c.kzSupply!=null?fmtN(c.kzSupply):''}" onchange="onPriceCellEdit(${r.row_no},'kz_supply_krw',this.value)"></td>
+      <td class="center" style="border-left:1px solid var(--border)"><input type="number" step="any" style="${inputStyle}" value="${r.kz_supply_krw!=null&&r.kz_supply_krw!==''?Number(r.kz_supply_krw):''}" placeholder="${c.kzSupply!=null?fmtN(c.kzSupply):''}" onchange="onPriceCellEdit(${r.row_no},'kz_supply_krw',this.value)"></td>
       <td style="text-align:right;padding-right:10px">${fmtN(c.kzUsd)}</td>
       <td class="center" style="color:var(--muted)">${fmtGp(c.kzGpVal)}</td>
     </tr>`;
