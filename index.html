@@ -816,11 +816,12 @@ input[type="text"]::placeholder{color:var(--muted)}
         <button class="news-tab" id="priceTabSupply" onclick="switchPriceView('supply')"><span id="i18n-pricetab-supply">공급가</span></button>
       </div>
       <!-- 계산식 상단: 환율/GP 파라미터 -->
-      <div id="priceParamsBar" style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;padding:4px 4px 8px">
-        <div><div style="font-size:10px;color:var(--muted)">기준환율(KRW/RUB)</div><input type="number" step="0.01" id="prmRubRate" style="width:90px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)"></div>
-        <div><div style="font-size:10px;color:var(--muted)">기준환율(KRW/USD)</div><input type="number" step="0.01" id="prmUsdRate" style="width:90px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)"></div>
-        <div><div style="font-size:10px;color:var(--muted)">러시아 기준 GP(%)</div><input type="number" step="0.1" id="prmRuGp" style="width:70px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)"></div>
-        <div><div style="font-size:10px;color:var(--muted)">카자흐스탄 기준 GP(%)</div><input type="number" step="0.1" id="prmKzGp" style="width:70px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)"></div>
+      <!-- 라벨을 입력칸 위에 쌓지 않고 옆에 붙여 한 줄로 유지한다 (세로 공간 절약) -->
+      <div id="priceParamsBar" style="display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;padding:2px 4px 6px">
+        <label style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--muted)">기준환율(KRW/RUB)<input type="number" step="0.01" id="prmRubRate" style="width:76px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--muted)">기준환율(KRW/USD)<input type="number" step="0.01" id="prmUsdRate" style="width:76px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--muted)">러시아 기준 GP(%)<input type="number" step="0.1" id="prmRuGp" style="width:58px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--muted)">카자흐스탄 기준 GP(%)<input type="number" step="0.1" id="prmKzGp" style="width:58px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></label>
         <button class="dl-btn" onclick="savePriceSettings()" style="background:var(--accent);border-color:var(--accent);color:#fff"><span id="i18n-prm-save">저장</span></button>
         <button class="dl-btn" onclick="refreshRatesNow()" style="background:var(--surface2);border-color:var(--border);color:var(--text)"><span id="i18n-prm-refresh">환율 갱신</span></button>
         <div id="priceRateInfo" style="font-size:11px;color:var(--muted);flex:1;min-width:200px"></div>
@@ -1316,7 +1317,7 @@ const ANCH_KEYS=new Set(['anch_24','anch_35']);
 const T={
   ko:{title:'KITURAMI 부품 검색',sub:'',mbLabel:'모델 선택',mbAll:'전체',mbAllSub:'ALL',mbMulti:'다중',mbMultiOn:'다중',mbMultiSub2:'',
        ph:'도면번호, 품명, 대표품번으로 검색…',dl:'엑셀 다운로드',pndl:'엑셀 다운로드',
-       thDiag:'도면번호',thName:'품명',thSpec:'규격',thRep:'대표품번',
+       thDiag:'도면번호',thDiagBr:'도면<br>번호',thName:'품명',thSpec:'규격',thRep:'대표품번',
        count:n=>`<b>${n}</b>개`,footer:n=>`총 ${n}개`,noResult:'검색 결과가 없습니다.',
        tabParts:'🔧 부품 검색',tabPN:'🔄 품번 조회',tabOrder:'📦 주문',tabOrderParts:'📦 부품조회',tabInventory:'📊 재고관리',tabPrice:'💲 가격정보',orderDl:'엑셀 다운로드',orderMailBanner:'주문 접수 이메일: song@krb.co.kr',orderPh:'도면번호, 품명, 대표품번으로 검색…',orderQty:'주문',logoutBtn:'로그아웃',
        invTemplate:'양식 다운로드',invUpload:'엑셀 업로드',invHMaster:'대표품번(미변경)',invHRep:'재고품번',invHQty:'재고수량',invHUpdated:'업데이트 일시',invEmpty:'등록된 재고 데이터가 없습니다.',invCount:n=>`총 ${n}건`,
@@ -1922,11 +1923,14 @@ function setupHTableScroll(scrollId,headerId,trackId,thumbId){
   if(!sb||!hw||!track||!thumb) return function(){};
 
   function update(){
-    const trackWidth=track.clientWidth;
     const contentWidth=sb.scrollWidth;
     const visibleWidth=sb.clientWidth;
-    if(contentWidth<=visibleWidth+1||trackWidth<=0){ track.style.visibility='hidden'; return; }
-    track.style.visibility='visible';
+    // 가로 스크롤이 필요 없으면 자리까지 없앤다.
+    // visibility:hidden 은 공간을 그대로 차지해서 헤더와 데이터 사이에 빈 띠가 남았다.
+    if(contentWidth<=visibleWidth+1){ track.style.display='none'; return; }
+    track.style.display='';
+    const trackWidth=track.clientWidth; // 보이게 한 뒤에 측정해야 0 이 아니다
+    if(trackWidth<=0) return;
     const thumbWidth=Math.max(30, trackWidth*(visibleWidth/contentWidth));
     const maxScrollLeft=contentWidth-visibleWidth;
     const maxThumbLeft=trackWidth-thumbWidth;
@@ -2735,7 +2739,8 @@ function orderTailCols(){
 function renderOrderHeader(){
   const t=T[lang];
   const fixedWidths = lang==='ko' ? [70,170,150,140] : [70,250,140];
-  let r1=`<th rowspan="2">${t.thDiag}</th><th rowspan="2">${t.thName}</th>`;
+  // 도면번호는 좁은 열이라 '도면번/호'로 어색하게 끊긴다 → '도면/번호'로 직접 줄바꿈한다.
+  let r1=`<th rowspan="2">${t.thDiagBr||t.thDiag}</th><th rowspan="2">${t.thName}</th>`;
   if(lang==='ko')r1+=`<th rowspan="2">${t.thSpec}</th>`;
   r1+=`<th rowspan="2">${t.thRep}</th>`;
 
@@ -4820,38 +4825,45 @@ function syncSplitTableColumnWidths(hdrColId, bodyColId, tbodyId, mode){
             });
           });
         }
-        // 테이블별 열 설정(상한/잔여폭 분배/축소 보호)을 동적으로 계산
+        // 테이블별 열 설정(상한/축소 보호)을 동적으로 계산
+        //
+        // 공통 정책 — 남는 폭을 특정 열에 몰아주지 않는다(noFill).
+        //   예전에는 fill 로 잔여폭을 품명·규격에 50:50 으로 얹었는데, 넓은 화면에서는
+        //   그 두 열이 각각 화면의 1/3 씩 차지해 글자 주변이 텅 비어 보였다.
+        //   이제 내용에 맞는 폭만 쓰고 표를 억지로 늘리지 않는다.
+        //
+        // 품명·규격·품번 3열은 모든 탭에서 같은 상한을 써서 탭을 옮겨도 열이 서로 맞는다.
+        const LEAD_KO=[280,260,110,150,110]; // 품명|규격|대표품번|호환품번|최종품번
+        const LEAD_RU=[280,110,150,110];     // 품명|대표품번|호환품번|최종품번 (RU 는 규격 없음)
+        const allRigidFrom=(k,len)=>[...Array(len).keys()].filter(i=>i>=k);
         function getFitConfig(tbodyId, n){
           if(tbodyId==='priceCalcTbody'){
-            // 역할별 뷰(RUSSIA/KAZAK·회사 계정)는 8열이다:
-            //   품명 | 규격 | 대표품번 | 호환품번 | 최종품번 | 원가(구매가) | 공급가 | GP
-            // 앞 5열은 품번조회(pnTbody)와 같은 caps 를 써서 두 탭의 열이 서로 맞도록 한다.
+            // 역할별 뷰(RUSSIA/KAZAK·회사 계정) 8열: 앞 5열 + 원가(구매가) | 공급가 | GP
             if(n===8){
-              return { caps:[95, 90, 110, 150, 110, 84, 84, 56],
-                       fill:{0:0.5, 1:0.5}, rigid:[2,3,4,5,6,7] };
+              return { caps:[...LEAD_KO, 84, 84, 56], noFill:true, rigid:allRigidFrom(2,8) };
             }
-            //          품명  규격 대표 호환 최종 출고 원가 공KRW RUB  GP  공KRW USD  GP
-            return { caps:[95, 90, 110, 110, 110, 40,  74,  74,  60,  40,  74,  60,  40],
-                     fill:{0:0.5, 1:0.5}, rigid:[5,6,7,8,9,10,11,12] };
+            // 계산식 13열: 앞 5열 + 출고 | 원가 | 공KRW | RUB | GP | 공KRW | USD | GP
+            return { caps:[...LEAD_KO, 40, 74, 74, 60, 40, 74, 60, 40],
+                     noFill:true, rigid:allRigidFrom(2,13) };
           }
           if(tbodyId==='priceSupplyTbody'){
-            return { caps:[95, 90, 110, 110, 110, 70, 70], fill:{0:0.5, 1:0.5}, rigid:[5,6] };
+            // 공급가 7열: 앞 5열 + 공급가 RUB | 공급가 USD
+            return { caps:[...LEAD_KO, 84, 84], noFill:true, rigid:allRigidFrom(2,7) };
           }
-          const isKoL=(typeof lang!=='undefined' && lang==='ko');
           if(tbodyId==='pnTbody'){
             // KO: 품명|규격|대표|호환|최종 (5) / RU: 품명|대표|호환|최종 (4)
-            if(n===5) return { caps:[95,90,110,150,110], fill:{0:0.5,1:0.5}, rigid:[2,3,4] };
-            return { caps:[150,110,150,110], fill:{0:1}, rigid:[1,2,3] };
+            if(n===5) return { caps:[...LEAD_KO], noFill:true, rigid:[2,3,4] };
+            return { caps:[...LEAD_RU], noFill:true, rigid:[1,2,3] };
           }
           if(tbodyId==='inventoryTbody'){
             // KO: 품명|규격|대표품번|품번|기초재고|공급후재고|공급처재고 (7) / RU: 규격 제외 (6)
-            if(n===7) return { caps:[95,90,110,110,72,80,80], fill:{0:0.5,1:0.5}, rigid:[2,3,4,5,6] };
-            return { caps:[150,110,110,72,80,80], fill:{0:1}, rigid:[1,2,3,4,5] };
+            if(n===7) return { caps:[280,260,110,110,72,80,80], noFill:true, rigid:allRigidFrom(2,7) };
+            return { caps:[280,110,110,72,80,80], noFill:true, rigid:allRigidFrom(1,6) };
           }
           if(tbodyId==='shipmentsTbody'){
             // KO: 품명|규격|대표품번|품번|거래처|날짜|수량|작업 (8) / RU: 규격 제외 (7)
-            if(n===8) return { caps:[95,90,110,110,120,84,56,58], fill:{0:0.4,1:0.3,4:0.3}, rigid:[2,3,5,6,7] };
-            return { caps:[140,110,110,120,84,56,58], fill:{0:0.6,3:0.4}, rigid:[1,2,4,5,6] };
+            if(n===8) return { caps:[280,260,110,110,120,84,56,58], noFill:true, rigid:allRigidFrom(2,8) };
+            return { caps:[280,110,110,120,84,56,58], noFill:true, rigid:allRigidFrom(1,7) };
           }
           if(tbodyId==='orderTbody'){
             // 도면번호 | 품명 | (규격:KO만) | 대표품번 | 모델열×M | [가격] [주문접수] [보유재고] [주문]
@@ -4864,15 +4876,15 @@ function syncSplitTableColumnWidths(hdrColId, bodyColId, tbodyId, mode){
             if(vis.received) tailW.push(68);
             if(vis.stock)    tailW.push(68);
             if(vis.qty)      tailW.push(76);
+            // 품명·규격 상한은 다른 탭과 동일하게 맞춘다.
             const caps=new Array(n).fill(48); // 기본(모델 열)
-            caps[0]=48; caps[1]=100;
-            let i=2; if(isKo){ caps[2]=95; i=3; }
+            caps[0]=48; caps[1]=280;
+            let i=2; if(isKo){ caps[2]=260; i=3; }
             caps[i]=110; // 대표품번
             tailW.forEach((w,k)=>{ const idx=n-tailW.length+k; if(idx>i) caps[idx]=w; });
             const flex=isKo?[1,2]:[1];
             const rigid=[...Array(n).keys()].filter(k=>!flex.includes(k));
-            const fill=isKo?{1:0.5, 2:0.5}:{1:1};
-            return { caps, fill, rigid };
+            return { caps, noFill:true, rigid };
           }
           return { caps:[], fill:null, rigid:[] };
         }
@@ -4916,10 +4928,16 @@ function syncSplitTableColumnWidths(hdrColId, bodyColId, tbodyId, mode){
           finalW=widths.slice();
           const fill=FIT_CFG.fill;
           const extra=avail-total;
-          if(fill && typeof fill==='object'){
+          if(FIT_CFG.noFill){
+            // 남는 폭을 특정 열에 몰아주지 않고 내용에 맞는 폭을 그대로 쓴다.
+            finalTotal=total;
+          }else if(fill && typeof fill==='object'){
             Object.keys(fill).forEach(k=>{ const i=Number(k); if(finalW[i]!=null) finalW[i]+=extra*fill[k]; });
-          }else{ const per=extra/finalW.length; finalW=finalW.map(w=>w+per); }
-          finalTotal=avail;
+            finalTotal=avail;
+          }else{
+            const per=extra/finalW.length; finalW=finalW.map(w=>w+per);
+            finalTotal=avail;
+          }
         }else{
           finalW=widths.slice();
           finalTotal=total;
@@ -5741,8 +5759,11 @@ function applyPriceTabChrome(){
   const isMaster=m==='master';
   const tabsEl=document.getElementById('priceTabCalc');
   if(tabsEl && tabsEl.parentElement) tabsEl.parentElement.style.display = isMaster?'':'none';
-  show('priceParamsBar', isMaster);
-  if(!isMaster) document.getElementById('priceParamsBar').style.display='none';
+  // 환율/GP 파라미터는 MASTER 계산식에서만.
+  // display 를 '' 로 비우면 인라인 flex 가 사라져 block 이 되고, 항목들이 세로로
+  // 쌓여 화면을 낭비한다 → 반드시 'flex' 를 명시한다.
+  const params=document.getElementById('priceParamsBar');
+  if(params) params.style.display = (isMaster && priceView==='calc') ? 'flex' : 'none';
   // 업로드: MASTER(계산식) 와 회사 계정만
   show('priceUploadWrap', isMaster ? priceView==='calc' : m==='company');
   // 지역/회사 뷰는 계산식 슬롯을 재사용한다
