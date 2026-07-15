@@ -233,6 +233,17 @@ input[type="text"]::placeholder{color:var(--muted)}
 .card-list{border:1px solid var(--border);border-radius:10px;background:var(--surface)}
 .price-row td{overflow:hidden}
 #priceCalcThead th,#priceSupplyThead th{overflow:hidden}
+/* 주문관리 표: 한 화면 맞춤 (압축·줄바꿈·넘침 차단) */
+#adminOrderThead th,#adminMyOrdersThead th{padding:4px 3px !important;font-size:10px !important;word-break:break-all;overflow:hidden;text-align:center !important;vertical-align:middle}
+#adminOrderTbody td,#adminMyOrdersTbody td{padding:4px 3px !important;font-size:11px !important;word-break:break-all;overflow:hidden}
+#adminOrderTbody .code,#adminMyOrdersTbody .code{font-size:10px;padding:1px 3px}
+#adminOrderTbody button,#adminMyOrdersTbody button{padding:3px 6px !important;font-size:10px !important}
+#adminOrderTbody input,#adminMyOrdersTbody input{max-width:100%;box-sizing:border-box}
+/* 품번조회/재고관리 헤더 중앙 정렬 */
+#pn-thead th,#inventoryThead th{text-align:center !important;vertical-align:middle}
+/* 회원관리 헤더: 구분선 + 중앙 정렬 */
+#adminSignupsView thead th{text-align:center !important;vertical-align:middle;border-bottom:2px solid var(--border);background:var(--surface2)}
+#adminSignupsView tbody button{padding:4px 8px;font-size:11px}
 .part-card{padding:9px 12px;border-bottom:1px solid var(--border)}
 .order-card{padding:10px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;background:var(--surface)}
 .part-card:last-child{border-bottom:none}
@@ -864,7 +875,7 @@ input[type="text"]::placeholder{color:var(--muted)}
         </button>
       </div>
       <div class="pn-body-wrap">
-        <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <table style="width:100%;border-collapse:collapse;font-size:11px;table-layout:fixed">
           <thead id="adminOrderThead"></thead>
           <tbody id="adminOrderTbody"></tbody>
         </table>
@@ -880,7 +891,7 @@ input[type="text"]::placeholder{color:var(--muted)}
         </button>
       </div>
       <div class="pn-body-wrap">
-        <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <table style="width:100%;border-collapse:collapse;font-size:11px;table-layout:fixed">
           <thead id="adminMyOrdersThead"></thead>
           <tbody id="adminMyOrdersTbody"></tbody>
         </table>
@@ -909,7 +920,7 @@ input[type="text"]::placeholder{color:var(--muted)}
             <th style="padding:9px 12px" id="i18n-signup-th-email">이메일</th>
             <th style="padding:9px 12px" id="i18n-signup-th-id">아이디</th>
             <th style="padding:9px 12px;text-align:center" id="i18n-signup-th-status">상태</th>
-            <th style="padding:9px 12px;text-align:center" colspan="3"></th>
+            <th style="padding:9px 12px;text-align:center" colspan="3" id="i18n-signup-th-actions">수정/삭제</th>
           </tr></thead>
           <tbody id="adminSignupsList"></tbody>
         </table>
@@ -1334,7 +1345,7 @@ const T={
        reqApprove:'승인',reqReject:'거부',
        reqApproveConfirm:'이 요청을 승인하고 주문에 반영할까요?',reqRejectConfirm:'이 요청을 거부할까요?',
        grpCancelReceive:'취소 및 변경 접수',grpCancelRequest:'취소 및 변경 신청',
-       colChangeHistory:'변경이력',colCancelChangeAction:'취소/변경',colRequestedQty:'신청수량',colChangeResult:'신청결과',
+       colChangeHistory:'변경이력',colCancelChangeAction:'취소/변경',colRequestedQty:'신청수량',colChangeResult:'신청결과',colChangeType:'취소/변경',colChangeQty:'접수수량',colChangeDecision:'의사결정',
        changeHistoryLabel:'변경',reqTypeCancel:'취소',reqTypeChange:'변경',cancelBtn:'취소',changeBtn:'변경',cannotBtn:'불가',
        groupCancelConfirm:(rep,q)=>`${rep}의 미출고분 ${q}개 전체 취소를 신청하시겠습니까? 구매처의 동의가 있어야 반영됩니다.`,
        groupChangePrompt:(rep,q)=>`${rep}의 새로운 미출고 수량을 입력하세요 (현재 미출고 ${q}개, 이보다 적은 수를 입력해야 합니다). 구매처의 동의가 있어야 반영됩니다.`,
@@ -1414,7 +1425,7 @@ const T={
        reqApprove:'Одобрить',reqReject:'Отклонить',
        reqApproveConfirm:'Одобрить этот запрос и применить к заказу?',reqRejectConfirm:'Отклонить этот запрос?',
        grpCancelReceive:'Заявки на отмену/изменение',grpCancelRequest:'Отмена/изменение',
-       colChangeHistory:'История изменений',colCancelChangeAction:'Отмена/изм.',colRequestedQty:'Запрошено',colChangeResult:'Результат',
+       colChangeHistory:'История изменений',colCancelChangeAction:'Отмена/изм.',colRequestedQty:'Запрошено',colChangeResult:'Результат',colChangeType:'Отмена/изм.',colChangeQty:'Принято',colChangeDecision:'Решение',
        changeHistoryLabel:'Изменено',reqTypeCancel:'Отмена',reqTypeChange:'Изменение',cancelBtn:'Отменить',changeBtn:'Изменить',cannotBtn:'Нельзя',
        groupCancelConfirm:(rep,q)=>`Запросить отмену всех ${q} неотгруженных единиц ${rep}? Требуется согласие поставщика.`,
        groupChangePrompt:(rep,q)=>`Введите новое количество неотгруженных единиц для ${rep} (сейчас ${q}, нужно меньше). Требуется согласие поставщика.`,
@@ -2431,9 +2442,10 @@ function renderPN(){
 
   const thead=document.getElementById('pn-thead');
   if(thead){
+    const brLabel=(x)=>String(x||'').replace(' (','<br>(');
     thead.innerHTML=isKo
-      ? `<tr><th class="sticky-col1">${t.pnH0}</th><th>${t.pnH0s}</th><th id="pn-th1">${t.pnH1}</th><th id="pn-th2">${t.pnH2}</th><th id="pn-th3">${t.pnH3}</th></tr>`
-      : `<tr><th class="sticky-col1">${t.pnH0}</th><th id="pn-th1">${t.pnH1}</th><th id="pn-th2">${t.pnH2}</th><th id="pn-th3">${t.pnH3}</th></tr>`;
+      ? `<tr><th class="sticky-col1">${t.pnH0}</th><th>${t.pnH0s}</th><th id="pn-th1">${brLabel(t.pnH1)}</th><th id="pn-th2">${brLabel(t.pnH2)}</th><th id="pn-th3">${brLabel(t.pnH3)}</th></tr>`
+      : `<tr><th class="sticky-col1">${t.pnH0}</th><th id="pn-th1">${brLabel(t.pnH1)}</th><th id="pn-th2">${brLabel(t.pnH2)}</th><th id="pn-th3">${brLabel(t.pnH3)}</th></tr>`;
   }
 
   // 청크 렌더링
@@ -4013,6 +4025,7 @@ function refreshAdminTexts(){
   setTxt('i18n-signup-th-phone', t.signupThPhone);
   setTxt('i18n-signup-th-email', t.signupThEmail);
   setTxt('i18n-signup-th-status', t.signupThStatus);
+  setTxt('i18n-signup-th-actions', lang==='ru'?'Изм./Удал.':'수정/삭제');
   setTxt('i18n-resetallmembers', t.resetAllMembersBtn);
   setTxt('i18n-resetallorders', t.resetAllOrdersBtn);
   setTxt('i18n-editmembertitle', t.editMemberTitle);
@@ -4608,8 +4621,8 @@ function syncSplitTableColumnWidths(hdrColId, bodyColId, tbodyId, mode){
           }
           if(tbodyId==='shipmentsTbody'){
             // KO: 품명|규격|대표품번|품번|거래처|날짜|수량|작업 (8) / RU: 규격 제외 (7)
-            if(n===8) return { caps:[95,90,110,110,120,84,56,40], fill:{0:0.4,1:0.3,4:0.3}, rigid:[2,3,5,6,7] };
-            return { caps:[140,110,110,120,84,56,40], fill:{0:0.6,3:0.4}, rigid:[1,2,4,5,6] };
+            if(n===8) return { caps:[95,90,110,110,120,84,56,58], fill:{0:0.4,1:0.3,4:0.3}, rigid:[2,3,5,6,7] };
+            return { caps:[140,110,110,120,84,56,58], fill:{0:0.6,3:0.4}, rigid:[1,2,4,5,6] };
           }
           if(tbodyId==='orderTbody'){
             // 도면번호 | 품명 | (규격:KO만) | 대표품번 | 모델열×M | 가격 | 주문접수 | 보유재고 | 주문
@@ -4638,7 +4651,10 @@ function syncSplitTableColumnWidths(hdrColId, bodyColId, tbodyId, mode){
         if(!(total>0)) return;
         // 화면 폭에 맞춤: 표가 화면보다 넓으면 비율 축소, 좁으면 남는 폭을 지정 열에 더해 정확히 채움
         const wrap=bodyTable.parentElement;
-        const avail=wrap?wrap.clientWidth:0;
+        const hdrWrap=hdrTable.parentElement;
+        const availBody=wrap?wrap.clientWidth:0;
+        const availHdr=hdrWrap?hdrWrap.clientWidth:0;
+        const avail=(availBody>0&&availHdr>0)?Math.min(availBody,availHdr):(availBody||availHdr);
         let finalW, finalTotal;
         // 숫자/코드 열은 축소 대상에서 제외해 값·헤더가 항상 보이게 유지
         if(avail>0 && total>avail){
@@ -4726,8 +4742,8 @@ function renderShipmentsList(){
   if(lastUpdatedEl) lastUpdatedEl.textContent = latest ? t.invLastUpdated(formatNewsDate(new Date(latest).getTime())) : '';
 
   const cols = isKo
-    ? [t.adminHName, t.thSpec, t.invHMaster, t.shipThRep, t.shipThClient, t.shipThDate, t.shipThQty, '']
-    : [t.adminHName, t.invHMaster, t.shipThRep, t.shipThClient, t.shipThDate, t.shipThQty, ''];
+    ? [t.adminHName, t.thSpec, t.invHMaster, t.shipThRep, t.shipThClient, t.shipThDate, t.shipThQty, t.signupEdit]
+    : [t.adminHName, t.invHMaster, t.shipThRep, t.shipThClient, t.shipThDate, t.shipThQty, t.signupEdit];
   const colgroupHtml=cols.map(()=>`<col>`).join('');
   ['ship-hdr-col','ship-body-col'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=colgroupHtml;});
   document.getElementById('shipmentsThead').innerHTML=`<tr>${cols.map((c,i)=>`<th${i===cols.length-2?' style="text-align:right;padding-right:16px"':''}${i===cols.length-1?' style="text-align:center"':''}>${c}</th>`).join('')}</tr>`;
@@ -4755,7 +4771,7 @@ function renderShipmentsList(){
     <td style="padding:9px 12px;color:var(--muted)">${escapeHtml(formatShipDate(r.ship_date))}</td>
     <td style="padding:9px 16px 9px 12px;text-align:right;font-weight:700">${r.qty}</td>
     <td style="padding:9px 12px;text-align:center;white-space:nowrap">
-      <button class="news-btn-secondary" style="padding:5px 9px;font-size:11px" onclick="openEditShipmentModal(${r.id})">${t.signupEdit}</button>
+      <button class="news-btn-secondary" style="padding:3px 6px;font-size:10px;max-width:100%;box-sizing:border-box;white-space:nowrap" onclick="openEditShipmentModal(${r.id})">${t.signupEdit}</button>
       <button class="news-btn-secondary" style="padding:5px 9px;font-size:11px" onclick="deleteShipment(${r.id})">${t.signupDelete}</button>
     </td>
   </tr>`;
@@ -4903,9 +4919,8 @@ function renderInventoryList(){
   const colgroupHtml = cols.map(()=>`<col>`).join('');
   ['inv-hdr-col','inv-body-col'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=colgroupHtml;});
   document.getElementById('inventoryThead').innerHTML=`<tr>${cols.map((c,i)=>{
-    const rightAlign = (i===cols.length-1 || i===cols.length-2);
     const stickyCls = i===0 ? ' class="sticky-col1"' : '';
-    return `<th${stickyCls}${rightAlign?' style="text-align:right;padding-right:16px"':''}>${c}</th>`;
+    return `<th${stickyCls} style="text-align:center">${c}</th>`;
   }).join('')}</tr>`;
 
   const tbody=document.getElementById('inventoryTbody');
