@@ -2380,7 +2380,7 @@ function renderPNChunk(startFrom=0){
   }).join('');
   if(startFrom===0) tbody.innerHTML=rows;
   else tbody.insertAdjacentHTML('beforeend', rows);
-  if(startFrom===0) scheduleSplitTableResync('pn-hdr-col','pn-body-col','pnTbody');
+  if(startFrom===0) scheduleSplitTableResync('pn-hdr-col','pn-body-col','pnTbody','fixed');
 
   // ── 모바일 카드 (좌우 스크롤 없이 한 화면에서 모든 정보 확인) ──
   const cards=chunk.map(r=>{
@@ -4595,6 +4595,22 @@ function syncSplitTableColumnWidths(hdrColId, bodyColId, tbodyId, mode){
           if(tbodyId==='priceSupplyTbody'){
             return { caps:[95, 90, 110, 110, 110, 70, 70], fill:{0:0.5, 1:0.5}, rigid:[5,6] };
           }
+          const isKoL=(typeof lang!=='undefined' && lang==='ko');
+          if(tbodyId==='pnTbody'){
+            // KO: 품명|규격|대표|호환|최종 (5) / RU: 품명|대표|호환|최종 (4)
+            if(n===5) return { caps:[95,90,110,150,110], fill:{0:0.5,1:0.5}, rigid:[2,3,4] };
+            return { caps:[150,110,150,110], fill:{0:1}, rigid:[1,2,3] };
+          }
+          if(tbodyId==='inventoryTbody'){
+            // KO: 품명|규격|대표품번|품번|기초재고|공급후재고|공급처재고 (7) / RU: 규격 제외 (6)
+            if(n===7) return { caps:[95,90,110,110,72,80,80], fill:{0:0.5,1:0.5}, rigid:[2,3,4,5,6] };
+            return { caps:[150,110,110,72,80,80], fill:{0:1}, rigid:[1,2,3,4,5] };
+          }
+          if(tbodyId==='shipmentsTbody'){
+            // KO: 품명|규격|대표품번|품번|거래처|날짜|수량|작업 (8) / RU: 규격 제외 (7)
+            if(n===8) return { caps:[95,90,110,110,120,84,56,40], fill:{0:0.4,1:0.3,4:0.3}, rigid:[2,3,5,6,7] };
+            return { caps:[140,110,110,120,84,56,40], fill:{0:0.6,3:0.4}, rigid:[1,2,4,5,6] };
+          }
           if(tbodyId==='orderTbody'){
             // 도면번호 | 품명 | (규격:KO만) | 대표품번 | 모델열×M | 가격 | 주문접수 | 보유재고 | 주문
             const isKo=(typeof lang!=='undefined' && lang==='ko');
@@ -4768,7 +4784,7 @@ function renderShipmentsList(){
     </div>
   </div>`;
   }).join('');
-  scheduleSplitTableResync('ship-hdr-col','ship-body-col','shipmentsTbody');
+  scheduleSplitTableResync('ship-hdr-col','ship-body-col','shipmentsTbody','fixed');
 }
 async function loadInventory(){
   const myCompany=currentUser?currentUser.company:'';
@@ -4965,7 +4981,7 @@ function renderInventoryList(){
   });
   tbody.innerHTML=rowsHtml.join('');
   if(cardList) cardList.innerHTML=cardsHtml.join('');
-  scheduleSplitTableResync('inv-hdr-col','inv-body-col','inventoryTbody');
+  scheduleSplitTableResync('inv-hdr-col','inv-body-col','inventoryTbody','fixed');
 }
 function downloadInventoryData(){
   const t=T[lang];
