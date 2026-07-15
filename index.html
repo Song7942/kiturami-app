@@ -207,6 +207,13 @@ input[type="text"]::placeholder{color:var(--muted)}
 .count-badge b{color:var(--accent)}
 .dl-btn{flex-shrink:0;display:flex;align-items:center;gap:4px;padding:6px 10px;background:linear-gradient(135deg,#166534,#15803d);border:1px solid #166534;border-radius:7px;color:#bbf7d0;font-size:11px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif}
 
+/* ── 품번조회·가격정보 데이터 정렬 ──
+   두 표는 헤더가 가운데 정렬인데 데이터만 왼쪽이라 열이 어긋나 보였다.
+   부품조회 탭(헤더·데이터 모두 가운데)과 같게 맞춘다.
+   원가·공급가처럼 인라인 text-align 이 지정된 숫자 열은 인라인이 우선하므로
+   오른쪽 정렬 그대로 유지된다. */
+#pnTbody td,#priceCalcTbody td,#priceSupplyTbody td{text-align:center}
+
 /* ── 회원관리 표 (헤더에 구분선, 다른 탭 헤더와 동일한 모양) ── */
 .member-tbl thead th{background:var(--surface2);padding:8px 12px;font-size:11px;font-weight:600;color:var(--muted);text-align:left;border-top:1px solid var(--border);border-bottom:1px solid var(--border);border-right:1px solid var(--border);white-space:nowrap;vertical-align:middle}
 .member-tbl thead th:first-child{border-left:1px solid var(--border)}
@@ -6698,7 +6705,8 @@ function enterApp(user){
   const tabInv=document.getElementById('tab-inventory');
   const tabShip=document.getElementById('tab-shipments');
   const tabPrice=document.getElementById('tab-price');
-  if(tabInv) tabInv.style.display = 'block';
+  // 재고관리·출고관리: MASTER 는 재고를 보유하거나 출고하지 않으므로 숨긴다.
+  if(tabInv) tabInv.style.display = role.isMaster ? 'none' : 'block';
   if(tabShip) tabShip.style.display = role.isMaster ? 'none' : 'block';
   applyOrderTabLabel();
   // 가격정보: MASTER · RUSSIA/KAZAK · 회사 계정만. KITURAMI 일반 가입자 포함 그 외는 숨김.
