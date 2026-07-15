@@ -207,6 +207,14 @@ input[type="text"]::placeholder{color:var(--muted)}
 .count-badge b{color:var(--accent)}
 .dl-btn{flex-shrink:0;display:flex;align-items:center;gap:4px;padding:6px 10px;background:linear-gradient(135deg,#166534,#15803d);border:1px solid #166534;border-radius:7px;color:#bbf7d0;font-size:11px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif}
 
+/* ── 회원관리 표 (헤더에 구분선, 다른 탭 헤더와 동일한 모양) ── */
+.member-tbl thead th{background:var(--surface2);padding:8px 12px;font-size:11px;font-weight:600;color:var(--muted);text-align:left;border-top:1px solid var(--border);border-bottom:1px solid var(--border);border-right:1px solid var(--border);white-space:nowrap;vertical-align:middle}
+.member-tbl thead th:first-child{border-left:1px solid var(--border)}
+.member-tbl thead th.center{text-align:center}
+.member-tbl tbody td{border-right:1px solid var(--border)}
+.member-tbl tbody td:first-child{border-left:1px solid var(--border)}
+.member-tbl tbody tr:last-child td{border-bottom:1px solid var(--border)}
+
 /* ── 테이블 헤더 (고정) ── */
 .tbl-header-wrap{background:var(--surface);border:1px solid var(--border);border-radius:10px 10px 0 0;overflow:hidden;border-bottom:none}
 .tbl-header-wrap table{border-collapse:collapse;table-layout:fixed;width:100%;min-width:max-content}
@@ -927,16 +935,16 @@ input[type="text"]::placeholder{color:var(--muted)}
         </button>
       </div>
       <div class="pn-body-wrap">
-        <table style="width:100%;border-collapse:collapse;font-size:13px">
-          <thead><tr style="border-bottom:1px solid var(--border);color:var(--muted);text-align:left">
-            <th style="padding:9px 12px" id="i18n-signup-th-company">회사명</th>
-            <th style="padding:9px 12px" id="i18n-signup-th-contact">담당자명</th>
-            <th style="padding:9px 12px" id="i18n-signup-th-phone">휴대폰</th>
-            <th style="padding:9px 12px" id="i18n-signup-th-email">이메일</th>
-            <th style="padding:9px 12px" id="i18n-signup-th-id">아이디</th>
-            <th style="padding:9px 12px" id="i18n-signup-th-supplier">구매처</th>
-            <th style="padding:9px 12px;text-align:center" id="i18n-signup-th-status">상태</th>
-            <th style="padding:9px 12px;text-align:center" colspan="3" id="i18n-signup-th-actions">수정/삭제</th>
+        <table class="member-tbl" style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead><tr>
+            <th id="i18n-signup-th-company">회사명</th>
+            <th id="i18n-signup-th-supplier">구매처</th>
+            <th id="i18n-signup-th-id">아이디</th>
+            <th id="i18n-signup-th-contact">담당자명</th>
+            <th id="i18n-signup-th-phone">휴대폰</th>
+            <th id="i18n-signup-th-email">이메일</th>
+            <th class="center" id="i18n-signup-th-status">상태</th>
+            <th class="center" id="i18n-signup-th-actions">수정/삭제</th>
           </tr></thead>
           <tbody id="adminSignupsList"></tbody>
         </table>
@@ -1310,7 +1318,7 @@ const T={
        ph:'도면번호, 품명, 대표품번으로 검색…',dl:'엑셀 다운로드',pndl:'엑셀 다운로드',
        thDiag:'도면번호',thName:'품명',thSpec:'규격',thRep:'대표품번',
        count:n=>`<b>${n}</b>개`,footer:n=>`총 ${n}개`,noResult:'검색 결과가 없습니다.',
-       tabParts:'🔧 부품 검색',tabPN:'🔄 품번 조회',tabOrder:'📦 주문',tabInventory:'📊 재고관리',tabPrice:'💲 가격정보',orderDl:'엑셀 다운로드',orderMailBanner:'주문 접수 이메일: song@krb.co.kr',orderPh:'도면번호, 품명, 대표품번으로 검색…',orderQty:'주문',logoutBtn:'로그아웃',
+       tabParts:'🔧 부품 검색',tabPN:'🔄 품번 조회',tabOrder:'📦 주문',tabOrderParts:'📦 부품조회',tabInventory:'📊 재고관리',tabPrice:'💲 가격정보',orderDl:'엑셀 다운로드',orderMailBanner:'주문 접수 이메일: song@krb.co.kr',orderPh:'도면번호, 품명, 대표품번으로 검색…',orderQty:'주문',logoutBtn:'로그아웃',
        invTemplate:'양식 다운로드',invUpload:'엑셀 업로드',invHMaster:'대표품번(미변경)',invHRep:'재고품번',invHQty:'재고수량',invHUpdated:'업데이트 일시',invEmpty:'등록된 재고 데이터가 없습니다.',invCount:n=>`총 ${n}건`,
        pnUploadOk:n=>`품번 ${n}건이 업데이트되었습니다.`,pnUploadFail:'엑셀 업로드에 실패했습니다. 다운로드한 양식(품명·규격·대표품번·호환품번·최종품번)인지 확인해주세요.',invUploadOk:n=>`재고 ${n}건이 업데이트되었습니다.`,invUploadFail:'업로드에 실패했습니다. 양식을 확인해주세요.',invUploadEmpty:'파일에서 유효한 데이터를 찾지 못했습니다. 양식을 확인해주세요.',invSearchPh:'대표품번으로 검색…',invLastUpdated:d=>`최근 업데이트: ${d}`,dmZoomHint:'손가락으로 확대/이동',invHSupplierStock:'구매처 재고',
        tabShipments:'출고관리',tabAdminOrders:'주문관리',tabMemberMgmt:'회원관리',shipUpload:'엑셀 업로드',shipThRep:'품번',shipThClient:'거래처명',shipThDate:'일자',shipThQty:'출고',
@@ -1390,7 +1398,7 @@ const T={
        ph:'Поиск по №чертежа, названию, артикулу…',dl:'Скачать Excel',pndl:'Скачать Excel',
        thDiag:'№ чертежа',thName:'Наименование',thSpec:'Спецификация',thRep:'Осн. артикул',
        count:n=>`<b>${n}</b>`,footer:n=>`Итого: ${n}`,noResult:'Результаты не найдены.',
-       tabParts:'🔧 Поиск деталей',tabPN:'🔄 Артикулы',tabOrder:'📦 Заказ',tabInventory:'📊 Склад',tabPrice:'💲 Цены',orderDl:'Скачать Excel',orderMailBanner:'Email для приёма заказов: song@krb.co.kr',orderPh:'Поиск по №чертежа, названию, артикулу…',orderQty:'Заказ',logoutBtn:'Выйти',
+       tabParts:'🔧 Поиск деталей',tabPN:'🔄 Артикулы',tabOrder:'📦 Заказ',tabOrderParts:'📦 Поиск деталей',tabInventory:'📊 Склад',tabPrice:'💲 Цены',orderDl:'Скачать Excel',orderMailBanner:'Email для приёма заказов: song@krb.co.kr',orderPh:'Поиск по №чертежа, названию, артикулу…',orderQty:'Заказ',logoutBtn:'Выйти',
        invTemplate:'Скачать шаблон',invUpload:'Загрузить Excel',invHMaster:'Осн. артикул (неизм.)',invHRep:'Артикул склада',invHQty:'Остаток',invHUpdated:'Обновлено',invEmpty:'Данных о складе пока нет.',invCount:n=>`Всего: ${n}`,
        pnUploadOk:n=>`Обновлено артикулов: ${n}.`,pnUploadFail:'Не удалось загрузить Excel. Проверьте, что файл соответствует скачанному шаблону.',invUploadOk:n=>`Обновлено позиций: ${n}.`,invUploadFail:'Ошибка загрузки. Проверьте шаблон.',invUploadEmpty:'В файле не найдено данных. Проверьте шаблон.',invSearchPh:'Поиск по артикулу…',invLastUpdated:d=>`Последнее обновление: ${d}`,dmZoomHint:'Растяните пальцами, чтобы увеличить',invHSupplierStock:'Остаток поставщика',
        tabShipments:'Отгрузки',tabAdminOrders:'Управление заказами',tabMemberMgmt:'Участники',shipUpload:'Загрузить Excel',shipThRep:'Артикул',shipThClient:'Клиент',shipThDate:'Дата',shipThQty:'Отгружено',
@@ -1538,7 +1546,7 @@ function setLang(l){
   document.getElementById('i18n-pndl').textContent=t.pndl;
   document.getElementById('tab-parts').textContent=t.tabParts;
   document.getElementById('tab-pn').textContent=t.tabPN;
-  document.getElementById('tab-order').textContent=t.tabOrder;
+  applyOrderTabLabel();
   document.getElementById('orderSearchInput').placeholder=t.orderPh;
   document.getElementById('i18n-orderdl').textContent=t.orderDl;
   document.getElementById('i18n-ordersubmit').textContent=t.orderSubmit;
@@ -2688,13 +2696,22 @@ function orderPriceText(rep){
   return v==null ? '-' : v.toLocaleString();
 }
 // 주문탭 열 노출 규칙
-//   가격(구매가/공급가) : MASTER · 회사 계정(아이디==회사명) · RUSSIA/KAZAK
-//   주문접수 · 주문수량 : MASTER · 회사 계정만 → 그 외는 주문을 넣을 수 없다
-//   보유재고            : 전원
+//   MASTER      : 가격·주문접수·보유재고·주문 전부 숨김 → 순수 부품조회 표가 된다
+//   회사 계정   : 전부 노출 (주문 가능)
+//   RUSSIA/KAZAK: 공급가 + 보유재고 (주문 불가)
+//   일반 회원   : 보유재고만 (주문 불가)
 function orderColVis(){
   const role=userRole(currentUser);
-  const canOrder = role.isMaster || role.isCompanyAdmin;
-  return { price: canOrder || role.isRegion, received: canOrder, qty: canOrder };
+  if(role.isMaster) return { price:false, received:false, stock:false, qty:false };
+  const canOrder = role.isCompanyAdmin;
+  return { price: canOrder || role.isRegion, received: canOrder, stock: true, qty: canOrder };
+}
+// MASTER 의 주문탭은 주문 열이 없으므로 '부품조회'로 부른다.
+function applyOrderTabLabel(){
+  const el=document.getElementById('tab-order');
+  if(!el) return;
+  const t=T[lang];
+  el.textContent = userRole(currentUser).isMaster ? (t.tabOrderParts||t.tabOrder) : t.tabOrder;
 }
 function orderTailTh(t){
   const v=orderColVis();
@@ -2702,7 +2719,7 @@ function orderTailTh(t){
   let s='';
   if(v.price)    s+=`<th rowspan="2" style="${R}">${orderPriceLabel()}</th>`;
   if(v.received) s+=`<th rowspan="2" style="${R}">${t.orderReceived}</th>`;
-  s+=`<th rowspan="2" style="${R}">${t.orderStock}</th>`;
+  if(v.stock)    s+=`<th rowspan="2" style="${R}">${t.orderStock}</th>`;
   if(v.qty)      s+=`<th rowspan="2" class="center">${t.orderQty}</th>`;
   return s;
 }
@@ -2711,7 +2728,7 @@ function orderTailCols(){
   let s='';
   if(v.price)    s+='<col style="width:90px">';
   if(v.received) s+='<col style="width:80px">';
-  s+='<col style="width:100px">';
+  if(v.stock)    s+='<col style="width:100px">';
   if(v.qty)      s+='<col style="width:100px">';
   return s;
 }
@@ -2815,7 +2832,7 @@ function renderOrderTable(){
     let tail='';
     if(vis.price)    tail+=`<td style="text-align:right;padding-right:16px;color:var(--muted)">${priceText}</td>`;
     if(vis.received) tail+=`<td style="text-align:right;padding-right:16px;color:var(--muted)">${receivedQty}</td>`;
-    tail+=`<td style="text-align:right;padding-right:16px;color:var(--muted)">${stockText}</td>`;
+    if(vis.stock)    tail+=`<td style="text-align:right;padding-right:16px;color:var(--muted)">${stockText}</td>`;
     if(vis.qty)      tail+=`<td class="center" onclick="event.stopPropagation()"><input type="number" min="0" class="order-qty-input" value="${qty}" data-key="${key.replace(/"/g,'&quot;')}" oninput="setOrderQty(this)" style="width:100%;max-width:68px;box-sizing:border-box;text-align:center;padding:5px 2px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text)"></td>`;
     return `<tr onclick="onRowClickHighlight('${d.diag}','${d.rep.replace(/'/g,"\\'")}',true)"><td class="center" style="color:var(--muted);font-size:11px">${d.diag}</td>${nc}<td style="text-align:center"><span class="code">${d.rep}</span></td>${modelCells}${tail}</tr>`;
   }).join('');
@@ -2861,10 +2878,10 @@ function renderOrderTable(){
             <div style="font-size:10px;color:var(--muted)">${t.orderReceived}</div>
             <div style="font-size:15px;font-weight:700;color:var(--text)">${receivedQty}</div>
           </div>`:''}
-          <div style="text-align:center">
+          ${cardVis.stock?`<div style="text-align:center">
             <div style="font-size:10px;color:var(--muted)">${t.orderStock}</div>
             <div style="font-size:15px;font-weight:700;color:var(--text)">${stockText}</div>
-          </div>
+          </div>`:''}
           ${cardVis.qty?`<div style="text-align:center;margin-top:4px" onclick="event.stopPropagation()">
             <div style="font-size:10px;color:var(--accent2);font-weight:600">${t.grpNew} ${t.colOrder}</div>
             <input type="number" min="0" class="order-qty-input" value="${qty}" data-key="${key.replace(/"/g,'&quot;')}" oninput="setOrderQty(this)" style="width:64px;text-align:center;padding:6px 4px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text);font-size:14px;margin-top:2px">
@@ -3711,15 +3728,15 @@ function renderPendingSignups(){
     const rejectBtn=u.status==='pending' ? `<button class="news-btn-secondary" onclick="rejectSignup('${idEsc}')">${t.signupReject}</button>` : '';
     return `<tr style="border-bottom:1px solid var(--border)">
     <td style="padding:9px 12px">${escapeHtml(u.company)}</td>
+    <td style="padding:9px 12px">${escapeHtml(u.supplier_company||'-')}</td>
+    <td style="padding:9px 12px">${escapeHtml(u.id)}</td>
     <td style="padding:9px 12px">${escapeHtml(u.contact_name||'')}</td>
     <td style="padding:9px 12px">${escapeHtml(u.phone||'')}</td>
     <td style="padding:9px 12px">${escapeHtml(u.email||'')}</td>
-    <td style="padding:9px 12px">${escapeHtml(u.id)}</td>
-    <td style="padding:9px 12px">${escapeHtml(u.supplier_company||'-')}</td>
     <td style="padding:9px 12px;text-align:center">${statusLabel(u.status)}</td>
-    <td style="padding:9px 12px;text-align:center">${approveBtn}${rejectBtn}</td>
-    <td style="padding:9px 12px;text-align:center"><button class="news-btn-secondary" onclick="openEditMemberModal('${idEsc}')">${t.signupEdit}</button></td>
-    <td style="padding:9px 12px;text-align:center"><button class="news-btn-secondary" onclick="deleteMember('${idEsc}')">${t.signupDelete}</button></td>
+    <td style="padding:9px 12px;text-align:center;white-space:nowrap">
+      <span style="display:inline-flex;gap:4px;justify-content:center;flex-wrap:wrap">${approveBtn}${rejectBtn}<button class="news-btn-secondary" onclick="openEditMemberModal('${idEsc}')">${t.signupEdit}</button><button class="news-btn-secondary" onclick="deleteMember('${idEsc}')">${t.signupDelete}</button></span>
+    </td>
   </tr>`;
   }).join('');
 
@@ -3753,10 +3770,10 @@ function downloadMembers(){
   const t=T[lang];
   if(!companyMembers.length) return;
   const statusText=(s)=> s==='pending'?t.signupStatusPending : (s==='rejected'?t.signupStatusRejected : t.signupStatusApproved);
-  const header=[t.signupThCompany,t.signupThContact,t.signupThPhone,t.signupThEmail,t.signupThId,t.signupThSupplier,t.signupThStatus];
-  const aoa=[header,...companyMembers.map(u=>[u.company||'',u.contact_name||'',u.phone||'',u.email||'',u.id||'',u.supplier_company||'',statusText(u.status)])];
+  const header=[t.signupThCompany,t.signupThSupplier,t.signupThId,t.signupThContact,t.signupThPhone,t.signupThEmail,t.signupThStatus];
+  const aoa=[header,...companyMembers.map(u=>[u.company||'',u.supplier_company||'',u.id||'',u.contact_name||'',u.phone||'',u.email||'',statusText(u.status)])];
   const ws=XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols']=[{wch:22},{wch:14},{wch:18},{wch:26},{wch:16},{wch:22},{wch:10}];
+  ws['!cols']=[{wch:22},{wch:22},{wch:16},{wch:14},{wch:18},{wch:26},{wch:10}];
   const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,lang==='ru'?'Пользователи':'회원관리');
   XLSX.writeFile(wb,`KITURAMI_회원관리_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
@@ -4806,6 +4823,13 @@ function syncSplitTableColumnWidths(hdrColId, bodyColId, tbodyId, mode){
         // 테이블별 열 설정(상한/잔여폭 분배/축소 보호)을 동적으로 계산
         function getFitConfig(tbodyId, n){
           if(tbodyId==='priceCalcTbody'){
+            // 역할별 뷰(RUSSIA/KAZAK·회사 계정)는 8열이다:
+            //   품명 | 규격 | 대표품번 | 호환품번 | 최종품번 | 원가(구매가) | 공급가 | GP
+            // 앞 5열은 품번조회(pnTbody)와 같은 caps 를 써서 두 탭의 열이 서로 맞도록 한다.
+            if(n===8){
+              return { caps:[95, 90, 110, 150, 110, 84, 84, 56],
+                       fill:{0:0.5, 1:0.5}, rigid:[2,3,4,5,6,7] };
+            }
             //          품명  규격 대표 호환 최종 출고 원가 공KRW RUB  GP  공KRW USD  GP
             return { caps:[95, 90, 110, 110, 110, 40,  74,  74,  60,  40,  74,  60,  40],
                      fill:{0:0.5, 1:0.5}, rigid:[5,6,7,8,9,10,11,12] };
@@ -4830,13 +4854,21 @@ function syncSplitTableColumnWidths(hdrColId, bodyColId, tbodyId, mode){
             return { caps:[140,110,110,120,84,56,58], fill:{0:0.6,3:0.4}, rigid:[1,2,4,5,6] };
           }
           if(tbodyId==='orderTbody'){
-            // 도면번호 | 품명 | (규격:KO만) | 대표품번 | 모델열×M | 가격 | 주문접수 | 보유재고 | 주문
+            // 도면번호 | 품명 | (규격:KO만) | 대표품번 | 모델열×M | [가격] [주문접수] [보유재고] [주문]
+            // 꼬리 열은 역할에 따라 개수가 달라진다(MASTER 는 0개). 있는 것만 폭을 지정해야
+            // 마지막 모델 열들이 꼬리 열 폭으로 덮어써지지 않는다.
             const isKo=(typeof lang!=='undefined' && lang==='ko');
+            const vis=orderColVis();
+            const tailW=[];
+            if(vis.price)    tailW.push(72);
+            if(vis.received) tailW.push(68);
+            if(vis.stock)    tailW.push(68);
+            if(vis.qty)      tailW.push(76);
             const caps=new Array(n).fill(48); // 기본(모델 열)
             caps[0]=48; caps[1]=100;
             let i=2; if(isKo){ caps[2]=95; i=3; }
             caps[i]=110; // 대표품번
-            caps[n-4]=72; caps[n-3]=68; caps[n-2]=68; caps[n-1]=76;
+            tailW.forEach((w,k)=>{ const idx=n-tailW.length+k; if(idx>i) caps[idx]=w; });
             const flex=isKo?[1,2]:[1];
             const rigid=[...Array(n).keys()].filter(k=>!flex.includes(k));
             const fill=isKo?{1:0.5, 2:0.5}:{1:1};
@@ -6636,8 +6668,9 @@ function enterApp(user){
   const lb2 = document.getElementById('logoutBtn');
   if(lb2) lb2.textContent = T[lang].logoutBtn;
   const role=userRole(user);
+  // 주문관리·출고관리: MASTER 는 주문을 받거나 출고하지 않으므로 숨긴다.
   const tabAdminOrders=document.getElementById('tab-adminOrders');
-  if(tabAdminOrders) tabAdminOrders.style.display = 'flex';
+  if(tabAdminOrders) tabAdminOrders.style.display = role.isMaster ? 'none' : 'flex';
   // 회원관리: MASTER(전체) · 회사 계정(자사 회원)만. 그 외(일반/지역)는 숨김.
   const tabMemberMgmt=document.getElementById('tab-memberManagement');
   if(tabMemberMgmt) tabMemberMgmt.style.display = role.canSeeMembers ? 'flex' : 'none';
@@ -6645,7 +6678,8 @@ function enterApp(user){
   const tabShip=document.getElementById('tab-shipments');
   const tabPrice=document.getElementById('tab-price');
   if(tabInv) tabInv.style.display = 'block';
-  if(tabShip) tabShip.style.display = 'block';
+  if(tabShip) tabShip.style.display = role.isMaster ? 'none' : 'block';
+  applyOrderTabLabel();
   // 가격정보: MASTER · RUSSIA/KAZAK · 회사 계정만. KITURAMI 일반 가입자 포함 그 외는 숨김.
   if(tabPrice) tabPrice.style.display = role.canSeePrice ? 'block' : 'none';
   const tabReset=document.getElementById('tab-reset');
