@@ -2677,7 +2677,7 @@ function renderOrderTable(){
   }).join(''));
   if(activeDiagNum)highlightByDiag(activeDiagNum,activeDiagRep);
   updateOrderTableScrollbar();
-  scheduleSplitTableResync('order-hdr-col','order-body-col','orderTbody');
+  scheduleSplitTableResync('order-hdr-col','order-body-col','orderTbody','fixed');
 }
 
 function setOrderQty(input){
@@ -4585,15 +4585,33 @@ function syncSplitTableColumnWidths(hdrColId, bodyColId, tbodyId, mode){
             });
           });
         }
-        // 열별 최대폭 상한: 품명/규격/품번/출고가 내용 길이만큼 무한정 넓어지지 않도록 제한 (넘치는 내용은 줄바꿈)
-        const FIT_CAPS={
-          //             품명  규격 대표 호환 최종 출고 원가 공KRW RUB  GP  공KRW USD  GP
-          priceCalcTbody:[95,  90,  110, 110, 110, 40,  74,  74,  60,  40,  74,  60,  40],
-          priceSupplyTbody:[95, 90,  110, 110, 110, 70,  70]
-        };
-        // 화면보다 표가 좁으면 남는 폭을 지정 열들에 가중치대로 분배 (계산식: 품명 50%·규격 50%)
-        const FIT_FILL={ priceCalcTbody:{0:0.5, 1:0.5}, priceSupplyTbody:{0:0.5, 1:0.5} };
-        const caps=FIT_CAPS[tbodyId]||[];
+        // 테이블별 열 설정(상한/잔여폭 분배/축소 보호)을 동적으로 계산
+        function getFitConfig(tbodyId, n){
+          if(tbodyId==='priceCalcTbody'){
+            //          품명  규격 대표 호환 최종 출고 원가 공KRW RUB  GP  공KRW USD  GP
+            return { caps:[95, 90, 110, 110, 110, 40,  74,  74,  60,  40,  74,  60,  40],
+                     fill:{0:0.5, 1:0.5}, rigid:[5,6,7,8,9,10,11,12] };
+          }
+          if(tbodyId==='priceSupplyTbody'){
+            return { caps:[95, 90, 110, 110, 110, 70, 70], fill:{0:0.5, 1:0.5}, rigid:[5,6] };
+          }
+          if(tbodyId==='orderTbody'){
+            // 도면번호 | 품명 | (규격:KO만) | 대표품번 | 모델열×M | 가격 | 주문접수 | 보유재고 | 주문
+            const isKo=(typeof lang!=='undefined' && lang==='ko');
+            const caps=new Array(n).fill(48); // 기본(모델 열)
+            caps[0]=48; caps[1]=100;
+            let i=2; if(isKo){ caps[2]=95; i=3; }
+            caps[i]=110; // 대표품번
+            caps[n-4]=72; caps[n-3]=68; caps[n-2]=68; caps[n-1]=76;
+            const flex=isKo?[1,2]:[1];
+            const rigid=[...Array(n).keys()].filter(k=>!flex.includes(k));
+            const fill=isKo?{1:0.5, 2:0.5}:{1:1};
+            return { caps, fill, rigid };
+          }
+          return { caps:[], fill:null, rigid:[] };
+        }
+        const FIT_CFG=getFitConfig(tbodyId, bodyW.length);
+        const caps=FIT_CFG.caps;
         const widths=bodyW.map((w,i)=>{
           let v=Math.max(w, hdrW[i]||0);
           const cap=caps[i];
@@ -4606,10 +4624,9 @@ function syncSplitTableColumnWidths(hdrColId, bodyColId, tbodyId, mode){
         const wrap=bodyTable.parentElement;
         const avail=wrap?wrap.clientWidth:0;
         let finalW, finalTotal;
-        // 숫자 열(출고~GP)은 축소 대상에서 제외해 값·헤더가 항상 보이게 유지
-        const FIT_RIGID={ priceCalcTbody:[5,6,7,8,9,10,11,12], priceSupplyTbody:[5,6] };
+        // 숫자/코드 열은 축소 대상에서 제외해 값·헤더가 항상 보이게 유지
         if(avail>0 && total>avail){
-          const rigidIdx=new Set(FIT_RIGID[tbodyId]||[]);
+          const rigidIdx=new Set(FIT_CFG.rigid||[]);
           const rigidSum=widths.reduce((a,w,i)=>a+(rigidIdx.has(i)?w:0),0);
           const flexSum=total-rigidSum;
           const MIN_FLEX=44; // 텍스트 열 최소폭
@@ -4628,7 +4645,7 @@ function syncSplitTableColumnWidths(hdrColId, bodyColId, tbodyId, mode){
           }
         }else if(avail>0 && total<avail){
           finalW=widths.slice();
-          const fill=FIT_FILL[tbodyId];
+          const fill=FIT_CFG.fill;
           const extra=avail-total;
           if(fill && typeof fill==='object'){
             Object.keys(fill).forEach(k=>{ const i=Number(k); if(finalW[i]!=null) finalW[i]+=extra*fill[k]; });
