@@ -4605,10 +4605,26 @@ function syncSplitTableColumnWidths(hdrColId, bodyColId, tbodyId, mode){
         const wrap=bodyTable.parentElement;
         const avail=wrap?wrap.clientWidth:0;
         let finalW, finalTotal;
+        // 숫자 열(출고~GP)은 축소 대상에서 제외해 값·헤더가 항상 보이게 유지
+        const FIT_RIGID={ priceCalcTbody:[5,6,7,8,9,10,11,12], priceSupplyTbody:[5,6] };
         if(avail>0 && total>avail){
-          const scale=avail/total;
-          finalW=widths.map(w=>w*scale);
-          finalTotal=avail;
+          const rigidIdx=new Set(FIT_RIGID[tbodyId]||[]);
+          const rigidSum=widths.reduce((a,w,i)=>a+(rigidIdx.has(i)?w:0),0);
+          const flexSum=total-rigidSum;
+          const MIN_FLEX=44; // 텍스트 열 최소폭
+          const flexCount=widths.length-rigidIdx.size;
+          const flexAvail=avail-rigidSum;
+          if(flexAvail>=MIN_FLEX*flexCount && flexSum>0){
+            // 텍스트 열만 비율 축소 (숫자 열 폭 유지)
+            const factor=flexAvail/flexSum;
+            finalW=widths.map((w,i)=>rigidIdx.has(i)?w:Math.max(w*factor, MIN_FLEX));
+            finalTotal=finalW.reduce((a,b)=>a+b,0);
+          }else{
+            // 화면이 아주 좁으면 전체 비율 축소 (최후 수단)
+            const scale=avail/total;
+            finalW=widths.map(w=>w*scale);
+            finalTotal=avail;
+          }
         }else if(avail>0 && total<avail){
           finalW=widths.slice();
           const fill=FIT_FILL[tbodyId];
