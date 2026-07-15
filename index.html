@@ -5370,14 +5370,14 @@ function renderPriceSupply(){
   const emptyEl=document.getElementById('priceNoResult');
   if(!list.length){ tbody.innerHTML=''; emptyEl.textContent='공급가 데이터가 없습니다. 계산식 탭에서 엑셀을 업로드해 주세요.'; emptyEl.style.display='block'; return; }
   emptyEl.style.display='none';
-  tbody.innerHTML=list.map(m=>`<tr style="border-bottom:1px solid var(--border)">
-      <td style="padding:6px 10px">${escapeHtml(m.name_ko||'')}</td>
-      <td style="padding:6px 10px;color:var(--muted);font-size:11px">${escapeHtml(m.spec||'')}</td>
-      <td style="padding:6px 10px"><span class="code">${escapeHtml(m.rep)}</span></td>
-      <td style="padding:6px 10px"><span class="code">${escapeHtml(m.compats.join(' / '))}</span></td>
-      <td style="padding:6px 10px"><span class="code">${escapeHtml(m.final||'')}</span></td>
-      <td style="text-align:right;padding-right:10px;font-weight:600">${fmtN(m.rub)}</td>
-      <td style="text-align:right;padding-right:10px;font-weight:600">${fmtN(m.usd)}</td>
+  tbody.innerHTML=list.map(m=>`<tr style="border-bottom:1px solid var(--border);font-size:11px" class="price-row">
+      <td style="padding:3px 4px;word-break:break-all">${escapeHtml(m.name_ko||'')}</td>
+      <td style="padding:3px 4px;color:var(--muted);font-size:10px;word-break:break-all">${escapeHtml(m.spec||'')}</td>
+      <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px;word-break:break-all;white-space:normal">${escapeHtml(m.rep)}</span></td>
+      <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px;word-break:break-all;white-space:normal">${escapeHtml(m.compats.join(' / '))}</span></td>
+      <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px;word-break:break-all;white-space:normal">${escapeHtml(m.final||'')}</span></td>
+      <td style="text-align:right;padding:3px 6px;font-weight:600">${fmtN(m.rub)}</td>
+      <td style="text-align:right;padding:3px 6px;font-weight:600">${fmtN(m.usd)}</td>
     </tr>`).join('');
   scheduleSplitTableResync('pricesupply-hdr-col','pricesupply-body-col','priceSupplyTbody','fixed');
 }
