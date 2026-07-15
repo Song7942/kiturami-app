@@ -1,16 +1,21 @@
 // Cloudflare Pages Function: 환율 조회 (/api/fxrate)
-// 우선순위:
-//  1) 한국수출입은행 공개 API → 전월 말일(마지막 영업일)의 매매기준율
-//  2) 시장환율 (open.er-api.com) — 1)에서 못 구한 통화만 보충
 //
-// 인증키는 Cloudflare 환경변수 KOREAEXIM_KEY (Secret) 로 주입됩니다.
-// 코드에 키를 넣지 마세요.
+// 전월 말일(마지막 영업일) 기준으로 두 통화를 각각 공식 소스에서 가져옵니다.
+//   USD : 한국수출입은행 공개 API — 매매기준율        (환경변수 KOREAEXIM_KEY)
+//   RUB : 한국은행 ECOS — 주요국통화의 대원화환율(731Y001) (환경변수 ECOS_KEY)
+// 둘 중 못 구한 통화만 시장환율(open.er-api.com)로 보충합니다.
 //
-// 참고: 종전에 쓰던 두나무 중계 API(quotation-api-cdn.dunamu.com)는
-//       도메인이 폐지되어 항상 실패했고, 그 결과 늘 시장환율로 폴백되고 있었습니다.
+// 인증키는 Cloudflare 환경변수(Secret)로 주입됩니다. 코드에 키를 넣지 마세요.
+//
+// 이력:
+//  - 종전 두나무 중계 API(quotation-api-cdn.dunamu.com)는 도메인이 폐지되어
+//    항상 실패했고 그 결과 늘 시장환율로 폴백되고 있었음.
+//  - 수출입은행은 RUB을 취급하지 않아 RUB만 한국은행에서 가져옴.
 
 const KEB_ENDPOINT = 'https://oapi.koreaexim.go.kr/site/program/financial/exchangeJSON';
-const LOOKBACK_DAYS = 8;   // 전월 말일이 주말·공휴일이면 직전 영업일로 되짚는 최대 일수
+const ECOS_ENDPOINT = 'https://ecos.bok.or.kr/api/StatisticSearch';
+const ECOS_FX_TABLE = '731Y001';   // 주요국통화의 대원화환율 (일별)
+const LOOKBACK_DAYS = 8;           // 전월 말일이 휴장일이면 직전 영업일로 되짚는 최대 일수
 
 export async function onRequestGet(context) {
   const headers = {
@@ -19,40 +24,47 @@ export async function onRequestGet(context) {
     'Cache-Control': 'public, max-age=1800'
   };
 
+  const env = context.env || {};
   const out = { usd: null, rub: null, date: null, type: null, source: null };
-  const key = context.env && context.env.KOREAEXIM_KEY;
+  const days = monthEndLookback();
+  const sources = [];
 
-  // ── 1) 수출입은행: 전월 말일 기준 매매기준율 ──
-  if (key) {
-    const rows = await fetchMonthEndRates(key);
-    if (rows) {
-      const usd = pickRate(rows.data, 'USD');
-      const rub = pickRate(rows.data, 'RUB');
-      if (usd) out.usd = round2(usd);
-      if (rub) out.rub = round2(rub);
-      if (out.usd || out.rub) {
-        out.date = rows.date;
-        out.type = 'month-end';
-        out.source = '수출입은행 전월말일 매매기준율';
-      }
+  // ── USD: 수출입은행 매매기준율 ──
+  if (env.KOREAEXIM_KEY) {
+    const hit = await walkBack(days, ymd => fetchKebUsd(env.KOREAEXIM_KEY, ymd));
+    if (hit) {
+      out.usd = round2(hit.value);
+      out.date = hit.date;
+      sources.push('USD 수출입은행 매매기준율');
     }
   }
 
-  // ── 2) 시장환율로 부족한 통화 보충 ──
+  // ── RUB: 한국은행 ECOS ──
+  if (env.ECOS_KEY) {
+    const hit = await walkBack(days, ymd => fetchEcosRub(env.ECOS_KEY, ymd));
+    if (hit) {
+      out.rub = round2(hit.value);
+      if (!out.date) out.date = hit.date;
+      sources.push('RUB 한국은행');
+    }
+  }
+
+  if (out.usd || out.rub) out.type = 'month-end';
+
+  // ── 못 구한 통화만 시장환율로 보충 ──
   if (!out.usd || !out.rub) {
     try {
       const r = await fetch('https://open.er-api.com/v6/latest/KRW');
       const j = await r.json();
       if (j && j.rates) {
-        if (!out.usd && j.rates.USD) out.usd = round2(1 / j.rates.USD);
-        if (!out.rub && j.rates.RUB) out.rub = round2(1 / j.rates.RUB);
-        out.source = out.source
-          ? out.source + ' + 시장환율 보충'
-          : '시장환율(open.er-api.com)';
+        if (!out.usd && j.rates.USD) { out.usd = round2(1 / j.rates.USD); sources.push('USD 시장환율'); }
+        if (!out.rub && j.rates.RUB) { out.rub = round2(1 / j.rates.RUB); sources.push('RUB 시장환율'); }
         if (!out.type) out.type = 'market';
       }
     } catch (e) { /* 아래에서 처리 */ }
   }
+
+  out.source = sources.length ? sources.join(' + ') : null;
 
   if (!out.usd && !out.rub) {
     return new Response(JSON.stringify({ error: 'rate fetch failed' }), { status: 502, headers });
@@ -60,47 +72,59 @@ export async function onRequestGet(context) {
   return new Response(JSON.stringify(out), { headers });
 }
 
-// 전월 말일부터 최대 LOOKBACK_DAYS 일 거슬러 올라가며 고시가 있는 날을 찾는다.
-// (주말·공휴일에는 수출입은행이 빈 배열을 돌려줌)
-async function fetchMonthEndRates(key) {
+// 전월 말일부터 하루씩 거슬러 올라간 날짜 목록 (주말·공휴일 대응)
+function monthEndLookback() {
   // Workers 는 UTC 로 도므로 KST(+9) 기준으로 날짜를 잡는다
   const kstNow = new Date(Date.now() + 9 * 3600 * 1000);
-  // 이번 달 0일 = 전월 말일
-  const prevEnd = Date.UTC(kstNow.getUTCFullYear(), kstNow.getUTCMonth(), 0);
+  const prevEnd = Date.UTC(kstNow.getUTCFullYear(), kstNow.getUTCMonth(), 0);  // 이번 달 0일 = 전월 말일
+  const days = [];
+  for (let i = 0; i < LOOKBACK_DAYS; i++) days.push(toYmd(new Date(prevEnd - i * 86400000)));
+  return days;
+}
 
-  for (let i = 0; i < LOOKBACK_DAYS; i++) {
-    const d = new Date(prevEnd - i * 86400000);
-    const ymd = toYmd(d);
-    const data = await fetchKeb(key, ymd);
-    if (data) return { data, date: ymd };
+// 고시가 나올 때까지 하루씩 되짚으며 fn(ymd) 실행
+async function walkBack(days, fn) {
+  for (const ymd of days) {
+    const value = await fn(ymd);
+    if (value !== null && value !== undefined) return { value, date: ymd };
   }
   return null;
 }
 
-async function fetchKeb(key, ymd) {
+async function fetchKebUsd(key, ymd) {
   const url = `${KEB_ENDPOINT}?authkey=${encodeURIComponent(key)}&searchdate=${ymd}&data=AP01`;
   try {
     const r = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (fxrate-proxy)' } });
     if (!r.ok) return null;
     const arr = await r.json();
-    if (!Array.isArray(arr) || !arr.length) return null;   // 휴장일이면 빈 배열
+    if (!Array.isArray(arr) || !arr.length) return null;      // 휴장일이면 빈 배열
     // result: 1=성공, 2=DATA코드오류, 3=인증코드오류, 4=일일제한마감
-    const ok = arr.filter(x => Number(x.result) === 1);
-    return ok.length ? ok : null;
+    const row = arr.find(x => Number(x.result) === 1 && String(x.cur_unit || '').toUpperCase().startsWith('USD'));
+    if (!row) return null;
+    const val = Number(String(row.deal_bas_r || '').replace(/,/g, ''));
+    return val > 0 ? val : null;
   } catch (e) {
     return null;   // JSON 이 아닌 응답(점검 페이지 등) 포함
   }
 }
 
-// cur_unit 은 'USD', 'JPY(100)' 처럼 100단위 표기가 붙는 통화가 있어 1단위로 환산한다.
-function pickRate(rows, code) {
-  const row = rows.find(x => String(x.cur_unit || '').toUpperCase().startsWith(code));
-  if (!row) return null;                                   // 취급하지 않는 통화
-  const val = Number(String(row.deal_bas_r || '').replace(/,/g, ''));
-  if (!(val > 0)) return null;
-  const m = String(row.cur_unit).match(/\((\d+)\)/);
-  const unit = m ? Number(m[1]) : 1;
-  return unit > 1 ? val / unit : val;
+// ECOS 731Y001 을 통째로 받아 항목명에 '루블'이 들어간 행을 찾는다.
+// (항목코드를 하드코딩하지 않으므로 코드가 바뀌어도 견딤. 취급하지 않으면 자연히 null)
+async function fetchEcosRub(key, ymd) {
+  const url = `${ECOS_ENDPOINT}/${encodeURIComponent(key)}/json/kr/1/100/${ECOS_FX_TABLE}/D/${ymd}/${ymd}`;
+  try {
+    const r = await fetch(url);
+    if (!r.ok) return null;
+    const j = await r.json();
+    const rows = j && j.StatisticSearch && j.StatisticSearch.row;
+    if (!Array.isArray(rows) || !rows.length) return null;    // 휴장일 또는 RESULT 오류
+    const row = rows.find(x => /루블|RUB/i.test(String(x.ITEM_NAME1 || '')));
+    if (!row) return null;                                     // 한국은행이 루블을 고시하지 않음
+    const val = Number(String(row.DATA_VALUE || '').replace(/,/g, ''));
+    return val > 0 ? val : null;
+  } catch (e) {
+    return null;
+  }
 }
 
 function toYmd(d) {
