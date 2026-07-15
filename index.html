@@ -1400,6 +1400,9 @@ const T={
        pnPh:'대표품번, 호환품번, 최종품번으로 검색…',
        pnH0:'품명',pnH0s:'규격',pnH1:'대표품번 (미변경)',pnH2:'호환품번 (변경)',pnH3:'최종품번 (변경, 현시점)',
        pnNoResult:'검색 결과가 없습니다.',
+       priceThCost:'원가',priceThBuy:'구매가',priceThSupply:'공급가',priceThGp:'GP',
+       priceCount:n=>`총 ${n}건`,priceNoData:'가격 데이터가 없습니다.',
+       priceBuyHint:'구매가는 구매처 공급가를 자동으로 가져옵니다. 직접 입력하면 입력값이 우선합니다.',
        ddTitle:'모델 선택',ddAllOn:'전체 해제',ddAllOff:'모두 선택',
        diagTitle:'ALPHA PLUS — 분해도',apsDiagTitle:'ALPHA PLUS S — 분해도',diagHint:'번호 클릭 → 해당 부품 강조'},
   ru:{title:'KITURAMI Поиск запчастей',sub:'',mbLabel:'Модель',mbAll:'Все',mbAllSub:'ALL',mbMulti:'Мн.',mbMultiOn:'Мн.',mbMultiSub2:'Выбор',
@@ -1480,6 +1483,9 @@ const T={
        pnPh:'Поиск по артикулу…',
        pnH0:'Наименование',pnH0s:'',pnH1:'Осн. артикул (неизм.)',pnH2:'Артикул замены',pnH3:'Актуальный артикул',
        pnNoResult:'Результаты не найдены.',
+       priceThCost:'Себестоимость',priceThBuy:'Закупочная цена',priceThSupply:'Цена поставки',priceThGp:'GP',
+       priceCount:n=>`Всего ${n}`,priceNoData:'Нет данных о ценах.',
+       priceBuyHint:'Закупочная цена подставляется из цены поставщика. Введённое вручную значение имеет приоритет.',
        ddTitle:'Выбор модели',ddAllOn:'Снять всё',ddAllOff:'Выбрать все',
        diagTitle:'ALPHA PLUS — Сборочный чертёж',apsDiagTitle:'ALPHA PLUS S — Сборочный чертёж',diagHint:'Нажмите номер → выделение'},
 };
@@ -4851,6 +4857,10 @@ function syncSplitTableColumnWidths(hdrColId, bodyColId, tbodyId, mode){
             if(n===8){
               return { caps:[...LEAD_KO, 84, 84, 56], noFill:true, rigid:allRigidFrom(2,8) };
             }
+            // 같은 뷰의 RU 7열: 규격이 빠져 앞이 4열 (러시아어 규격이 없음)
+            if(n===7){
+              return { caps:[...LEAD_RU, 84, 84, 56], noFill:true, rigid:allRigidFrom(1,7) };
+            }
             // 계산식 13열: 앞 5열 + 출고 | 원가 | 공KRW | RUB | GP | 공KRW | USD | GP
             // GP 는 8열 뷰와 같은 56px. 음수 GP('-1234.5%' 55px)가 40px 에서 잘렸음.
             return { caps:[...LEAD_KO, 40, 74, 74, 60, 56, 74, 60, 56],
@@ -5502,6 +5512,17 @@ function calcPriceRow(r){
   const kzGpVal=(kzSupply!=null&&kzSupply>0)?((kzSupply-(kzCost||0))/kzSupply):null;
   return { ruCost, ruSupply, ruRub, ruGpVal, kzCost, kzSupply, kzUsd, kzGpVal };
 }
+// 가격 데이터(kt_price_calc)에는 러시아어 품명이 없으므로 PN_DATA에서 대표품번으로 찾는다.
+// 품번조회 탭과 같은 규칙(없으면 한국어 품명)으로 표시한다.
+let _nameRuByRep=null;
+function priceNameFor(row){
+  if(lang!=='ru') return row.name_ko||'';
+  if(!_nameRuByRep){
+    _nameRuByRep={};
+    if(typeof PN_DATA!=='undefined') PN_DATA.forEach(p=>{ if(p.rep && p.name_ru) _nameRuByRep[p.rep]=p.name_ru; });
+  }
+  return row.name_ru || _nameRuByRep[row.rep] || row.name_ko || '';
+}
 // 대표품번별 최고 공급가 (동일 대표품번에 원가/공급가가 다르면 가장 높은 공급가 채택)
 function buildSupplyByRep(){
   const map={};
@@ -5797,27 +5818,30 @@ function renderPriceRegion(region){
   const isKz=region==='kz';
   let list=Object.values(map).filter(m=>(isKz?m.usd:m.rub)!=null).sort((a,b)=>a.rep.localeCompare(b.rep));
   if(kw) list=list.filter(m=>m.rep.toLowerCase().includes(kw)||(m.name_ko||'').toLowerCase().includes(kw)||(m.final||'').toLowerCase().includes(kw)||m.compats.some(c=>c.toLowerCase().includes(kw)));
-  document.getElementById('priceCountBadge').innerHTML=`총 ${list.length}건`;
+  const t=T[lang];
+  const isKo=lang==='ko';   // RU 에는 러시아어 규격이 없어 규격 열을 뺀다 (품번조회 탭과 동일)
+  document.getElementById('priceCountBadge').innerHTML=t.priceCount(list.length);
   const lastEl=document.getElementById('priceLastUpdated');
   if(lastEl) lastEl.textContent='';
   const thS='padding:6px 4px;text-align:center;vertical-align:middle;overflow:hidden;word-break:break-all';
+  const brLabel=(x)=>String(x||'').replace(' (','<br>(');
   document.getElementById('priceCalcThead').innerHTML=`<tr style="border-bottom:1px solid var(--border);color:var(--muted);font-size:11px">
-    <th style="${thS}">품명</th><th style="${thS}">규격</th>
-    <th style="${thS}">대표품번<br>(미변경)</th><th style="${thS}">호환품번<br>(변경)</th>
-    <th style="${thS}">최종품번<br>(변경, 현시점)</th>
-    <th style="${thS};border-left:1px solid var(--border)">원가<br>KRW</th>
-    <th style="${thS}">공급가<br>${isKz?'USD':'RUB'}</th>
-    <th style="${thS}">GP</th></tr>`;
-  const cols='<col><col><col><col><col><col style="width:78px"><col style="width:84px"><col style="width:56px">';
+    <th style="${thS}">${t.pnH0}</th>${isKo?`<th style="${thS}">${t.pnH0s}</th>`:''}
+    <th style="${thS}">${brLabel(t.pnH1)}</th><th style="${thS}">${brLabel(t.pnH2)}</th>
+    <th style="${thS}">${brLabel(t.pnH3)}</th>
+    <th style="${thS};border-left:1px solid var(--border)">${t.priceThCost}<br>KRW</th>
+    <th style="${thS}">${t.priceThSupply}<br>${isKz?'USD':'RUB'}</th>
+    <th style="${thS}">${t.priceThGp}</th></tr>`;
+  const cols=`<col>${isKo?'<col>':''}<col><col><col><col style="width:78px"><col style="width:84px"><col style="width:56px">`;
   document.getElementById('pricecalc-hdr-col').innerHTML=cols;
   document.getElementById('pricecalc-body-col').innerHTML=cols;
   const tbody=document.getElementById('priceCalcTbody');
   const emptyEl=document.getElementById('priceNoResult');
-  if(!list.length){ tbody.innerHTML=''; emptyEl.textContent='가격 데이터가 없습니다.'; emptyEl.style.display='block'; return; }
+  if(!list.length){ tbody.innerHTML=''; emptyEl.textContent=t.priceNoData; emptyEl.style.display='block'; return; }
   emptyEl.style.display='none';
   tbody.innerHTML=list.map(m=>`<tr style="border-bottom:1px solid var(--border);font-size:11px" class="price-row">
-      <td style="padding:3px 4px;word-break:break-all">${escapeHtml(m.name_ko||'')}</td>
-      <td style="padding:3px 4px;color:var(--muted);font-size:10px;word-break:break-all">${escapeHtml(m.spec||'')}</td>
+      <td style="padding:3px 4px;word-break:break-all">${escapeHtml(priceNameFor(m))}</td>
+      ${isKo?`<td style="padding:3px 4px;color:var(--muted);font-size:10px;word-break:break-all">${escapeHtml(m.spec||'')}</td>`:''}
       <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(m.rep)}</span></td>
       <td style="padding:3px 4px">${m.compats.map(c=>`<span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(c)}</span>`).join('<br>')}</td>
       <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(m.final||'')}</span></td>
@@ -5845,30 +5869,33 @@ function companyPriceRows(){
 }
 function renderPriceCompany(){
   const list=companyPriceRows();
-  document.getElementById('priceCountBadge').innerHTML=`총 ${list.length}건`;
+  const t=T[lang];
+  const isKo=lang==='ko';   // RU 에는 러시아어 규격이 없어 규격 열을 뺀다 (품번조회 탭과 동일)
+  document.getElementById('priceCountBadge').innerHTML=t.priceCount(list.length);
   const lastEl=document.getElementById('priceLastUpdated');
-  if(lastEl) lastEl.textContent='구매가는 구매처 공급가를 자동으로 가져옵니다. 직접 입력하면 입력값이 우선합니다.';
+  if(lastEl) lastEl.textContent=t.priceBuyHint;
   const thS='padding:6px 4px;text-align:center;vertical-align:middle;overflow:hidden;word-break:break-all';
+  const brLabel=(x)=>String(x||'').replace(' (','<br>(');
   document.getElementById('priceCalcThead').innerHTML=`<tr style="border-bottom:1px solid var(--border);color:var(--muted);font-size:11px">
-    <th style="${thS}">품명</th><th style="${thS}">규격</th>
-    <th style="${thS}">대표품번<br>(미변경)</th><th style="${thS}">호환품번<br>(변경)</th>
-    <th style="${thS}">최종품번<br>(변경, 현시점)</th>
-    <th style="${thS};border-left:1px solid var(--border)">구매가</th>
-    <th style="${thS}">공급가</th>
-    <th style="${thS}">GP</th></tr>`;
-  const cols='<col><col><col><col><col><col style="width:82px"><col style="width:82px"><col style="width:56px">';
+    <th style="${thS}">${t.pnH0}</th>${isKo?`<th style="${thS}">${t.pnH0s}</th>`:''}
+    <th style="${thS}">${brLabel(t.pnH1)}</th><th style="${thS}">${brLabel(t.pnH2)}</th>
+    <th style="${thS}">${brLabel(t.pnH3)}</th>
+    <th style="${thS};border-left:1px solid var(--border)">${t.priceThBuy}</th>
+    <th style="${thS}">${t.priceThSupply}</th>
+    <th style="${thS}">${t.priceThGp}</th></tr>`;
+  const cols=`<col>${isKo?'<col>':''}<col><col><col><col style="width:82px"><col style="width:82px"><col style="width:56px">`;
   document.getElementById('pricecalc-hdr-col').innerHTML=cols;
   document.getElementById('pricecalc-body-col').innerHTML=cols;
   const tbody=document.getElementById('priceCalcTbody');
   const emptyEl=document.getElementById('priceNoResult');
-  if(!list.length){ tbody.innerHTML=''; emptyEl.textContent='가격 데이터가 없습니다.'; emptyEl.style.display='block'; return; }
+  if(!list.length){ tbody.innerHTML=''; emptyEl.textContent=t.priceNoData; emptyEl.style.display='block'; return; }
   emptyEl.style.display='none';
   const inputStyle='width:100%;max-width:80px;box-sizing:border-box;padding:2px 3px;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:var(--text);text-align:right;font-size:11px';
   tbody.innerHTML=list.map(m=>{
     const repEsc=String(m.rep).replace(/'/g,"\\'");
     return `<tr style="border-bottom:1px solid var(--border);font-size:11px" class="price-row">
-      <td style="padding:3px 4px;word-break:break-all">${escapeHtml(m.name_ko||'')}</td>
-      <td style="padding:3px 4px;color:var(--muted);font-size:10px;word-break:break-all">${escapeHtml(m.spec||'')}</td>
+      <td style="padding:3px 4px;word-break:break-all">${escapeHtml(priceNameFor(m))}</td>
+      ${isKo?`<td style="padding:3px 4px;color:var(--muted);font-size:10px;word-break:break-all">${escapeHtml(m.spec||'')}</td>`:''}
       <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(m.rep)}</span></td>
       <td style="padding:3px 4px">${m.compats.map(c=>`<span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(c)}</span>`).join('<br>')}</td>
       <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(m.final||'')}</span></td>
