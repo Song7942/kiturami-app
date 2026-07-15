@@ -4568,8 +4568,10 @@ function syncSplitTableColumnWidths(hdrColId, bodyColId, tbodyId, mode){
         const hdrW=new Array(bodyW.length).fill(0);
         {
           const hrows=[...hdrTable.querySelectorAll('thead tr')];
-          const occupied={}; // colIdx -> 남은 rowspan 수
+          const occupied={}; // colIdx -> 해당 열을 점유 중인 남은 행 수 (현재 행 포함)
           hrows.forEach(tr=>{
+            // 새 행 시작: 이전 행들의 rowspan 점유 카운트를 1 감소
+            Object.keys(occupied).forEach(k=>{ if(occupied[k]>0) occupied[k]--; });
             let colIdx=0;
             [...tr.children].forEach(cell=>{
               while(occupied[colIdx]>0) colIdx++;
@@ -4578,10 +4580,9 @@ function syncSplitTableColumnWidths(hdrColId, bodyColId, tbodyId, mode){
               if(csp===1 && colIdx<hdrW.length){
                 hdrW[colIdx]=Math.max(hdrW[colIdx], cell.getBoundingClientRect().width);
               }
-              if(rsp>1){ for(let k=0;k<csp;k++) occupied[colIdx+k]=(occupied[colIdx+k]||0)+(rsp-1); }
+              for(let k=0;k<csp;k++) occupied[colIdx+k]=(occupied[colIdx+k]||0)+rsp; // 현재 행 포함 rsp행 점유
               colIdx+=csp;
             });
-            Object.keys(occupied).forEach(k=>{ if(occupied[k]>0) occupied[k]--; });
           });
         }
         // 열별 최대폭 상한: 품명/규격/품번/출고가 내용 길이만큼 무한정 넓어지지 않도록 제한 (넘치는 내용은 줄바꿈)
