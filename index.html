@@ -4806,9 +4806,11 @@ function syncSplitTableColumnWidths(hdrColId, bodyColId, tbodyId, mode){
         bodyCols.forEach(c=>{c.style.width='';});
         bodyTable.style.tableLayout='auto';
         bodyTable.style.width='';
+        bodyTable.style.minWidth='';
         hdrCols.forEach(c=>{c.style.width='';});
         hdrTable.style.tableLayout='auto';
         hdrTable.style.width='';
+        hdrTable.style.minWidth='';
         void bodyTable.offsetWidth; void hdrTable.offsetWidth; // 강제 리플로우 후 자연폭 측정
         const bodyW=cells.map(td=>td.getBoundingClientRect().width);
         // 헤더 자연폭도 측정 (rowspan/colspan 고려해 리프 열에 매핑) → 헤더 글자가 잘리지 않도록 max 적용
@@ -4952,8 +4954,15 @@ function syncSplitTableColumnWidths(hdrColId, bodyColId, tbodyId, mode){
         finalW.forEach((w,i)=>{ bodyCols[i].style.width=w+'px'; hdrCols[i].style.width=w+'px'; });
         bodyTable.style.tableLayout='fixed';
         hdrTable.style.tableLayout='fixed';
+        // width 뿐 아니라 minWidth 도 고정해야 한다.
+        // CSS 의 min-width:100% (본문) / min-width:max-content (주문표) 가 남아 있으면
+        // 표가 래퍼 폭까지 늘어나고, 남는 폭이 열마다 나눠 붙는다.
+        // 헤더 래퍼와 본문 래퍼는 세로 스크롤바 때문에 폭이 10px 다르므로
+        // 그 분배량도 달라져 열이 조금씩 어긋나고 오차가 오른쪽으로 누적된다.
         bodyTable.style.width=finalTotal+'px';
         hdrTable.style.width=finalTotal+'px';
+        bodyTable.style.minWidth=finalTotal+'px';
+        hdrTable.style.minWidth=finalTotal+'px';
         return;
       }
       const cells=[...firstRow.children].filter(td=>!td.hasAttribute('colspan'));
