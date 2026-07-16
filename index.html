@@ -5266,23 +5266,6 @@ async function loadReceivedOrderTotals(){
   });
   receivedOrderTotals=totals;
 }
-// KITURAMI(본사) 재고관리의 '배분후 재고'용.
-// RUSSIA·KAZAK 을 구매처로 지정한 업체들이 주문한 수량 합계 (rep 기준).
-// 주문 저장 시 target_company 에 그 업체의 구매처가 들어가므로(=RUSSIA|KAZAK) 그것으로 모은다.
-let regionOrderTotals={};
-async function loadRegionOrderTotals(){
-  if(!userRole(currentUser).isKituramiHQ){ regionOrderTotals={}; return; }
-  // 회사명 비교는 이 앱 전체가 대소문자를 가리지 않으므로(ilike) 여기서도 맞춘다.
-  // in() 을 쓰면 'Russia' 처럼 저장된 값을 놓쳐 배분후 재고가 기초재고와 같아진다.
-  const { data, error } = await sb.from('kt_orders').select('items,target_company')
-    .or('target_company.ilike.RUSSIA,target_company.ilike.KAZAK');
-  if(error){ console.error(error); regionOrderTotals={}; return; }
-  const totals={};
-  (data||[]).forEach(o=>{
-    (o.items||[]).forEach(it=>{ if(it.rep) totals[it.rep]=(totals[it.rep]||0)+(it.qty||0); });
-  });
-  regionOrderTotals=totals;
-}
 function computeMasterRepTotals(dataSource){
   const src=dataSource||inventoryData;
   const totals={};
@@ -5328,8 +5311,9 @@ function renderInventoryList(){
   if(lastUpdatedEl) lastUpdatedEl.textContent = overallLatest ? t.invLastUpdated(formatNewsDate(new Date(overallLatest).getTime())) : '';
 
   // 헤더 + 열 너비 (품번조회 화면과 동일하게 품명/규격을 맨 앞에 배치)
-  // KITURAMI(본사)는 구매처가 없어 공급처재고가 항상 '-' 라 열 자체를 뺀다.
-  const showSupplierStock = !userRole(currentUser).isKituramiHQ;
+  // KITURAMI 회사(KITURAMI·RUSSIA·KAZAK)와 MASTER 는 구매처가 없어
+  // 공급처재고가 항상 '-' 라 열 자체를 뺀다.
+  const showSupplierStock = !isKituramiCompany(currentUser) && !userRole(currentUser).isMaster;
   const cols = [
     t.adminHName, ...(isKo?[t.thSpec]:[]), t.invHMaster, t.invHRep,
     t.invHBase, t.invHPostAlloc, ...(showSupplierStock?[t.invHSupplierStock]:[])
@@ -5347,19 +5331,16 @@ function renderInventoryList(){
   if(!keys.length){ tbody.innerHTML=''; if(cardList) cardList.innerHTML=''; emptyEl.textContent=t.invEmpty; emptyEl.style.display='block'; return; }
   emptyEl.style.display='none';
   const supplierMasterTotals=computeMasterRepTotals(supplierInventoryData);
-  const deductByRegionOrders=userRole(currentUser).isKituramiHQ;
   const rowsHtml=[]; const cardsHtml=[];
   keys.forEach(k=>{
     const g=groups[k];
     const items=g.items.slice().sort((a,b)=>a.articul.localeCompare(b.articul));
     const total=items.reduce((s,it)=>s+(it.qty||0),0);
-    // 배분후 재고 = 기초재고 − 빠져나간 수량.
-    //  · KITURAMI(본사): RUSSIA·KAZAK 을 구매처로 지정한 업체들의 주문 수량
-    //  · 그 외: 내가 고객사에게 배분해준 수량
-    const outbound = g.master
-      ? (deductByRegionOrders ? (regionOrderTotals[g.master]||0) : (globalSuppliedTotals[g.master]||0))
-      : 0;
-    const postAlloc = g.master ? Math.max(0, total-outbound) : null;
+    // 배분후 재고 = 기초재고 − 내 회사가 배분해준 수량.
+    // 배분은 target_company=배분한 계정의 회사 로 저장되므로, 회사가 같은 계정들
+    // (KITURAMI·RUSSIA·KAZAK)은 같은 기초재고와 같은 배분 합계를 본다.
+    // 즉 RUSSIA 가 배분하면 KITURAMI 계정에서도 그만큼 줄어든다.
+    const postAlloc = g.master ? Math.max(0, total-(globalSuppliedTotals[g.master]||0)) : null;
     const postAllocText = postAlloc===null ? '-' : postAlloc;
     const supplierStockText = g.master && supplierMasterTotals[g.master]!==undefined ? supplierMasterTotals[g.master] : '-';
     const pnInfo = g.master ? getPNInfo(g.master) : null;
@@ -6957,7 +6938,7 @@ function enterApp(user){
   // 초기화: KITURAMI(본사)는 구매처가 없어 조건에 걸려버리므로 명시적으로 제외한다.
   const tabReset=document.getElementById('tab-reset');
   if(tabReset) tabReset.style.display = (user.is_admin && !user.supplier_company && !role.isKituramiHQ) ? 'block' : 'none';
-  Promise.all([loadMyOrderTotals(), loadInventory(), loadGlobalSuppliedTotals(), loadReceivedOrderTotals(), loadRegionOrderTotals(), loadPrices(), loadPNOverrides(),
+  Promise.all([loadMyOrderTotals(), loadInventory(), loadGlobalSuppliedTotals(), loadReceivedOrderTotals(), loadPrices(), loadPNOverrides(),
                (role.region==='kz'?Promise.all([loadPriceSettings(),loadPriceCalc()]):Promise.resolve())]).then(()=>{
     if(document.getElementById('pane-order').classList.contains('active')) renderOrderTable();
     if(document.getElementById('pane-pn').classList.contains('active')) renderPN();
