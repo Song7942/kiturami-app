@@ -2725,16 +2725,16 @@ function orderPriceText(rep){
 //   일반 회원   : 보유재고만 (주문 불가)
 function orderColVis(){
   const role=userRole(currentUser);
-  if(role.isMaster) return { price:false, received:false, stock:false, qty:false };
+  if(role.usesMasterView) return { price:false, received:false, stock:false, qty:false };
   const canOrder = role.isCompanyAdmin;
   return { price: canOrder || role.isRegion, received: canOrder, stock: true, qty: canOrder };
 }
-// MASTER 의 주문탭은 주문 열이 없으므로 '부품조회'로 부른다.
+// MASTER·KITURAMI 의 주문탭은 주문 열이 없으므로 '부품조회'로 부른다.
 function applyOrderTabLabel(){
   const el=document.getElementById('tab-order');
   if(!el) return;
   const t=T[lang];
-  el.textContent = userRole(currentUser).isMaster ? (t.tabOrderParts||t.tabOrder) : t.tabOrder;
+  el.textContent = userRole(currentUser).usesMasterView ? (t.tabOrderParts||t.tabOrder) : t.tabOrder;
 }
 function orderTailTh(t){
   const v=orderColVis();
@@ -4889,9 +4889,14 @@ function syncSplitTableColumnWidths(hdrColId, bodyColId, tbodyId, mode){
             return { caps:[...LEAD_RU], noFill:true, rigid:[1,2,3] };
           }
           if(tbodyId==='inventoryTbody'){
-            // KO: 품명|규격|대표품번|품번|기초재고|공급후재고|공급처재고 (7) / RU: 규격 제외 (6)
-            if(n===7) return { caps:[280,260,110,110,72,80,80], noFill:true, rigid:allRigidFrom(2,7) };
-            return { caps:[280,110,110,72,80,80], noFill:true, rigid:allRigidFrom(1,6) };
+            // 앞: 품명|규격|대표품번|품번 (RU 는 규격 제외)
+            // 뒤: 기초재고|배분후재고(|공급처재고) — KITURAMI 는 공급처재고 열이 없어 하나 적다.
+            // KO 6열(KITURAMI)과 RU 6열이 개수만으로는 구분되지 않아 lang 으로 앞부분을 정한다.
+            const isKoI=(typeof lang!=='undefined' && lang==='ko');
+            const lead=isKoI?[280,260,110,110]:[280,110,110];
+            const qty=new Array(Math.max(0,n-lead.length)).fill(80);
+            if(qty.length) qty[0]=72;   // 기초재고
+            return { caps:[...lead, ...qty], noFill:true, rigid:allRigidFrom(isKoI?2:1, n) };
           }
           if(tbodyId==='shipmentsTbody'){
             // KO: 품명|규격|대표품번|품번|거래처|날짜|수량|작업 (8) / RU: 규격 제외 (7)
@@ -5163,6 +5168,20 @@ async function loadReceivedOrderTotals(){
   });
   receivedOrderTotals=totals;
 }
+// KITURAMI(본사) 재고관리의 '배분후 재고'용.
+// RUSSIA·KAZAK 을 구매처로 지정한 업체들이 주문한 수량 합계 (rep 기준).
+// 주문 저장 시 target_company 에 그 업체의 구매처가 들어가므로(=RUSSIA|KAZAK) 그것으로 모은다.
+let regionOrderTotals={};
+async function loadRegionOrderTotals(){
+  if(!userRole(currentUser).isKituramiHQ){ regionOrderTotals={}; return; }
+  const { data, error } = await sb.from('kt_orders').select('items,target_company').in('target_company', ['RUSSIA','KAZAK']);
+  if(error){ console.error(error); regionOrderTotals={}; return; }
+  const totals={};
+  (data||[]).forEach(o=>{
+    (o.items||[]).forEach(it=>{ if(it.rep) totals[it.rep]=(totals[it.rep]||0)+(it.qty||0); });
+  });
+  regionOrderTotals=totals;
+}
 function computeMasterRepTotals(dataSource){
   const src=dataSource||inventoryData;
   const totals={};
@@ -5208,9 +5227,12 @@ function renderInventoryList(){
   if(lastUpdatedEl) lastUpdatedEl.textContent = overallLatest ? t.invLastUpdated(formatNewsDate(new Date(overallLatest).getTime())) : '';
 
   // 헤더 + 열 너비 (품번조회 화면과 동일하게 품명/규격을 맨 앞에 배치)
-  const cols = isKo
-    ? [t.adminHName, t.thSpec, t.invHMaster, t.invHRep, t.invHBase, t.invHPostAlloc, t.invHSupplierStock]
-    : [t.adminHName, t.invHMaster, t.invHRep, t.invHBase, t.invHPostAlloc, t.invHSupplierStock];
+  // KITURAMI(본사)는 구매처가 없어 공급처재고가 항상 '-' 라 열 자체를 뺀다.
+  const showSupplierStock = !userRole(currentUser).isKituramiHQ;
+  const cols = [
+    t.adminHName, ...(isKo?[t.thSpec]:[]), t.invHMaster, t.invHRep,
+    t.invHBase, t.invHPostAlloc, ...(showSupplierStock?[t.invHSupplierStock]:[])
+  ];
   const colgroupHtml = cols.map(()=>`<col>`).join('');
   ['inv-hdr-col','inv-body-col'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=colgroupHtml;});
   document.getElementById('inventoryThead').innerHTML=`<tr>${cols.map((c,i)=>{
@@ -5224,12 +5246,19 @@ function renderInventoryList(){
   if(!keys.length){ tbody.innerHTML=''; if(cardList) cardList.innerHTML=''; emptyEl.textContent=t.invEmpty; emptyEl.style.display='block'; return; }
   emptyEl.style.display='none';
   const supplierMasterTotals=computeMasterRepTotals(supplierInventoryData);
+  const deductByRegionOrders=userRole(currentUser).isKituramiHQ;
   const rowsHtml=[]; const cardsHtml=[];
   keys.forEach(k=>{
     const g=groups[k];
     const items=g.items.slice().sort((a,b)=>a.articul.localeCompare(b.articul));
     const total=items.reduce((s,it)=>s+(it.qty||0),0);
-    const postAlloc = g.master ? Math.max(0, total-(globalSuppliedTotals[g.master]||0)) : null;
+    // 배분후 재고 = 기초재고 − 빠져나간 수량.
+    //  · KITURAMI(본사): RUSSIA·KAZAK 을 구매처로 지정한 업체들의 주문 수량
+    //  · 그 외: 내가 고객사에게 배분해준 수량
+    const outbound = g.master
+      ? (deductByRegionOrders ? (regionOrderTotals[g.master]||0) : (globalSuppliedTotals[g.master]||0))
+      : 0;
+    const postAlloc = g.master ? Math.max(0, total-outbound) : null;
     const postAllocText = postAlloc===null ? '-' : postAlloc;
     const supplierStockText = g.master && supplierMasterTotals[g.master]!==undefined ? supplierMasterTotals[g.master] : '-';
     const pnInfo = g.master ? getPNInfo(g.master) : null;
@@ -5245,7 +5274,7 @@ function renderInventoryList(){
         <td style="padding:9px 12px"></td>
         <td style="padding:9px 16px 9px 12px;text-align:right;font-weight:700">${total}</td>
         <td style="padding:9px 16px 9px 12px;text-align:right;font-weight:700">${postAllocText}</td>
-        <td style="padding:9px 16px 9px 12px;text-align:right;color:var(--muted)">${supplierStockText}</td>
+        ${showSupplierStock?`<td style="padding:9px 16px 9px 12px;text-align:right;color:var(--muted)">${supplierStockText}</td>`:''}
       </tr>`;
       items.forEach(it=>{
         const emptySpecTd = isKo ? `<td style="padding:9px 12px"></td>` : '';
@@ -5256,7 +5285,7 @@ function renderInventoryList(){
           <td style="padding:9px 12px"><span class="code">${escapeHtml(it.articul)}</span></td>
           <td style="padding:9px 16px 9px 12px;text-align:right">${it.qty}</td>
           <td style="padding:9px 16px 9px 12px;text-align:right;color:var(--muted)"></td>
-          <td style="padding:9px 16px 9px 12px;text-align:right;color:var(--muted)"></td>
+          ${showSupplierStock?`<td style="padding:9px 16px 9px 12px;text-align:right;color:var(--muted)"></td>`:''}
         </tr>`;
       });
     } else {
@@ -5268,7 +5297,7 @@ function renderInventoryList(){
         <td style="padding:9px 12px"><span class="code">${escapeHtml(it.articul)}</span></td>
         <td style="padding:9px 16px 9px 12px;text-align:right">${it.qty}</td>
         <td style="padding:9px 16px 9px 12px;text-align:right;font-weight:700">${postAllocText}</td>
-        <td style="padding:9px 16px 9px 12px;text-align:right;color:var(--muted)">${supplierStockText}</td>
+        ${showSupplierStock?`<td style="padding:9px 16px 9px 12px;text-align:right;color:var(--muted)">${supplierStockText}</td>`:''}
       </tr>`;
     }
     rowsHtml.push(html);
@@ -5285,7 +5314,7 @@ function renderInventoryList(){
       <div style="display:flex;justify-content:space-between;margin-top:10px;padding-top:8px;border-top:1px solid var(--border);font-size:12px;flex-wrap:wrap;gap:6px">
         <span style="color:var(--muted)">${t.invHBase}: <b style="color:var(--text)">${total}</b></span>
         <span style="color:var(--muted)">${t.invHPostAlloc}: <b style="color:var(--text)">${postAllocText}</b></span>
-        <span style="color:var(--muted)">${t.invHSupplierStock}: <b style="color:var(--text)">${supplierStockText}</b></span>
+        ${showSupplierStock?`<span style="color:var(--muted)">${t.invHSupplierStock}: <b style="color:var(--text)">${supplierStockText}</b></span>`:''}
       </div>
     </div>`);
   });
@@ -5778,7 +5807,7 @@ function renderPriceSupply(){
 // ══════════════════════════════════════════
 function priceMode(){
   const role=userRole(currentUser);
-  if(role.isMaster) return 'master';
+  if(role.usesMasterView) return 'master';   // MASTER · KITURAMI(본사)
   if(role.isRegion) return role.region;      // 'ru' | 'kz'
   if(role.isCompanyAdmin) return 'company';
   return null;
@@ -6762,13 +6791,18 @@ function userRole(user){
   const isMaster=id==='MASTER';
   const isRegion=id==='RUSSIA'||id==='KAZAK';
   const isCompanyAdmin=!isMaster && !isRegion && id!=='' && id===company;
+  // KITURAMI(본사)는 최상위 공급사라 구매처가 없다. 주문을 넣을 곳이 없으므로
+  // 부품조회·품번조회·가격정보는 MASTER 와 같은 화면을 쓴다.
+  const isKituramiHQ=isCompanyAdmin && id==='KITURAMI';
   return {
-    id, company, isMaster, isRegion, isCompanyAdmin,
+    id, company, isMaster, isRegion, isCompanyAdmin, isKituramiHQ,
     region: id==='RUSSIA'?'ru':(id==='KAZAK'?'kz':null),
+    // MASTER 와 동일한 조회 전용 화면을 쓰는 역할
+    usesMasterView: isMaster||isKituramiHQ,
     // 가격정보 탭을 볼 수 있는 역할
     canSeePrice: isMaster||isRegion||isCompanyAdmin,
-    // 회원관리 탭을 볼 수 있는 역할
-    canSeeMembers: isMaster||isCompanyAdmin
+    // 회원관리 탭을 볼 수 있는 역할 (KITURAMI 는 회원을 관리하지 않는다)
+    canSeeMembers: (isMaster||isCompanyAdmin) && !isKituramiHQ
   };
 }
 function enterApp(user){
@@ -6795,9 +6829,10 @@ function enterApp(user){
   applyOrderTabLabel();
   // 가격정보: MASTER · RUSSIA/KAZAK · 회사 계정만. KITURAMI 일반 가입자 포함 그 외는 숨김.
   if(tabPrice) tabPrice.style.display = role.canSeePrice ? 'block' : 'none';
+  // 초기화: KITURAMI(본사)는 구매처가 없어 조건에 걸려버리므로 명시적으로 제외한다.
   const tabReset=document.getElementById('tab-reset');
-  if(tabReset) tabReset.style.display = (user.is_admin && !user.supplier_company) ? 'block' : 'none';
-  Promise.all([loadMyOrderTotals(), loadInventory(), loadGlobalSuppliedTotals(), loadReceivedOrderTotals(), loadPrices(), loadPNOverrides(),
+  if(tabReset) tabReset.style.display = (user.is_admin && !user.supplier_company && !role.isKituramiHQ) ? 'block' : 'none';
+  Promise.all([loadMyOrderTotals(), loadInventory(), loadGlobalSuppliedTotals(), loadReceivedOrderTotals(), loadRegionOrderTotals(), loadPrices(), loadPNOverrides(),
                (role.region==='kz'?Promise.all([loadPriceSettings(),loadPriceCalc()]):Promise.resolve())]).then(()=>{
     if(document.getElementById('pane-order').classList.contains('active')) renderOrderTable();
     if(document.getElementById('pane-pn').classList.contains('active')) renderPN();
