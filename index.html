@@ -4699,6 +4699,7 @@ function refreshMyOrdersTexts(){
 let inventoryData={}; // rep -> {qty, updated_at}
 
 let supplierInventoryData={}; // 구매처(내가 주문을 넣는 곳)의 창고 재고 - 참고용, 읽기 전용
+let supplierSuppliedTotals={}; // 구매처가 이미 배분해 나간 누적 수량 (rep 기준)
 // ══════════════════════════════════════════
 // 출고내역
 // ══════════════════════════════════════════
@@ -5226,8 +5227,16 @@ async function loadInventory(){
       supplierInventoryData={};
       (supData||[]).forEach(row=>{ supplierInventoryData[row.rep]={ qty:row.qty, updated_at:row.updated_at }; });
     }
+    // 구매처가 이미 배분해 나간 수량. 구매처 재고는 총 재고가 아니라
+    // 배분후 남은 재고를 보여줘야 실제로 받을 수 있는 양이 된다.
+    // (기초재고와 함께 읽어야 둘이 어긋나지 않는다)
+    const { data: alcData, error: alcErr } = await sb.from('kt_order_allocations').select('rep,allocated').ilike('target_company', supplierCompany);
+    supplierSuppliedTotals={};
+    if(alcErr){ console.error(alcErr); }
+    else (alcData||[]).forEach(a=>{ if(a.rep) supplierSuppliedTotals[a.rep]=(supplierSuppliedTotals[a.rep]||0)+(a.allocated||0); });
   } else {
     supplierInventoryData={};
+    supplierSuppliedTotals={};
   }
 }
 let _pnLookupMap=null;
@@ -5369,7 +5378,11 @@ function renderInventoryList(){
     // 즉 RUSSIA 가 배분하면 KITURAMI 계정에서도 그만큼 줄어든다.
     const postAlloc = g.master ? Math.max(0, total-(globalSuppliedTotals[g.master]||0)) : null;
     const postAllocText = postAlloc===null ? '-' : postAlloc;
-    const supplierStockText = g.master && supplierMasterTotals[g.master]!==undefined ? supplierMasterTotals[g.master] : '-';
+    // 구매처 재고 = 구매처의 배분후 재고 (총 재고 − 구매처가 배분해 나간 수량).
+    // 총 재고를 그대로 보여주면 이미 남에게 배분된 몫까지 받을 수 있는 것처럼 보인다.
+    const supplierStockText = (g.master && supplierMasterTotals[g.master]!==undefined)
+      ? Math.max(0, supplierMasterTotals[g.master]-(supplierSuppliedTotals[g.master]||0))
+      : '-';
     // 데스크별 배분 수량 (감독 계정에서만 쓴다)
     const deskRow = g.master ? (deskSuppliedTotals[g.master]||{}) : {};
     const allocRu = deskRow.RUSSIA || 0;
