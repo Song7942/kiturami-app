@@ -1122,13 +1122,21 @@ input[type="text"]::placeholder{color:var(--muted)}
     </div>
     <div style="padding:20px;overflow-y:auto">
       <input type="hidden" id="emId">
-      <div style="margin-bottom:12px">
-        <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" id="i18n-editmember-id">아이디</label>
-        <input type="text" id="emIdDisplay" disabled style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--muted)">
-      </div>
+      <!-- 필드 순서는 회원관리 표 헤더와 같게 유지한다:
+           회사명 | 구매처 | 아이디 | 담당자명 | 휴대폰 | 이메일 | 상태
+           국가·지역은 표에 없지만 휴대폰 국가번호를 정하므로 휴대폰 바로 앞에 둔다. -->
       <div style="margin-bottom:12px">
         <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" id="i18n-editmember-company">회사명</label>
         <input type="text" id="emCompany" oninput="this.value=this.value.toUpperCase()" style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)">
+      </div>
+      <div id="emSupplierWrap" style="margin-bottom:12px;position:relative">
+        <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" id="i18n-editmember-supplier">구매처(거래처) 회사명</label>
+        <input type="text" id="emSupplier" autocomplete="off" oninput="this.value=this.value.toUpperCase();onEmSupplierInput()" onfocus="onEmSupplierFocus()" onblur="setTimeout(()=>{const l=document.getElementById('emSupplierList');if(l)l.style.display='none';},150)" style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)">
+        <div id="emSupplierList" class="supplier-suggest" style="display:none"></div>
+      </div>
+      <div style="margin-bottom:12px">
+        <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" id="i18n-editmember-id">아이디</label>
+        <input type="text" id="emIdDisplay" disabled style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--muted)">
       </div>
       <div style="margin-bottom:12px">
         <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" id="i18n-editmember-contact">담당자명</label>
@@ -1151,9 +1159,13 @@ input[type="text"]::placeholder{color:var(--muted)}
           <input type="tel" id="emPhone" oninput="this.value=this.value.replace(/[^0-9\- ]/g,'')" onblur="normalizePhoneOnBlur('emPhone')" style="flex:1;box-sizing:border-box;padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)">
         </div>
       </div>
-      <div style="margin-bottom:16px">
+      <div style="margin-bottom:12px">
         <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" id="i18n-editmember-email">이메일</label>
         <input type="email" id="emEmail" style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)">
+      </div>
+      <div id="emStatusWrap" style="margin-bottom:16px">
+        <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" id="i18n-editmember-status">상태</label>
+        <select id="emStatus" style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)"></select>
       </div>
       <div style="border-top:1px solid var(--border);padding-top:14px;margin-bottom:8px">
         <div style="font-size:12px;color:var(--muted);margin-bottom:10px" id="i18n-editmember-pwhint">비밀번호를 재설정하려면 입력하세요 (선택사항)</div>
@@ -3897,17 +3909,45 @@ async function deleteMember(id){
 function openEditMemberModal(id){
   const m=companyMembers.find(u=>u.id===id);
   if(!m) return;
+  const t=T[lang];
+  // 구매처·상태는 표에는 보이지만 종전에 수정할 수 없었다. MASTER 에게만 연다.
+  const canEditAll=userRole(currentUser).isMaster;
   document.getElementById('emId').value=m.id;
   document.getElementById('emIdDisplay').value=m.id;
   document.getElementById('emCompany').value=m.company||'';
+  document.getElementById('emSupplier').value=m.supplier_company||'';
+  document.getElementById('emSupplierWrap').style.display=canEditAll?'':'none';
   document.getElementById('emContactName').value=m.contact_name||'';
   document.getElementById('emRegion').value=m.region||'';
   const { country, digits } = splitStoredPhone(m.phone, m.country);
   applyPhoneToModal('em', country, digits);
   document.getElementById('emEmail').value=m.email||'';
+  const statusSel=document.getElementById('emStatus');
+  statusSel.innerHTML=[['approved',t.signupStatusApproved],['pending',t.signupStatusPending],['rejected',t.signupStatusRejected]]
+    .map(([v,label])=>`<option value="${v}">${escapeHtml(label)}</option>`).join('');
+  statusSel.value=m.status||'approved';
+  document.getElementById('emStatusWrap').style.display=canEditAll?'':'none';
   document.getElementById('emNewPw').value='';
   document.getElementById('editMemberErr').textContent='';
   document.getElementById('editMemberModal').classList.add('show');
+}
+async function onEmSupplierFocus(){
+  await loadAllCompanyNames();
+  renderEmSupplierSuggest();
+}
+function onEmSupplierInput(){ renderEmSupplierSuggest(); }
+function renderEmSupplierSuggest(){
+  const list=document.getElementById('emSupplierList');
+  const kw=document.getElementById('emSupplier').value.trim().toLowerCase();
+  if(!kw || !_allCompanyNames){ list.style.display='none'; list.innerHTML=''; return; }
+  const matches=_allCompanyNames.filter(c=>c.toLowerCase().includes(kw)).slice(0,8);
+  if(!matches.length){ list.style.display='none'; list.innerHTML=''; return; }
+  list.innerHTML=matches.map(c=>`<div class="supplier-suggest-item" onmousedown="selectEmSupplier('${c.replace(/'/g,"\\'")}')">${escapeHtml(c)}</div>`).join('');
+  list.style.display='block';
+}
+function selectEmSupplier(name){
+  document.getElementById('emSupplier').value=name;
+  document.getElementById('emSupplierList').style.display='none';
 }
 function closeEditMemberModal(){ document.getElementById('editMemberModal').classList.remove('show'); }
 function closeEditMemberModalBg(e){ if(e.target===document.getElementById('editMemberModal')) closeEditMemberModal(); }
@@ -3931,6 +3971,11 @@ async function saveEditMember(){
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ errEl.textContent=t.myInfoErrEmail; return; }
 
   const payload = { company, contact_name: contactName, country, region, phone, email };
+  // 구매처·상태는 MASTER 만 수정할 수 있으므로, 그 외에는 payload 에 담지 않는다.
+  if(userRole(currentUser).isMaster){
+    payload.supplier_company = document.getElementById('emSupplier').value.trim() || null;
+    payload.status = document.getElementById('emStatus').value;
+  }
   if(newPw){
     if(newPw.length < 4){ errEl.textContent=t.myInfoErrPwShort; return; }
     payload.password_hash = await sha256Hex(newPw);
@@ -4280,6 +4325,9 @@ function refreshAdminTexts(){
   setTxt('i18n-editmember-contact', t.editMemberContact);
   setTxt('i18n-editmember-phone', t.editMemberPhone);
   setTxt('i18n-editmember-email', t.editMemberEmail);
+  // 구매처·상태는 회원관리 표 헤더와 같은 문구를 쓴다 (팝업이 표 순서·용어를 그대로 따르도록)
+  setTxt('i18n-editmember-supplier', t.signupThSupplier);
+  setTxt('i18n-editmember-status', t.signupThStatus);
   setTxt('i18n-editmember-pwhint', t.editMemberPwHint);
   setTxt('i18n-editmember-save', t.editMemberSave);
   if(document.getElementById('pane-adminOrders').classList.contains('active')){ renderAdminOrders(); renderAdminMyOrders(); }
