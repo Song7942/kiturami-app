@@ -6592,7 +6592,9 @@ async function applyShipQtyList(arr, event){
     alert('품번 열을 찾지 못했습니다.\n품번이 적힌 열이 있는지 확인해 주세요.');
     event.target.value=''; return;
   }
-  const qtyCol = cols.ship!=null ? cols.ship : codeCol+1;
+  // '출고' 머리글이 품번 열 위에 붙어 있으면(제목처럼) 수량 열과 품번 열이 같아진다.
+  // 그 경우엔 품번 바로 오른쪽 칸을 수량으로 본다.
+  const qtyCol = (cols.ship!=null && cols.ship!==codeCol) ? cols.ship : codeCol+1;
   const byCode={};
   for(let i=ds;i<arr.length;i++){
     const row=arr[i]||[];
@@ -6612,35 +6614,48 @@ async function applyShipQtyList(arr, event){
     const key=String(r.compat||'').trim();
     return (key && byCode[key]!=null) ? byCode[key] : null;
   };
-  if(!priceCalcData.length){
-    alert('계산식 데이터가 비어 있습니다.\n먼저 계산식 엑셀을 업로드한 뒤 출고수량을 올려 주세요.');
-    event.target.value=''; return;
-  }
   const targets=priceCalcData.filter(r=>qtyOf(r)!=null);
-  if(!targets.length){
-    alert(`품번 ${codes.length}개를 읽었지만 호환품번(변경)이 일치하는 행이 없습니다.\n\n`
-      +`엑셀에서 읽은 품번: ${codes.slice(0,5).join(', ')}${codes.length>5?' …':''}\n`
-      +`계산식의 호환품번: ${priceCalcData.slice(0,5).map(r=>r.compat).filter(Boolean).join(', ')||'(없음)'}`);
+  // 계산식에 없는 품번은 품번조회(PN_DATA)에서 품명·규격·대표품번·최종품번을 가져와
+  // 새 행을 만든다 (원가 시세표 업로드와 같은 규칙).
+  const known=new Set(priceCalcData.map(r=>String(r.compat||'').trim()));
+  const newCodes=codes.filter(c=>!known.has(c) && findMasterRep(c));
+  if(!targets.length && !newCodes.length){
+    alert(`품번 ${codes.length}개를 읽었지만 품번조회에서 찾을 수 없습니다.\n\n`
+      +`엑셀에서 읽은 품번: ${codes.slice(0,5).join(', ')}${codes.length>5?' …':''}`);
     event.target.value=''; return;
   }
-  if(!confirm(`품번 ${codes.length}개의 출고수량을 찾았습니다.\n계산식 ${targets.length}행의 출고(18y~)를 갱신합니다. 계속하시겠습니까?`)){
-    event.target.value=''; return;
-  }
+  const msg=`품번 ${codes.length}개의 출고수량을 읽었습니다.\n`
+    +`· 기존 ${targets.length}행의 출고(18y~) 갱신\n`
+    +(newCodes.length?`· 새 품번 ${newCodes.length}행 추가 (품명·대표품번·최종품번은 품번조회에서 가져옵니다)\n`:'')
+    +`\n계속하시겠습니까?`;
+  if(!confirm(msg)){ event.target.value=''; return; }
   const now=new Date().toISOString();
+  const rowOf=r=>({ row_no:r.row_no, name_ko:r.name_ko, spec:r.spec, rep:r.rep, compat:r.compat, final:r.final,
+                    ship_qty:r.ship_qty, ru_cost:r.ru_cost, ru_supply_krw:r.ru_supply_krw,
+                    kz_supply_krw:r.kz_supply_krw, updated_at:now });
   const payload=targets.map(r=>{
     r.ship_qty=Math.round(qtyOf(r));   // 출고는 수량 — 정수
     r.updated_at=now;
-    return { row_no:r.row_no, name_ko:r.name_ko, spec:r.spec, rep:r.rep, compat:r.compat, final:r.final,
-             ship_qty:r.ship_qty, ru_cost:r.ru_cost, ru_supply_krw:r.ru_supply_krw,
-             kz_supply_krw:r.kz_supply_krw, updated_at:now };
+    return rowOf(r);
+  });
+  let nextRow=priceCalcData.reduce((m,r)=>Math.max(m, Number(r.row_no)||0), 0);
+  newCodes.forEach(code=>{
+    const rep=findMasterRep(code);
+    const info=getPNInfo(rep)||{};
+    const r={ row_no:++nextRow, name_ko:info.name_ko||'', spec:info.spec||'', rep,
+              compat:code, final:info.final||'', ship_qty:Math.round(byCode[code]),
+              ru_cost:null, ru_supply_krw:null, kz_supply_krw:null, updated_at:now };
+    priceCalcData.push(r);
+    payload.push(rowOf(r));
   });
   for(let i=0;i<payload.length;i+=500){
     const { error } = await sb.from('kt_price_calc').upsert(payload.slice(i,i+500),{onConflict:'row_no'});
     if(error){ alert('업로드 실패\n['+(error.message||error.code)+']'); event.target.value=''; return; }
   }
+  await loadPriceCalc();
   renderPriceActive();
   event.target.value='';
-  alert(`출고수량 ${targets.length}행을 갱신했습니다.`);
+  alert(`완료했습니다. (출고 18y~)\n· 갱신 ${targets.length}행\n`+(newCodes.length?`· 추가 ${newCodes.length}행\n`:''));
 }
 // ── 계산식 엑셀의 헤더 읽기 ──
 // 열을 위치가 아니라 헤더 글자로 찾는다. 헤더가 여러 줄(원가 / KRW)이면 위아래를 이어
