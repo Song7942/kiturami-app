@@ -853,6 +853,10 @@ input[type="text"]::placeholder{color:var(--muted)}
           <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           <span id="i18n-pricedl">엑셀 다운로드</span>
         </button>
+        <button class="dl-btn" id="priceResetWrap" onclick="resetPriceCalcData()" style="background:var(--surface2);border-color:#ef4444;color:#ef4444">
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+          <span id="i18n-pricereset">초기화</span>
+        </button>
       </div>
       <div id="priceLastUpdated" style="padding:2px 4px 6px;font-size:11px;color:var(--muted)"></div>
       <!-- 계산식 헤더 -->
@@ -1399,6 +1403,9 @@ const T={
        resetAllCancelled:'취소되었습니다.',resetAllDone:'전체 회원이 초기화되었습니다.',
        resetOrdersConfirmPrompt:w=>`모든 회원의 주문·재고·출고내역을 전부 지우시겠습니까?\n회원 계정 자체는 유지됩니다. 이 작업은 되돌릴 수 없습니다. 계속하려면 아래에 "${w}"를 정확히 입력하세요.`,
        resetOrdersDone:'주문·재고·출고내역이 전부 초기화되었습니다.',
+       priceResetBtn:'초기화',
+       priceResetPrompt:w=>`가격정보의 계산식·공급가 데이터를 전부 지우시겠습니까?\n환율·기준 GP 설정은 그대로 유지됩니다.\n\n계속하려면 "${w}" 를 입력하세요.`,
+       priceResetDone:'가격정보의 계산식·공급가 데이터가 초기화되었습니다.',
        tabReset:'초기화',resetAllTitle:'주문&재고&출고 초기화',resetAllDesc:'모든 회원의 주문·재고·출고 데이터를 전부 삭제합니다. 회원 계정은 유지됩니다.',resetAllBtn:'주문&재고&출고 전체 초기화',
        resetOnlyOrdersTitle:'주문 초기화',resetOnlyOrdersDesc:'주문 수량 데이터(주문·공급결정·취소변경요청)만 삭제합니다. 재고와 출고내역은 유지됩니다.',resetOnlyOrdersBtn:'주문 초기화',
        resetOnlyOrdersPrompt:w=>`모든 회원의 주문 수량 데이터를 지우시겠습니까?\n재고와 출고내역은 유지됩니다. 이 작업은 되돌릴 수 없습니다. 계속하려면 아래에 "${w}"를 정확히 입력하세요.`,resetOnlyOrdersDone:'주문 데이터가 초기화되었습니다.',
@@ -1488,6 +1495,9 @@ const T={
        resetAllCancelled:'Отменено.',resetAllDone:'Все участники сброшены.',
        resetOrdersConfirmPrompt:w=>`Удалить все заказы, склад и отгрузки всех участников?\nСами аккаунты останутся. Это необратимо. Введите "${w}", чтобы продолжить.`,
        resetOrdersDone:'Заказы, склад и отгрузки сброшены.',
+       priceResetBtn:'Сброс',
+       priceResetPrompt:w=>`Удалить все данные формулы и цен поставки?\nНастройки курса и базового GP сохранятся.\n\nДля продолжения введите "${w}".`,
+       priceResetDone:'Данные формулы и цен поставки сброшены.',
        tabReset:'Сброс',resetAllTitle:'Сброс заказов, склада и отгрузок',resetAllDesc:'Удаляет все данные заказов, склада и отгрузок всех участников. Аккаунты сохраняются.',resetAllBtn:'Сбросить всё (заказы & склад & отгрузки)',
        resetOnlyOrdersTitle:'Сброс заказов',resetOnlyOrdersDesc:'Удаляет только данные заказов (заказы, решения о поставке, запросы на изменение). Склад и отгрузки сохраняются.',resetOnlyOrdersBtn:'Сбросить заказы',
        resetOnlyOrdersPrompt:w=>`Удалить данные заказов всех участников?\nСклад и отгрузки сохранятся. Это необратимо. Введите "${w}", чтобы продолжить.`,resetOnlyOrdersDone:'Данные заказов сброшены.',
@@ -6186,6 +6196,8 @@ function applyPriceTabChrome(){
   show('priceUploadWrap', isMaster ? priceView==='calc' : m==='company');
   // 출고수량 업로드: 출고 열이 있는 계산식 화면에서만
   show('shipQtyUploadWrap', isMaster && priceView==='calc');
+  // 초기화: MASTER·KITURAMI 만. 계산식·공급가 어느 쪽에서도 같은 데이터를 지운다.
+  show('priceResetWrap', isMaster);
   // 지역/회사 뷰는 계산식 슬롯을 재사용한다
   if(!isMaster){
     show('priceCalcHdrWrap', true); show('priceCalcBodyWrap', true);
@@ -6468,6 +6480,25 @@ async function applyCostPriceList(arr, event){
   event.target.value='';
   alert(`원가 ${targets.length}행을 갱신했습니다.\n원가 RUB/USD 는 현재 기준환율로 계산됩니다.`);
 }
+// ── 가격정보 초기화 (MASTER · KITURAMI) ──
+// 계산식(kt_price_calc)이 공급가 화면의 원본이므로 이것을 지우면 두 화면이 함께 비워진다.
+// 주문 탭이 읽는 kt_prices 는 계산식에서 동기화된 사본이라 같이 지워야 옛 가격이 남지 않는다.
+// 환율·기준 GP(kt_price_settings)는 데이터가 아니라 설정이므로 건드리지 않는다.
+async function resetPriceCalcData(){
+  const t=T[lang];
+  if(!userRole(currentUser).usesMasterView) return;   // MASTER · KITURAMI 만
+  const typed = prompt(t.priceResetPrompt(t.resetAllConfirmWord));
+  if(typed===null) return;
+  if(typed.trim()!==t.resetAllConfirmWord){ alert(t.resetAllCancelled); return; }
+  const del1 = await sb.from('kt_price_calc').delete().not('row_no','is',null);
+  if(del1.error){ alert(t.reqFail+'\n\n['+(del1.error.message||del1.error.code)+']'); return; }
+  const del2 = await sb.from('kt_prices').delete().not('rep','is',null);
+  if(del2.error){ alert(t.reqFail+'\n\n['+(del2.error.message||del2.error.code)+']'); return; }
+  await loadPriceCalc();
+  await loadPrices();
+  renderPriceActive();
+  alert(t.priceResetDone);
+}
 // ── 출고수량 업로드 (자유 양식) ──
 // 원가 시세표와 같은 방식: 호환품번(변경)을 찾아 바로 오른쪽 칸의 수량을
 // 출고(18y~)에 기재한다. 계산식의 다른 값은 건드리지 않는다.
@@ -6645,6 +6676,7 @@ function refreshPriceTexts(){
   setTxt('i18n-pricetab-supply', lang==='ru'?'Цены поставки':'공급가');
   setTxt('i18n-priceupload', lang==='ru'?'Загрузить Excel':'엑셀 업로드');
   setTxt('i18n-shipqtyupload', lang==='ru'?'Загрузить отгрузку':'출고수량 업로드');
+  setTxt('i18n-pricereset', t.priceResetBtn);
   setTxt('i18n-pricedl', lang==='ru'?'Скачать Excel':'엑셀 다운로드');
   setTxt('i18n-prm-save', lang==='ru'?'Сохранить':'저장');
   setTxt('i18n-prm-refresh', lang==='ru'?'Обновить курс':'환율 갱신');
