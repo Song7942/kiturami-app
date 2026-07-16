@@ -1354,6 +1354,7 @@ const T={
        colOrder:'주문',grpOrderStatus:'주문현황',colSupply:'출고',colStock:'재고',colSupplyRate:'출고율',colNotSupplied:'미출고',colAllocation:'배분',colPreparing:'준비중',colShipped:'출고완료',
        colDate:'날짜',colStatus:'완료여부',grpStatusHdr:'출고현황',colFinalOrder:'최종주문',colDecision:'의사결정',decisionAgreed:'동의',myOrderReqSection:'구매처의 요청사항',agreeBtn:'동의',colSupplyAvailable:'공급가능',colShippedQty:'수량',colImmediateSupply:'즉시공급',colFutureSupply:'향후공급',
        invHBase:'기초재고',invHPostAlloc:'배분후 재고',
+       invHAllocRu:'RUSSIA 배분',invHAllocKz:'KAZAK 배분',
        orderSubmit:'주문 제출',orderSubmitting:'제출 중…',orderSubmitOk:'주문이 접수되었습니다.',orderSubmitFail:'주문 제출에 실패했습니다. 잠시 후 다시 시도해주세요.',orderSubmitEmpty:'주문수량을 입력한 품목이 없습니다.',orderPrevQty:'기존 주문수량',orderStock:'보유 재고',orderReceived:'주문 접수',orderPrice:'구매가',orderSupply:'공급가',orderNoSupplier:'주문을 보낼 구매처가 지정되어 있지 않습니다.',
        reqActionHeader:'취소/변경',reqCancelBtn:'취소<br>신청',reqChangeBtn:'수량변경<br>신청',
        reqPendingCancel:'취소 승인 대기중',reqPendingChange:n=>`수량변경(${n}) 승인 대기중`,
@@ -1440,6 +1441,7 @@ const T={
        colOrder:'Заказ',grpOrderStatus:'Статус заказа',colSupply:'Отгрузка',colStock:'Остаток',colSupplyRate:'% отгрузки',colNotSupplied:'Не отгружено',colAllocation:'Выделено',colPreparing:'Готовится',colShipped:'Отгружено',
        colDate:'Дата',colStatus:'Статус',grpStatusHdr:'Статус отгрузки',colFinalOrder:'Финальный заказ',colDecision:'Решение',decisionAgreed:'Согласен',myOrderReqSection:'Предложение поставщика',agreeBtn:'Согласиться',colSupplyAvailable:'Доступно',colShippedQty:'Кол-во',colImmediateSupply:'Сразу',colFutureSupply:'Позже',
        invHBase:'Начальный остаток',invHPostAlloc:'Остаток после выделения',
+       invHAllocRu:'Выделено RUSSIA',invHAllocKz:'Выделено KAZAK',
        orderSubmit:'Отправить заказ',orderSubmitting:'Отправка…',orderSubmitOk:'Заказ принят.',orderSubmitFail:'Не удалось отправить заказ. Попробуйте позже.',orderSubmitEmpty:'Не указано количество ни для одного товара.',orderPrevQty:'Ранее заказано',orderStock:'Мой склад',orderReceived:'Принято заказов',orderPrice:'Закупочная цена',orderSupply:'Цена поставки',orderNoSupplier:'Поставщик для заказа не указан.',
        reqActionHeader:'Отмена/Изменение',reqCancelBtn:'Запросить<br>отмену',reqChangeBtn:'Изменить<br>кол-во',
        reqPendingCancel:'Ожидает одобрения отмены',reqPendingChange:n=>`Ожидает изменения на ${n}`,
@@ -3341,7 +3343,8 @@ function isKituramiCompany(user){
 }
 async function loadOrderDeskMap(){
   _orderDeskById=null; _orderDeskByCompany=null;
-  if(!isKituramiCompany(currentUser)) return;   // KITURAMI 회사에만 해당
+  // KITURAMI 회사(주문 분리용) 와 MASTER(재고 데스크별 집계용) 에만 필요하다
+  if(!isKituramiCompany(currentUser) && !userRole(currentUser).isMaster) return;
   const { data, error } = await sb.from('kt_users').select('id,company,contact_name');
   if(error){ console.error(error); return; }
   const byId={}, byCompany={};
@@ -5200,8 +5203,15 @@ function renderShipmentsList(){
   }).join('');
   scheduleSplitTableResync('ship-hdr-col','ship-body-col','shipmentsTbody','fixed');
 }
+// 재고 화면이 바라보는 창고. MASTER 는 자기 창고가 없고 KITURAMI 창고를 감독한다.
+// (기초재고 조회·업로드, 배분 합계 모두 이 회사 기준으로 본다)
+const KITURAMI_CO='KITURAMI';
+function inventoryCompanyFor(user){
+  if(userRole(user).isMaster) return KITURAMI_CO;
+  return String(user&&user.company||'');
+}
 async function loadInventory(){
-  const myCompany=currentUser?currentUser.company:'';
+  const myCompany=inventoryCompanyFor(currentUser);
   const { data, error } = await sb.from('kt_inventory').select('*').ilike('company', myCompany).order('rep');
   if(error){ console.error(error); inventoryData={}; }
   else{
@@ -5236,14 +5246,25 @@ function findMasterRep(articul){
   return buildPNLookupMap().get(String(articul).trim()) || '';
 }
 let globalSuppliedTotals={}; // rep -> 지금까지 관리자가 배분한 누적 수량 (전체 주문 기준)
+let deskSuppliedTotals={};   // rep -> { RUSSIA:n, KAZAK:n } (KITURAMI 창고를 데스크별로 나눈 값)
 async function loadGlobalSuppliedTotals(){
-  const { data, error } = await sb.from('kt_order_allocations').select('*').ilike('target_company', currentUser?currentUser.company:'');
-  if(error){ console.error(error); globalSuppliedTotals={}; return; }
-  const totals={};
+  await loadOrderDeskMap();   // 데스크별로 나누려면 업체별 담당자명이 필요하다
+  const { data, error } = await sb.from('kt_order_allocations').select('*').ilike('target_company', inventoryCompanyFor(currentUser));
+  if(error){ console.error(error); globalSuppliedTotals={}; deskSuppliedTotals={}; return; }
+  const totals={}, byDesk={};
+  const up=v=>String(v||'').trim().toUpperCase();
   (data||[]).forEach(a=>{
     totals[a.rep]=(totals[a.rep]||0)+(a.allocated||0);
+    // 배분 데이터에는 누가 배분했는지가 없다(target_company 는 회사명이라 RUSSIA·KAZAK 모두 KITURAMI).
+    // 배분받은 업체의 담당자명이 곧 담당 데스크이므로 그것으로 나눈다 — 주문접수현황을 나누는 규칙과 동일.
+    const desk = _orderDeskByCompany ? (_orderDeskByCompany[up(a.company)] || _orderDeskById[up(a.company)] || '') : '';
+    if(desk){
+      if(!byDesk[a.rep]) byDesk[a.rep]={};
+      byDesk[a.rep][desk]=(byDesk[a.rep][desk]||0)+(a.allocated||0);
+    }
   });
   globalSuppliedTotals=totals;
+  deskSuppliedTotals=byDesk;
 }
 let _pnByRepMap=null;
 function buildPNByRepMap(){
@@ -5313,10 +5334,16 @@ function renderInventoryList(){
   // 헤더 + 열 너비 (품번조회 화면과 동일하게 품명/규격을 맨 앞에 배치)
   // KITURAMI 회사(KITURAMI·RUSSIA·KAZAK)와 MASTER 는 구매처가 없어
   // 공급처재고가 항상 '-' 라 열 자체를 뺀다.
-  const showSupplierStock = !isKituramiCompany(currentUser) && !userRole(currentUser).isMaster;
+  const roleNow = userRole(currentUser);
+  const showSupplierStock = !isKituramiCompany(currentUser) && !roleNow.isMaster;
+  // 감독 계정(MASTER·KITURAMI)은 데스크별 배분 내역을 함께 본다.
+  // RUSSIA·KAZAK 계정은 자기 몫만 보면 되므로 종전대로 기초/배분후만 표시.
+  const showDeskCols = roleNow.isMaster || roleNow.isKituramiHQ;
   const cols = [
     t.adminHName, ...(isKo?[t.thSpec]:[]), t.invHMaster, t.invHRep,
-    t.invHBase, t.invHPostAlloc, ...(showSupplierStock?[t.invHSupplierStock]:[])
+    t.invHBase,
+    ...(showDeskCols?[t.invHAllocRu, t.invHAllocKz]:[]),
+    t.invHPostAlloc, ...(showSupplierStock?[t.invHSupplierStock]:[])
   ];
   const colgroupHtml = cols.map(()=>`<col>`).join('');
   ['inv-hdr-col','inv-body-col'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=colgroupHtml;});
@@ -5343,6 +5370,17 @@ function renderInventoryList(){
     const postAlloc = g.master ? Math.max(0, total-(globalSuppliedTotals[g.master]||0)) : null;
     const postAllocText = postAlloc===null ? '-' : postAlloc;
     const supplierStockText = g.master && supplierMasterTotals[g.master]!==undefined ? supplierMasterTotals[g.master] : '-';
+    // 데스크별 배분 수량 (감독 계정에서만 쓴다)
+    const deskRow = g.master ? (deskSuppliedTotals[g.master]||{}) : {};
+    const allocRu = deskRow.RUSSIA || 0;
+    const allocKz = deskRow.KAZAK || 0;
+    const deskTds = showDeskCols
+      ? `<td style="padding:9px 16px 9px 12px;text-align:right;color:var(--muted)">${g.master?allocRu:''}</td>`
+      + `<td style="padding:9px 16px 9px 12px;text-align:right;color:var(--muted)">${g.master?allocKz:''}</td>`
+      : '';
+    const deskTdsEmpty = showDeskCols
+      ? `<td style="padding:9px 12px"></td><td style="padding:9px 12px"></td>`
+      : '';
     const pnInfo = g.master ? getPNInfo(g.master) : null;
     const nameText = pnInfo ? (isKo ? pnInfo.name_ko : (pnInfo.name_ru||pnInfo.name_ko)) : '';
     const specTd = isKo ? `<td class="wrap-ok" style="padding:9px 12px;color:var(--muted)">${escapeHtml(pnInfo?pnInfo.spec:'')}</td>` : '';
@@ -5355,6 +5393,7 @@ function renderInventoryList(){
         <td style="padding:9px 12px"><span class="code">${escapeHtml(g.master)}</span></td>
         <td style="padding:9px 12px"></td>
         <td style="padding:9px 16px 9px 12px;text-align:right;font-weight:700">${total}</td>
+        ${deskTds}
         <td style="padding:9px 16px 9px 12px;text-align:right;font-weight:700">${postAllocText}</td>
         ${showSupplierStock?`<td style="padding:9px 16px 9px 12px;text-align:right;color:var(--muted)">${supplierStockText}</td>`:''}
       </tr>`;
@@ -5366,6 +5405,7 @@ function renderInventoryList(){
           <td style="padding:9px 12px"></td>
           <td style="padding:9px 12px"><span class="code">${escapeHtml(it.articul)}</span></td>
           <td style="padding:9px 16px 9px 12px;text-align:right">${it.qty}</td>
+          ${deskTdsEmpty}
           <td style="padding:9px 16px 9px 12px;text-align:right;color:var(--muted)"></td>
           ${showSupplierStock?`<td style="padding:9px 16px 9px 12px;text-align:right;color:var(--muted)"></td>`:''}
         </tr>`;
@@ -5378,6 +5418,7 @@ function renderInventoryList(){
         <td style="padding:9px 12px">${g.master?`<span class="code">${escapeHtml(g.master)}</span>`:''}</td>
         <td style="padding:9px 12px"><span class="code">${escapeHtml(it.articul)}</span></td>
         <td style="padding:9px 16px 9px 12px;text-align:right">${it.qty}</td>
+        ${deskTds}
         <td style="padding:9px 16px 9px 12px;text-align:right;font-weight:700">${postAllocText}</td>
         ${showSupplierStock?`<td style="padding:9px 16px 9px 12px;text-align:right;color:var(--muted)">${supplierStockText}</td>`:''}
       </tr>`;
@@ -5395,6 +5436,8 @@ function renderInventoryList(){
       ${variantsHtml}
       <div style="display:flex;justify-content:space-between;margin-top:10px;padding-top:8px;border-top:1px solid var(--border);font-size:12px;flex-wrap:wrap;gap:6px">
         <span style="color:var(--muted)">${t.invHBase}: <b style="color:var(--text)">${total}</b></span>
+        ${showDeskCols?`<span style="color:var(--muted)">${t.invHAllocRu}: <b style="color:var(--text)">${allocRu}</b></span>
+        <span style="color:var(--muted)">${t.invHAllocKz}: <b style="color:var(--text)">${allocKz}</b></span>`:''}
         <span style="color:var(--muted)">${t.invHPostAlloc}: <b style="color:var(--text)">${postAllocText}</b></span>
         ${showSupplierStock?`<span style="color:var(--muted)">${t.invHSupplierStock}: <b style="color:var(--text)">${supplierStockText}</b></span>`:''}
       </div>
@@ -5544,7 +5587,8 @@ async function handleInventoryUpload(event){
         if(dedupMap[r.rep]){ dedupMap[r.rep].qty+=r.qty; dedupMap[r.rep].updated_at=r.updated_at; }
         else{ dedupMap[r.rep]={ rep:r.rep, qty:r.qty, updated_at:r.updated_at }; }
       });
-      const myCompany=currentUser?currentUser.company:'';
+      // MASTER 는 자기 창고가 없으므로 KITURAMI 창고를 갱신한다 (조회 대상과 같은 회사).
+      const myCompany=inventoryCompanyFor(currentUser);
       const dedupedRows=Object.values(dedupMap).map(r=>Object.assign({company:myCompany}, r));
 
       // 새 엑셀로 업데이트하면 "내 회사"의 기존 재고 데이터만 지우고 새 파일 내용으로 완전히 교체합니다.
@@ -6929,8 +6973,9 @@ function enterApp(user){
   const tabInv=document.getElementById('tab-inventory');
   const tabShip=document.getElementById('tab-shipments');
   const tabPrice=document.getElementById('tab-price');
-  // 재고관리·출고관리: MASTER 는 재고를 보유하거나 출고하지 않으므로 숨긴다.
-  if(tabInv) tabInv.style.display = role.isMaster ? 'none' : 'block';
+  // 출고관리: MASTER 는 출고하지 않으므로 숨긴다.
+  // 재고관리: MASTER 는 자기 창고는 없지만 KITURAMI 창고를 감독하므로 보여준다.
+  if(tabInv) tabInv.style.display = 'block';
   if(tabShip) tabShip.style.display = role.isMaster ? 'none' : 'block';
   applyOrderTabLabel();
   // 가격정보: MASTER · RUSSIA/KAZAK · 회사 계정만. KITURAMI 일반 가입자 포함 그 외는 숨김.
