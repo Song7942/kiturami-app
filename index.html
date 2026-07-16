@@ -3965,7 +3965,16 @@ async function saveEditMember(){
 
   const { callingCode, digits, phone } = readE164FromModal('em');
 
-  if(!company || !contactName || !country || !region || !digits || !email){ errEl.textContent=t.myInfoErrFill; return; }
+  // 비어 있는 칸을 그대로 알려준다. 종전에는 실제로 빈 칸이 국가여도
+  // '담당자명, 휴대폰, 이메일'이라고만 나와 무엇을 채워야 할지 알 수 없었다.
+  const missing=[];
+  if(!company) missing.push(t.editMemberCompany);
+  if(!contactName) missing.push(t.editMemberContact);
+  if(!country) missing.push(t.editMemberCountry);
+  if(!region) missing.push(t.editMemberRegion);
+  if(!digits) missing.push(t.editMemberPhone);
+  if(!email) missing.push(t.editMemberEmail);
+  if(missing.length){ errEl.textContent=(lang==='ru'?'Заполните: ':'다음 항목을 입력해주세요: ')+missing.join(', '); return; }
   if(!callingCode){ errEl.textContent=t.myInfoErrCountry||'목록에서 국가를 선택해주세요.'; return; }
   if(digits.length < 4 || digits.length > (15-String(callingCode).length)){ errEl.textContent=t.myInfoErrPhone||'전화번호 형식이 올바르지 않습니다.'; return; }
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ errEl.textContent=t.myInfoErrEmail; return; }
@@ -6451,7 +6460,13 @@ function buildRegionSuggestList(countryInputId, regionInputId, listId, selectFnN
 }
 function findCountryByStoredName(name){
   if(!name) return null;
-  return COUNTRIES.find(c=>c.name_ko===name || c.name_ru===name) || null;
+  // 저장된 값에 앞뒤 공백이나 대소문자 차이가 있어도 찾는다.
+  // 못 찾으면 국가 칸이 비어 저장 자체가 막히므로 느슨하게 본다.
+  const k=String(name).trim().toLowerCase();
+  if(!k) return null;
+  return COUNTRIES.find(c=>String(c.name_ko).toLowerCase()===k || String(c.name_ru).toLowerCase()===k)
+      || COUNTRIES.find(c=>String(c.iso2).toLowerCase()===k)
+      || null;
 }
 function onMiCountryInput(){ buildCountrySuggestList('miCountry','miCountryList','selectMiCountry'); }
 function selectMiCountry(iso2){
@@ -6487,9 +6502,27 @@ function splitStoredPhone(phone, countryName){
     const m = String(phone).trim().match(/^\+(\d+)\s*(.*)$/);
     if(m){
       digits = m[2].replace(/[^0-9]/g,'');
-      if(!country){
-        // 국가 정보가 따로 없으면 전화번호의 국가번호로 추정합니다(같은 국가번호를 쓰는 나라가 여럿일 수 있어 참고용입니다).
-        country = COUNTRIES.find(c=>String(c.callingCode)===m[1]) || null;
+      if(digits){
+        // '+82 1012345678' — 국가번호와 번호가 공백으로 나뉜 형태(이 앱이 저장하는 형식)
+        if(!country){
+          // 국가 정보가 따로 없으면 전화번호의 국가번호로 추정합니다(같은 국가번호를 쓰는 나라가 여럿일 수 있어 참고용입니다).
+          country = COUNTRIES.find(c=>String(c.callingCode)===m[1]) || null;
+        }
+      } else {
+        // '+821012345678' — 공백 없이 붙은 형태. (\d+)가 번호까지 삼켜 digits 가 비므로
+        // 국가번호를 앞에서 떼어낸다. 국가를 알면 그 국가번호를, 모르면 가장 긴 일치를 쓴다.
+        const all = m[1];
+        const cc = country && all.startsWith(String(country.callingCode))
+          ? String(country.callingCode)
+          : COUNTRIES.map(c=>String(c.callingCode))
+              .filter(c=>all.startsWith(c) && all.length>c.length)
+              .sort((a,b)=>b.length-a.length)[0] || '';
+        if(cc){
+          digits = all.slice(cc.length);
+          if(!country) country = COUNTRIES.find(c=>String(c.callingCode)===cc) || null;
+        } else {
+          digits = all;
+        }
       }
     } else {
       digits = String(phone).replace(/[^0-9]/g,'');
