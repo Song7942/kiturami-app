@@ -5795,7 +5795,11 @@ async function loadPriceCalc(){
 function ceil1(x){ return Math.ceil(x*10)/10; } // 소수 1자리 올림 (ROUNDUP(x,1))
 function calcPriceRow(r){
   const ruGp=priceSettings.ru_gp, kzGp=priceSettings.kz_gp;
-  const ruCost=(r.ru_cost!=null&&r.ru_cost!=='')?Number(r.ru_cost):null;
+  // 원가는 원 단위로만 다룬다. 엑셀·수기로 소수가 들어와도 올림해서 쓴다.
+  // 여기서 올림하므로 화면·환산값·엑셀 다운로드가 모두 같은 정수를 쓴다
+  // (이미 소수로 저장돼 있는 기존 데이터도 함께 정리된다).
+  const ruCostRaw=(r.ru_cost!=null&&r.ru_cost!=='')?Number(r.ru_cost):null;
+  const ruCost=(ruCostRaw!=null&&!isNaN(ruCostRaw))?Math.ceil(ruCostRaw):null;
   let ruSupply=(r.ru_supply_krw!=null&&r.ru_supply_krw!=='')?Number(r.ru_supply_krw):null;
   // 새 원가가 있고 공급가가 없으면: 공급가 = 원가/(1-기준GP), 소수점 이하 올림
   if((ruSupply==null||ruSupply===0) && ruCost!=null && ruCost>0 && ruGp<1) ruSupply=Math.ceil(ruCost/(1-ruGp));
@@ -6372,8 +6376,11 @@ function downloadPriceCompany(){
 async function onPriceCellEdit(rowNo, field, value){
   const r=priceCalcData.find(x=>x.row_no===rowNo);
   if(!r) return;
-  const num=value===''?null:Number(value);
+  let num=value===''?null:Number(value);
   if(value!=='' && isNaN(num)){ alert('숫자를 입력해 주세요.'); renderPriceCalc(); return; }
+  // 원가는 원 단위 — 소수로 입력해도 올림해서 저장한다.
+  // (공급가 자동계산도 올림한 원가를 기준으로 하도록 여기서 먼저 처리)
+  if(field==='ru_cost' && num!=null) num=Math.ceil(num);
   r[field]=num;
   // 새 원가 입력 시 공급가가 비어있으면 자동 채움 (원가/(1-기준GP) 올림)
   if(field==='ru_cost' && num!=null && num>0 && (r.ru_supply_krw==null||r.ru_supply_krw===''||Number(r.ru_supply_krw)===0)){
@@ -6423,6 +6430,9 @@ async function handlePriceCalcUpload(event){
         if(!rep && !name) continue;
         const cellNum=v=>{ if(v===''||v==null) return null; if(typeof v==='string'&&v.trim().startsWith('=')) return null; const n=Number(v); return isNaN(n)?null:n; };
         let ruCost=cellNum(a[6]), ruSupply=cellNum(a[7]), kzSupply=cellNum(isOldFmt?a[11]:a[10]);
+        // 원가는 원 단위 — 엑셀에 소수가 있어도 올림해서 받는다.
+        // 아래 공급가 자동계산이 이 값을 쓰므로 반드시 먼저 올림한다.
+        if(ruCost!=null) ruCost=Math.ceil(ruCost);
         // 새 원가 + 공급가 없음 → 자동 계산 (원가/(1-기준GP) 올림)
         if((ruSupply==null||ruSupply===0)&&ruCost!=null&&ruCost>0) ruSupply=Math.ceil(ruCost/(1-priceSettings.ru_gp));
         if((kzSupply==null||kzSupply===0)&&ruCost!=null&&ruCost>0) kzSupply=Math.ceil(ruCost/(1-priceSettings.kz_gp));
