@@ -6455,9 +6455,18 @@ async function applyCostPriceList(arr, event){
     const key=String(r.compat||'').trim();
     return (key && byCode[key]!=null) ? byCode[key] : null;
   };
+  // 왜 안 되는지 구분해서 알려준다. 종전에는 계산식이 비어 있어도, 품번이 안 맞아도
+  // 같은 문구가 나와 원인을 알 수 없었다.
+  if(!priceCalcData.length){
+    alert('계산식 데이터가 비어 있습니다.\n먼저 계산식 엑셀을 업로드한 뒤 시세표를 올려 주세요.\n\n(시세표 업로드는 이미 있는 행의 원가만 바꿉니다)');
+    event.target.value=''; return;
+  }
   const targets=priceCalcData.filter(r=>priceOf(r)!=null);
   if(!targets.length){
-    alert(`품번 ${codes.length}개를 찾았지만 계산식에 해당하는 행이 없습니다.`);
+    alert(`품번 ${codes.length}개를 읽었지만 호환품번(변경)이 일치하는 행이 없습니다.\n\n`
+      +`엑셀에서 읽은 품번: ${codes.slice(0,5).join(', ')}${codes.length>5?' …':''}\n`
+      +`계산식의 호환품번: ${priceCalcData.slice(0,5).map(r=>r.compat).filter(Boolean).join(', ')||'(없음)'}\n\n`
+      +`시세표의 품번이 계산식의 '호환품번(변경)' 과 같은지 확인해 주세요.`);
     event.target.value=''; return;
   }
   if(!confirm(`품번 ${codes.length}개의 가격을 찾았습니다.\n계산식 ${targets.length}행의 원가 KRW 를 갱신합니다. 계속하시겠습니까?`)){
@@ -6532,9 +6541,15 @@ async function applyShipQtyList(arr, event){
     const key=String(r.compat||'').trim();
     return (key && byCode[key]!=null) ? byCode[key] : null;
   };
+  if(!priceCalcData.length){
+    alert('계산식 데이터가 비어 있습니다.\n먼저 계산식 엑셀을 업로드한 뒤 출고수량을 올려 주세요.');
+    event.target.value=''; return;
+  }
   const targets=priceCalcData.filter(r=>qtyOf(r)!=null);
   if(!targets.length){
-    alert(`품번 ${codes.length}개를 찾았지만 계산식에 해당하는 호환품번이 없습니다.`);
+    alert(`품번 ${codes.length}개를 읽었지만 호환품번(변경)이 일치하는 행이 없습니다.\n\n`
+      +`엑셀에서 읽은 품번: ${codes.slice(0,5).join(', ')}${codes.length>5?' …':''}\n`
+      +`계산식의 호환품번: ${priceCalcData.slice(0,5).map(r=>r.compat).filter(Boolean).join(', ')||'(없음)'}`);
     event.target.value=''; return;
   }
   if(!confirm(`품번 ${codes.length}개의 출고수량을 찾았습니다.\n계산식 ${targets.length}행의 출고(18y~)를 갱신합니다. 계속하시겠습니까?`)){
