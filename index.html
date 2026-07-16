@@ -536,7 +536,7 @@ input[type="text"]::placeholder{color:var(--muted)}
 </header>
 <div class="tabs">
   <button class="tab-btn active" onclick="switchTab('order')" id="tab-order">📦 주문</button>
-  <button class="tab-btn" style="display:none" onclick="switchTab('adminOrders')" id="tab-adminOrders"><span id="i18n-tab-adminorders">🗂️ 주문관리</span></button>
+  <button class="tab-btn" style="display:none;position:relative" onclick="switchTab('adminOrders')" id="tab-adminOrders"><span id="i18n-tab-adminorders">🗂️ 주문관리</span><span id="adminOrdersUnreadDot" style="display:none;position:absolute;top:4px;right:2px;width:8px;height:8px;border-radius:50%;background:#ef4444;box-shadow:0 0 0 2px var(--bg)"></span></button>
   <button class="tab-btn"        onclick="switchTab('pn')"    id="tab-pn">🔄 품번 조회</button>
   <button class="tab-btn" style="display:none" onclick="switchTab('inventory')" id="tab-inventory">📊 재고관리</button>
   <button class="tab-btn" style="display:none" onclick="switchTab('shipments')" id="tab-shipments"><span id="i18n-tab-shipments">🚚 출고관리</span></button>
@@ -885,11 +885,13 @@ input[type="text"]::placeholder{color:var(--muted)}
 <div class="tab-pane" id="pane-adminOrders">
   <div class="scroll-body" id="scrollBodyAdminOrders" style="padding:8px 12px 72px">
     <div style="display:flex;gap:6px;margin-bottom:10px;border-bottom:1px solid var(--border)">
-      <button class="news-tab active" id="adminTabOrders" onclick="switchAdminView('orders')" style="flex:1;text-align:center">
+      <button class="news-tab active" id="adminTabOrders" onclick="switchAdminView('orders')" style="flex:1;text-align:center;position:relative">
         <span id="i18n-admintab-orders">주문 접수</span>
+        <span id="recvUnreadDot" style="display:none;position:absolute;top:4px;right:6px;width:8px;height:8px;border-radius:50%;background:#ef4444;box-shadow:0 0 0 2px var(--bg)"></span>
       </button>
-      <button class="news-tab" id="adminTabMyOrders" onclick="switchAdminView('myorders')" style="flex:1;text-align:center">
+      <button class="news-tab" id="adminTabMyOrders" onclick="switchAdminView('myorders')" style="flex:1;text-align:center;position:relative">
         <span id="i18n-admintab-myorders">주문</span>
+        <span id="myOrdersUnreadDot" style="display:none;position:absolute;top:4px;right:6px;width:8px;height:8px;border-radius:50%;background:#ef4444;box-shadow:0 0 0 2px var(--bg)"></span>
       </button>
     </div>
     <div id="adminOrdersView" style="display:flex;flex-direction:column;flex:1;min-height:0">
@@ -4321,11 +4323,64 @@ function renderAdminMyOrders(){
     </div>`;
   }).join('');
 }
+// ── 주문 알림 점 ──
+// News 와 같은 방식: 마지막으로 본 시각을 localStorage 에 두고, 그보다 새 활동이 있으면 점을 띄운다.
+// '새로운 소식'의 기준
+//   주문 접수: 나에게 새로 들어온 주문 / 변경·취소 신청
+//   주문     : 구매처가 나에게 한 일 — 출고, 내가 낸 신청의 처리 결과
+// 탭을 열기 전에도 점이 보여야 하므로, 로그인 시 시각만 가볍게 따로 읽는다.
+let orderFeedLatest={recv:0, mine:0};
+function _ts(v){ const t=v?new Date(v).getTime():0; return isNaN(t)?0:t; }
+async function loadOrderFeedStamps(){
+  orderFeedLatest={recv:0, mine:0};
+  if(!currentUser) return;
+  const co=currentUser.company||'';
+  const sup=currentUser.supplier_company||'';
+  const bump=(k,v)=>{ if(v>orderFeedLatest[k]) orderFeedLatest[k]=v; };
+  // 알림 점은 부가기능이다. 컬럼이 없거나 권한이 막혀도 화면은 그대로 뜨게 한다.
+  const safe=async(fn)=>{ try{ await fn(); }catch(e){ console.warn('order feed stamp skip', e); } };
+  await Promise.all([
+    safe(async()=>{
+      const { data } = await sb.from('kt_orders').select('created_at').ilike('target_company', co);
+      (data||[]).forEach(o=>bump('recv', _ts(o.created_at)));
+    }),
+    safe(async()=>{
+      const { data } = await sb.from('kt_group_change_requests').select('created_at').ilike('target_company', co);
+      (data||[]).forEach(r=>bump('recv', _ts(r.created_at)));
+    }),
+    ...(sup?[
+      safe(async()=>{
+        const { data } = await sb.from('kt_shipments').select('ship_date,client_name').ilike('company', sup);
+        (data||[]).forEach(s=>{ if(isSameClient(s.client_name, co)) bump('mine', _ts(s.ship_date)); });
+      }),
+      safe(async()=>{
+        const { data } = await sb.from('kt_group_change_requests').select('resolved_at').ilike('target_company', sup).ilike('company', co);
+        (data||[]).forEach(r=>bump('mine', _ts(r.resolved_at)));
+      })
+    ]:[])
+  ]);
+}
+// 계정마다 따로 기억한다 (한 브라우저에서 여러 계정을 쓸 수 있다)
+function _orderSeenKey(kind){ return 'kt_order_seen_'+kind+'_'+String(currentUser&&currentUser.id||''); }
+function updateOrderUnreadDots(){
+  const show=(id,on)=>{ const el=document.getElementById(id); if(el) el.style.display=on?'block':'none'; };
+  const newRecv = orderFeedLatest.recv > Number(localStorage.getItem(_orderSeenKey('recv'))||0);
+  const newMine = orderFeedLatest.mine > Number(localStorage.getItem(_orderSeenKey('mine'))||0);
+  show('recvUnreadDot', newRecv);
+  show('myOrdersUnreadDot', newMine);
+  show('adminOrdersUnreadDot', newRecv||newMine);   // 주문관리: 둘 중 하나라도 있으면
+}
+function markOrderViewSeen(view){
+  if(view==='orders' && orderFeedLatest.recv) localStorage.setItem(_orderSeenKey('recv'), String(orderFeedLatest.recv));
+  if(view==='myorders' && orderFeedLatest.mine) localStorage.setItem(_orderSeenKey('mine'), String(orderFeedLatest.mine));
+  updateOrderUnreadDots();
+}
 function switchAdminView(view){
   document.getElementById('adminTabOrders').classList.toggle('active', view==='orders');
   document.getElementById('adminTabMyOrders').classList.toggle('active', view==='myorders');
   document.getElementById('adminOrdersView').style.display = view==='orders' ? 'flex' : 'none';
   document.getElementById('adminMyOrdersView').style.display = view==='myorders' ? 'flex' : 'none';
+  markOrderViewSeen(view);   // 본 탭은 읽음 처리
 }
 function downloadAdminMyOrders(){
   const t=T[lang];
@@ -7061,6 +7116,7 @@ function enterApp(user){
   // 초기화: KITURAMI(본사)는 구매처가 없어 조건에 걸려버리므로 명시적으로 제외한다.
   const tabReset=document.getElementById('tab-reset');
   if(tabReset) tabReset.style.display = (user.is_admin && !user.supplier_company && !role.isKituramiHQ) ? 'block' : 'none';
+  loadOrderFeedStamps().then(updateOrderUnreadDots);   // 주문 알림 점 (탭을 열기 전에도 보이게)
   Promise.all([loadMyOrderTotals(), loadInventory(), loadGlobalSuppliedTotals(), loadReceivedOrderTotals(), loadPrices(), loadPNOverrides(),
                (role.region==='kz'?Promise.all([loadPriceSettings(),loadPriceCalc()]):Promise.resolve())]).then(()=>{
     if(document.getElementById('pane-order').classList.contains('active')) renderOrderTable();
