@@ -5348,12 +5348,14 @@ function renderShipmentsList(){
   const latest=shipmentsData.length ? shipmentsData.reduce((a,b)=> (a.created_at>b.created_at?a:b)).created_at : null;
   if(lastUpdatedEl) lastUpdatedEl.textContent = latest ? t.invLastUpdated(formatNewsDate(new Date(latest).getTime())) : '';
 
+  const editDelLabel=t.signupEdit+'/'+t.signupDelete;   // 수정/삭제
   const cols = isKo
-    ? [t.adminHName, t.thSpec, t.invHMaster, t.shipThRep, t.shipThClient, t.shipThDate, t.shipThQty, t.signupEdit]
-    : [t.adminHName, t.invHMaster, t.shipThRep, t.shipThClient, t.shipThDate, t.shipThQty, t.signupEdit];
+    ? [t.adminHName, t.thSpec, t.invHMaster, t.shipThRep, t.shipThClient, t.shipThDate, t.shipThQty, editDelLabel]
+    : [t.adminHName, t.invHMaster, t.shipThRep, t.shipThClient, t.shipThDate, t.shipThQty, editDelLabel];
   const colgroupHtml=cols.map(()=>`<col>`).join('');
   ['ship-hdr-col','ship-body-col'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=colgroupHtml;});
-  document.getElementById('shipmentsThead').innerHTML=`<tr>${cols.map((c,i)=>`<th${i===cols.length-2?' style="text-align:right;padding-right:16px"':''}${i===cols.length-1?' style="text-align:center"':''}>${c}</th>`).join('')}</tr>`;
+  // 헤더 글자는 모두 각 셀 중앙 정렬 (본문 셀 정렬은 그대로 둔다)
+  document.getElementById('shipmentsThead').innerHTML=`<tr>${cols.map(c=>`<th style="text-align:center">${c}</th>`).join('')}</tr>`;
 
   const tbody=document.getElementById('shipmentsTbody');
   const cardList=document.getElementById('shipmentsCardList');
