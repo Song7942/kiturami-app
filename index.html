@@ -6556,6 +6556,77 @@ async function applyShipQtyList(arr, event){
   event.target.value='';
   alert(`출고수량 ${targets.length}행을 갱신했습니다.`);
 }
+// ── 계산식 엑셀의 헤더 읽기 ──
+// 열을 위치가 아니라 헤더 글자로 찾는다. 헤더가 여러 줄(원가 / KRW)이면 위아래를 이어
+// 한 라벨로 본다('원가KRW'). 병합된 그룹칸(원가, 러시아…)은 빈칸으로 들어오므로 옆으로 채운다.
+// 그래서 '원가 KRW' 를 한 칸에 써도, 두 줄로 나눠 써도 같은 라벨이 된다.
+const _normHdr=s=>String(s==null?'':s).replace(/\s/g,'').toUpperCase();
+function mapCalcColumns(arr){
+  const out={ name:null, spec:null, rep:null, compat:null, final:null, ship:null, cost:null, ruSup:null, kzSup:null, dataStart:0 };
+  // 헤더 줄: '품명'이 있는 줄부터, 그 아래로 '품명' 칸이 빈 줄까지
+  let h=-1, nameCol=-1;
+  for(let i=0;i<Math.min(12,arr.length) && h<0;i++){
+    const row=arr[i]||[];
+    for(let c=0;c<row.length;c++){ if(_normHdr(row[c]).includes('품명')){ h=i; nameCol=c; break; } }
+  }
+  if(h<0) return out;
+  let last=h;
+  for(let i=h+1;i<Math.min(h+4,arr.length);i++){
+    if(String((arr[i]||[])[nameCol]==null?'':(arr[i]||[])[nameCol]).trim()) break;  // 품명에 값이 있으면 데이터
+    last=i;
+  }
+  out.dataStart=last+1;
+  const width=Math.max(...arr.slice(h,last+1).map(r=>(r||[]).length),0);
+  const labels=new Array(width).fill('');
+  for(let i=h;i<=last;i++){
+    const row=arr[i]||[];
+    let carry='';
+    for(let c=0;c<width;c++){
+      const v=_normHdr(row[c]);
+      if(v) carry=v;            // 병합 그룹칸은 첫 칸에만 값이 있다 → 옆으로 이어붙인다
+      labels[c]+=carry;
+    }
+  }
+  const has=(l,...ws)=>ws.every(w=>l.includes(w));
+  const noRegion=[];
+  labels.forEach((L,c)=>{
+    if(!L) return;
+    if(out.name==null && has(L,'품명')) { out.name=c; return; }
+    if(out.spec==null && has(L,'규격')) { out.spec=c; return; }
+    if(out.rep==null && has(L,'대표품번')) { out.rep=c; return; }
+    if(out.compat==null && has(L,'호환품번')) { out.compat=c; return; }
+    if(out.final==null && has(L,'최종품번')) { out.final=c; return; }
+    if(out.ship==null && has(L,'출고')) { out.ship=c; return; }
+    // 원가 KRW: '공급가'가 붙어 있으면 원가가 아니다
+    if(out.cost==null && has(L,'원가','KRW') && !has(L,'공급가')) { out.cost=c; return; }
+    if(has(L,'공급가','KRW')){
+      const isRu = L.includes('러시아')||L.includes('RUSSIA');
+      const isKz = L.includes('카자흐')||L.includes('KAZAK')||L.includes('KZ');
+      if(isRu && out.ruSup==null) out.ruSup=c;
+      else if(isKz && out.kzSup==null) out.kzSup=c;
+      else if(!isRu && !isKz) noRegion.push(c);   // 지역 표기가 없으면 나온 순서대로
+    }
+    // 원가 RUB/USD·공급가 RUB/USD·GP 는 환율과 원가에서 계산되는 값이라 읽지 않는다
+  });
+  noRegion.forEach(c=>{ if(out.ruSup==null) out.ruSup=c; else if(out.kzSup==null) out.kzSup=c; });
+  return out;
+}
+// 라벨(예: 기준환율 KRW/RUB)을 찾아 그 오른쪽의 첫 숫자를 돌려준다
+function findCalcParam(arr, ...words){
+  for(let i=0;i<Math.min(6,arr.length);i++){
+    const row=arr[i]||[];
+    for(let c=0;c<row.length;c++){
+      const L=_normHdr(row[c]);
+      if(!L || !words.every(w=>L.includes(_normHdr(w)))) continue;
+      for(let k=c+1;k<Math.min(c+4,row.length);k++){
+        if(row[k]===''||row[k]==null) continue;
+        const n=Number(String(row[k]).replace(/,/g,''));
+        if(!isNaN(n)) return n;
+      }
+    }
+  }
+  return null;
+}
 // ── 계산식 엑셀 업로드 ──
 async function handlePriceCalcUpload(event){
   const file=event.target.files[0];
@@ -6572,42 +6643,37 @@ async function handlePriceCalcUpload(event){
       // 삼아버리므로, 헤더에 '대표품번'이 있으면 무조건 계산식 양식으로 본다.
       const isCalcSheet=arr.slice(0,8).some(row=>(row||[]).some(v=>String(v||'').replace(/\s/g,'').includes('대표품번')));
       if(!isCalcSheet) return applyCostPriceList(arr, event);
-      // 양식 감지: 6행(단위행)의 USD 위치로 판별
-      //   현행(원가 KRW|RUB|USD 3열): I열(idx8)=USD   ← 지금 다운로드가 내보내는 양식
-      //   중간(원가 1열)            : L열(idx11)=USD
-      //   구양식(원가 2열)          : M열(idx12)=USD
-      const unitRow=(arr[5]||[]).map(v=>String(v||'').trim().toUpperCase());
-      const isCostSplitFmt = unitRow[8]==='USD';
-      const isOldFmt = unitRow[12]==='USD';
-      // 파라미터: D2=KRW/RUB, F2=KRW/USD. GP 위치는 양식마다 다르다.
-      const num=v=>{ const n=Number(v); return isNaN(n)?null:n; };
-      const pr=arr[1]||[];
-      const rub=num(pr[3]), usd=num(pr[5]);
-      const ruGp=isCostSplitFmt?num(pr[11]):num(pr[9]);
-      const kzGp=isCostSplitFmt?num(pr[14]):(isOldFmt?num(pr[13]):num(pr[12]));
+      // 열은 위치가 아니라 헤더 글자로 찾는다. 양식이 바뀌거나 열 순서가 달라도 따라간다.
+      const cols=mapCalcColumns(arr);
+      if(cols.rep==null && cols.compat==null){
+        alert('열을 알아보지 못했습니다.\n헤더에 대표품번 또는 호환품번이 있는지 확인해 주세요.');
+        event.target.value=''; return;
+      }
+      // 파라미터도 글자로 찾는다 (라벨 오른쪽의 첫 숫자)
+      const rub=findCalcParam(arr,'기준환율','RUB'), usd=findCalcParam(arr,'기준환율','USD');
+      const ruGp=findCalcParam(arr,'러시아','GP'), kzGp=findCalcParam(arr,'카자흐','GP');
       if(rub>0) priceSettings.rub_rate=rub;
       if(usd>0) priceSettings.usd_rate=usd;
       if(ruGp!=null&&ruGp>=0&&ruGp<1) priceSettings.ru_gp=ruGp;
       if(kzGp!=null&&kzGp>=0&&kzGp<1) priceSettings.kz_gp=kzGp;
-      // 데이터: 7행부터, A품명 B규격 C대표 D호환 E최종 F출고 G원가 H공급가KRW ... L KZ공급가KRW
       const rows=[];
-      for(let i=6;i<arr.length;i++){
+      for(let i=cols.dataStart;i<arr.length;i++){
         const a=arr[i]; if(!a) continue;
-        const rep=String(a[2]||'').trim();
-        const name=String(a[0]||'').trim();
+        const at=k=>cols[k]==null?'':String(a[cols[k]]==null?'':a[cols[k]]).trim();
+        const rep=at('rep'), name=at('name');
         if(!rep && !name) continue;
-        const cellNum=v=>{ if(v===''||v==null) return null; if(typeof v==='string'&&v.trim().startsWith('=')) return null; const n=Number(v); return isNaN(n)?null:n; };
-        // 원가 KRW 는 어느 양식이든 G열(idx6). 공급가 위치만 양식에 따라 다르다.
-        let ruCost=cellNum(a[6]);
-        let ruSupply=cellNum(isCostSplitFmt?a[9]:a[7]);
-        let kzSupply=cellNum(isCostSplitFmt?a[12]:(isOldFmt?a[11]:a[10]));
+        const cellNum=v=>{ if(v===''||v==null) return null; if(typeof v==='string'&&v.trim().startsWith('=')) return null; const n=Number(String(v).replace(/,/g,'')); return isNaN(n)?null:n; };
+        const numAt=k=>cols[k]==null?null:cellNum(a[cols[k]]);
+        let ruCost=numAt('cost');
+        let ruSupply=numAt('ruSup');
+        let kzSupply=numAt('kzSup');
         // 원가는 원 단위 — 엑셀에 소수가 있어도 올림해서 받는다.
         // 아래 공급가 자동계산이 이 값을 쓰므로 반드시 먼저 올림한다.
         if(ruCost!=null) ruCost=Math.ceil(ruCost);
         // 새 원가 + 공급가 없음 → 자동 계산 (원가/(1-기준GP) 올림)
         if((ruSupply==null||ruSupply===0)&&ruCost!=null&&ruCost>0) ruSupply=Math.ceil(ruCost/(1-priceSettings.ru_gp));
         if((kzSupply==null||kzSupply===0)&&ruCost!=null&&ruCost>0) kzSupply=Math.ceil(ruCost/(1-priceSettings.kz_gp));
-        rows.push({ row_no:rows.length+1, name_ko:name, spec:String(a[1]||'').trim(), rep, compat:String(a[3]||'').trim(), final:String(a[4]||'').trim(), ship_qty:cellNum(a[5]), ru_cost:ruCost, ru_supply_krw:ruSupply, kz_supply_krw:kzSupply, updated_at:new Date().toISOString() });
+        rows.push({ row_no:rows.length+1, name_ko:name, spec:at('spec'), rep, compat:at('compat'), final:at('final'), ship_qty:numAt('ship'), ru_cost:ruCost, ru_supply_krw:ruSupply, kz_supply_krw:kzSupply, updated_at:new Date().toISOString() });
       }
       if(!rows.length){ alert('업로드할 데이터가 없습니다. 계산식 시트 형식을 확인해 주세요.'); event.target.value=''; return; }
       if(!confirm(`계산식 데이터 ${rows.length}행을 업로드합니다.\n기존 계산식 데이터는 교체됩니다. 계속하시겠습니까?`)){ event.target.value=''; return; }
