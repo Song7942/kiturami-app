@@ -946,8 +946,8 @@ input[type="text"]::placeholder{color:var(--muted)}
         <table class="member-tbl" style="width:100%;border-collapse:collapse;font-size:13px">
           <thead><tr>
             <th id="i18n-signup-th-company">회사명</th>
-            <th id="i18n-signup-th-supplier">구매처</th>
             <th id="i18n-signup-th-id">아이디</th>
+            <th id="i18n-signup-th-supplier">구매처</th>
             <th id="i18n-signup-th-contact">담당자명</th>
             <th id="i18n-signup-th-phone">휴대폰</th>
             <th id="i18n-signup-th-email">이메일</th>
@@ -1123,20 +1123,20 @@ input[type="text"]::placeholder{color:var(--muted)}
     <div style="padding:20px;overflow-y:auto">
       <input type="hidden" id="emId">
       <!-- 필드 순서는 회원관리 표 헤더와 같게 유지한다:
-           회사명 | 구매처 | 아이디 | 담당자명 | 휴대폰 | 이메일 | 상태
+           회사명 | 아이디 | 구매처 | 담당자명 | 휴대폰 | 이메일 | 상태
            국가·지역은 표에 없지만 휴대폰 국가번호를 정하므로 휴대폰 바로 앞에 둔다. -->
       <div style="margin-bottom:12px">
         <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" id="i18n-editmember-company">회사명</label>
         <input type="text" id="emCompany" oninput="this.value=this.value.toUpperCase()" style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)">
       </div>
+      <div style="margin-bottom:12px">
+        <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" id="i18n-editmember-id">아이디</label>
+        <input type="text" id="emIdDisplay" disabled style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--muted)">
+      </div>
       <div id="emSupplierWrap" style="margin-bottom:12px;position:relative">
         <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" id="i18n-editmember-supplier">구매처(거래처) 회사명</label>
         <input type="text" id="emSupplier" autocomplete="off" oninput="this.value=this.value.toUpperCase();onEmSupplierInput()" onfocus="onEmSupplierFocus()" onblur="setTimeout(()=>{const l=document.getElementById('emSupplierList');if(l)l.style.display='none';},150)" style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)">
         <div id="emSupplierList" class="supplier-suggest" style="display:none"></div>
-      </div>
-      <div style="margin-bottom:12px">
-        <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" id="i18n-editmember-id">아이디</label>
-        <input type="text" id="emIdDisplay" disabled style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--muted)">
       </div>
       <div style="margin-bottom:12px">
         <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" id="i18n-editmember-contact">담당자명</label>
@@ -3764,8 +3764,8 @@ function renderPendingSignups(){
     const rejectBtn=u.status==='pending' ? `<button class="news-btn-secondary" onclick="rejectSignup('${idEsc}')">${t.signupReject}</button>` : '';
     return `<tr style="border-bottom:1px solid var(--border)">
     <td style="padding:9px 12px">${escapeHtml(u.company)}</td>
-    <td style="padding:9px 12px">${escapeHtml(u.supplier_company||'-')}</td>
     <td style="padding:9px 12px">${escapeHtml(u.id)}</td>
+    <td style="padding:9px 12px">${escapeHtml(u.supplier_company||'-')}</td>
     <td style="padding:9px 12px">${escapeHtml(u.contact_name||'')}</td>
     <td style="padding:9px 12px">${escapeHtml(u.phone||'')}</td>
     <td style="padding:9px 12px">${escapeHtml(u.email||'')}</td>
