@@ -825,10 +825,10 @@ input[type="text"]::placeholder{color:var(--muted)}
       <!-- 계산식 상단: 환율/GP 파라미터 -->
       <!-- 라벨을 입력칸 위에 쌓지 않고 옆에 붙여 한 줄로 유지한다 (세로 공간 절약) -->
       <div id="priceParamsBar" style="display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;padding:2px 4px 6px">
-        <label style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--muted)">기준환율(KRW/RUB)<input type="number" step="0.01" id="prmRubRate" style="width:76px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></label>
-        <label style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--muted)">기준환율(KRW/USD)<input type="number" step="0.01" id="prmUsdRate" style="width:76px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></label>
-        <label style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--muted)">러시아 기준 GP(%)<input type="number" step="0.1" id="prmRuGp" style="width:58px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></label>
-        <label style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--muted)">카자흐스탄 기준 GP(%)<input type="number" step="0.1" id="prmKzGp" style="width:58px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--muted)"><span id="i18n-prm-rub">기준환율(KRW/RUB)</span><input type="number" step="0.01" id="prmRubRate" style="width:76px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--muted)"><span id="i18n-prm-usd">기준환율(KRW/USD)</span><input type="number" step="0.01" id="prmUsdRate" style="width:76px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--muted)"><span id="i18n-prm-rugp">러시아 기준 GP(%)</span><input type="number" step="0.1" id="prmRuGp" style="width:58px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--muted)"><span id="i18n-prm-kzgp">카자흐스탄 기준 GP(%)</span><input type="number" step="0.1" id="prmKzGp" style="width:58px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></label>
         <button class="dl-btn" onclick="savePriceSettings()" style="background:var(--accent);border-color:var(--accent);color:#fff"><span id="i18n-prm-save">저장</span></button>
         <button class="dl-btn" onclick="refreshRatesNow()" style="background:var(--surface2);border-color:var(--border);color:var(--text)"><span id="i18n-prm-refresh">환율 갱신</span></button>
         <div id="priceRateInfo" style="font-size:11px;color:var(--muted);flex:1;min-width:200px"></div>
@@ -5564,17 +5564,30 @@ async function syncKtPricesFromCalc(){
 }
 
 // ── 전월말일 기준환율 자동 갱신 (매월 1회) ──
-// /api/fxrate (Cloudflare 서버 함수)가 하나은행 고시 매매기준율을 중계합니다.
+// /api/fxrate (Cloudflare 서버 함수)가 USD는 수출입은행, RUB은 한국은행에서 중계합니다.
 // 매월 첫 접속 시 자동 반영되며, 실패하면 시장환율(open.er-api.com)로 폴백합니다. 수동 수정도 가능합니다.
-let fxRateSource='';
+// 환율 출처는 기관 코드로만 들고 있다가 표시할 때 언어에 맞는 이름을 붙인다.
+// (서버가 만든 한국어 문자열을 그대로 쓰면 러시아어 화면에 한글이 남는다)
+let fxRateSrc=null;   // {usd:'keb'|'market', rub:'ecos'|'market'}
+function fxSourceLabel(){
+  if(!fxRateSrc) return '';
+  const N = lang==='ru'
+    ? { keb:'Эксимбанк Кореи', ecos:'Банк Кореи', market:'рыночный курс' }
+    : { keb:'수출입은행', ecos:'한국은행', market:'시장환율' };
+  const parts=[];
+  if(fxRateSrc.usd) parts.push('USD '+(N[fxRateSrc.usd]||fxRateSrc.usd));
+  if(fxRateSrc.rub) parts.push('RUB '+(N[fxRateSrc.rub]||fxRateSrc.rub));
+  return parts.join(' + ');
+}
 async function fetchFxRates(){
-  // 1순위: 하나은행 고시환율 (사이트 자체 API 중계)
+  // 1순위: /api/fxrate (전월말일 매매기준율 — USD 수출입은행, RUB 한국은행)
   try{
     const res=await fetch('/api/fxrate');
     if(res.ok){
       const j=await res.json();
       if(j && (j.usd>0 || j.rub>0)){
-        return { usd:j.usd>0?Math.round(j.usd*100)/100:null, rub:j.rub>0?Math.round(j.rub*100)/100:null, source:j.source||'하나은행 고시환율', date:j.date||'' };
+        return { usd:j.usd>0?Math.round(j.usd*100)/100:null, rub:j.rub>0?Math.round(j.rub*100)/100:null,
+                 src:{ usd:j.srcUsd||null, rub:j.srcRub||null }, date:j.date||'' };
       }
     }
   }catch(e){ console.warn('fxrate API 실패, 시장환율로 폴백:', e); }
@@ -5582,7 +5595,8 @@ async function fetchFxRates(){
   const res2=await fetch('https://open.er-api.com/v6/latest/KRW');
   const j2=await res2.json();
   if(!j2 || !j2.rates || !j2.rates.RUB || !j2.rates.USD) throw new Error('rate fetch failed');
-  return { usd:Math.round((1/j2.rates.USD)*100)/100, rub:Math.round((1/j2.rates.RUB)*100)/100, source:'시장환율(open.er-api.com)', date:'' };
+  return { usd:Math.round((1/j2.rates.USD)*100)/100, rub:Math.round((1/j2.rates.RUB)*100)/100,
+           src:{ usd:'market', rub:'market' }, date:'' };
 }
 async function autoUpdateRatesIfNewMonth(){
   const nowMonth=new Date().toISOString().slice(0,7);
@@ -5592,7 +5606,7 @@ async function autoUpdateRatesIfNewMonth(){
     if(r.rub) priceSettings.rub_rate=r.rub;
     if(r.usd) priceSettings.usd_rate=r.usd;
     priceSettings.rate_month=nowMonth;
-    fxRateSource=r.source;
+    fxRateSrc=r.src;
     await sb.from('kt_price_settings').upsert({ id:1, rub_rate:priceSettings.rub_rate, usd_rate:priceSettings.usd_rate, ru_gp:priceSettings.ru_gp, kz_gp:priceSettings.kz_gp, rate_month:nowMonth, updated_at:new Date().toISOString() },{onConflict:'id'});
     await syncKtPricesFromCalc(); // 환율이 바뀌면 공급가 RUB/USD도 자동 반영
     return true;
@@ -5605,13 +5619,15 @@ async function refreshRatesNow(){
     if(r.rub) priceSettings.rub_rate=r.rub;
     if(r.usd) priceSettings.usd_rate=r.usd;
     priceSettings.rate_month=new Date().toISOString().slice(0,7);
-    fxRateSource=r.source;
+    fxRateSrc=r.src;
     await sb.from('kt_price_settings').upsert({ id:1, rub_rate:priceSettings.rub_rate, usd_rate:priceSettings.usd_rate, ru_gp:priceSettings.ru_gp, kz_gp:priceSettings.kz_gp, rate_month:priceSettings.rate_month, updated_at:new Date().toISOString() },{onConflict:'id'});
     await syncKtPricesFromCalc();
     fillParamInputs();
     renderPriceActive();
-    alert(`환율을 갱신했습니다.\nKRW/USD ${priceSettings.usd_rate} · KRW/RUB ${priceSettings.rub_rate}\n출처: ${r.source}${r.date?' ('+r.date+')':''}`);
-  }catch(e){ alert('환율 갱신에 실패했습니다. 잠시 후 다시 시도해 주세요.'); }
+    alert(lang==='ru'
+      ? `Курс обновлён.\nKRW/USD ${priceSettings.usd_rate} · KRW/RUB ${priceSettings.rub_rate}\nИсточник: ${fxSourceLabel()}${r.date?' ('+r.date+')':''}`
+      : `환율을 갱신했습니다.\nKRW/USD ${priceSettings.usd_rate} · KRW/RUB ${priceSettings.rub_rate}\n출처: ${fxSourceLabel()}${r.date?' ('+r.date+')':''}`);
+  }catch(e){ alert(lang==='ru'?'Не удалось обновить курс. Повторите попытку позже.':'환율 갱신에 실패했습니다. 잠시 후 다시 시도해 주세요.'); }
 }
 async function savePriceSettings(){
   const rub=Number(document.getElementById('prmRubRate').value);
@@ -5633,7 +5649,13 @@ function fillParamInputs(){
   if(g('prmRuGp')) g('prmRuGp').value=Math.round(priceSettings.ru_gp*1000)/10;
   if(g('prmKzGp')) g('prmKzGp').value=Math.round(priceSettings.kz_gp*1000)/10;
   const info=document.getElementById('priceRateInfo');
-  if(info) info.textContent=`기준월 ${priceSettings.rate_month||'-'} · 하나은행 전월말일 최초매매기준율, 매월 자동 갱신${fxRateSource?' · '+fxRateSource:''} (수동 수정 가능)`;
+  // 기관명은 여기 적지 않는다 — 실제 출처는 /api/fxrate 응답(fxRateSrc)이 알려준다.
+  // (예전엔 '하나은행'이 박혀 있었는데 소스가 바뀐 뒤로 사실과 달랐음)
+  const m=priceSettings.rate_month||'-';
+  const src=fxSourceLabel();
+  if(info) info.textContent = lang==='ru'
+    ? `Базовый месяц ${m} · базовый курс на последний день пред. месяца, обновляется ежемесячно${src?' · '+src:''} (можно изменить вручную)`
+    : `기준월 ${m} · 전월말일 매매기준율, 매월 자동 갱신${src?' · '+src:''} (수동 수정 가능)`;
 }
 
 // ── 뷰 전환 / 렌더 ──
@@ -6134,6 +6156,12 @@ function refreshPriceTexts(){
   setTxt('i18n-priceupload', lang==='ru'?'Загрузить Excel':'엑셀 업로드');
   setTxt('i18n-pricedl', lang==='ru'?'Скачать Excel':'엑셀 다운로드');
   setTxt('i18n-prm-save', lang==='ru'?'Сохранить':'저장');
+  setTxt('i18n-prm-refresh', lang==='ru'?'Обновить курс':'환율 갱신');
+  setTxt('i18n-prm-rub', lang==='ru'?'Базовый курс (KRW/RUB)':'기준환율(KRW/RUB)');
+  setTxt('i18n-prm-usd', lang==='ru'?'Базовый курс (KRW/USD)':'기준환율(KRW/USD)');
+  setTxt('i18n-prm-rugp', lang==='ru'?'Базовый GP Россия (%)':'러시아 기준 GP(%)');
+  setTxt('i18n-prm-kzgp', lang==='ru'?'Базовый GP Казахстан (%)':'카자흐스탄 기준 GP(%)');
+  fillParamInputs(); // 기준월·환율 출처 안내문도 새 언어로 다시 씀
   const sEl=document.getElementById('priceSearchInput'); if(sEl) sEl.placeholder=lang==='ru'?'Поиск по названию, артикулу…':'품명, 대표품번으로 검색…';
   if(document.getElementById('pane-price').classList.contains('active')) renderPriceActive();
 }

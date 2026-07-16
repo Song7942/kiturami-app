@@ -25,7 +25,10 @@ export async function onRequestGet(context) {
   };
 
   const env = context.env || {};
-  const out = { usd: null, rub: null, date: null, type: null, source: null };
+  // srcUsd/srcRub 는 기관 코드('keb'|'ecos'|'market')를 그대로 내보낸다.
+  // 화면이 언어에 맞는 이름을 붙이므로 여기서 사람이 읽는 문자열을 만들지 않는다.
+  // (source 는 종전 호환용 한국어 문자열)
+  const out = { usd: null, rub: null, date: null, type: null, source: null, srcUsd: null, srcRub: null };
   const days = monthEndLookback();
   const sources = [];
 
@@ -35,6 +38,7 @@ export async function onRequestGet(context) {
     if (hit) {
       out.usd = round2(hit.value);
       out.date = hit.date;
+      out.srcUsd = 'keb';
       sources.push('USD 수출입은행 매매기준율');
     }
   }
@@ -45,6 +49,7 @@ export async function onRequestGet(context) {
     if (hit) {
       out.rub = round2(hit.value);
       if (!out.date) out.date = hit.date;
+      out.srcRub = 'ecos';
       sources.push('RUB 한국은행');
     }
   }
@@ -57,8 +62,8 @@ export async function onRequestGet(context) {
       const r = await fetch('https://open.er-api.com/v6/latest/KRW');
       const j = await r.json();
       if (j && j.rates) {
-        if (!out.usd && j.rates.USD) { out.usd = round2(1 / j.rates.USD); sources.push('USD 시장환율'); }
-        if (!out.rub && j.rates.RUB) { out.rub = round2(1 / j.rates.RUB); sources.push('RUB 시장환율'); }
+        if (!out.usd && j.rates.USD) { out.usd = round2(1 / j.rates.USD); out.srcUsd = 'market'; sources.push('USD 시장환율'); }
+        if (!out.rub && j.rates.RUB) { out.rub = round2(1 / j.rates.RUB); out.srcRub = 'market'; sources.push('RUB 시장환율'); }
         if (!out.type) out.type = 'market';
       }
     } catch (e) { /* 아래에서 처리 */ }
