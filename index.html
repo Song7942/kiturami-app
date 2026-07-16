@@ -3330,11 +3330,45 @@ function refreshNewsTexts(){
 // ══════════════════════════════════════════
 let adminOrderRows=[]; // 화면표시/엑셀다운로드 공용 (아이템 단위로 펼친 행)
 
+// ── KITURAMI 로 들어온 주문의 담당 데스크 ──
+// KITURAMI 는 RUSSIA·KAZAK 데스크를 함께 두고 있어, 같은 회사(KITURAMI) 계정끼리
+// target_company 만으로 거르면 서로의 주문까지 다 보게 된다.
+// 주문한 업체의 담당자명이 곧 담당 데스크라, 담당자명과 아이디가 같은 계정만 그 주문을 본다.
+// 주문 데이터에는 담당자명이 없으므로 회원 정보에서 찾아 온다.
+let _orderDeskById=null, _orderDeskByCompany=null;
+function isKituramiCompany(user){
+  return String(user&&user.company||'').trim().toUpperCase()==='KITURAMI';
+}
+async function loadOrderDeskMap(){
+  _orderDeskById=null; _orderDeskByCompany=null;
+  if(!isKituramiCompany(currentUser)) return;   // KITURAMI 회사에만 해당
+  const { data, error } = await sb.from('kt_users').select('id,company,contact_name');
+  if(error){ console.error(error); return; }
+  const byId={}, byCompany={};
+  const up=v=>String(v||'').trim().toUpperCase();
+  (data||[]).forEach(u=>{
+    const desk=up(u.contact_name);
+    if(u.id) byId[up(u.id)]=desk;
+    // 회사 대표 계정(아이디 == 회사명)의 담당자명을 회사 기본값으로 둔다
+    if(u.company && up(u.id)===up(u.company)) byCompany[up(u.company)]=desk;
+  });
+  _orderDeskById=byId; _orderDeskByCompany=byCompany;
+}
+// 이 주문이 내 담당인가? (KITURAMI 회사가 아니면 항상 true — 종전대로 전부 본다)
+function isMyDeskOrder(o){
+  if(!isKituramiCompany(currentUser)) return true;
+  if(!_orderDeskById) return true;   // 회원 정보를 못 읽었으면 걸러내지 않는다
+  const up=v=>String(v||'').trim().toUpperCase();
+  const desk = _orderDeskById[up(o.user_id)] ?? _orderDeskByCompany[up(o.company)] ?? '';
+  return desk === up(currentUser.id);
+}
 async function loadAdminOrders(){
+  await loadOrderDeskMap();
   const { data, error } = await sb.from('kt_orders').select('*').ilike('target_company', currentUser?currentUser.company:'').order('created_at', { ascending:false });
   if(error){ console.error(error); adminOrderRows=[]; return; }
   const rows=[];
   (data||[]).forEach(o=>{
+    if(!isMyDeskOrder(o)) return;
     const dateStr=formatNewsDate(new Date(o.created_at).getTime());
     (o.items||[]).forEach(it=>{
       rows.push({
