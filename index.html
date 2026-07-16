@@ -3596,10 +3596,14 @@ function buildAdminOrderGroups(){
   });
   return Object.values(groups);
 }
+// 변경이력 팝업이 클릭 시점에 그룹을 찾을 수 있도록 마지막 렌더 결과를 보관한다.
+let _adminOrderGroups={};
 function renderAdminOrders(){
   const t=T[lang];
   const isKo=lang==='ko';
   const groups=buildAdminOrderGroups();
+  _adminOrderGroups={};
+  groups.forEach(g=>{ _adminOrderGroups[g.company+'||'+g.rep]=g; });
   document.getElementById('adminOrderCount').textContent=t.adminCount(groups.length);
   const thead=document.getElementById('adminOrderThead');
   const tbody=document.getElementById('adminOrderTbody');
@@ -3680,7 +3684,7 @@ function renderAdminOrders(){
           ? `<button class="news-btn-primary" style="padding:4px 8px;font-size:11px;margin-right:4px" onclick="resolveGroupChangeRequest(${g.changeRequest.id},'agreed')">${t.agreeBtn}</button><button class="news-btn-secondary" style="padding:4px 8px;font-size:11px" onclick="resolveGroupChangeRequest(${g.changeRequest.id},'rejected')">${t.cannotBtn}</button>`
           : (g.changeRequest && g.changeRequest.status==='agreed' ? `<span style="color:#22c55e">${t.decisionAgreed}</span>` : (g.changeRequest && g.changeRequest.status==='rejected' ? `<span style="color:#ef4444">${t.cannotBtn}</span>` : ''))
       }</td>
-      <td style="padding:9px 12px;text-align:center;border-left:2px solid var(--border)">${g.changeHistory?`<span style="color:#3b82f6">${t.changeHistoryLabel}</span>`:''}</td>
+      <td style="padding:9px 12px;text-align:center;border-left:2px solid var(--border)">${g.changeHistory?`<span style="color:#3b82f6;text-decoration:underline;cursor:pointer" onclick="openAdminChangeHistoryModal('${String(g.company).replace(/'/g,"\\'")}','${String(g.rep).replace(/'/g,"\\'")}')">${t.changeHistoryLabel}</span>`:''}</td>
     </tr>`;
 
     // 상세 내역: 개별 주문일자·수량과 개별 출고일자·수량을 나란히 나열(가는 글씨)
@@ -4120,15 +4124,20 @@ function buildMyOrderGroups(){
 let _myOrderGroups={};
 // 주문 탭의 '변경' 표시를 누르면 그 품목이 어쩌다 지금 수량이 됐는지 보여준다.
 //   최초 주문 → 공급된 수량 → 변경 신청(언제·몇 개로) → 최종 공급필요수량
-function openChangeHistoryModal(rep){
-  const g=_myOrderGroups[rep];
+// 주문 탭(내가 신청한 주문)
+function openChangeHistoryModal(rep){ showChangeHistory(_myOrderGroups[rep]); }
+// 주문 접수 탭(내가 받은 주문) — 업체별로 나뉘므로 회사명까지 키에 넣는다
+function openAdminChangeHistoryModal(company, rep){ showChangeHistory(_adminOrderGroups[company+'||'+rep]); }
+function showChangeHistory(g){
   if(!g) return;
   const t=T[lang];
   const isKo=lang==='ko';
   const req=g.changeRequest;
   document.getElementById('i18n-chtitle').textContent=t.colChangeHistory;
   document.getElementById('chItem').textContent=isKo?(g.name_ko||''):(g.name_ru||g.name_ko||'');
-  document.getElementById('chRep').innerHTML=`<span class="code" style="font-size:11px">${escapeHtml(g.rep)}</span>`;
+  // 주문 접수 탭에서는 어느 업체의 주문인지도 함께 보여준다
+  document.getElementById('chRep').innerHTML=`<span class="code" style="font-size:11px">${escapeHtml(g.rep)}</span>`
+    + (g.company?`<span style="color:var(--muted);font-size:11px;margin-left:6px">${escapeHtml(g.company)}</span>`:'');
 
   const row=(label,val,strong)=>`<div style="display:flex;justify-content:space-between;gap:12px;padding:7px 0">
       <span style="color:var(--muted)">${escapeHtml(label)}</span>
