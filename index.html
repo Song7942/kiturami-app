@@ -839,6 +839,11 @@ input[type="text"]::placeholder{color:var(--muted)}
           <input type="text" id="priceSearchInput" placeholder="품명, 대표품번으로 검색…" oninput="renderPriceActive()">
         </div>
         <div class="count-badge" id="priceCountBadge"></div>
+        <button class="dl-btn" id="shipQtyUploadWrap" onclick="document.getElementById('shipQtyFileInput').click()" style="background:var(--surface2);border-color:var(--border);color:var(--text)">
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <span id="i18n-shipqtyupload">출고수량 업로드</span>
+        </button>
+        <input type="file" id="shipQtyFileInput" accept=".xlsx,.xls" style="display:none" onchange="handleShipQtyUpload(event)">
         <button class="dl-btn" id="priceUploadWrap" onclick="document.getElementById('priceFileInput').click()" style="background:var(--accent2);border-color:var(--accent2);color:#fff">
           <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
           <span id="i18n-priceupload">엑셀 업로드</span>
@@ -6179,6 +6184,8 @@ function applyPriceTabChrome(){
   setEditable('prmKzGp', isMaster || m==='kz');
   // 업로드: MASTER(계산식) 와 회사 계정만
   show('priceUploadWrap', isMaster ? priceView==='calc' : m==='company');
+  // 출고수량 업로드: 출고 열이 있는 계산식 화면에서만
+  show('shipQtyUploadWrap', isMaster && priceView==='calc');
   // 지역/회사 뷰는 계산식 슬롯을 재사용한다
   if(!isMaster){
     show('priceCalcHdrWrap', true); show('priceCalcBodyWrap', true);
@@ -6404,36 +6411,37 @@ function handlePriceUpload(event){
 // 여러 품번이 같은 대표품번으로 모이면 그중 가장 높은 가격을 원가로 삼는다.
 // 계산식 전체를 갈아엎지 않고 이미 있는 행의 원가 KRW 만 갱신한다.
 // (원가 RUB/USD 는 화면의 기준환율로 계산되므로 따로 저장하지 않는다)
-async function applyCostPriceList(arr, event){
+// 어느 열에 있든 아는 품번을 찾아, 바로 오른쪽 칸의 숫자를 { 품번: 값 } 으로 모은다.
+// 원가 시세표와 출고수량 업로드가 같은 방식으로 읽는다.
+function scanCodeNumberPairs(arr){
   const byCode={};
   (arr||[]).forEach(row=>{
     if(!Array.isArray(row)) return;
     for(let c=0;c<row.length-1;c++){
       const code=String(row[c]==null?'':row[c]).trim();
       if(!code) continue;
-      if(!findMasterRep(code)) continue;       // 아는 품번인지 확인만 한다 (대표품번으로 묶지는 않는다)
+      if(!findMasterRep(code)) continue;       // 아는 품번인지 확인만 한다
       const raw=String(row[c+1]==null?'':row[c+1]).replace(/,/g,'').trim();
       if(!raw) continue;
-      const price=Number(raw);
-      if(!(price>0)) continue;                 // 옆칸이 숫자가 아니면 가격이 아니다
-      byCode[code]=price;                      // 같은 품번이 여러 번 나오면 마지막 값
+      const n=Number(raw);
+      if(!(n>0)) continue;                     // 옆칸이 숫자가 아니면 값이 아니다
+      byCode[code]=n;                          // 같은 품번이 여러 번 나오면 마지막 값
     }
   });
+  return byCode;
+}
+async function applyCostPriceList(arr, event){
+  const byCode=scanCodeNumberPairs(arr);
   const codes=Object.keys(byCode);
   if(!codes.length){
     alert('가격을 읽지 못했습니다.\n품번과 그 오른쪽 칸에 가격이 있는지 확인해 주세요.');
     event.target.value=''; return;
   }
-  // 적힌 품번 그대로 찾아 그 행에 기재한다.
-  // 한 행은 호환·최종·대표 품번을 갖는데, 대표품번은 여러 행이 공유하므로 먼저 보면
-  // 안 된다(같은 대표품번 행들이 전부 같은 값이 되어 '대표품번으로 묶기'와 같아진다).
-  // 그 행을 특정하는 호환 → 최종 → 대표 순으로 본다.
+  // 시세표의 품번은 '호환품번(변경)'을 가리킨다. 그 행만 찾아 기재한다.
+  // (대표품번은 여러 행이 공유하므로 기준으로 쓰지 않는다)
   const priceOf=r=>{
-    for(const k of [r.compat, r.final, r.rep]){
-      const key=String(k||'').trim();
-      if(key && byCode[key]!=null) return byCode[key];
-    }
-    return null;
+    const key=String(r.compat||'').trim();
+    return (key && byCode[key]!=null) ? byCode[key] : null;
   };
   const targets=priceCalcData.filter(r=>priceOf(r)!=null);
   if(!targets.length){
@@ -6459,6 +6467,63 @@ async function applyCostPriceList(arr, event){
   renderPriceActive();
   event.target.value='';
   alert(`원가 ${targets.length}행을 갱신했습니다.\n원가 RUB/USD 는 현재 기준환율로 계산됩니다.`);
+}
+// ── 출고수량 업로드 (자유 양식) ──
+// 원가 시세표와 같은 방식: 호환품번(변경)을 찾아 바로 오른쪽 칸의 수량을
+// 출고(18y~)에 기재한다. 계산식의 다른 값은 건드리지 않는다.
+function handleShipQtyUpload(event){
+  const file=event.target.files[0];
+  if(!file) return;
+  const reader=new FileReader();
+  reader.onload=async function(e){
+    try{
+      const data=new Uint8Array(e.target.result);
+      const wb=XLSX.read(data,{type:'array'});
+      const arr=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:true,defval:''});
+      await applyShipQtyList(arr, event);
+    }catch(err){
+      console.error(err);
+      alert('업로드 실패\n파일을 읽지 못했습니다.');
+      event.target.value='';
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+async function applyShipQtyList(arr, event){
+  const byCode=scanCodeNumberPairs(arr);
+  const codes=Object.keys(byCode);
+  if(!codes.length){
+    alert('출고수량을 읽지 못했습니다.\n품번과 그 오른쪽 칸에 수량이 있는지 확인해 주세요.');
+    event.target.value=''; return;
+  }
+  // 품번은 '호환품번(변경)'을 가리킨다 (원가 시세표와 동일한 규칙)
+  const qtyOf=r=>{
+    const key=String(r.compat||'').trim();
+    return (key && byCode[key]!=null) ? byCode[key] : null;
+  };
+  const targets=priceCalcData.filter(r=>qtyOf(r)!=null);
+  if(!targets.length){
+    alert(`품번 ${codes.length}개를 찾았지만 계산식에 해당하는 호환품번이 없습니다.`);
+    event.target.value=''; return;
+  }
+  if(!confirm(`품번 ${codes.length}개의 출고수량을 찾았습니다.\n계산식 ${targets.length}행의 출고(18y~)를 갱신합니다. 계속하시겠습니까?`)){
+    event.target.value=''; return;
+  }
+  const now=new Date().toISOString();
+  const payload=targets.map(r=>{
+    r.ship_qty=Math.round(qtyOf(r));   // 출고는 수량 — 정수
+    r.updated_at=now;
+    return { row_no:r.row_no, name_ko:r.name_ko, spec:r.spec, rep:r.rep, compat:r.compat, final:r.final,
+             ship_qty:r.ship_qty, ru_cost:r.ru_cost, ru_supply_krw:r.ru_supply_krw,
+             kz_supply_krw:r.kz_supply_krw, updated_at:now };
+  });
+  for(let i=0;i<payload.length;i+=500){
+    const { error } = await sb.from('kt_price_calc').upsert(payload.slice(i,i+500),{onConflict:'row_no'});
+    if(error){ alert('업로드 실패\n['+(error.message||error.code)+']'); event.target.value=''; return; }
+  }
+  renderPriceActive();
+  event.target.value='';
+  alert(`출고수량 ${targets.length}행을 갱신했습니다.`);
 }
 // ── 계산식 엑셀 업로드 ──
 async function handlePriceCalcUpload(event){
@@ -6579,6 +6644,7 @@ function refreshPriceTexts(){
   setTxt('i18n-pricetab-calc', lang==='ru'?'Формула':'계산식');
   setTxt('i18n-pricetab-supply', lang==='ru'?'Цены поставки':'공급가');
   setTxt('i18n-priceupload', lang==='ru'?'Загрузить Excel':'엑셀 업로드');
+  setTxt('i18n-shipqtyupload', lang==='ru'?'Загрузить отгрузку':'출고수량 업로드');
   setTxt('i18n-pricedl', lang==='ru'?'Скачать Excel':'엑셀 다운로드');
   setTxt('i18n-prm-save', lang==='ru'?'Сохранить':'저장');
   setTxt('i18n-prm-refresh', lang==='ru'?'Обновить курс':'환율 갱신');
