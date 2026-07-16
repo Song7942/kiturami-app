@@ -833,6 +833,14 @@ input[type="text"]::placeholder{color:var(--muted)}
         <button class="dl-btn" id="prmRefreshBtn" onclick="refreshRatesNow()" style="background:var(--surface2);border-color:var(--border);color:var(--text)"><span id="i18n-prm-refresh">환율 갱신</span></button>
         <div id="priceRateInfo" style="font-size:11px;color:var(--muted);flex:1;min-width:200px"></div>
       </div>
+      <!-- 회사 계정 상단: 공급가 A~D 의 기준 GP(%) -->
+      <div id="companyGpBar" style="display:none;flex-wrap:wrap;gap:6px 12px;align-items:center;padding:2px 4px 6px">
+        <label style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--muted)"><span id="i18n-cgp-a">공급가A GP(%)</span><input type="number" step="0.1" id="cgpA" style="width:58px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--muted)"><span id="i18n-cgp-b">공급가B GP(%)</span><input type="number" step="0.1" id="cgpB" style="width:58px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--muted)"><span id="i18n-cgp-c">공급가C GP(%)</span><input type="number" step="0.1" id="cgpC" style="width:58px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--muted)"><span id="i18n-cgp-d">공급가D GP(%)</span><input type="number" step="0.1" id="cgpD" style="width:58px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></label>
+        <button class="dl-btn" onclick="saveCompanyGp()" style="background:var(--accent);border-color:var(--accent);color:#fff"><span id="i18n-cgp-save">저장</span></button>
+      </div>
       <div class="search-bar">
         <div class="search-wrap">
           <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
@@ -1446,6 +1454,7 @@ const T={
        pnH0:'품명',pnH0s:'규격',pnH1:'대표품번 (미변경)',pnH2:'호환품번 (변경)',pnH3:'최종품번 (변경, 현시점)',
        pnNoResult:'검색 결과가 없습니다.',
        priceThCost:'원가',priceThBuy:'구매가',priceThSupply:'공급가',priceThGp:'GP',
+       priceThSupplyA:'공급가A',priceThSupplyB:'공급가B',priceThSupplyC:'공급가C',priceThSupplyD:'공급가D',
        priceCount:n=>`총 ${n}건`,priceNoData:'가격 데이터가 없습니다.',
        priceBuyHint:'구매가는 구매처 공급가를 자동으로 가져옵니다. 직접 입력하면 입력값이 우선합니다.',
        priceThShip:'출고<br>(18y~)',priceThRu:'러시아',priceThKz:'카자흐스탄',priceUpdated:'업데이트: ',
@@ -1538,6 +1547,7 @@ const T={
        pnH0:'Наименование',pnH0s:'',pnH1:'Осн. артикул (неизм.)',pnH2:'Артикул замены',pnH3:'Актуальный артикул',
        pnNoResult:'Результаты не найдены.',
        priceThCost:'Себестоимость',priceThBuy:'Закупочная цена',priceThSupply:'Цена поставки',priceThGp:'GP',
+       priceThSupplyA:'Цена A',priceThSupplyB:'Цена B',priceThSupplyC:'Цена C',priceThSupplyD:'Цена D',
        priceCount:n=>`Всего ${n}`,priceNoData:'Нет данных о ценах.',
        priceBuyHint:'Закупочная цена подставляется из цены поставщика. Введённое вручную значение имеет приоритет.',
        priceThShip:'Отгрузка<br>(с 18г.)',priceThRu:'Россия',priceThKz:'Казахстан',priceUpdated:'Обновлено: ',
@@ -5105,7 +5115,7 @@ function syncSplitTableColumnWidths(hdrColId, bodyColId, tbodyId, mode){
             const rigidP=allRigidFrom(isKoP?2:1, n);
             const m=(typeof priceMode==='function')?priceMode():null;
             // 회사 계정: 앞 + 구매가 | 공급가 | GP
-            if(m==='company') return { caps:[...lead, 84, 84, 56], noFill:true, rigid:rigidP };
+            if(m==='company') return { caps:[...lead, 84, 76, 76, 76, 76], noFill:true, rigid:rigidP };
             // RUSSIA/KAZAK: 앞 + 원가(KRW · 자기통화) | 공급가 | GP
             if(m==='ru'||m==='kz') return { caps:[...lead, 78, 70, 84, 56], noFill:true, rigid:rigidP };
             // 계산식(MASTER·KITURAMI): 앞 + 출고 | 원가(KRW·RUB·USD) | 러시아 3 | 카자흐 3
@@ -6118,6 +6128,10 @@ function priceMode(){
 // 회사별 가격 (rep -> {buy_price, supply_price})
 let companyPriceData={};   // 자사
 let supplierPriceData={};  // 구매처(상위 회사)의 가격 — 구매가 자동 채우기에 사용
+// 공급가 A~D 의 기준 GP(%) — 회사별 설정. 스키마를 바꾸지 않으려고 kt_company_prices 의
+// 예약 rep 행('@GP_A'…'@GP_D')에 buy_price 로 저장한다. 표에는 노출하지 않는다.
+const CGP_KEYS={ a:'@GP_A', b:'@GP_B', c:'@GP_C', d:'@GP_D' };
+let companySupplyGp={ a:0.20, b:0.25, c:0.30, d:0.35 };   // 기본값
 async function loadCompanyPrices(){
   const role=userRole(currentUser);
   if(!role.isCompanyAdmin){ companyPriceData={}; supplierPriceData={}; return; }
@@ -6125,7 +6139,13 @@ async function loadCompanyPrices(){
   if(error){ console.error('kt_company_prices:', error.message); companyPriceData={}; }
   else {
     companyPriceData={};
-    (data||[]).forEach(row=>{ companyPriceData[row.rep]={ buy_price:row.buy_price, supply_price:row.supply_price }; });
+    const gp={};
+    (data||[]).forEach(row=>{
+      const sentinel=Object.keys(CGP_KEYS).find(k=>CGP_KEYS[k]===row.rep);
+      if(sentinel){ if(row.buy_price!=null) gp[sentinel]=Number(row.buy_price); return; }  // 설정 행은 표에서 제외
+      companyPriceData[row.rep]={ buy_price:row.buy_price, supply_price:row.supply_price };
+    });
+    ['a','b','c','d'].forEach(k=>{ if(gp[k]!=null && gp[k]>=0 && gp[k]<1) companySupplyGp[k]=gp[k]; });
   }
   // 구매처가 KITURAMI 가 아닌 일반 회사면, 그 회사가 등록한 공급가를 구매가로 가져온다.
   supplierPriceData={};
@@ -6163,6 +6183,34 @@ function companyGp(buy, supply){
   if(buy==null||supply==null||!(supply>0)) return null;
   return (supply-buy)/supply;
 }
+// 공급가 = 구매가 / (1 - 기준GP), 원 단위 올림
+function companySupplyFrom(buy, gp){
+  if(buy==null||!(buy>0)||gp==null||!(gp>=0&&gp<1)) return null;
+  return Math.ceil(buy/(1-gp));
+}
+function fillCompanyGpInputs(){
+  const g=(id)=>document.getElementById(id);
+  if(g('cgpA')) g('cgpA').value=Math.round(companySupplyGp.a*1000)/10;
+  if(g('cgpB')) g('cgpB').value=Math.round(companySupplyGp.b*1000)/10;
+  if(g('cgpC')) g('cgpC').value=Math.round(companySupplyGp.c*1000)/10;
+  if(g('cgpD')) g('cgpD').value=Math.round(companySupplyGp.d*1000)/10;
+}
+async function saveCompanyGp(){
+  const role=userRole(currentUser);
+  if(!role.isCompanyAdmin) return;
+  const read=id=>Number(document.getElementById(id).value)/100;
+  const vals={ a:read('cgpA'), b:read('cgpB'), c:read('cgpC'), d:read('cgpD') };
+  for(const k of ['a','b','c','d']){
+    if(!(vals[k]>=0 && vals[k]<1)){ alert(lang==='ru'?'Проверьте GP (%). Допустимо 0~99.9.':'GP(%) 값을 확인해 주세요. 0~99.9 사이여야 합니다.'); return; }
+  }
+  const now=new Date().toISOString();
+  const payload=['a','b','c','d'].map(k=>({ company:role.company, rep:CGP_KEYS[k], buy_price:vals[k], supply_price:null, updated_at:now }));
+  const { error } = await sb.from('kt_company_prices').upsert(payload,{ onConflict:'company,rep' });
+  if(error){ alert((lang==='ru'?'Ошибка сохранения':'저장 실패')+'\n['+(error.message||error.code)+']'); return; }
+  companySupplyGp=vals;
+  renderPriceCompany();
+  alert(lang==='ru'?'Сохранено. Цены пересчитаны по новому GP.':'저장되었습니다. 공급가가 새 GP 기준으로 다시 계산되었습니다.');
+}
 // 역할별 탭 크롬(계산식/공급가 전환·환율 파라미터·업로드 버튼) 표시 제어
 function applyPriceTabChrome(){
   const m=priceMode();
@@ -6178,6 +6226,9 @@ function applyPriceTabChrome(){
   const isRegion=(m==='ru'||m==='kz');
   const params=document.getElementById('priceParamsBar');
   if(params) params.style.display = ((isMaster && priceView==='calc') || isRegion) ? 'flex' : 'none';
+  // 회사 계정: 공급가 A~D 의 기준 GP 바
+  const cgpBar=document.getElementById('companyGpBar');
+  if(cgpBar){ cgpBar.style.display = (m==='company') ? 'flex' : 'none'; if(m==='company') fillCompanyGpInputs(); }
   show('prmRubWrap',  isMaster || m==='ru');
   show('prmUsdWrap',  isMaster || m==='kz');
   show('prmRuGpWrap', isMaster || m==='ru');
@@ -6262,8 +6313,12 @@ function companyPriceRows(){
     const saved=companyPriceData[m.rep]||{};
     const autoBuy=supplierBuyPriceFor(m.rep, map);
     const buy=(saved.buy_price!=null&&saved.buy_price!=='')?Number(saved.buy_price):autoBuy;
-    const supply=(saved.supply_price!=null&&saved.supply_price!=='')?Number(saved.supply_price):null;
-    return { ...m, autoBuy, buyRaw:saved.buy_price, buy, supply, gp:companyGp(buy,supply) };
+    // 공급가 A~D 는 구매가와 각 기준 GP 로 자동 계산 (저장하지 않음)
+    const supplyA=companySupplyFrom(buy, companySupplyGp.a);
+    const supplyB=companySupplyFrom(buy, companySupplyGp.b);
+    const supplyC=companySupplyFrom(buy, companySupplyGp.c);
+    const supplyD=companySupplyFrom(buy, companySupplyGp.d);
+    return { ...m, autoBuy, buyRaw:saved.buy_price, buy, supplyA, supplyB, supplyC, supplyD };
   });
   if(kw) list=list.filter(m=>m.rep.toLowerCase().includes(kw)||(m.name_ko||'').toLowerCase().includes(kw)||(m.final||'').toLowerCase().includes(kw)||m.compats.some(c=>c.toLowerCase().includes(kw)));
   return list;
@@ -6282,9 +6337,11 @@ function renderPriceCompany(){
     <th style="${thS}">${brLabel(t.pnH1)}</th><th style="${thS}">${brLabel(t.pnH2)}</th>
     <th style="${thS}">${brLabel(t.pnH3)}</th>
     <th style="${thS};border-left:1px solid var(--border)">${t.priceThBuy}</th>
-    <th style="${thS}">${t.priceThSupply}</th>
-    <th style="${thS}">${t.priceThGp}</th></tr>`;
-  const cols=`<col>${isKo?'<col>':''}<col><col><col><col style="width:82px"><col style="width:82px"><col style="width:56px">`;
+    <th style="${thS};border-left:1px solid var(--border)">${t.priceThSupplyA}</th>
+    <th style="${thS}">${t.priceThSupplyB}</th>
+    <th style="${thS}">${t.priceThSupplyC}</th>
+    <th style="${thS}">${t.priceThSupplyD}</th></tr>`;
+  const cols=`<col>${isKo?'<col>':''}<col><col><col><col style="width:82px"><col style="width:72px"><col style="width:72px"><col style="width:72px"><col style="width:72px">`;
   document.getElementById('pricecalc-hdr-col').innerHTML=cols;
   document.getElementById('pricecalc-body-col').innerHTML=cols;
   const tbody=document.getElementById('priceCalcTbody');
@@ -6292,6 +6349,7 @@ function renderPriceCompany(){
   if(!list.length){ tbody.innerHTML=''; emptyEl.textContent=t.priceNoData; emptyEl.style.display='block'; return; }
   emptyEl.style.display='none';
   const inputStyle='width:100%;max-width:80px;box-sizing:border-box;padding:2px 3px;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:var(--text);text-align:right;font-size:11px';
+  const supplyTd=v=>`<td style="text-align:right;padding:3px 6px;font-weight:600">${fmtN(v)}</td>`;
   tbody.innerHTML=list.map(m=>{
     const repEsc=String(m.rep).replace(/'/g,"\\'");
     return `<tr style="border-bottom:1px solid var(--border);font-size:11px" class="price-row">
@@ -6301,8 +6359,8 @@ function renderPriceCompany(){
       <td style="padding:3px 4px">${m.compats.map(c=>`<span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(c)}</span>`).join('<br>')}</td>
       <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(m.final||'')}</span></td>
       <td class="center" style="padding:3px 2px;border-left:1px solid var(--border)"><input type="number" step="any" style="${inputStyle}" value="${m.buyRaw!=null&&m.buyRaw!==''?Number(m.buyRaw):''}" placeholder="${m.autoBuy!=null?fmtN(m.autoBuy):''}" onchange="onCompanyPriceEdit('${repEsc}','buy_price',this.value)"></td>
-      <td class="center" style="padding:3px 2px"><input type="number" step="any" style="${inputStyle}" value="${m.supply!=null?m.supply:''}" onchange="onCompanyPriceEdit('${repEsc}','supply_price',this.value)"></td>
-      <td class="center" style="padding:3px 2px;color:var(--muted)">${fmtGp(m.gp)}</td>
+      <td style="border-left:1px solid var(--border);text-align:right;padding:3px 6px;font-weight:600">${fmtN(m.supplyA)}</td>
+      ${supplyTd(m.supplyB)}${supplyTd(m.supplyC)}${supplyTd(m.supplyD)}
     </tr>`;
   }).join('');
   scheduleSplitTableResync('pricecalc-hdr-col','pricecalc-body-col','priceCalcTbody','fixed');
@@ -6384,10 +6442,10 @@ function downloadPriceRegion(region){
 function downloadPriceCompany(){
   const list=companyPriceRows();
   if(!list.length) return;
-  const header=['품명','규격','대표품번','호환품번','최종품번','구매가','공급가','GP'];
-  const aoa=[header,...list.map(m=>[m.name_ko||'',m.spec||'',m.rep,(m.compats||[]).join(', '),m.final||'',m.buy,m.supply,fmtGp(m.gp)])];
+  const header=['품명','규격','대표품번','호환품번','최종품번','구매가','공급가A','공급가B','공급가C','공급가D'];
+  const aoa=[header,...list.map(m=>[m.name_ko||'',m.spec||'',m.rep,(m.compats||[]).join(', '),m.final||'',m.buy,m.supplyA,m.supplyB,m.supplyC,m.supplyD])];
   const ws=XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols']=[{wch:22},{wch:28},{wch:16},{wch:22},{wch:16},{wch:12},{wch:12},{wch:8}];
+  ws['!cols']=[{wch:22},{wch:28},{wch:16},{wch:22},{wch:16},{wch:12},{wch:11},{wch:11},{wch:11},{wch:11}];
   const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'가격정보');
   const co=String(userRole(currentUser).company||'회사').replace(/[\\\/\?\*\[\]:]/g,'_');
   XLSX.writeFile(wb,`KITURAMI_가격정보_${co}_${new Date().toISOString().slice(0,10)}.xlsx`);
@@ -6855,6 +6913,11 @@ function refreshPriceTexts(){
   setTxt('i18n-priceupload', lang==='ru'?'Загрузить Excel':'엑셀 업로드');
   setTxt('i18n-shipqtyupload', lang==='ru'?'Загрузить отгрузку':'출고수량 업로드');
   setTxt('i18n-pricereset', t.priceResetBtn);
+  setTxt('i18n-cgp-a', lang==='ru'?'GP A (%)':'공급가A GP(%)');
+  setTxt('i18n-cgp-b', lang==='ru'?'GP B (%)':'공급가B GP(%)');
+  setTxt('i18n-cgp-c', lang==='ru'?'GP C (%)':'공급가C GP(%)');
+  setTxt('i18n-cgp-d', lang==='ru'?'GP D (%)':'공급가D GP(%)');
+  setTxt('i18n-cgp-save', lang==='ru'?'Сохранить':'저장');
   setTxt('i18n-pricedl', lang==='ru'?'Скачать Excel':'엑셀 다운로드');
   setTxt('i18n-prm-save', lang==='ru'?'Сохранить':'저장');
   setTxt('i18n-prm-refresh', lang==='ru'?'Обновить курс':'환율 갱신');
