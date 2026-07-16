@@ -1179,6 +1179,20 @@ input[type="text"]::placeholder{color:var(--muted)}
   </div>
 </div>
 
+<div id="changeHistoryModal" class="news-modal" onclick="closeChangeHistoryModalBg(event)">
+  <div class="news-modal-inner" onclick="event.stopPropagation()" style="max-width:460px">
+    <div class="news-modal-hdr">
+      <span id="i18n-chtitle">변경이력</span>
+      <button class="news-modal-close" onclick="closeChangeHistoryModal()">✕</button>
+    </div>
+    <div style="padding:20px;overflow-y:auto">
+      <div id="chItem" style="font-size:13px;font-weight:600;margin-bottom:2px"></div>
+      <div id="chRep" style="margin-bottom:14px"></div>
+      <div id="chBody" style="font-size:13px"></div>
+    </div>
+  </div>
+</div>
+
 <div id="myInfoModal" class="news-modal" onclick="closeMyInfoModalBg(event)">
   <div class="news-modal-inner" onclick="event.stopPropagation()" style="max-width:420px">
     <div class="news-modal-hdr">
@@ -1393,6 +1407,8 @@ const T={
        reqApprove:'승인',reqReject:'거부',
        reqApproveConfirm:'이 요청을 승인하고 주문에 반영할까요?',reqRejectConfirm:'이 요청을 거부할까요?',
        grpCancelReceive:'취소 및 변경 접수',grpCancelRequest:'취소 및 변경 신청',
+       chOrigOrder:'최초 주문수량',chSupplied:'공급된 수량',chReqDate:'신청일',chFinalNeed:'최종 공급필요수량',
+       chReqLine:(type,qty)=>`미출고분을 ${qty}개로 ${type} 신청`,chNoReq:'변경 신청 내역이 없습니다.',
        colChangeHistory:'변경이력',colCancelChangeAction:'취소/변경',colRequestedQty:'신청수량',colChangeResult:'신청결과',colChangeType:'취소/변경',colChangeQty:'접수수량',colChangeDecision:'의사결정',
        changeHistoryLabel:'변경',reqTypeCancel:'취소',reqTypeChange:'변경',cancelBtn:'취소',changeBtn:'변경',cannotBtn:'불가',
        groupCancelConfirm:(rep,q)=>`${rep}의 미출고분 ${q}개 전체 취소를 신청하시겠습니까? 구매처의 동의가 있어야 반영됩니다.`,
@@ -1480,6 +1496,8 @@ const T={
        reqApprove:'Одобрить',reqReject:'Отклонить',
        reqApproveConfirm:'Одобрить этот запрос и применить к заказу?',reqRejectConfirm:'Отклонить этот запрос?',
        grpCancelReceive:'Заявки на отмену/изменение',grpCancelRequest:'Отмена/изменение',
+       chOrigOrder:'Первоначальный заказ',chSupplied:'Поставлено',chReqDate:'Дата заявки',chFinalNeed:'Итого к поставке',
+       chReqLine:(type,qty)=>`Заявка «${type}»: неотгруженный остаток → ${qty} шт.`,chNoReq:'Заявок на изменение нет.',
        colChangeHistory:'История изменений',colCancelChangeAction:'Отмена/изм.',colRequestedQty:'Запрошено',colChangeResult:'Результат',colChangeType:'Отмена/изм.',colChangeQty:'Принято',colChangeDecision:'Решение',
        changeHistoryLabel:'Изменено',reqTypeCancel:'Отмена',reqTypeChange:'Изменение',cancelBtn:'Отменить',changeBtn:'Изменить',cannotBtn:'Нельзя',
        groupCancelConfirm:(rep,q)=>`Запросить отмену всех ${q} неотгруженных единиц ${rep}? Требуется согласие поставщика.`,
@@ -4098,10 +4116,48 @@ function buildMyOrderGroups(){
   });
   return Object.values(groups);
 }
+// 변경이력 팝업이 클릭 시점에 그룹을 찾을 수 있도록 마지막 렌더 결과를 대표품번으로 보관한다.
+let _myOrderGroups={};
+// 주문 탭의 '변경' 표시를 누르면 그 품목이 어쩌다 지금 수량이 됐는지 보여준다.
+//   최초 주문 → 공급된 수량 → 변경 신청(언제·몇 개로) → 최종 공급필요수량
+function openChangeHistoryModal(rep){
+  const g=_myOrderGroups[rep];
+  if(!g) return;
+  const t=T[lang];
+  const isKo=lang==='ko';
+  const req=g.changeRequest;
+  document.getElementById('i18n-chtitle').textContent=t.colChangeHistory;
+  document.getElementById('chItem').textContent=isKo?(g.name_ko||''):(g.name_ru||g.name_ko||'');
+  document.getElementById('chRep').innerHTML=`<span class="code" style="font-size:11px">${escapeHtml(g.rep)}</span>`;
+
+  const row=(label,val,strong)=>`<div style="display:flex;justify-content:space-between;gap:12px;padding:7px 0">
+      <span style="color:var(--muted)">${escapeHtml(label)}</span>
+      <b style="${strong?'font-size:15px':''}">${val}</b></div>`;
+  const rule=`<div style="border-top:1px solid var(--border);margin:6px 0"></div>`;
+
+  let html=row(t.chOrigOrder, g.rawOrderQty)+row(t.chSupplied, g.totalSuppliedQty);
+  if(req){
+    // 신청일: created_at 이 없으면 처리일(resolved_at)로 대신한다
+    const when=req.created_at||req.resolved_at||null;
+    const dateTxt=when?formatNewsDate(new Date(when).getTime()):'-';
+    const typeTxt=req.request_type==='cancel'?t.reqTypeCancel:t.reqTypeChange;
+    html+=rule+`<div style="padding:7px 0;color:var(--muted)">${escapeHtml(t.chReqDate)}: <b style="color:var(--text)">${escapeHtml(dateTxt)}</b></div>`
+        + `<div style="padding:0 0 7px;color:#3b82f6">${escapeHtml(t.chReqLine(typeTxt, req.request_type==='cancel'?0:req.requested_qty))}</div>`;
+  } else {
+    html+=rule+`<div style="padding:7px 0;color:var(--muted)">${escapeHtml(t.chNoReq)}</div>`;
+  }
+  html+=rule+row(t.colFinalOrder, g.totalOrderQty)+row(t.chFinalNeed, g.notSupplied, true);
+  document.getElementById('chBody').innerHTML=html;
+  document.getElementById('changeHistoryModal').classList.add('show');
+}
+function closeChangeHistoryModal(){ document.getElementById('changeHistoryModal').classList.remove('show'); }
+function closeChangeHistoryModalBg(e){ if(e.target===document.getElementById('changeHistoryModal')) closeChangeHistoryModal(); }
 function renderAdminMyOrders(){
   const t=T[lang];
   const isKo=lang==='ko';
   const groups=buildMyOrderGroups();
+  _myOrderGroups={};
+  groups.forEach(g=>{ _myOrderGroups[g.rep]=g; });
   const countEl=document.getElementById('adminMyOrderCount');
   if(countEl) countEl.textContent=t.adminCount(groups.length);
   const thead=document.getElementById('adminMyOrdersThead');
@@ -4181,7 +4237,7 @@ function renderAdminMyOrders(){
         g.changeRequest && g.changeRequest.status==='agreed' ? `<span style="color:#22c55e">${t.decisionAgreed}</span>`
         : (g.changeRequest && g.changeRequest.status==='rejected' ? `<span style="color:#ef4444">${t.cannotBtn}</span>` : '')
       }</td>
-      <td style="padding:9px 12px;text-align:center;border-left:2px solid var(--border)">${g.changeHistory?`<span style="color:#3b82f6">${t.changeHistoryLabel}</span>`:''}</td>
+      <td style="padding:9px 12px;text-align:center;border-left:2px solid var(--border)">${g.changeHistory?`<span style="color:#3b82f6;text-decoration:underline;cursor:pointer" onclick="openChangeHistoryModal('${String(g.rep).replace(/'/g,"\\'")}')">${t.changeHistoryLabel}</span>`:''}</td>
     </tr>`;
 
     const maxLines=Math.max(g.orderLines.length, g.supplyLines.length);
