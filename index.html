@@ -5299,6 +5299,15 @@ function syncSplitTableColumnWidths(hdrColId, bodyColId, tbodyId, mode){
         hdrTable.style.width=finalTotal+'px';
         bodyTable.style.minWidth=finalTotal+'px';
         hdrTable.style.minWidth=finalTotal+'px';
+        // 박스(래퍼)도 표 폭에 맞춘다. 그러지 않으면 래퍼가 블록이라 화면 전체 폭을
+        // 차지해 오른쪽에 빈 공간이 남고, 헤더 박스와 본문 박스의 오른쪽 선이 어긋난다.
+        // 두 래퍼를 같은 finalTotal 로 맞추면 내용에 딱 맞게 줄고 오른쪽이 정렬된다.
+        // (resize/확대축소 시 이 함수가 다시 돌아 폭이 따라간다)
+        // finalTotal 은 이미 avail(두 컨테이너 중 좁은 쪽) 이내로 계산되므로 max-width 로 다시
+        // 조이면 안 된다 — 헤더(스크롤바 여백 예약)와 본문에서 다르게 clamp 되어 폭이 어긋난다.
+        // 정확히 같은 finalTotal 로 두면 두 박스 오른쪽이 정렬된다.
+        if(hdrWrap){ hdrWrap.style.width=finalTotal+'px'; hdrWrap.style.maxWidth=''; }
+        if(wrap){ wrap.style.width=finalTotal+'px'; wrap.style.maxWidth=''; }
         return;
       }
       const cells=[...firstRow.children].filter(td=>!td.hasAttribute('colspan'));
