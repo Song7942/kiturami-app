@@ -6423,30 +6423,64 @@ function handlePriceUpload(event){
 // 여러 품번이 같은 대표품번으로 모이면 그중 가장 높은 가격을 원가로 삼는다.
 // 계산식 전체를 갈아엎지 않고 이미 있는 행의 원가 KRW 만 갱신한다.
 // (원가 RUB/USD 는 화면의 기준환율로 계산되므로 따로 저장하지 않는다)
-// 어느 열에 있든 아는 품번을 찾아, 바로 오른쪽 칸의 숫자를 { 품번: 값 } 으로 모은다.
-// 원가 시세표와 출고수량 업로드가 같은 방식으로 읽는다.
-function scanCodeNumberPairs(arr){
-  const byCode={};
-  (arr||[]).forEach(row=>{
-    if(!Array.isArray(row)) return;
-    for(let c=0;c<row.length-1;c++){
-      const code=String(row[c]==null?'':row[c]).trim();
-      if(!code) continue;
-      if(!findMasterRep(code)) continue;       // 아는 품번인지 확인만 한다
-      const raw=String(row[c+1]==null?'':row[c+1]).replace(/,/g,'').trim();
-      if(!raw) continue;
-      const n=Number(raw);
-      if(!(n>0)) continue;                     // 옆칸이 숫자가 아니면 값이 아니다
-      byCode[code]=n;                          // 같은 품번이 여러 번 나오면 마지막 값
+// 품번이 적힌 열을 찾는다. 머리글이 없을 수도 있어(예: 첫 열이 품번인데 머리글 없음)
+// 데이터 구간에서 아는 품번이 가장 많이 나오는 열을 품번 열로 본다.
+function detectCodeColumn(arr, dataStart){
+  const score={};
+  for(let i=dataStart;i<Math.min(dataStart+300,arr.length);i++){
+    const row=arr[i]||[];
+    for(let c=0;c<row.length;c++){
+      const s=String(row[c]==null?'':row[c]).trim();
+      if(s && findMasterRep(s)) score[c]=(score[c]||0)+1;
     }
-  });
-  return byCode;
+  }
+  let best=null,bn=0;
+  Object.keys(score).forEach(c=>{ if(score[c]>bn){ bn=score[c]; best=Number(c); } });
+  return best;
 }
-async function applyCostPriceList(arr, event){
-  const byCode=scanCodeNumberPairs(arr);
+const _cellNumOf=v=>{
+  if(v===''||v==null) return null;
+  if(typeof v==='string' && v.trim().startsWith('=')) return null;
+  const n=Number(String(v).replace(/,/g,'').trim());
+  return isNaN(n)?null:n;
+};
+// ── 원가·공급가 시세표 업로드 ──
+// 머리글로 열을 찾아(원가 KRW / 러시아 공급가 KRW / 카자흐스탄 공급가 KRW / 출고)
+// 호환품번(변경)이 같은 행에 그 값들을 기재한다. 계산식 전체를 갈아엎지 않는다.
+// 머리글이 하나도 없으면 옛 방식대로 '품번 바로 오른쪽 칸'을 원가로 읽는다.
+// (원가·공급가의 RUB/USD 는 기준환율로 계산되는 값이라 읽지 않는다)
+async function applyCostPriceList(arr, event, cols){
+  cols = cols || mapCalcColumns(arr);
+  const ds = cols.dataStart || 0;
+  const codeCol = cols.compat!=null ? cols.compat : detectCodeColumn(arr, ds);
+  if(codeCol==null){
+    alert('품번 열을 찾지 못했습니다.\n품번이 적힌 열이 있는지 확인해 주세요.');
+    event.target.value=''; return;
+  }
+  const hasHdr = (cols.cost!=null || cols.ruSup!=null || cols.kzSup!=null || cols.ship!=null);
+  const byCode={};
+  for(let i=ds;i<arr.length;i++){
+    const row=arr[i]||[];
+    const code=String(row[codeCol]==null?'':row[codeCol]).trim();
+    if(!code || !findMasterRep(code)) continue;
+    const rec={};
+    if(hasHdr){
+      if(cols.cost!=null)  rec.cost =_cellNumOf(row[cols.cost]);
+      if(cols.ruSup!=null) rec.ruSup=_cellNumOf(row[cols.ruSup]);
+      if(cols.kzSup!=null) rec.kzSup=_cellNumOf(row[cols.kzSup]);
+      if(cols.ship!=null)  rec.ship =_cellNumOf(row[cols.ship]);
+    } else {
+      rec.cost=_cellNumOf(row[codeCol+1]);   // 머리글이 없으면 바로 오른쪽 칸이 원가
+    }
+    // 값이 하나도 없는 줄은 건너뛴다 (그래야 빈칸이 기존 값을 지우지 않는다)
+    if(rec.cost==null && rec.ruSup==null && rec.kzSup==null && rec.ship==null) continue;
+    byCode[code]=rec;
+  }
   const codes=Object.keys(byCode);
   if(!codes.length){
-    alert('가격을 읽지 못했습니다.\n품번과 그 오른쪽 칸에 가격이 있는지 확인해 주세요.');
+    alert(hasHdr
+      ? '값을 읽지 못했습니다.\n원가 KRW · 러시아 공급가 KRW 같은 머리글 아래에 숫자가 있는지 확인해 주세요.'
+      : '가격을 읽지 못했습니다.\n품번과 그 오른쪽 칸에 가격이 있는지 확인해 주세요.');
     event.target.value=''; return;
   }
   // 시세표의 품번은 '호환품번(변경)'을 가리킨다. 그 행만 찾아 기재한다.
@@ -6469,12 +6503,19 @@ async function applyCostPriceList(arr, event){
       +`시세표의 품번이 계산식의 '호환품번(변경)' 과 같은지 확인해 주세요.`);
     event.target.value=''; return;
   }
-  if(!confirm(`품번 ${codes.length}개의 가격을 찾았습니다.\n계산식 ${targets.length}행의 원가 KRW 를 갱신합니다. 계속하시겠습니까?`)){
+  const fields=[cols.cost!=null||!hasHdr?'원가 KRW':null, cols.ruSup!=null?'러시아 공급가 KRW':null,
+                cols.kzSup!=null?'카자흐스탄 공급가 KRW':null, cols.ship!=null?'출고':null].filter(Boolean);
+  if(!confirm(`품번 ${codes.length}개를 읽었습니다.\n계산식 ${targets.length}행의 [${fields.join(' · ')}] 을(를) 갱신합니다. 계속하시겠습니까?`)){
     event.target.value=''; return;
   }
   const now=new Date().toISOString();
   const payload=targets.map(r=>{
-    r.ru_cost=Math.ceil(priceOf(r));   // 원가는 원 단위 — 올림
+    const v=priceOf(r);
+    // 엑셀에 값이 있는 항목만 덮어쓴다. 빈칸은 기존 값을 그대로 둔다.
+    if(v.cost!=null) r.ru_cost=Math.ceil(v.cost);        // 원가는 원 단위 — 올림
+    if(v.ruSup!=null) r.ru_supply_krw=Math.ceil(v.ruSup);
+    if(v.kzSup!=null) r.kz_supply_krw=Math.ceil(v.kzSup);
+    if(v.ship!=null) r.ship_qty=Math.round(v.ship);
     r.updated_at=now;
     return { row_no:r.row_no, name_ko:r.name_ko, spec:r.spec, rep:r.rep, compat:r.compat, final:r.final,
              ship_qty:r.ship_qty, ru_cost:r.ru_cost, ru_supply_krw:r.ru_supply_krw,
@@ -6487,7 +6528,7 @@ async function applyCostPriceList(arr, event){
   await syncKtPricesFromCalc();
   renderPriceActive();
   event.target.value='';
-  alert(`원가 ${targets.length}행을 갱신했습니다.\n원가 RUB/USD 는 현재 기준환율로 계산됩니다.`);
+  alert(`${targets.length}행을 갱신했습니다. (${fields.join(' · ')})\n원가·공급가의 RUB/USD 는 현재 기준환율로 계산됩니다.`);
 }
 // ── 가격정보 초기화 (MASTER · KITURAMI) ──
 // 계산식(kt_price_calc)이 공급가 화면의 원본이므로 이것을 지우면 두 화면이 함께 비워진다.
@@ -6530,10 +6571,27 @@ function handleShipQtyUpload(event){
   reader.readAsArrayBuffer(file);
 }
 async function applyShipQtyList(arr, event){
-  const byCode=scanCodeNumberPairs(arr);
+  // 원가 시세표와 같은 규칙으로 읽는다: '출고' 머리글이 있으면 그 열, 없으면 품번 바로 오른쪽 칸.
+  const cols=mapCalcColumns(arr);
+  const ds=cols.dataStart || 0;
+  const codeCol = cols.compat!=null ? cols.compat : detectCodeColumn(arr, ds);
+  if(codeCol==null){
+    alert('품번 열을 찾지 못했습니다.\n품번이 적힌 열이 있는지 확인해 주세요.');
+    event.target.value=''; return;
+  }
+  const qtyCol = cols.ship!=null ? cols.ship : codeCol+1;
+  const byCode={};
+  for(let i=ds;i<arr.length;i++){
+    const row=arr[i]||[];
+    const code=String(row[codeCol]==null?'':row[codeCol]).trim();
+    if(!code || !findMasterRep(code)) continue;
+    const n=_cellNumOf(row[qtyCol]);
+    if(n==null) continue;
+    byCode[code]=n;
+  }
   const codes=Object.keys(byCode);
   if(!codes.length){
-    alert('출고수량을 읽지 못했습니다.\n품번과 그 오른쪽 칸에 수량이 있는지 확인해 주세요.');
+    alert('출고수량을 읽지 못했습니다.\n품번과 그 오른쪽 칸(또는 출고 머리글 아래)에 수량이 있는지 확인해 주세요.');
     event.target.value=''; return;
   }
   // 품번은 '호환품번(변경)'을 가리킨다 (원가 시세표와 동일한 규칙)
@@ -6578,16 +6636,25 @@ async function applyShipQtyList(arr, event){
 const _normHdr=s=>String(s==null?'':s).replace(/\s/g,'').toUpperCase();
 function mapCalcColumns(arr){
   const out={ name:null, spec:null, rep:null, compat:null, final:null, ship:null, cost:null, ruSup:null, kzSup:null, dataStart:0 };
-  // 헤더 줄: '품명'이 있는 줄부터, 그 아래로 '품명' 칸이 빈 줄까지
-  let h=-1, nameCol=-1;
+  // 헤더 줄: 아는 머리글이 하나라도 있는 첫 줄.
+  // '품명'을 기준으로 삼으면 품명 열이 없는 시세표(품번·원가·공급가만 있는 파일)를 놓친다.
+  const KEY=['품명','규격','대표품번','호환품번','최종품번','출고','원가','공급가','품번'];
+  let h=-1;
   for(let i=0;i<Math.min(12,arr.length) && h<0;i++){
     const row=arr[i]||[];
-    for(let c=0;c<row.length;c++){ if(_normHdr(row[c]).includes('품명')){ h=i; nameCol=c; break; } }
+    for(let c=0;c<row.length;c++){
+      const L=_normHdr(row[c]);
+      if(L && KEY.some(k=>L.includes(k))){ h=i; break; }
+    }
   }
   if(h<0) return out;
+  // 데이터 시작: 헤더 아래에서 아는 품번이 처음 나오는 줄.
+  // (머리글이 여러 줄이거나 품번 열에 머리글이 없어도 맞게 잡힌다)
   let last=h;
-  for(let i=h+1;i<Math.min(h+4,arr.length);i++){
-    if(String((arr[i]||[])[nameCol]==null?'':(arr[i]||[])[nameCol]).trim()) break;  // 품명에 값이 있으면 데이터
+  for(let i=h+1;i<Math.min(h+5,arr.length);i++){
+    const row=arr[i]||[];
+    const hasCode=row.some(v=>{ const s=String(v==null?'':v).trim(); return s && findMasterRep(s); });
+    if(hasCode) break;
     last=i;
   }
   out.dataStart=last+1;
