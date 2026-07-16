@@ -6489,28 +6489,26 @@ async function applyCostPriceList(arr, event, cols){
     const key=String(r.compat||'').trim();
     return (key && byCode[key]!=null) ? byCode[key] : null;
   };
-  // 왜 안 되는지 구분해서 알려준다. 종전에는 계산식이 비어 있어도, 품번이 안 맞아도
-  // 같은 문구가 나와 원인을 알 수 없었다.
-  if(!priceCalcData.length){
-    alert('계산식 데이터가 비어 있습니다.\n먼저 계산식 엑셀을 업로드한 뒤 시세표를 올려 주세요.\n\n(시세표 업로드는 이미 있는 행의 원가만 바꿉니다)');
-    event.target.value=''; return;
-  }
   const targets=priceCalcData.filter(r=>priceOf(r)!=null);
-  if(!targets.length){
-    alert(`품번 ${codes.length}개를 읽었지만 호환품번(변경)이 일치하는 행이 없습니다.\n\n`
-      +`엑셀에서 읽은 품번: ${codes.slice(0,5).join(', ')}${codes.length>5?' …':''}\n`
-      +`계산식의 호환품번: ${priceCalcData.slice(0,5).map(r=>r.compat).filter(Boolean).join(', ')||'(없음)'}\n\n`
-      +`시세표의 품번이 계산식의 '호환품번(변경)' 과 같은지 확인해 주세요.`);
+  // 계산식에 없는 품번은 새 행을 만든다.
+  // 품명·규격·대표품번·최종품번은 품번조회(PN_DATA)에 이미 있으므로 거기서 가져온다
+  // → 시세표만 올려도 계산식이 채워진다(별도 계산식 파일이 없어도 된다).
+  const known=new Set(priceCalcData.map(r=>String(r.compat||'').trim()));
+  const newCodes=codes.filter(c=>!known.has(c) && findMasterRep(c));
+  if(!targets.length && !newCodes.length){
+    alert(`품번 ${codes.length}개를 읽었지만 품번조회에서 찾을 수 없습니다.\n\n`
+      +`엑셀에서 읽은 품번: ${codes.slice(0,5).join(', ')}${codes.length>5?' …':''}`);
     event.target.value=''; return;
   }
   const fields=[cols.cost!=null||!hasHdr?'원가 KRW':null, cols.ruSup!=null?'러시아 공급가 KRW':null,
                 cols.kzSup!=null?'카자흐스탄 공급가 KRW':null, cols.ship!=null?'출고':null].filter(Boolean);
-  if(!confirm(`품번 ${codes.length}개를 읽었습니다.\n계산식 ${targets.length}행의 [${fields.join(' · ')}] 을(를) 갱신합니다. 계속하시겠습니까?`)){
-    event.target.value=''; return;
-  }
+  const msg=`품번 ${codes.length}개를 읽었습니다.\n`
+    +`· 기존 ${targets.length}행의 [${fields.join(' · ')}] 갱신\n`
+    +(newCodes.length?`· 새 품번 ${newCodes.length}행 추가 (품명·대표품번·최종품번은 품번조회에서 가져옵니다)\n`:'')
+    +`\n계속하시겠습니까?`;
+  if(!confirm(msg)){ event.target.value=''; return; }
   const now=new Date().toISOString();
-  const payload=targets.map(r=>{
-    const v=priceOf(r);
+  const setVals=(r,v)=>{
     // 엑셀에 값이 있는 항목만 덮어쓴다. 빈칸은 기존 값을 그대로 둔다.
     if(v.cost!=null) r.ru_cost=Math.ceil(v.cost);        // 원가는 원 단위 — 올림
     if(v.ruSup!=null) r.ru_supply_krw=Math.ceil(v.ruSup);
@@ -6520,15 +6518,30 @@ async function applyCostPriceList(arr, event, cols){
     return { row_no:r.row_no, name_ko:r.name_ko, spec:r.spec, rep:r.rep, compat:r.compat, final:r.final,
              ship_qty:r.ship_qty, ru_cost:r.ru_cost, ru_supply_krw:r.ru_supply_krw,
              kz_supply_krw:r.kz_supply_krw, updated_at:now };
+  };
+  const payload=targets.map(r=>setVals(r, priceOf(r)));
+  let nextRow=priceCalcData.reduce((m,r)=>Math.max(m, Number(r.row_no)||0), 0);
+  newCodes.forEach(code=>{
+    const rep=findMasterRep(code);
+    const info=getPNInfo(rep)||{};
+    const r={ row_no:++nextRow, name_ko:info.name_ko||'', spec:info.spec||'', rep,
+              compat:code, final:info.final||'', ship_qty:null,
+              ru_cost:null, ru_supply_krw:null, kz_supply_krw:null };
+    priceCalcData.push(r);
+    payload.push(setVals(r, byCode[code]));
   });
   for(let i=0;i<payload.length;i+=500){
     const { error } = await sb.from('kt_price_calc').upsert(payload.slice(i,i+500),{onConflict:'row_no'});
     if(error){ alert('업로드 실패\n['+(error.message||error.code)+']'); event.target.value=''; return; }
   }
+  await loadPriceCalc();   // row_no 정렬 등 서버 기준으로 다시 읽는다
   await syncKtPricesFromCalc();
   renderPriceActive();
   event.target.value='';
-  alert(`${targets.length}행을 갱신했습니다. (${fields.join(' · ')})\n원가·공급가의 RUB/USD 는 현재 기준환율로 계산됩니다.`);
+  alert(`완료했습니다. (${fields.join(' · ')})\n`
+    +`· 갱신 ${targets.length}행\n`
+    +(newCodes.length?`· 추가 ${newCodes.length}행\n`:'')
+    +`\n원가·공급가의 RUB/USD 는 현재 기준환율로 계산됩니다.`);
 }
 // ── 가격정보 초기화 (MASTER · KITURAMI) ──
 // 계산식(kt_price_calc)이 공급가 화면의 원본이므로 이것을 지우면 두 화면이 함께 비워진다.
