@@ -6258,10 +6258,15 @@ function supplierBuyPriceFor(rep, supplyMap){
   }
   // 구매처가 일반 회사: 구매가 = 구매처가 나에게 지정한 등급의 공급가
   //   = ceil(구매처의 그 품목 구매가 / (1 - 구매처 GP[내 등급]))
+  // 구매처의 '구매가'는 구매처가 직접 입력했으면 그 값(kt_company_prices),
+  // 아니면 자동값 — 구매처가 KITURAMI 체인이면 곧 priceData(RUSSIA 공급가 RUB)이다.
+  // 그래서 저장값이 없을 땐 priceData 로 폴백해야 구매처 화면의 공급가와 일치한다.
   const s=supplierPriceData[rep];
-  if(!s || s.buy_price==null || s.buy_price==='') return null;
+  let base=(s && s.buy_price!=null && s.buy_price!=='') ? Number(s.buy_price) : null;
+  if(base==null){ const p=priceData[rep]; base=(p && p.price!=null && p.price!=='') ? Number(p.price) : null; }
+  if(base==null) return null;
   const gk=String(myGrade||'A').toLowerCase();
-  return companySupplyFrom(Number(s.buy_price), supplierSupplyGp[gk]);
+  return companySupplyFrom(base, supplierSupplyGp[gk]);
 }
 function companyGp(buy, supply){
   if(buy==null||supply==null||!(supply>0)) return null;
