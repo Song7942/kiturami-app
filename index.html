@@ -6405,38 +6405,47 @@ function handlePriceUpload(event){
 // 계산식 전체를 갈아엎지 않고 이미 있는 행의 원가 KRW 만 갱신한다.
 // (원가 RUB/USD 는 화면의 기준환율로 계산되므로 따로 저장하지 않는다)
 async function applyCostPriceList(arr, event){
-  const byRep={}, seen={};
+  const byCode={};
   (arr||[]).forEach(row=>{
     if(!Array.isArray(row)) return;
     for(let c=0;c<row.length-1;c++){
       const code=String(row[c]==null?'':row[c]).trim();
       if(!code) continue;
-      const rep=findMasterRep(code);
-      if(!rep) continue;                       // 아는 품번이 아니면 건너뛴다
+      if(!findMasterRep(code)) continue;       // 아는 품번인지 확인만 한다 (대표품번으로 묶지는 않는다)
       const raw=String(row[c+1]==null?'':row[c+1]).replace(/,/g,'').trim();
       if(!raw) continue;
       const price=Number(raw);
       if(!(price>0)) continue;                 // 옆칸이 숫자가 아니면 가격이 아니다
-      if(byRep[rep]==null || price>byRep[rep]){ byRep[rep]=price; }
-      (seen[rep]=seen[rep]||[]).push(code);
+      byCode[code]=price;                      // 같은 품번이 여러 번 나오면 마지막 값
     }
   });
-  const reps=Object.keys(byRep);
-  if(!reps.length){
+  const codes=Object.keys(byCode);
+  if(!codes.length){
     alert('가격을 읽지 못했습니다.\n품번과 그 오른쪽 칸에 가격이 있는지 확인해 주세요.');
     event.target.value=''; return;
   }
-  const targets=priceCalcData.filter(r=>byRep[r.rep]!=null);
+  // 적힌 품번 그대로 찾아 그 행에 기재한다.
+  // 한 행은 호환·최종·대표 품번을 갖는데, 대표품번은 여러 행이 공유하므로 먼저 보면
+  // 안 된다(같은 대표품번 행들이 전부 같은 값이 되어 '대표품번으로 묶기'와 같아진다).
+  // 그 행을 특정하는 호환 → 최종 → 대표 순으로 본다.
+  const priceOf=r=>{
+    for(const k of [r.compat, r.final, r.rep]){
+      const key=String(k||'').trim();
+      if(key && byCode[key]!=null) return byCode[key];
+    }
+    return null;
+  };
+  const targets=priceCalcData.filter(r=>priceOf(r)!=null);
   if(!targets.length){
-    alert(`품번 ${reps.length}개를 찾았지만 계산식에 해당하는 행이 없습니다.`);
+    alert(`품번 ${codes.length}개를 찾았지만 계산식에 해당하는 행이 없습니다.`);
     event.target.value=''; return;
   }
-  if(!confirm(`대표품번 ${reps.length}개의 가격을 찾았습니다.\n계산식 ${targets.length}행의 원가 KRW 를 갱신합니다. 계속하시겠습니까?`)){
+  if(!confirm(`품번 ${codes.length}개의 가격을 찾았습니다.\n계산식 ${targets.length}행의 원가 KRW 를 갱신합니다. 계속하시겠습니까?`)){
     event.target.value=''; return;
   }
   const now=new Date().toISOString();
   const payload=targets.map(r=>{
-    r.ru_cost=Math.ceil(byRep[r.rep]);   // 원가는 원 단위 — 올림
+    r.ru_cost=Math.ceil(priceOf(r));   // 원가는 원 단위 — 올림
     r.updated_at=now;
     return { row_no:r.row_no, name_ko:r.name_ko, spec:r.spec, rep:r.rep, compat:r.compat, final:r.final,
              ship_qty:r.ship_qty, ru_cost:r.ru_cost, ru_supply_krw:r.ru_supply_krw,
