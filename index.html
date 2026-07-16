@@ -906,7 +906,8 @@ input[type="text"]::placeholder{color:var(--muted)}
     <div id="adminOrdersView" style="display:flex;flex-direction:column;flex:1;min-height:0">
       <div style="padding:0 4px 10px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:10px">
         <span id="adminOrderCount" style="font-size:11px;color:var(--muted)"></span>
-        <button class="news-btn-primary" onclick="downloadAdminOrders()">
+        <button class="dl-btn" onclick="downloadAdminOrders()">
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           <span id="i18n-adminxls">엑셀 다운로드</span>
         </button>
       </div>
@@ -922,7 +923,8 @@ input[type="text"]::placeholder{color:var(--muted)}
     <div id="adminMyOrdersView" style="display:none;flex-direction:column;flex:1;min-height:0">
       <div style="padding:10px 4px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:10px">
         <span id="adminMyOrderCount" style="font-size:11px;color:var(--muted)"></span>
-        <button class="news-btn-primary" onclick="downloadAdminMyOrders()">
+        <button class="dl-btn" onclick="downloadAdminMyOrders()">
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           <span id="i18n-adminmyorderxls">엑셀 다운로드</span>
         </button>
       </div>
