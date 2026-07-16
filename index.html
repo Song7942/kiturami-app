@@ -966,6 +966,7 @@ input[type="text"]::placeholder{color:var(--muted)}
       <div class="pn-body-wrap">
         <table class="member-tbl" style="width:100%;border-collapse:collapse;font-size:13px">
           <thead><tr>
+            <th class="center" id="i18n-signup-th-grade">등급</th>
             <th id="i18n-signup-th-company">회사명</th>
             <th id="i18n-signup-th-id">아이디</th>
             <th id="i18n-signup-th-supplier">구매처</th>
@@ -1424,7 +1425,7 @@ const T={
        resetOnlyShipTitle:'출고 초기화',resetOnlyShipDesc:'출고내역 데이터만 삭제합니다. 주문과 재고는 유지됩니다.',resetOnlyShipBtn:'출고 초기화',
        resetOnlyShipPrompt:w=>`모든 회원의 출고내역을 지우시겠습니까?\n주문과 재고는 유지됩니다. 이 작업은 되돌릴 수 없습니다. 계속하려면 아래에 "${w}"를 정확히 입력하세요.`,resetOnlyShipDone:'출고내역이 초기화되었습니다.',
        signupApproveConfirm:id=>`${id} 계정의 가입을 승인하시겠습니까?`,signupRejectConfirm:id=>`${id} 계정의 가입을 거부하시겠습니까?`,signupDeleteConfirm:id=>`${id} 계정을 삭제하시겠습니까? 삭제하면 되돌릴 수 없습니다.`,
-       signupThCompany:'회사명',signupThId:'아이디',signupThContact:'담당자명',signupThPhone:'휴대폰',signupThEmail:'이메일',signupThSupplier:'구매처',signupThStatus:'상태',
+       signupThGrade:'등급',signupThCompany:'회사명',signupThId:'아이디',signupThContact:'담당자명',signupThPhone:'휴대폰',signupThEmail:'이메일',signupThSupplier:'구매처',signupThStatus:'상태',
        resetAllMembersBtn:'전체 회원 초기화',resetAllOrdersBtn:'주문·재고·출고 초기화',
        signupStatusPending:'승인대기',signupStatusApproved:'승인됨',signupStatusRejected:'거부됨',
        reqEmpty:'대기중인 요청이 없습니다.',reqTypeCancel:'취소 신청',reqTypeChange:n=>`수량변경 신청 → ${n}`,
@@ -1517,7 +1518,7 @@ const T={
        resetOnlyShipTitle:'Сброс отгрузок',resetOnlyShipDesc:'Удаляет только данные отгрузок. Заказы и склад сохраняются.',resetOnlyShipBtn:'Сбросить отгрузки',
        resetOnlyShipPrompt:w=>`Удалить данные отгрузок всех участников?\nЗаказы и склад сохранятся. Это необратимо. Введите "${w}", чтобы продолжить.`,resetOnlyShipDone:'Данные отгрузок сброшены.',
        signupApproveConfirm:id=>`Одобрить регистрацию аккаунта ${id}?`,signupRejectConfirm:id=>`Отклонить регистрацию аккаунта ${id}?`,signupDeleteConfirm:id=>`Удалить аккаунт ${id}? Это необратимо.`,
-       signupThCompany:'Компания',signupThId:'Логин',signupThContact:'Контактное лицо',signupThPhone:'Мобильный',signupThEmail:'Email',signupThSupplier:'Поставщик',signupThStatus:'Статус',
+       signupThGrade:'Уровень',signupThCompany:'Компания',signupThId:'Логин',signupThContact:'Контактное лицо',signupThPhone:'Мобильный',signupThEmail:'Email',signupThSupplier:'Поставщик',signupThStatus:'Статус',
        resetAllMembersBtn:'Сбросить всех участников',resetAllOrdersBtn:'Сбросить заказы/склад/отгрузки',
        signupStatusPending:'Ожидает',signupStatusApproved:'Одобрено',signupStatusRejected:'Отклонено',
        reqEmpty:'Нет ожидающих запросов.',reqTypeCancel:'Запрос отмены',reqTypeChange:n=>`Запрос изменения → ${n}`,
@@ -1593,7 +1594,7 @@ function switchTab(tab){
   const btn=document.getElementById('toTopBtn'); if(btn) btn.classList.remove('show');
   if(tab==='pn') renderPN();
   // KAZAK 은 주문탭 공급가로 카자흐스탄 USD 를 쓰므로 계산식 데이터도 함께 읽는다.
-  if(tab==='order'){ mountModelDiag('order'); syncDiagram(); refreshCurrentUser().then(()=>Promise.all([loadMyOrderTotals(), loadInventory(), loadGlobalSuppliedTotals(), loadReceivedOrderTotals(), loadPrices(), (userRole(currentUser).region==='kz'?Promise.all([loadPriceSettings(),loadPriceCalc()]):Promise.resolve())])).then(renderOrderTable); renderOrderTable(); }
+  if(tab==='order'){ mountModelDiag('order'); syncDiagram(); refreshCurrentUser().then(()=>Promise.all([loadMyOrderTotals(), loadInventory(), loadGlobalSuppliedTotals(), loadReceivedOrderTotals(), loadPrices(), loadCompanyPrices(), (userRole(currentUser).region==='kz'?Promise.all([loadPriceSettings(),loadPriceCalc()]):Promise.resolve())])).then(renderOrderTable); renderOrderTable(); }
   if(tab==='parts'){ mountModelDiag('parts'); syncDiagram(); renderTable(); }
   if(tab==='inventory'){ refreshCurrentUser().then(()=>Promise.all([loadInventory(), loadGlobalSuppliedTotals()])).then(renderInventoryList); }
   if(tab==='shipments'){ refreshCurrentUser().then(()=>loadShipments()).then(renderShipmentsList); }
@@ -2772,6 +2773,11 @@ function orderPriceFor(rep){
     const m=buildSupplyByRep()[rep];
     return (m && m.usd!=null) ? m.usd : null;
   }
+  // 구매처가 일반 회사인 회사 계정: 구매처가 지정한 등급의 공급가 (가격정보 탭의 구매가와 동일)
+  const sup=String(currentUser&&currentUser.supplier_company||'').trim().toUpperCase();
+  if(role.isCompanyAdmin && sup && sup!=='KITURAMI'){
+    return supplierBuyPriceFor(rep, buildSupplyByRep());
+  }
   const p=priceData[rep];
   return (p && p.price!=null && p.price!=='') ? Number(p.price) : null;
 }
@@ -3814,6 +3820,27 @@ async function loadMemberManagementTab(){
   if(resetWrap) resetWrap.style.display = (currentUser.is_admin && !currentUser.supplier_company) ? "block" : "none";
 }
 let companyMembers=[];
+// 공급가 등급 A~D. 구매처가 자기 회사를 구매처로 지정한 각 회사에게 어떤 공급가(A/B/C/D)를
+// 노출할지 정한다. 스키마 변경을 피하려고 구매처의 kt_company_prices 에 예약 rep
+// '@GRADE:<구매사>' 행으로 저장한다(buy_price = 1~4). 표에는 노출하지 않는다.
+const GRADE_LETTERS=['A','B','C','D'];
+const gradeToCode=g=>({A:1,B:2,C:3,D:4}[String(g||'').toUpperCase()]||null);
+const codeToGrade=c=>GRADE_LETTERS[(Number(c)||0)-1]||null;
+const GRADE_PREFIX='@GRADE:';
+let memberGradeByCompany={};   // 구매사 회사명(대문자) → 'A'|'B'|'C'|'D'
+async function loadMemberGrades(){
+  memberGradeByCompany={};
+  const role=userRole(currentUser);
+  let q=sb.from('kt_company_prices').select('company,rep,buy_price').like('rep', GRADE_PREFIX+'%');
+  if(!role.isMaster) q=q.ilike('company', currentUser?currentUser.company:'');   // 회사 계정은 자기 회사 것만
+  const { data, error } = await q;
+  if(error){ console.warn('등급 조회 실패:', error.message); return; }
+  (data||[]).forEach(r=>{
+    const buyer=String(r.rep).slice(GRADE_PREFIX.length).trim().toUpperCase();
+    const g=codeToGrade(r.buy_price);
+    if(buyer && g) memberGradeByCompany[buyer]=g;
+  });
+}
 async function loadPendingSignups(){
   const myCompany=currentUser?currentUser.company:'';
   const role=userRole(currentUser);
@@ -3823,11 +3850,43 @@ async function loadPendingSignups(){
   const { data, error } = await q.order('id');
   if(error){ console.error(error); companyMembers=[]; return; }
   companyMembers=data||[];
+  await loadMemberGrades();
   const pendingCount=companyMembers.filter(u=>u.status==='pending').length;
   const badge=document.getElementById('adminSignupBadge');
   if(badge){
     if(pendingCount){ badge.textContent=pendingCount; badge.style.display='inline-block'; }
     else badge.style.display='none';
+  }
+}
+// 등급 드롭다운. 구매처가 있는 회원만 등급을 정할 수 있다(구매처가 그 회원에게 공급가를 노출).
+function gradeSelectHtml(u){
+  if(!u.supplier_company) return '<span style="color:var(--muted)">-</span>';
+  const cur=memberGradeByCompany[String(u.company||'').trim().toUpperCase()]||'';
+  const opts=['<option value="">-</option>']
+    .concat(GRADE_LETTERS.map(g=>`<option value="${g}"${cur===g?' selected':''}>${g}</option>`)).join('');
+  const cEsc=String(u.company||'').replace(/'/g,"\\'");
+  const sEsc=String(u.supplier_company||'').replace(/'/g,"\\'");
+  return `<select onchange="updateMemberGrade('${cEsc}','${sEsc}',this.value)" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px">${opts}</select>`;
+}
+async function updateMemberGrade(buyerCompany, supplierCompany, grade){
+  const role=userRole(currentUser);
+  if(!role.isMaster && !role.isCompanyAdmin) return;
+  const buyer=String(buyerCompany||'').trim().toUpperCase();
+  if(!buyer || !supplierCompany) return;
+  const rep=GRADE_PREFIX+buyer;
+  const code=gradeToCode(grade);
+  const t=T[lang];
+  if(code==null){
+    // 등급 해제
+    const { error } = await sb.from('kt_company_prices').delete().ilike('company', supplierCompany).eq('rep', rep);
+    if(error){ alert((lang==='ru'?'Ошибка':'저장 실패')+'\n['+(error.message||error.code)+']'); return; }
+    delete memberGradeByCompany[buyer];
+  } else {
+    const { error } = await sb.from('kt_company_prices').upsert(
+      { company:supplierCompany, rep, buy_price:code, supply_price:null, updated_at:new Date().toISOString() },
+      { onConflict:'company,rep' });
+    if(error){ alert((lang==='ru'?'Ошибка':'저장 실패')+'\n['+(error.message||error.code)+']'); return; }
+    memberGradeByCompany[buyer]=codeToGrade(code);
   }
 }
 function renderPendingSignups(){
@@ -3851,6 +3910,7 @@ function renderPendingSignups(){
     const approveBtn=u.status==='pending' ? `<button class="news-btn-primary" onclick="approveSignup('${idEsc}')">${t.signupApprove}</button>` : '';
     const rejectBtn=u.status==='pending' ? `<button class="news-btn-secondary" onclick="rejectSignup('${idEsc}')">${t.signupReject}</button>` : '';
     return `<tr style="border-bottom:1px solid var(--border)">
+    <td style="padding:9px 12px;text-align:center">${gradeSelectHtml(u)}</td>
     <td style="padding:9px 12px">${escapeHtml(u.company)}</td>
     <td style="padding:9px 12px">${escapeHtml(u.id)}</td>
     <td style="padding:9px 12px">${escapeHtml(u.supplier_company||'-')}</td>
@@ -3881,6 +3941,7 @@ function renderPendingSignups(){
         <div>${t.signupThEmail}: <span style="color:var(--text)">${escapeHtml(u.email||'-')}</span></div>
         <div>ID: <span class="code">${escapeHtml(u.id)}</span></div>
         <div>${t.signupThSupplier}: <span style="color:var(--text)">${escapeHtml(u.supplier_company||'-')}</span></div>
+        <div style="display:flex;align-items:center;gap:6px">${t.signupThGrade}: ${gradeSelectHtml(u)}</div>
       </div>
       <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
         ${approveBtn}${rejectBtn}
@@ -4508,6 +4569,7 @@ function refreshAdminTexts(){
   setTxt('i18n-admintab-requests', t.adminTabRequests);
   setTxt('i18n-admintab-signups', t.adminTabSignups);
   setTxt('i18n-adminmyorderxls', t.adminXls||t.myOrdersXls||'엑셀 다운로드');
+  setTxt('i18n-signup-th-grade', t.signupThGrade);
   setTxt('i18n-signup-th-company', t.signupThCompany);
   setTxt('i18n-signup-th-id', t.signupThId);
   setTxt('i18n-signup-th-contact', t.signupThContact);
@@ -6127,7 +6189,9 @@ function priceMode(){
 }
 // 회사별 가격 (rep -> {buy_price, supply_price})
 let companyPriceData={};   // 자사
-let supplierPriceData={};  // 구매처(상위 회사)의 가격 — 구매가 자동 채우기에 사용
+let supplierPriceData={};  // 구매처(상위 회사)의 rep별 구매가 — 등급 공급가 계산에 사용
+let supplierSupplyGp={ a:0.20, b:0.25, c:0.30, d:0.35 };  // 구매처의 공급가 A~D 기준 GP
+let myGrade='A';           // 구매처가 나에게 지정한 공급가 등급
 // 공급가 A~D 의 기준 GP(%) — 회사별 설정. 스키마를 바꾸지 않으려고 kt_company_prices 의
 // 예약 rep 행('@GP_A'…'@GP_D')에 buy_price 로 저장한다. 표에는 노출하지 않는다.
 const CGP_KEYS={ a:'@GP_A', b:'@GP_B', c:'@GP_C', d:'@GP_D' };
@@ -6147,13 +6211,29 @@ async function loadCompanyPrices(){
     });
     ['a','b','c','d'].forEach(k=>{ if(gp[k]!=null && gp[k]>=0 && gp[k]<1) companySupplyGp[k]=gp[k]; });
   }
-  // 구매처가 KITURAMI 가 아닌 일반 회사면, 그 회사가 등록한 공급가를 구매가로 가져온다.
+  // 구매처가 KITURAMI 가 아닌 일반 회사면, 그 회사의 구매가·GP·내 등급을 가져와
+  // 구매가 = 구매처의 '내 등급' 공급가 = ceil(구매처 구매가 / (1 - 구매처 GP[등급])) 로 계산한다.
   supplierPriceData={};
+  supplierSupplyGp={ a:0.20, b:0.25, c:0.30, d:0.35 };
+  myGrade='A';   // 등급 미지정 시 A
   const sup=String(currentUser&&currentUser.supplier_company||'').trim();
   if(sup && sup.toUpperCase()!=='KITURAMI'){
     const r=await sb.from('kt_company_prices').select('*').ilike('company', sup);
     if(r.error) console.error('구매처 가격 조회 실패:', r.error.message);
-    else (r.data||[]).forEach(row=>{ supplierPriceData[row.rep]={ supply_price:row.supply_price }; });
+    else {
+      const myCoUp=String(role.company||'').trim().toUpperCase();
+      const sgp={};
+      (r.data||[]).forEach(row=>{
+        const gk=Object.keys(CGP_KEYS).find(k=>CGP_KEYS[k]===row.rep);
+        if(gk){ if(row.buy_price!=null) sgp[gk]=Number(row.buy_price); return; }
+        if(String(row.rep).startsWith(GRADE_PREFIX)){
+          if(String(row.rep).slice(GRADE_PREFIX.length).trim().toUpperCase()===myCoUp){ const g=codeToGrade(row.buy_price); if(g) myGrade=g; }
+          return;
+        }
+        supplierPriceData[row.rep]={ buy_price:row.buy_price };
+      });
+      ['a','b','c','d'].forEach(k=>{ if(sgp[k]!=null && sgp[k]>=0 && sgp[k]<1) supplierSupplyGp[k]=sgp[k]; });
+    }
   }
 }
 // 구매가 기본값을 어디서 가져올지 결정한다.
@@ -6176,8 +6256,12 @@ function supplierBuyPriceFor(rep, supplyMap){
     const isKz=/카자|Казах|Kazakh/i.test(country);
     return isKz ? m.usd : m.rub;
   }
+  // 구매처가 일반 회사: 구매가 = 구매처가 나에게 지정한 등급의 공급가
+  //   = ceil(구매처의 그 품목 구매가 / (1 - 구매처 GP[내 등급]))
   const s=supplierPriceData[rep];
-  return (s && s.supply_price!=null && s.supply_price!=='') ? Number(s.supply_price) : null;
+  if(!s || s.buy_price==null || s.buy_price==='') return null;
+  const gk=String(myGrade||'A').toLowerCase();
+  return companySupplyFrom(Number(s.buy_price), supplierSupplyGp[gk]);
 }
 function companyGp(buy, supply){
   if(buy==null||supply==null||!(supply>0)) return null;
@@ -7593,7 +7677,7 @@ function enterApp(user){
   const tabReset=document.getElementById('tab-reset');
   if(tabReset) tabReset.style.display = (user.is_admin && !user.supplier_company && !role.isKituramiHQ) ? 'block' : 'none';
   loadOrderFeedStamps().then(updateOrderUnreadDots);   // 주문 알림 점 (탭을 열기 전에도 보이게)
-  Promise.all([loadMyOrderTotals(), loadInventory(), loadGlobalSuppliedTotals(), loadReceivedOrderTotals(), loadPrices(), loadPNOverrides(),
+  Promise.all([loadMyOrderTotals(), loadInventory(), loadGlobalSuppliedTotals(), loadReceivedOrderTotals(), loadPrices(), loadPNOverrides(), loadCompanyPrices(),
                (role.region==='kz'?Promise.all([loadPriceSettings(),loadPriceCalc()]):Promise.resolve())]).then(()=>{
     if(document.getElementById('pane-order').classList.contains('active')) renderOrderTable();
     if(document.getElementById('pane-pn').classList.contains('active')) renderPN();
