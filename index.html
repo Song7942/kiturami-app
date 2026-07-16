@@ -6399,6 +6399,58 @@ function handlePriceUpload(event){
   if(priceMode()==='company') return handleCompanyPriceUpload(event);
   return handlePriceCalcUpload(event);
 }
+// ── 원가 시세표 업로드 (자유 양식) ──
+// 어느 열에 있든 아는 품번을 찾아, 바로 오른쪽 칸을 가격으로 읽는다.
+// 여러 품번이 같은 대표품번으로 모이면 그중 가장 높은 가격을 원가로 삼는다.
+// 계산식 전체를 갈아엎지 않고 이미 있는 행의 원가 KRW 만 갱신한다.
+// (원가 RUB/USD 는 화면의 기준환율로 계산되므로 따로 저장하지 않는다)
+async function applyCostPriceList(arr, event){
+  const byRep={}, seen={};
+  (arr||[]).forEach(row=>{
+    if(!Array.isArray(row)) return;
+    for(let c=0;c<row.length-1;c++){
+      const code=String(row[c]==null?'':row[c]).trim();
+      if(!code) continue;
+      const rep=findMasterRep(code);
+      if(!rep) continue;                       // 아는 품번이 아니면 건너뛴다
+      const raw=String(row[c+1]==null?'':row[c+1]).replace(/,/g,'').trim();
+      if(!raw) continue;
+      const price=Number(raw);
+      if(!(price>0)) continue;                 // 옆칸이 숫자가 아니면 가격이 아니다
+      if(byRep[rep]==null || price>byRep[rep]){ byRep[rep]=price; }
+      (seen[rep]=seen[rep]||[]).push(code);
+    }
+  });
+  const reps=Object.keys(byRep);
+  if(!reps.length){
+    alert('가격을 읽지 못했습니다.\n품번과 그 오른쪽 칸에 가격이 있는지 확인해 주세요.');
+    event.target.value=''; return;
+  }
+  const targets=priceCalcData.filter(r=>byRep[r.rep]!=null);
+  if(!targets.length){
+    alert(`품번 ${reps.length}개를 찾았지만 계산식에 해당하는 행이 없습니다.`);
+    event.target.value=''; return;
+  }
+  if(!confirm(`대표품번 ${reps.length}개의 가격을 찾았습니다.\n계산식 ${targets.length}행의 원가 KRW 를 갱신합니다. 계속하시겠습니까?`)){
+    event.target.value=''; return;
+  }
+  const now=new Date().toISOString();
+  const payload=targets.map(r=>{
+    r.ru_cost=Math.ceil(byRep[r.rep]);   // 원가는 원 단위 — 올림
+    r.updated_at=now;
+    return { row_no:r.row_no, name_ko:r.name_ko, spec:r.spec, rep:r.rep, compat:r.compat, final:r.final,
+             ship_qty:r.ship_qty, ru_cost:r.ru_cost, ru_supply_krw:r.ru_supply_krw,
+             kz_supply_krw:r.kz_supply_krw, updated_at:now };
+  });
+  for(let i=0;i<payload.length;i+=500){
+    const { error } = await sb.from('kt_price_calc').upsert(payload.slice(i,i+500),{onConflict:'row_no'});
+    if(error){ alert('업로드 실패\n['+(error.message||error.code)+']'); event.target.value=''; return; }
+  }
+  await syncKtPricesFromCalc();
+  renderPriceActive();
+  event.target.value='';
+  alert(`원가 ${targets.length}행을 갱신했습니다.\n원가 RUB/USD 는 현재 기준환율로 계산됩니다.`);
+}
 // ── 계산식 엑셀 업로드 ──
 async function handlePriceCalcUpload(event){
   const file=event.target.files[0];
@@ -6410,13 +6462,24 @@ async function handlePriceCalcUpload(event){
       const wb=XLSX.read(data,{type:'array'});
       const sheetName=wb.SheetNames.includes('계산식')?'계산식':wb.SheetNames[0];
       const arr=XLSX.utils.sheet_to_json(wb.Sheets[sheetName],{header:1,raw:true,defval:''});
-      // 양식 감지: 6행(단위행)에서 USD 위치로 판별 — 신양식(원가 1열): L열(idx11), 구양식(원가 2열): M열(idx12)
+      // 계산식 양식(전체 교체)인지, 품번+가격만 있는 시세표(원가만 갱신)인지 가른다.
+      // 계산식 시트를 시세표로 잘못 읽으면 최종품번 옆의 '출고' 수량을 가격으로
+      // 삼아버리므로, 헤더에 '대표품번'이 있으면 무조건 계산식 양식으로 본다.
+      const isCalcSheet=arr.slice(0,8).some(row=>(row||[]).some(v=>String(v||'').replace(/\s/g,'').includes('대표품번')));
+      if(!isCalcSheet) return applyCostPriceList(arr, event);
+      // 양식 감지: 6행(단위행)의 USD 위치로 판별
+      //   현행(원가 KRW|RUB|USD 3열): I열(idx8)=USD   ← 지금 다운로드가 내보내는 양식
+      //   중간(원가 1열)            : L열(idx11)=USD
+      //   구양식(원가 2열)          : M열(idx12)=USD
       const unitRow=(arr[5]||[]).map(v=>String(v||'').trim().toUpperCase());
+      const isCostSplitFmt = unitRow[8]==='USD';
       const isOldFmt = unitRow[12]==='USD';
-      // 파라미터: D2=KRW/RUB, F2=KRW/USD, J2=러시아 GP, 카자흐 GP는 신양식 M2 / 구양식 N2
+      // 파라미터: D2=KRW/RUB, F2=KRW/USD. GP 위치는 양식마다 다르다.
       const num=v=>{ const n=Number(v); return isNaN(n)?null:n; };
       const pr=arr[1]||[];
-      const rub=num(pr[3]), usd=num(pr[5]), ruGp=num(pr[9]), kzGp=isOldFmt?num(pr[13]):num(pr[12]);
+      const rub=num(pr[3]), usd=num(pr[5]);
+      const ruGp=isCostSplitFmt?num(pr[11]):num(pr[9]);
+      const kzGp=isCostSplitFmt?num(pr[14]):(isOldFmt?num(pr[13]):num(pr[12]));
       if(rub>0) priceSettings.rub_rate=rub;
       if(usd>0) priceSettings.usd_rate=usd;
       if(ruGp!=null&&ruGp>=0&&ruGp<1) priceSettings.ru_gp=ruGp;
@@ -6429,7 +6492,10 @@ async function handlePriceCalcUpload(event){
         const name=String(a[0]||'').trim();
         if(!rep && !name) continue;
         const cellNum=v=>{ if(v===''||v==null) return null; if(typeof v==='string'&&v.trim().startsWith('=')) return null; const n=Number(v); return isNaN(n)?null:n; };
-        let ruCost=cellNum(a[6]), ruSupply=cellNum(a[7]), kzSupply=cellNum(isOldFmt?a[11]:a[10]);
+        // 원가 KRW 는 어느 양식이든 G열(idx6). 공급가 위치만 양식에 따라 다르다.
+        let ruCost=cellNum(a[6]);
+        let ruSupply=cellNum(isCostSplitFmt?a[9]:a[7]);
+        let kzSupply=cellNum(isCostSplitFmt?a[12]:(isOldFmt?a[11]:a[10]));
         // 원가는 원 단위 — 엑셀에 소수가 있어도 올림해서 받는다.
         // 아래 공급가 자동계산이 이 값을 쓰므로 반드시 먼저 올림한다.
         if(ruCost!=null) ruCost=Math.ceil(ruCost);
@@ -6465,19 +6531,24 @@ function downloadPriceActive(){
   if(m==='ru'||m==='kz') return downloadPriceRegion(m);
   if(m==='company') return downloadPriceCompany();
   if(priceView==='calc'){
+    // 열 순서는 화면과 같게 유지한다 (원가 KRW|RUB|USD 3열 포함).
+    // 6행(단위행)의 I열이 USD 인지로 이 양식을 알아본다 → handlePriceCalcUpload 참고.
     const aoa=[];
-    aoa.push(['','','러시아','','카자흐스탄','','','','','','','','']);
-    aoa.push(['','','기준환율(KRW/RUB)',priceSettings.rub_rate,'기준환율(KRW/USD)',priceSettings.usd_rate,'','러시아 기준 GP','',priceSettings.ru_gp,'카자흐스탄 기준 GP','',priceSettings.kz_gp]);
-    aoa.push(['','','최초매매기준율(전월말일)','','최초매매기준율(전월말일)','','','','','','','','']);
-    aoa.push(['품명','규격','대표품번\n(미변경)','호환품번\n(변경)','최종품번\n(변경, 현시점)','출고\n(18y~)','원가','러시아','','','카자흐스탄','','']);
-    aoa.push(['','','','','','','','공급가','','GP','공급가','','GP']);
-    aoa.push(['','','','','','','KRW','KRW','RUB','','KRW','USD','']);
+    aoa.push(['','','러시아','','카자흐스탄','','','','','','','','','','']);
+    aoa.push(['','','기준환율(KRW/RUB)',priceSettings.rub_rate,'기준환율(KRW/USD)',priceSettings.usd_rate,'','','','러시아 기준 GP','',priceSettings.ru_gp,'카자흐스탄 기준 GP','',priceSettings.kz_gp]);
+    aoa.push(['','','최초매매기준율(전월말일)','','최초매매기준율(전월말일)','','','','','','','','','','']);
+    aoa.push(['품명','규격','대표품번\n(미변경)','호환품번\n(변경)','최종품번\n(변경, 현시점)','출고\n(18y~)','원가','','','러시아','','','카자흐스탄','','']);
+    aoa.push(['','','','','','','','','','공급가','','GP','공급가','','GP']);
+    aoa.push(['','','','','','','KRW','RUB','USD','KRW','RUB','','KRW','USD','']);
     priceCalcData.forEach(r=>{
       const c=calcPriceRow(r);
-      aoa.push([r.name_ko||'',r.spec||'',r.rep||'',r.compat||'',r.final||'',r.ship_qty??'',c.ruCost??'',c.ruSupply??'',c.ruRub??'',c.ruGpVal!=null?Math.round(c.ruGpVal*1000)/1000:'',c.kzSupply??'',c.kzUsd??'',c.kzGpVal!=null?Math.round(c.kzGpVal*1000)/1000:'']);
+      aoa.push([r.name_ko||'',r.spec||'',r.rep||'',r.compat||'',r.final||'',r.ship_qty??'',
+        c.ruCost??'',c.costRub??'',c.costUsd??'',
+        c.ruSupply??'',c.ruRub??'',c.ruGpVal!=null?Math.round(c.ruGpVal*1000)/1000:'',
+        c.kzSupply??'',c.kzUsd??'',c.kzGpVal!=null?Math.round(c.kzGpVal*1000)/1000:'']);
     });
     const ws=XLSX.utils.aoa_to_sheet(aoa);
-    ws['!cols']=[{wch:18},{wch:24},{wch:15},{wch:15},{wch:15},{wch:8},{wch:11},{wch:11},{wch:10},{wch:7},{wch:11},{wch:9},{wch:7}];
+    ws['!cols']=[{wch:18},{wch:24},{wch:15},{wch:15},{wch:15},{wch:8},{wch:11},{wch:10},{wch:9},{wch:11},{wch:10},{wch:7},{wch:11},{wch:9},{wch:7}];
     const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'계산식');
     XLSX.writeFile(wb,`KITURAMI_가격정보_계산식_${new Date().toISOString().slice(0,10)}.xlsx`);
   }else{
