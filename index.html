@@ -5222,7 +5222,10 @@ async function loadReceivedOrderTotals(){
 let regionOrderTotals={};
 async function loadRegionOrderTotals(){
   if(!userRole(currentUser).isKituramiHQ){ regionOrderTotals={}; return; }
-  const { data, error } = await sb.from('kt_orders').select('items,target_company').in('target_company', ['RUSSIA','KAZAK']);
+  // 회사명 비교는 이 앱 전체가 대소문자를 가리지 않으므로(ilike) 여기서도 맞춘다.
+  // in() 을 쓰면 'Russia' 처럼 저장된 값을 놓쳐 배분후 재고가 기초재고와 같아진다.
+  const { data, error } = await sb.from('kt_orders').select('items,target_company')
+    .or('target_company.ilike.RUSSIA,target_company.ilike.KAZAK');
   if(error){ console.error(error); regionOrderTotals={}; return; }
   const totals={};
   (data||[]).forEach(o=>{
