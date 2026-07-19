@@ -320,7 +320,7 @@ input[type="text"]::placeholder{color:var(--muted)}
   .tabs{flex-wrap:wrap;padding:2px 8px;overflow-x:hidden}
   .tab-btn{padding:10px 10px;font-size:17px;font-weight:700;flex:1 1 auto;text-align:center}
   #myOrdersTableWrap{display:none}
-  #pane-pn .pn-hdr-wrap,#pane-pn .pn-body-wrap,#pane-inventory .pn-hdr-wrap,#pane-inventory .pn-body-wrap,#pane-shipments .pn-hdr-wrap,#pane-shipments .pn-body-wrap,#pane-adminOrders .pn-body-wrap,#pane-memberManagement .pn-body-wrap{display:none}
+  #pane-pn .pn-hdr-wrap,#pane-pn .pn-body-wrap,#pane-inventory .pn-hdr-wrap,#pane-inventory .pn-body-wrap,#pane-shipments .pn-hdr-wrap,#pane-shipments .pn-body-wrap,#pane-adminOrders .pn-body-wrap,#pane-memberManagement .pn-body-wrap,#pane-price .pn-hdr-wrap,#pane-price .pn-body-wrap{display:none}
   .search-bar{flex-wrap:wrap}
   .search-wrap{flex-basis:100%;order:5}
 }
@@ -895,6 +895,8 @@ input[type="text"]::placeholder{color:var(--muted)}
           <tbody id="priceSupplyTbody"></tbody>
         </table>
       </div>
+      <!-- 모바일 카드 (표 대신) -->
+      <div class="card-list" id="priceCardList" style="margin:0 0 8px"></div>
       <div id="priceNoResult" class="no-result" style="display:none"></div>
     </div>
   </div>
@@ -6091,6 +6093,24 @@ function renderPriceActive(){
 }
 function fmtN(x){ return (x==null||isNaN(x))?'':Number(x).toLocaleString(); }
 function fmtGp(x){ return (x==null||isNaN(x))?'':(Math.round(x*1000)/10)+'%'; }
+// 모바일 카드 한 장. name=품명, spec=규격, codes=[{label,val}] 품번칩, fields=[{label,val}] 값들
+function priceCardHtml(name, spec, codes, fields){
+  const specHtml = spec ? `<div class="pc-spec">${escapeHtml(spec)}</div>` : '';
+  const codeHtml = (codes||[]).filter(c=>c.val).map(c=>
+    `<div style="font-size:10px;color:var(--muted);margin-top:2px">${escapeHtml(c.label)}: <span class="code" style="font-size:10px;padding:1px 4px">${escapeHtml(c.val)}</span></div>`).join('');
+  const fieldHtml = (fields||[]).filter(f=>f.val!=null && f.val!=='').map(f=>
+    `<div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:2px 0"><span style="color:var(--muted)">${escapeHtml(f.label)}</span><b style="color:var(--text)">${f.val}</b></div>`).join('');
+  return `<div class="order-card">
+    <div class="pc-name">${escapeHtml(name||'')}</div>
+    ${specHtml}${codeHtml}
+    <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">${fieldHtml}</div>
+  </div>`;
+}
+// 카드 리스트를 채운다. 비어 있으면 안내는 표 쪽 priceNoResult 가 처리하므로 여기선 목록만.
+function setPriceCards(html){
+  const el=document.getElementById('priceCardList');
+  if(el) el.innerHTML=html||'';
+}
 function priceFilterRows(){
   const kwEl=document.getElementById('priceSearchInput');
   const kw=(kwEl?kwEl.value:'').trim().toLowerCase();
@@ -6125,7 +6145,7 @@ function renderPriceCalc(){
   document.getElementById('pricecalc-body-col').innerHTML=cols;
   const tbody=document.getElementById('priceCalcTbody');
   const emptyEl=document.getElementById('priceNoResult');
-  if(!rows.length){ tbody.innerHTML=''; emptyEl.textContent=t.priceNoCalc; emptyEl.style.display='block'; return; }
+  if(!rows.length){ tbody.innerHTML=''; setPriceCards(''); emptyEl.textContent=t.priceNoCalc; emptyEl.style.display='block'; return; }
   emptyEl.style.display='none';
   const inputStyle='width:100%;max-width:72px;box-sizing:border-box;padding:2px 3px;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:var(--text);text-align:right;font-size:11px';
   tbody.innerHTML=rows.map(r=>{
@@ -6148,6 +6168,16 @@ function renderPriceCalc(){
       <td class="center" style="padding:3px 2px;color:var(--muted)">${fmtGp(c.kzGpVal)}</td>
     </tr>`;
   }).join('');
+  // 모바일 카드 (조회용 — 편집은 데스크톱 표에서)
+  setPriceCards(rows.map(r=>{
+    const c=calcPriceRow(r);
+    return priceCardHtml(priceNameFor(r), isKo?r.spec:'',
+      [{label:t.pnH1,val:r.rep},{label:t.pnH2,val:r.compat},{label:t.pnH3,val:r.final},{label:t.priceThShip.replace('<br>',' '),val:fmtN(r.ship_qty)}],
+      [{label:t.priceThCost+' KRW',val:fmtN(c.ruCost)},{label:t.priceThCost+' RUB',val:fmtN(c.costRub)},{label:t.priceThCost+' USD',val:fmtN(c.costUsd)},
+       {label:t.priceThRu+' '+t.priceThSupply+' KRW',val:fmtN(c.ruSupply)},{label:t.priceThRu+' '+t.priceThSupply+' RUB',val:fmtN(c.ruRub)},{label:t.priceThRu+' '+t.priceThGp,val:fmtGp(c.ruGpVal)},
+       {label:t.priceThKz+' '+t.priceThSupply+' KRW',val:fmtN(c.kzSupply)},{label:t.priceThKz+' '+t.priceThSupply+' USD',val:fmtN(c.kzUsd)},{label:t.priceThKz+' '+t.priceThGp,val:fmtGp(c.kzGpVal)}]
+    );
+  }).join(''));
   scheduleSplitTableResync('pricecalc-hdr-col','pricecalc-body-col','priceCalcTbody','fixed');
 }
 function renderPriceSupply(){
@@ -6172,7 +6202,7 @@ function renderPriceSupply(){
   document.getElementById('pricesupply-body-col').innerHTML=cols;
   const tbody=document.getElementById('priceSupplyTbody');
   const emptyEl=document.getElementById('priceNoResult');
-  if(!list.length){ tbody.innerHTML=''; emptyEl.textContent=t.priceNoSupply; emptyEl.style.display='block'; return; }
+  if(!list.length){ tbody.innerHTML=''; setPriceCards(''); emptyEl.textContent=t.priceNoSupply; emptyEl.style.display='block'; return; }
   emptyEl.style.display='none';
   tbody.innerHTML=list.map(m=>`<tr style="border-bottom:1px solid var(--border);font-size:11px" class="price-row">
       <td style="padding:3px 4px;word-break:break-all">${escapeHtml(priceNameFor(m))}</td>
@@ -6183,6 +6213,10 @@ function renderPriceSupply(){
       <td style="text-align:right;padding:3px 6px;font-weight:600">${fmtN(m.rub)}</td>
       <td style="text-align:right;padding:3px 6px;font-weight:600">${fmtN(m.usd)}</td>
     </tr>`).join('');
+  setPriceCards(list.map(m=>priceCardHtml(priceNameFor(m), isKo?m.spec:'',
+    [{label:t.pnH1,val:m.rep},{label:t.pnH2,val:(m.compats||[]).join(', ')},{label:t.pnH3,val:m.final}],
+    [{label:t.priceThSupply+' (RUB)',val:fmtN(m.rub)},{label:t.priceThSupply+' (USD)',val:fmtN(m.usd)}]
+  )).join(''));
   scheduleSplitTableResync('pricesupply-hdr-col','pricesupply-body-col','priceSupplyTbody','fixed');
 }
 
@@ -6389,7 +6423,7 @@ function renderPriceRegion(region){
   document.getElementById('pricecalc-body-col').innerHTML=cols;
   const tbody=document.getElementById('priceCalcTbody');
   const emptyEl=document.getElementById('priceNoResult');
-  if(!list.length){ tbody.innerHTML=''; emptyEl.textContent=t.priceNoData; emptyEl.style.display='block'; return; }
+  if(!list.length){ tbody.innerHTML=''; setPriceCards(''); emptyEl.textContent=t.priceNoData; emptyEl.style.display='block'; return; }
   emptyEl.style.display='none';
   tbody.innerHTML=list.map(m=>`<tr style="border-bottom:1px solid var(--border);font-size:11px" class="price-row">
       <td style="padding:3px 4px;word-break:break-all">${escapeHtml(priceNameFor(m))}</td>
@@ -6402,6 +6436,10 @@ function renderPriceRegion(region){
       <td style="text-align:right;padding:3px 6px;font-weight:600;border-left:1px solid var(--border)">${fmtN(isKz?m.usd:m.rub)}</td>
       <td class="center" style="padding:3px 2px;color:var(--muted)">${fmtGp(isKz?m.kzGp:m.ruGp)}</td>
     </tr>`).join('');
+  setPriceCards(list.map(m=>priceCardHtml(priceNameFor(m), isKo?m.spec:'',
+    [{label:t.pnH1,val:m.rep},{label:t.pnH2,val:(m.compats||[]).join(', ')},{label:t.pnH3,val:m.final}],
+    [{label:t.priceThCost+' KRW',val:fmtN(m.cost)},{label:t.priceThCost+' '+cur,val:fmtN(isKz?m.costUsd:m.costRub)},{label:t.priceThSupply+' '+cur,val:fmtN(isKz?m.usd:m.rub)},{label:t.priceThGp,val:fmtGp(isKz?m.kzGp:m.ruGp)}]
+  )).join(''));
   scheduleSplitTableResync('pricecalc-hdr-col','pricecalc-body-col','priceCalcTbody','fixed');
 }
 // ── 회사 계정: 구매가 · 공급가 · GP ──
@@ -6447,7 +6485,7 @@ function renderPriceCompany(){
   document.getElementById('pricecalc-body-col').innerHTML=cols;
   const tbody=document.getElementById('priceCalcTbody');
   const emptyEl=document.getElementById('priceNoResult');
-  if(!list.length){ tbody.innerHTML=''; emptyEl.textContent=t.priceNoData; emptyEl.style.display='block'; return; }
+  if(!list.length){ tbody.innerHTML=''; setPriceCards(''); emptyEl.textContent=t.priceNoData; emptyEl.style.display='block'; return; }
   emptyEl.style.display='none';
   const inputStyle='width:100%;max-width:80px;box-sizing:border-box;padding:2px 3px;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:var(--text);text-align:right;font-size:11px';
   const supplyTd=v=>`<td style="text-align:right;padding:3px 6px;font-weight:600">${fmtN(v)}</td>`;
@@ -6464,6 +6502,10 @@ function renderPriceCompany(){
       ${supplyTd(m.supplyB)}${supplyTd(m.supplyC)}${supplyTd(m.supplyD)}
     </tr>`;
   }).join('');
+  setPriceCards(list.map(m=>priceCardHtml(priceNameFor(m), isKo?m.spec:'',
+    [{label:t.pnH1,val:m.rep},{label:t.pnH2,val:(m.compats||[]).join(', ')},{label:t.pnH3,val:m.final}],
+    [{label:t.priceThBuy,val:fmtN(m.buy)},{label:t.priceThSupplyA,val:fmtN(m.supplyA)},{label:t.priceThSupplyB,val:fmtN(m.supplyB)},{label:t.priceThSupplyC,val:fmtN(m.supplyC)},{label:t.priceThSupplyD,val:fmtN(m.supplyD)}]
+  )).join(''));
   scheduleSplitTableResync('pricecalc-hdr-col','pricecalc-body-col','priceCalcTbody','fixed');
 }
 async function onCompanyPriceEdit(rep, field, value){
