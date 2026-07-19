@@ -277,8 +277,8 @@ input[type="text"]::placeholder{color:var(--muted)}
 #adminOrderTbody td, #adminMyOrdersTbody td{white-space:nowrap}
 #adminOrderTbody td.wrap-ok, #adminMyOrdersTbody td.wrap-ok{white-space:normal}
 #adminOrdersView table, #adminMyOrdersView table{table-layout:auto}
-#pane-order .code, #pane-parts .code, #pane-inventory .code{background:none;padding:1px 0;color:var(--text);font-weight:600}
-.part-card .code, .order-card .code{font-size:13px}
+#pane-order .code, #pane-parts .code, #pane-inventory .code, #pane-price .code, #pane-shipments .code{background:none;padding:1px 0;color:var(--text);font-weight:700}
+.part-card .code, .order-card .code{font-size:13px;letter-spacing:.2px}
 .no-result{text-align:center;padding:30px 20px;color:var(--muted);font-size:13px}
 
 /* ── 품번 조회 ── */
@@ -6097,7 +6097,7 @@ function fmtGp(x){ return (x==null||isNaN(x))?'':(Math.round(x*1000)/10)+'%'; }
 function priceCardHtml(name, spec, codes, fields){
   const specHtml = spec ? `<div class="pc-spec">${escapeHtml(spec)}</div>` : '';
   const codeHtml = (codes||[]).filter(c=>c.val).map(c=>
-    `<div style="font-size:10px;color:var(--muted);margin-top:2px">${escapeHtml(c.label)}: <span class="code" style="font-size:10px;padding:1px 4px">${escapeHtml(c.val)}</span></div>`).join('');
+    `<div style="font-size:11px;color:var(--muted);margin-top:3px">${escapeHtml(c.label)}: <span class="code" style="font-size:12.5px;padding:1px 2px">${escapeHtml(c.val)}</span></div>`).join('');
   const fieldHtml = (fields||[]).filter(f=>f.val!=null && f.val!=='').map(f=>
     `<div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:2px 0"><span style="color:var(--muted)">${escapeHtml(f.label)}</span><b style="color:var(--text)">${f.val}</b></div>`).join('');
   return `<div class="order-card">
