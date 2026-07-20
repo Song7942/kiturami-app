@@ -5140,6 +5140,12 @@ function syncSplitTableColumnWidths(hdrColId, bodyColId, tbodyId, mode){
         hdrTable.style.tableLayout='auto';
         hdrTable.style.width='';
         hdrTable.style.minWidth='';
+        // 래퍼 폭(fit-content)도 초기화해야 한다. 그러지 않으면 아래 avail 계산에서
+        // wrap.clientWidth 가 이전에 줄여둔 폭으로 읽혀, 열이 그 좁은 폭에 맞춰 계속
+        // 쪼그라드는 피드백 루프가 생긴다(열이 겹침). 여기서 블록 전체폭으로 되돌린 뒤
+        // 가용 폭을 재고, 계산이 끝나면 다시 fit-content 로 감싼다.
+        hdrTable.parentElement.style.width='';
+        bodyTable.parentElement.style.width='';
         void bodyTable.offsetWidth; void hdrTable.offsetWidth; // 강제 리플로우 후 자연폭 측정
         const bodyW=cells.map(td=>td.getBoundingClientRect().width);
         // 헤더 자연폭도 측정 (rowspan/colspan 고려해 리프 열에 매핑) → 헤더 글자가 잘리지 않도록 max 적용
