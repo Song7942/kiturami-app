@@ -320,6 +320,10 @@ input[type="text"]::placeholder{color:var(--muted)}
   .mb-dropdown{min-width:400px}
 }
 @media(max-width:768px){
+  /* 헤더가 한 줄에 안 들어가 로그아웃이 잘렸음 → 줄바꿈 허용, 우측 묶음(계정·내정보·로그아웃)을
+     자기 줄로 내려 오른쪽 정렬해 온전히 보이게 한다 */
+  header{flex-wrap:wrap;row-gap:6px;padding:8px 10px;gap:8px}
+  .user-box{width:100%;justify-content:flex-end;margin-left:0}
   .tbl-header-wrap,.tbl-body-wrap,.tbl-footer{display:none}
   .tabs{flex-wrap:wrap;padding:2px 8px;overflow-x:hidden}
   .tab-btn{padding:10px 10px;font-size:17px;font-weight:700;flex:1 1 auto;text-align:center}
