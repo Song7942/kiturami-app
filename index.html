@@ -3909,6 +3909,50 @@ async function loadAdminOrdersTab(){
   await loadMyGroupChangeRequests();
   renderAdminMyOrders();
 }
+// 주문관리 데이터만 다시 읽어 렌더(서브탭·전송대기·스크롤 유지). 라이브 갱신용.
+async function refreshAdminOrdersData(){
+  await loadOrderAllocations();
+  await loadShipments();
+  await loadGroupChangeRequests();
+  await loadAdminOrders();
+  renderAdminOrders();
+  await loadMyOrderAllocations();
+  await loadShipmentsToMe();
+  await loadMyCompanyOrders();
+  await loadMyGroupChangeRequests();
+  renderAdminMyOrders();
+}
+// ── 실시간처럼 보이게: 주기적 폴링 ──
+// Supabase Realtime 은 프로젝트/테이블 설정에 의존하므로, 설정 없이도 확실히 도는
+// 폴링으로 알림 점과 (편집 중이 아닌) 화면 내용을 주기적으로 갱신한다.
+let _liveTimer=null;
+function _focusedEditableIn(paneId){
+  const p=document.getElementById(paneId); const a=document.activeElement;
+  return p && a && p.contains(a) && /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName);
+}
+async function liveTick(){
+  if(!currentUser || document.hidden) return;   // 로그아웃/백그라운드면 건너뜀
+  try{
+    // 알림 점은 항상 갱신 (가벼운 조회)
+    loadOrderFeedStamps().then(updateOrderUnreadDots);
+    refreshSignupDot();
+    const active=(id)=>{ const p=document.getElementById(id); return p && p.classList.contains('active'); };
+    // 주문관리 화면: 전송 대기 편집이 있거나 입력칸에 포커스가 있으면 방해하지 않는다.
+    if(active('pane-adminOrders')){
+      if(!Object.keys(pendingAllocations).length && !_focusedEditableIn('pane-adminOrders')){
+        await refreshAdminOrdersData();
+      }
+    }
+    // 회원관리 화면: 드롭다운 등 편집 중이 아니면 목록 갱신(새 가입 신청도 바로 보이게).
+    if(active('pane-memberManagement')){
+      if(!_focusedEditableIn('pane-memberManagement')){ await loadPendingSignups(); renderPendingSignups(); }
+    }
+  }catch(e){ /* 폴링은 부가기능이라 조용히 무시 */ }
+}
+function startLive(){ if(_liveTimer) return; _liveTimer=setInterval(()=>{ liveTick(); }, 15000); }
+function stopLive(){ if(_liveTimer){ clearInterval(_liveTimer); _liveTimer=null; } }
+// 탭을 다시 보게 되면(백그라운드→포그라운드) 즉시 한 번 갱신
+document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) liveTick(); });
 async function loadMemberManagementTab(){
   if(!currentUser) return;
   await refreshCurrentUser();
@@ -7781,6 +7825,7 @@ async function saveMyInfo(){
 }
 function doLogout(){
   currentUser=null;
+  stopLive();
   sessionStorage.removeItem(AUTH_SESSION_KEY);
   document.getElementById('appRoot').style.display='none';
   document.getElementById('authOverlay').style.display='flex';
@@ -7888,6 +7933,7 @@ function enterApp(user){
   if(tabReset) tabReset.style.display = (user.is_admin && !user.supplier_company && !role.isKituramiHQ) ? 'block' : 'none';
   loadOrderFeedStamps().then(updateOrderUnreadDots);   // 주문 알림 점 (탭을 열기 전에도 보이게)
   refreshSignupDot();                                  // 회원관리 알림 점 (대기 가입 신청)
+  startLive();                                         // 15초 폴링으로 실시간처럼 갱신
   Promise.all([loadMyOrderTotals(), loadInventory(), loadGlobalSuppliedTotals(), loadReceivedOrderTotals(), loadPrices(), loadPNOverrides(), loadCompanyPrices(),
                (role.region==='kz'?Promise.all([loadPriceSettings(),loadPriceCalc()]):Promise.resolve())]).then(()=>{
     if(document.getElementById('pane-order').classList.contains('active')) renderOrderTable();
