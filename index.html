@@ -2847,7 +2847,7 @@ function orderTailTh(t){
   let s='';
   if(v.price)    s+=`<th rowspan="2" style="${R}">${orderPriceLabel()}</th>`;
   if(v.received) s+=`<th rowspan="2" style="${R}">${t.orderReceived}</th>`;
-  if(v.supplierStock) s+=`<th rowspan="2" style="${R}">${t.invHSupplierStock}</th>`;
+  if(v.supplierStock) s+=`<th rowspan="2" style="${R}">${t.invHSupplierStock.replace(' ','<br>')}</th>`;
   if(v.stock)    s+=`<th rowspan="2" style="${R}">${t.orderStock}</th>`;
   if(v.qty)      s+=`<th rowspan="2" class="center">${t.orderQty}</th>`;
   return s;
