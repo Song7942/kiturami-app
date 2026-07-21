@@ -3609,6 +3609,7 @@ async function agreeToAllocation(rep){
   if(error){ alert(t.reqFail+'\n\n['+(error.message||error.code)+']'); return; }
   await loadMyOrderAllocations();
   renderAdminMyOrders();
+  loadOrderFeedStamps().then(updateOrderUnreadDots);   // 동의했으면 알림 점 즉시 갱신
 }
 let shipmentsToMe=[]; // 내 구매처가 나에게 보낸 출고내역(구매처의 kt_shipments 중 거래처명이 나와 일치하는 것)
 async function loadShipmentsToMe(){
@@ -4619,10 +4620,10 @@ function renderAdminMyOrders(){
 // mineAllocFp: 구매처가 나에게 배분(즉시공급)한 내역의 지문. kt_order_allocations 에는
 // 타임스탬프 컬럼이 없어 시각 비교를 못 하므로, 배분값 조합을 문자열로 만들어 마지막으로
 // 본 지문과 다르면 '새 활동'으로 본다.
-let orderFeedLatest={recv:0, mine:0, mineAllocFp:''};
+let orderFeedLatest={recv:0, mine:0, mineAllocFp:'', mineActionable:false};
 function _ts(v){ const t=v?new Date(v).getTime():0; return isNaN(t)?0:t; }
 async function loadOrderFeedStamps(){
-  orderFeedLatest={recv:0, mine:0, mineAllocFp:''};
+  orderFeedLatest={recv:0, mine:0, mineAllocFp:'', mineActionable:false};
   if(!currentUser) return;
   const co=currentUser.company||'';
   const sup=currentUser.supplier_company||'';
@@ -4652,17 +4653,25 @@ async function loadOrderFeedStamps(){
       // 확정으로 바뀌면 새 소식으로 잡히게 한다.
       // 주문 합계 조회가 실패해도 배분 지문 자체는 만든다(부분공급 알림이 사라지지 않게).
       safe(async()=>{
-        const { data: allocs } = await sb.from('kt_order_allocations').select('rep,allocated').ilike('target_company', sup).ilike('company', co);
+        const { data: allocs } = await sb.from('kt_order_allocations').select('rep,allocated,agreed').ilike('target_company', sup).ilike('company', co);
         const orderQtyByRep={};
         try{
           const { data: myOrders } = await sb.from('kt_orders').select('items').ilike('company', co);
           (myOrders||[]).forEach(o=>(o.items||[]).forEach(it=>{ const rep=findMasterRep(it.rep)||it.rep; orderQtyByRep[rep]=(orderQtyByRep[rep]||0)+(it.qty||0); }));
         }catch(e){ /* 주문 합계 실패해도 배분 지문은 만든다 */ }
-        orderFeedLatest.mineAllocFp=(allocs||[]).filter(a=>Number(a.allocated)>0).map(a=>{
+        const pos=(allocs||[]).filter(a=>Number(a.allocated)>0);
+        orderFeedLatest.mineAllocFp=pos.map(a=>{
           const ord=orderQtyByRep[a.rep]||0;
           const conf=(ord>0 && Number(a.allocated)>=ord)?'C':'';   // 확정 표시
           return `${a.rep}:${a.allocated}:${conf}`;
         }).sort().join(',');
+        // 아직 처리 안 한 배분(구매자 동의 전인 부분공급)이 있으면, 읽음 상태와 무관하게
+        // 항상 점을 띄운다 — 동의라는 '할 일'이 남아있으니 놓치면 안 된다.
+        orderFeedLatest.mineActionable=pos.some(a=>{
+          if(a.agreed) return false;
+          const ord=orderQtyByRep[a.rep]||0;
+          return ord>0 && Number(a.allocated)<ord;   // 부분공급 미동의 = 동의 필요
+        });
       })
     ]:[])
   ]);
@@ -4676,7 +4685,8 @@ function updateOrderUnreadDots(){
   // 주문(mine): 출고·요청처리(시각) 또는 배분 지문 변화 중 하나라도 새로우면
   const seenFp = localStorage.getItem(_orderSeenFpKey()) || '';
   const newAlloc = !!orderFeedLatest.mineAllocFp && orderFeedLatest.mineAllocFp !== seenFp;
-  const newMine = (orderFeedLatest.mine > Number(localStorage.getItem(_orderSeenKey('mine'))||0)) || newAlloc;
+  // mineActionable: 동의가 필요한 부분공급이 남아있으면 읽음 여부와 상관없이 계속 표시.
+  const newMine = (orderFeedLatest.mine > Number(localStorage.getItem(_orderSeenKey('mine'))||0)) || newAlloc || !!orderFeedLatest.mineActionable;
   show('recvUnreadDot', newRecv);
   show('myOrdersUnreadDot', newMine);
   show('adminOrdersUnreadDot', newRecv||newMine);   // 주문관리: 둘 중 하나라도 있으면
