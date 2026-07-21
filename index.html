@@ -6078,8 +6078,8 @@ async function refreshRatesNow(){
   }catch(e){ alert(lang==='ru'?'Не удалось обновить курс. Повторите попытку позже.':'환율 갱신에 실패했습니다. 잠시 후 다시 시도해 주세요.'); }
 }
 async function savePriceSettings(){
-  // 환율·기준 GP 저장은 MASTER 전용. RUSSIA·KAZAK 은 조회만 (UI 도 숨김/비활성)
-  if(!userRole(currentUser).isMaster) return;
+  // 환율·기준 GP 저장은 MASTER·KITURAMI(본사) 만. RUSSIA·KAZAK 은 조회만 (UI 도 숨김/비활성)
+  if(!userRole(currentUser).usesMasterView) return;
   const rub=Number(document.getElementById('prmRubRate').value);
   const usd=Number(document.getElementById('prmUsdRate').value);
   const ruGp=Number(document.getElementById('prmRuGp').value)/100;
