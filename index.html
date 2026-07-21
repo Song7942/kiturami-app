@@ -3949,7 +3949,7 @@ async function loadPendingSignups(){
   if(error){ console.error(error); companyMembers=[]; return; }
   companyMembers=data||[];
   await loadMemberGrades();
-  const pendingCount=companyMembers.filter(u=>u.status==='pending').length;
+  const pendingCount=companyMembers.filter(isPendingMember).length;
   const badge=document.getElementById('adminSignupBadge');
   if(badge){
     if(pendingCount){ badge.textContent=pendingCount; badge.style.display='inline-block'; }
@@ -3958,19 +3958,25 @@ async function loadPendingSignups(){
   const dot=document.getElementById('memberMgmtUnreadDot');
   if(dot) dot.style.display = pendingCount>0 ? 'block' : 'none';
 }
-// 회원관리 알림 점: 승인 대기(pending) 가입 신청이 있으면 탭에 붉은 점.
-// 탭을 열기 전에도 보이도록 가벼운 카운트 조회만 한다(부가기능이라 실패해도 조용히 넘어감).
+// '아직 처리하지 않은' 회원 = 승인도 거절도 안 된 상태.
+// 가입 대기(pending)뿐 아니라 status 가 비어있는(legacy) 회원도 미처리로 본다.
+function isPendingMember(u){ const s=u&&u.status; return s!=='approved' && s!=='rejected'; }
+// 회원관리 알림 점: 아직 처리하지 않은 가입 신청이 있으면 탭에 붉은 점.
+// 탭을 열기 전에도 보이도록 가볍게 조회한다(부가기능이라 실패해도 조용히 넘어감).
 async function refreshSignupDot(){
   const dot=document.getElementById('memberMgmtUnreadDot');
   if(!dot||!currentUser) return;
   const role=userRole(currentUser);
   if(!role.canSeeMembers){ dot.style.display='none'; return; }
   try{
-    let q=sb.from('kt_users').select('id',{count:'exact',head:true}).eq('status','pending');
+    // status<>'approved' 식 필터는 legacy null 을 빠뜨리므로, 범위 회원의 status 만
+    // 가볍게 읽어와 미처리(승인·거절 아님)를 직접 센다.
+    let q=sb.from('kt_users').select('id,status');
     if(!role.isMaster) q=q.ilike('supplier_company', currentUser.company||'');
-    const { count, error } = await q;
+    const { data, error } = await q;
     if(error) return;
-    dot.style.display = (count>0) ? 'block' : 'none';
+    const n=(data||[]).filter(isPendingMember).length;
+    dot.style.display = n>0 ? 'block' : 'none';
   }catch(e){ /* 무시 */ }
 }
 // 등급 드롭다운. 구매처가 있는 회원만 등급을 정할 수 있다(구매처가 그 회원에게 공급가를 노출).
@@ -4016,14 +4022,14 @@ function renderPendingSignups(){
   }
   emptyEl.style.display='none';
   const statusLabel=(s)=>{
-    if(s==='pending') return `<span style="color:#f59e0b;font-weight:700">${t.signupStatusPending}</span>`;
     if(s==='rejected') return `<span style="color:#ef4444;font-weight:700">${t.signupStatusRejected}</span>`;
-    return `<span style="color:#22c55e;font-weight:700">${t.signupStatusApproved}</span>`;
+    if(s==='approved') return `<span style="color:#22c55e;font-weight:700">${t.signupStatusApproved}</span>`;
+    return `<span style="color:#f59e0b;font-weight:700">${t.signupStatusPending}</span>`;  // pending·미정 → 미처리
   };
   tbody.innerHTML=companyMembers.map(u=>{
     const idEsc=u.id.replace(/'/g,"\\'");
-    const approveBtn=u.status==='pending' ? `<button class="news-btn-primary" onclick="approveSignup('${idEsc}')">${t.signupApprove}</button>` : '';
-    const rejectBtn=u.status==='pending' ? `<button class="news-btn-secondary" onclick="rejectSignup('${idEsc}')">${t.signupReject}</button>` : '';
+    const approveBtn=isPendingMember(u) ? `<button class="news-btn-primary" onclick="approveSignup('${idEsc}')">${t.signupApprove}</button>` : '';
+    const rejectBtn=isPendingMember(u) ? `<button class="news-btn-secondary" onclick="rejectSignup('${idEsc}')">${t.signupReject}</button>` : '';
     return `<tr style="border-bottom:1px solid var(--border)">
     <td style="padding:9px 12px;text-align:center">${gradeSelectHtml(u)}</td>
     <td style="padding:9px 12px">${escapeHtml(u.company)}</td>
@@ -4043,8 +4049,8 @@ function renderPendingSignups(){
   const cardList=document.getElementById('adminSignupsCardList');
   if(cardList) cardList.innerHTML=companyMembers.map(u=>{
     const idEsc=u.id.replace(/'/g,"\\'");
-    const approveBtn=u.status==='pending' ? `<button class="news-btn-primary" style="padding:5px 10px;font-size:12px" onclick="approveSignup('${idEsc}')">${t.signupApprove}</button>` : '';
-    const rejectBtn=u.status==='pending' ? `<button class="news-btn-secondary" style="padding:5px 10px;font-size:12px" onclick="rejectSignup('${idEsc}')">${t.signupReject}</button>` : '';
+    const approveBtn=isPendingMember(u) ? `<button class="news-btn-primary" style="padding:5px 10px;font-size:12px" onclick="approveSignup('${idEsc}')">${t.signupApprove}</button>` : '';
+    const rejectBtn=isPendingMember(u) ? `<button class="news-btn-secondary" style="padding:5px 10px;font-size:12px" onclick="rejectSignup('${idEsc}')">${t.signupReject}</button>` : '';
     return `<div class="order-card">
       <div style="display:flex;justify-content:space-between;align-items:start">
         <div class="pc-name">${escapeHtml(u.company)}</div>
@@ -4069,7 +4075,7 @@ function renderPendingSignups(){
 function downloadMembers(){
   const t=T[lang];
   if(!companyMembers.length) return;
-  const statusText=(s)=> s==='pending'?t.signupStatusPending : (s==='rejected'?t.signupStatusRejected : t.signupStatusApproved);
+  const statusText=(s)=> s==='rejected'?t.signupStatusRejected : (s==='approved'?t.signupStatusApproved : t.signupStatusPending);
   const header=[t.signupThCompany,t.signupThSupplier,t.signupThId,t.signupThContact,t.signupThPhone,t.signupThEmail,t.signupThStatus];
   const aoa=[header,...companyMembers.map(u=>[u.company||'',u.supplier_company||'',u.id||'',u.contact_name||'',u.phone||'',u.email||'',statusText(u.status)])];
   const ws=XLSX.utils.aoa_to_sheet(aoa);
