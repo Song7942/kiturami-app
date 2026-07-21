@@ -1381,7 +1381,7 @@ const T={
        thDiag:'도면번호',thDiagBr:'도면<br>번호',thName:'품명',thSpec:'규격',thRep:'대표품번',
        count:n=>`<b>${n}</b>개`,footer:n=>`총 ${n}개`,noResult:'검색 결과가 없습니다.',
        tabParts:'🔧 부품 검색',tabPN:'🔄 품번 조회',tabOrder:'📦 주문',tabOrderParts:'📦 부품조회',tabInventory:'📊 재고관리',tabPrice:'💲 가격정보',orderDl:'엑셀 다운로드',orderMailBanner:'주문 접수 이메일: song@krb.co.kr',orderPh:'도면번호, 품명, 대표품번으로 검색…',orderQty:'주문',logoutBtn:'로그아웃',
-       invTemplate:'양식 다운로드',invUpload:'엑셀 업로드',invHMaster:'대표품번(미변경)',invHRep:'재고품번',invHQty:'재고수량',invHUpdated:'업데이트 일시',invEmpty:'등록된 재고 데이터가 없습니다.',invCount:n=>`총 ${n}건`,
+       invTemplate:'양식 다운로드',invUpload:'엑셀 업로드',invHMaster:'대표품번(미변경)',invHRep:'재고품번',invHQty:'재고수량',invHUpdated:'업데이트 일시',invEmpty:'등록된 재고 데이터가 없습니다.',shipEmpty:'등록된 출고 데이터가 없습니다.',invCount:n=>`총 ${n}건`,
        pnUploadOk:n=>`품번 ${n}건이 업데이트되었습니다.`,pnUploadFail:'엑셀 업로드에 실패했습니다. 다운로드한 양식(품명·규격·대표품번·호환품번·최종품번)인지 확인해주세요.',invUploadOk:n=>`재고 ${n}건이 업데이트되었습니다.`,invUploadFail:'업로드에 실패했습니다. 양식을 확인해주세요.',invUploadEmpty:'파일에서 유효한 데이터를 찾지 못했습니다. 양식을 확인해주세요.',invSearchPh:'대표품번으로 검색…',invLastUpdated:d=>`최근 업데이트: ${d}`,dmZoomHint:'손가락으로 확대/이동',invHSupplierStock:'구매처 재고',
        tabShipments:'출고관리',tabAdminOrders:'주문관리',tabMemberMgmt:'회원관리',shipUpload:'엑셀 업로드',shipThRep:'품번',shipThClient:'거래처명',shipThDate:'일자',shipThQty:'출고',
        shipUploadOk:n=>`출고내역 ${n}건이 추가되었습니다.`,shipUploadFail:'업로드에 실패했습니다. 양식을 확인해주세요.',shipUploadEmpty:'파일에서 유효한 데이터를 찾지 못했습니다. 양식을 확인해주세요.',
@@ -1474,7 +1474,7 @@ const T={
        thDiag:'№ чертежа',thName:'Наименование',thSpec:'Спецификация',thRep:'Осн. артикул',
        count:n=>`<b>${n}</b>`,footer:n=>`Итого: ${n}`,noResult:'Результаты не найдены.',
        tabParts:'🔧 Поиск деталей',tabPN:'🔄 Артикулы',tabOrder:'📦 Заказ',tabOrderParts:'📦 Поиск деталей',tabInventory:'📊 Склад',tabPrice:'💲 Цены',orderDl:'Скачать Excel',orderMailBanner:'Email для приёма заказов: song@krb.co.kr',orderPh:'Поиск по №чертежа, названию, артикулу…',orderQty:'Заказ',logoutBtn:'Выйти',
-       invTemplate:'Скачать шаблон',invUpload:'Загрузить Excel',invHMaster:'Осн. артикул (неизм.)',invHRep:'Артикул склада',invHQty:'Остаток',invHUpdated:'Обновлено',invEmpty:'Данных о складе пока нет.',invCount:n=>`Всего: ${n}`,
+       invTemplate:'Скачать шаблон',invUpload:'Загрузить Excel',invHMaster:'Осн. артикул (неизм.)',invHRep:'Артикул склада',invHQty:'Остаток',invHUpdated:'Обновлено',invEmpty:'Данных о складе пока нет.',shipEmpty:'Данных об отгрузках пока нет.',invCount:n=>`Всего: ${n}`,
        pnUploadOk:n=>`Обновлено артикулов: ${n}.`,pnUploadFail:'Не удалось загрузить Excel. Проверьте, что файл соответствует скачанному шаблону.',invUploadOk:n=>`Обновлено позиций: ${n}.`,invUploadFail:'Ошибка загрузки. Проверьте шаблон.',invUploadEmpty:'В файле не найдено данных. Проверьте шаблон.',invSearchPh:'Поиск по артикулу…',invLastUpdated:d=>`Последнее обновление: ${d}`,dmZoomHint:'Растяните пальцами, чтобы увеличить',invHSupplierStock:'Остаток поставщика',
        tabShipments:'Отгрузки',tabAdminOrders:'Управление заказами',tabMemberMgmt:'Участники',shipUpload:'Загрузить Excel',shipThRep:'Артикул',shipThClient:'Клиент',shipThDate:'Дата',shipThQty:'Отгружено',
        shipUploadOk:n=>`Добавлено записей: ${n}.`,shipUploadFail:'Ошибка загрузки. Проверьте шаблон.',shipUploadEmpty:'В файле не найдено данных. Проверьте шаблон.',
@@ -5384,7 +5384,7 @@ function renderShipmentsList(){
   const emptyEl=document.getElementById('shipmentsNoResult');
   if(!rows.length){
     tbody.innerHTML=''; if(cardList) cardList.innerHTML='';
-    emptyEl.textContent=t.invEmpty; emptyEl.style.display='block';
+    emptyEl.textContent=t.shipEmpty; emptyEl.style.display='block';
     return;
   }
   emptyEl.style.display='none';
