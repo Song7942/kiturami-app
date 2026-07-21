@@ -3611,6 +3611,22 @@ async function agreeToAllocation(rep){
   renderAdminMyOrders();
   loadOrderFeedStamps().then(updateOrderUnreadDots);   // 동의했으면 알림 점 즉시 갱신
 }
+// 확정(전량 즉시공급)은 별도 동의 버튼이 없다. 구매자가 '주문' 탭을 보면 확인한 것으로
+// 간주해 agreed=true 로 표시(=알림 점 내림). 부분공급은 건드리지 않는다(동의 버튼으로만).
+async function ackConfirmedAllocations(){
+  if(!currentUser || !currentUser.supplier_company) return;
+  try{
+    const toAck=buildMyOrderGroups().filter(g=>g.confirmed && !g.agreed && g.rep);
+    if(!toAck.length) return;
+    for(const g of toAck){
+      await sb.from('kt_order_allocations').update({agreed:true})
+        .ilike('target_company', currentUser.supplier_company).ilike('company', currentUser.company).ilike('rep', g.rep);
+    }
+    await loadMyOrderAllocations();
+    renderAdminMyOrders();
+    loadOrderFeedStamps().then(updateOrderUnreadDots);
+  }catch(e){ /* 부가기능이라 조용히 무시 */ }
+}
 let shipmentsToMe=[]; // 내 구매처가 나에게 보낸 출고내역(구매처의 kt_shipments 중 거래처명이 나와 일치하는 것)
 async function loadShipmentsToMe(){
   if(!currentUser || !currentUser.supplier_company){ shipmentsToMe=[]; return; }
@@ -4665,13 +4681,11 @@ async function loadOrderFeedStamps(){
           const conf=(ord>0 && Number(a.allocated)>=ord)?'C':'';   // 확정 표시
           return `${a.rep}:${a.allocated}:${conf}`;
         }).sort().join(',');
-        // 아직 처리 안 한 배분(구매자 동의 전인 부분공급)이 있으면, 읽음 상태와 무관하게
-        // 항상 점을 띄운다 — 동의라는 '할 일'이 남아있으니 놓치면 안 된다.
-        orderFeedLatest.mineActionable=pos.some(a=>{
-          if(a.agreed) return false;
-          const ord=orderQtyByRep[a.rep]||0;
-          return ord>0 && Number(a.allocated)<ord;   // 부분공급 미동의 = 동의 필요
-        });
+        // 아직 확인 안 한 배분(agreed=false)이 하나라도 있으면 읽음 상태와 무관하게 점을 띄운다.
+        // agreed 를 '구매자 확인함'의 단일 기준으로 쓴다 — localStorage 지문에 의존하지 않아 견고.
+        //  · 부분공급: 구매자가 '동의'를 눌러야 agreed=true (할 일이 남음)
+        //  · 확정(전량): 구매자가 주문 탭을 보면 자동으로 agreed 처리(ackConfirmedAllocations)
+        orderFeedLatest.mineActionable=pos.some(a=>!a.agreed);
       })
     ]:[])
   ]);
@@ -4708,6 +4722,7 @@ function switchAdminView(view, markSeen=true){
   document.getElementById('adminMyOrdersView').style.display = view==='myorders' ? 'flex' : 'none';
   if(markSeen) markOrderViewSeen(view);   // 직접 누른 서브탭만 읽음 처리
   else updateOrderUnreadDots();
+  if(view==='myorders') ackConfirmedAllocations();   // 주문 탭을 보면 확정건은 확인 처리 → 점 내림
 }
 function downloadAdminMyOrders(){
   const t=T[lang];
