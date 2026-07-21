@@ -549,7 +549,7 @@ input[type="text"]::placeholder{color:var(--muted)}
   <button class="tab-btn" style="display:none" onclick="switchTab('inventory')" id="tab-inventory">📊 재고관리</button>
   <button class="tab-btn" style="display:none" onclick="switchTab('shipments')" id="tab-shipments"><span id="i18n-tab-shipments">🚚 출고관리</span></button>
   <button class="tab-btn" style="display:none" onclick="switchTab('price')"     id="tab-price">💲 가격정보</button>
-  <button class="tab-btn" style="display:none" onclick="switchTab('memberManagement')" id="tab-memberManagement"><span id="i18n-tab-membermgmt">👥 회원관리</span></button>
+  <button class="tab-btn" style="display:none;position:relative" onclick="switchTab('memberManagement')" id="tab-memberManagement"><span id="i18n-tab-membermgmt">👥 회원관리</span><span id="memberMgmtUnreadDot" style="display:none;position:absolute;top:4px;right:2px;width:8px;height:8px;border-radius:50%;background:#ef4444;box-shadow:0 0 0 2px var(--bg)"></span></button>
   <button class="tab-btn" style="display:none" onclick="switchTab('reset')" id="tab-reset"><span id="i18n-tab-reset">🗑️ 초기화</span></button>
   <button class="tab-btn" style="display:none" onclick="switchTab('parts')" id="tab-parts">🔧 부품 검색</button>
 </div>
@@ -1634,7 +1634,7 @@ function switchTab(tab){
   const el=getScrollBody(); if(el) el.scrollTop=0;
   const btn=document.getElementById('toTopBtn'); if(btn) btn.classList.remove('show');
   // 탭을 옮길 때마다 주문 알림 점을 가볍게 새로고침 — 로그인 중 새 주문/배분도 바로 보이게.
-  if(currentUser) loadOrderFeedStamps().then(updateOrderUnreadDots);
+  if(currentUser){ loadOrderFeedStamps().then(updateOrderUnreadDots); refreshSignupDot(); }
   if(tab==='pn') renderPN();
   // KAZAK 은 주문탭 공급가로 카자흐스탄 USD 를 쓰므로 계산식 데이터도 함께 읽는다.
   if(tab==='order'){ mountModelDiag('order'); syncDiagram(); refreshCurrentUser().then(()=>Promise.all([loadMyOrderTotals(), loadInventory(), loadGlobalSuppliedTotals(), loadReceivedOrderTotals(), loadPrices(), loadCompanyPrices(), (userRole(currentUser).region==='kz'?Promise.all([loadPriceSettings(),loadPriceCalc()]):Promise.resolve())])).then(renderOrderTable); renderOrderTable(); }
@@ -3955,6 +3955,23 @@ async function loadPendingSignups(){
     if(pendingCount){ badge.textContent=pendingCount; badge.style.display='inline-block'; }
     else badge.style.display='none';
   }
+  const dot=document.getElementById('memberMgmtUnreadDot');
+  if(dot) dot.style.display = pendingCount>0 ? 'block' : 'none';
+}
+// 회원관리 알림 점: 승인 대기(pending) 가입 신청이 있으면 탭에 붉은 점.
+// 탭을 열기 전에도 보이도록 가벼운 카운트 조회만 한다(부가기능이라 실패해도 조용히 넘어감).
+async function refreshSignupDot(){
+  const dot=document.getElementById('memberMgmtUnreadDot');
+  if(!dot||!currentUser) return;
+  const role=userRole(currentUser);
+  if(!role.canSeeMembers){ dot.style.display='none'; return; }
+  try{
+    let q=sb.from('kt_users').select('id',{count:'exact',head:true}).eq('status','pending');
+    if(!role.isMaster) q=q.ilike('supplier_company', currentUser.company||'');
+    const { count, error } = await q;
+    if(error) return;
+    dot.style.display = (count>0) ? 'block' : 'none';
+  }catch(e){ /* 무시 */ }
 }
 // 등급 드롭다운. 구매처가 있는 회원만 등급을 정할 수 있다(구매처가 그 회원에게 공급가를 노출).
 function gradeSelectHtml(u){
@@ -7864,6 +7881,7 @@ function enterApp(user){
   const tabReset=document.getElementById('tab-reset');
   if(tabReset) tabReset.style.display = (user.is_admin && !user.supplier_company && !role.isKituramiHQ) ? 'block' : 'none';
   loadOrderFeedStamps().then(updateOrderUnreadDots);   // 주문 알림 점 (탭을 열기 전에도 보이게)
+  refreshSignupDot();                                  // 회원관리 알림 점 (대기 가입 신청)
   Promise.all([loadMyOrderTotals(), loadInventory(), loadGlobalSuppliedTotals(), loadReceivedOrderTotals(), loadPrices(), loadPNOverrides(), loadCompanyPrices(),
                (role.region==='kz'?Promise.all([loadPriceSettings(),loadPriceCalc()]):Promise.resolve())]).then(()=>{
     if(document.getElementById('pane-order').classList.contains('active')) renderOrderTable();
