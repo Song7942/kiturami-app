@@ -4631,9 +4631,20 @@ async function loadOrderFeedStamps(){
         (data||[]).forEach(r=>bump('mine', _ts(r.resolved_at)));
       }),
       // 구매처가 나에게 즉시공급(배분)한 내역. 타임스탬프가 없어 지문으로 새 활동을 감지한다.
+      // 지문에 '확정'(배분이 주문 전량 → 자동확정) 여부까지 넣어, 수량이 그대로여도
+      // 확정으로 바뀌면 새 소식으로 잡히게 한다.
       safe(async()=>{
-        const { data } = await sb.from('kt_order_allocations').select('rep,allocated').ilike('target_company', sup).ilike('company', co);
-        orderFeedLatest.mineAllocFp=(data||[]).filter(a=>Number(a.allocated)>0).map(a=>`${a.rep}:${a.allocated}`).sort().join(',');
+        const [ar, or] = await Promise.all([
+          sb.from('kt_order_allocations').select('rep,allocated').ilike('target_company', sup).ilike('company', co),
+          sb.from('kt_orders').select('items').ilike('company', co)
+        ]);
+        const orderQtyByRep={};
+        (or.data||[]).forEach(o=>(o.items||[]).forEach(it=>{ const rep=findMasterRep(it.rep)||it.rep; orderQtyByRep[rep]=(orderQtyByRep[rep]||0)+(it.qty||0); }));
+        orderFeedLatest.mineAllocFp=(ar.data||[]).filter(a=>Number(a.allocated)>0).map(a=>{
+          const ord=orderQtyByRep[a.rep]||0;
+          const conf=(ord>0 && Number(a.allocated)>=ord)?'C':'';   // 확정 표시
+          return `${a.rep}:${a.allocated}:${conf}`;
+        }).sort().join(',');
       })
     ]:[])
   ]);
