@@ -6078,24 +6078,8 @@ async function refreshRatesNow(){
   }catch(e){ alert(lang==='ru'?'Не удалось обновить курс. Повторите попытку позже.':'환율 갱신에 실패했습니다. 잠시 후 다시 시도해 주세요.'); }
 }
 async function savePriceSettings(){
-  const m=priceMode();
-  // RUSSIA·KAZAK 은 자기 기준 GP 만 바꾼다.
-  // 이때 화면에 남아있는 다른 값(환율·상대 GP)까지 같이 저장하면, MASTER 가 그
-  // 사이 바꾼 값을 옛 값으로 되돌려 버린다 → 자기 필드만 부분 갱신(update)한다.
-  // 설정은 id=1 한 줄을 공유하므로 저장 즉시 MASTER·KITURAMI 에도 반영된다.
-  if(m==='ru'||m==='kz'){
-    const isRu=m==='ru';
-    const gp=Number(document.getElementById(isRu?'prmRuGp':'prmKzGp').value)/100;
-    if(!(gp>=0&&gp<1)){ alert(lang==='ru'?'Проверьте GP (%). Допустимо 0~99.9.':'GP(%) 값을 확인해 주세요. 0~99.9 사이여야 합니다.'); return; }
-    const { error } = await sb.from('kt_price_settings')
-      .update({ ...(isRu?{ru_gp:gp}:{kz_gp:gp}), updated_at:new Date().toISOString() }).eq('id',1);
-    if(error){ alert((lang==='ru'?'Ошибка сохранения':'저장 실패')+'\n['+(error.message||error.code)+']'); return; }
-    if(isRu) priceSettings.ru_gp=gp; else priceSettings.kz_gp=gp;
-    await syncKtPricesFromCalc();
-    renderPriceActive();
-    alert(lang==='ru'?'Сохранено. Цены пересчитаны по новому GP.':'저장되었습니다. 공급가가 새 GP 기준으로 다시 계산되었습니다.');
-    return;
-  }
+  // 환율·기준 GP 저장은 MASTER 전용. RUSSIA·KAZAK 은 조회만 (UI 도 숨김/비활성)
+  if(!userRole(currentUser).isMaster) return;
   const rub=Number(document.getElementById('prmRubRate').value);
   const usd=Number(document.getElementById('prmUsdRate').value);
   const ruGp=Number(document.getElementById('prmRuGp').value)/100;
@@ -6420,18 +6404,18 @@ function applyPriceTabChrome(){
   show('prmUsdWrap',  isMaster || m==='kz');
   show('prmRuGpWrap', isMaster || m==='ru');
   show('prmKzGpWrap', isMaster || m==='kz');
-  show('prmSaveBtn', isMaster || isRegion);   // 지역은 자기 기준 GP 만 저장한다
+  show('prmSaveBtn', isMaster);               // 저장은 MASTER 만 (지역은 조회 전용)
   show('prmRefreshBtn', isMaster);            // 환율 갱신은 MASTER 만
   show('priceRateInfo', isMaster);
-  // 환율은 MASTER 전용. 기준 GP 는 자기 지역 것을 그 지역에서도 바꿀 수 있다.
+  // 환율·기준 GP 는 MASTER 전용. RUSSIA/KAZAK 은 볼 수만 있고 못 바꾼다.
   const setEditable=(id,on)=>{
     const el=document.getElementById(id);
     if(el){ el.disabled=!on; el.style.background=on?'var(--surface)':'var(--surface2)'; }
   };
   setEditable('prmRubRate', isMaster);
   setEditable('prmUsdRate', isMaster);
-  setEditable('prmRuGp', isMaster || m==='ru');
-  setEditable('prmKzGp', isMaster || m==='kz');
+  setEditable('prmRuGp', isMaster);
+  setEditable('prmKzGp', isMaster);
   // 업로드: MASTER(계산식) 와 회사 계정만
   show('priceUploadWrap', isMaster ? priceView==='calc' : m==='company');
   // 출고수량 업로드: 출고 열이 있는 계산식 화면에서만
