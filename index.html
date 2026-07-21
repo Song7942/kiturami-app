@@ -1572,13 +1572,20 @@ let selectedKeys=null,openGroup=null,openSeries=null,multiMode=false;
 let orderSearchKw='',orderQty={};
 
 // ── 스크롤 & 맨위로 ──
+// 모든 탭의 스크롤 컨테이너. 맨위로 버튼을 전 탭에 적용한다.
+const SCROLL_BODIES=['scrollBodyParts','scrollBodyPN','scrollBodyOrder','scrollBodyInventory','scrollBodyShipments','scrollBodyPrice','scrollBodyAdminOrders','scrollBodyMemberManagement','scrollBodyReset'];
 function getScrollBody(){
-  if(document.getElementById('pane-order').classList.contains('active')) return document.getElementById('scrollBodyOrder');
-  if(document.getElementById('pane-parts').classList.contains('active')) return document.getElementById('scrollBodyParts');
+  // 현재 활성 탭의 스크롤 컨테이너를 찾는다
+  for(const id of SCROLL_BODIES){
+    const el=document.getElementById(id);
+    if(el && el.offsetParent!==null && el.closest('.tab-pane')?.classList.contains('active')) return el;
+  }
+  // 폴백: 눈에 보이는(스크롤 가능한) 첫 컨테이너
+  for(const id of SCROLL_BODIES){ const el=document.getElementById(id); if(el && el.offsetParent!==null) return el; }
   return document.getElementById('scrollBodyPN');
 }
 function initScroll(){
-  ['scrollBodyParts','scrollBodyPN','scrollBodyOrder'].forEach(id=>{
+  SCROLL_BODIES.forEach(id=>{
     const el=document.getElementById(id);
     if(!el) return;
     el.addEventListener('scroll',()=>{
