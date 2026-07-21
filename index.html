@@ -44,7 +44,7 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0}
 .scroll-body::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:4px}
 
 /* 맨위로 버튼 */
-#toTopBtn{position:fixed;bottom:20px;right:16px;width:42px;height:42px;border-radius:50%;background:#4d78c4;border:none;cursor:pointer;display:none;align-items:center;justify-content:center;box-shadow:0 4px 20px rgba(0,0,0,.5);z-index:9999;transition:background .15s,opacity .2s;opacity:0;pointer-events:none;transform:translateY(6px)}
+#toTopBtn{position:fixed;top:56px;right:10px;width:38px;height:38px;border-radius:50%;background:#4d78c4;border:none;cursor:pointer;display:none;align-items:center;justify-content:center;box-shadow:0 4px 20px rgba(0,0,0,.5);z-index:9999;transition:background .15s,opacity .2s;opacity:0;pointer-events:none;transform:translateY(6px)}
 #toTopBtn.show{display:flex;opacity:1;pointer-events:auto;transform:translateY(0)}
 #toTopBtn:hover{background:#5a8ad4}
 #toTopBtn svg{width:20px;height:20px;display:block}
@@ -1376,7 +1376,7 @@ const ANC_KEYS=new Set(['anc_1524','anc_30','anc_35']);
 const ANCH_KEYS=new Set(['anch_24','anch_35']);
 
 const T={
-  ko:{title:'KITURAMI 부품 검색',sub:'',mbLabel:'모델 선택',mbAll:'전체',mbAllSub:'ALL',mbMulti:'다중',mbMultiOn:'다중',mbMultiSub2:'',
+  ko:{title:'KITURAMI 부품 검색',sub:'',mbLabel:'모델 선택',mbAll:'전체',mbAllSub:'ALL',mbMulti:'다중',mbMultiTip:'다중 선택',toTopTip:'맨 위로',mbMultiOn:'다중',mbMultiSub2:'',
        ph:'도면번호, 품명, 대표품번으로 검색…',dl:'엑셀 다운로드',pndl:'엑셀 다운로드',
        thDiag:'도면번호',thDiagBr:'도면<br>번호',thName:'품명',thSpec:'규격',thRep:'대표품번',
        count:n=>`<b>${n}</b>개`,footer:n=>`총 ${n}개`,noResult:'검색 결과가 없습니다.',
@@ -1469,7 +1469,7 @@ const T={
        priceNoSupply:'공급가 데이터가 없습니다. 계산식 탭에서 엑셀을 업로드해 주세요.',
        ddTitle:'모델 선택',ddAllOn:'전체 해제',ddAllOff:'모두 선택',
        diagTitle:'ALPHA PLUS — 분해도',apsDiagTitle:'ALPHA PLUS S — 분해도',diagHint:'번호 클릭 → 해당 부품 강조'},
-  ru:{title:'KITURAMI Поиск запчастей',sub:'',mbLabel:'Модель',mbAll:'Все',mbAllSub:'ALL',mbMulti:'Мн.',mbMultiOn:'Мн.',mbMultiSub2:'Выбор',
+  ru:{title:'KITURAMI Поиск запчастей',sub:'',mbLabel:'Модель',mbAll:'Все',mbAllSub:'ALL',mbMulti:'Мн.',mbMultiTip:'Множественный выбор',toTopTip:'Наверх',mbMultiOn:'Мн.',mbMultiSub2:'Выбор',
        ph:'Поиск по №чертежа, названию, артикулу…',dl:'Скачать Excel',pndl:'Скачать Excel',
        thDiag:'№ чертежа',thName:'Наименование',thSpec:'Спецификация',thRep:'Осн. артикул',
        count:n=>`<b>${n}</b>`,footer:n=>`Итого: ${n}`,noResult:'Результаты не найдены.',
@@ -1579,7 +1579,7 @@ function initScroll(){
     if(!el) return;
     el.addEventListener('scroll',()=>{
       const btn=document.getElementById('toTopBtn');
-      if(btn) btn.classList.toggle('show',el.scrollTop>250);
+      if(btn){ if(el.scrollTop>250) positionToTopBtn(); btn.classList.toggle('show',el.scrollTop>250); }
       // 품번조회 추가 로딩
       if(id==='scrollBodyPN' && _pnNextStart>0){
         const th=el.scrollHeight-el.clientHeight-200;
@@ -1589,6 +1589,19 @@ function initScroll(){
   });
 }
 function scrollToTop(){const el=getScrollBody();if(el)el.scrollTo({top:0,behavior:'smooth'});}
+// 맨위로 버튼을 탭 밴드(.tabs)의 우측 하단(= 마지막 탭 '회원관리' 오른쪽 빈공간)에 맞춘다.
+// 탭이 역할·언어·화면에 따라 여러 줄로 접혀 위치가 달라지므로 고정 px 대신 실측으로 정렬한다.
+function positionToTopBtn(){
+  const btn=document.getElementById('toTopBtn');
+  const tabs=document.querySelector('.tabs');
+  if(!btn||!tabs) return;
+  const r=tabs.getBoundingClientRect();
+  const size=btn.offsetHeight||38;
+  const top=Math.max(52, Math.round(r.bottom - size - 4));  // 탭 밴드 하단, 헤더 아래로 최소 보장
+  btn.style.top=top+'px';
+  btn.style.bottom='auto';
+}
+window.addEventListener('resize', positionToTopBtn);
 
 // ── 탭 ──
 function switchTab(tab){
@@ -1793,7 +1806,8 @@ function renderModelBar(){
   // 다중선택 버튼 상태
   const mbMultiEl=document.getElementById('mbMulti');
   const mbMultiLbl=document.getElementById('mbMultiLabel');
-  if(mbMultiEl) mbMultiEl.classList.toggle('on',multiMode);
+  if(mbMultiEl){ mbMultiEl.classList.toggle('on',multiMode); mbMultiEl.title=T[lang].mbMultiTip||'다중 선택'; }
+  const toTopEl=document.getElementById('toTopBtn'); if(toTopEl) toTopEl.title=T[lang].toTopTip||'맨 위로';
   if(mbMultiLbl) mbMultiLbl.textContent=multiMode?(T[lang].mbMultiOn||'다중'):(T[lang].mbMulti||'다중');
   const mbMultiSub2=document.getElementById('mbMultiSub2');
   if(mbMultiSub2) mbMultiSub2.textContent=T[lang].mbMultiSub2||'';
