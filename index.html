@@ -1590,13 +1590,18 @@ function initScroll(){
     if(!el) return;
     el.addEventListener('scroll',()=>{
       const btn=document.getElementById('toTopBtn');
-      if(btn){ if(el.scrollTop>250) positionToTopBtn(); btn.classList.toggle('show',el.scrollTop>250); }
+      if(btn){
+        const show=el.scrollTop>250;
+        // 위치 계산(getBoundingClientRect=레이아웃 강제)은 표시 상태가 바뀔 때만.
+        // 매 스크롤 프레임마다 하면 스크롤이 버벅인다.
+        if(show!==btn.classList.contains('show')){ if(show) positionToTopBtn(); btn.classList.toggle('show',show); }
+      }
       // 품번조회 추가 로딩
       if(id==='scrollBodyPN' && _pnNextStart>0){
         const th=el.scrollHeight-el.clientHeight-200;
         if(el.scrollTop>=th){ renderPNChunk(_pnNextStart); _pnNextStart=-1; }
       }
-    });
+    }, {passive:true});
   });
 }
 function scrollToTop(){const el=getScrollBody();if(el)el.scrollTo({top:0,behavior:'smooth'});}
@@ -5366,7 +5371,9 @@ function scheduleSplitTableResync(hdrColId, bodyColId, tbodyId, mode){
   }
   syncSplitTableColumnWidths(hdrColId, bodyColId, tbodyId, mode);
 }
+let _lastResyncAt=0;
 function resyncAllSplitTables(){
+  _lastResyncAt=(window.performance&&performance.now)?performance.now():+new Date();
   _splitTableResyncTargets.forEach(t=>syncSplitTableColumnWidths(t.hdrColId, t.bodyColId, t.tbodyId, t.mode));
 }
 let _splitTableResyncTimer=null;
@@ -5378,7 +5385,13 @@ window.addEventListener('resize', scheduleResyncAll);
 // 브라우저 화면 배율(확대/축소)은 resize 이벤트가 항상 발생한다고 보장되지 않아서,
 // 실제 레이아웃 크기 변화를 더 확실히 잡아내는 ResizeObserver도 함께 사용합니다.
 if(typeof ResizeObserver!=='undefined'){
-  const _splitTableRO=new ResizeObserver(()=>{ scheduleResyncAll(); });
+  const _splitTableRO=new ResizeObserver(()=>{
+    // 폭 맞춤이 방금 표 폭을 바꿔서 생긴 크기 변화면 무시한다 —
+    // 그러지 않으면 (폭 변경 → RO 발화 → 다시 폭 맞춤) 되먹임 루프로 계속 재계산해 느려진다.
+    const now=(window.performance&&performance.now)?performance.now():+new Date();
+    if(now-_lastResyncAt < 400) return;
+    scheduleResyncAll();
+  });
   document.addEventListener('DOMContentLoaded', ()=>{ if(document.body) _splitTableRO.observe(document.body); });
   if(document.body) _splitTableRO.observe(document.body);
 }
