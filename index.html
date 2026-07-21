@@ -924,10 +924,16 @@ input[type="text"]::placeholder{color:var(--muted)}
     <div id="adminOrdersView" style="display:flex;flex-direction:column;flex:1;min-height:0">
       <div style="padding:0 4px 10px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:10px">
         <span id="adminOrderCount" style="font-size:11px;color:var(--muted)"></span>
-        <button class="dl-btn" onclick="downloadAdminOrders()">
-          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-          <span id="i18n-adminxls">엑셀 다운로드</span>
-        </button>
+        <div style="display:flex;align-items:center;gap:8px">
+          <button class="dl-btn" id="adminSendBtn" onclick="sendAllocations()" disabled style="background:var(--accent);border-color:var(--accent);color:#fff;opacity:.5">
+            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            <span id="i18n-adminsend">전송</span><span id="adminSendCount"></span>
+          </button>
+          <button class="dl-btn" onclick="downloadAdminOrders()">
+            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <span id="i18n-adminxls">엑셀 다운로드</span>
+          </button>
+        </div>
       </div>
       <div class="pn-body-wrap">
         <table style="width:auto;min-width:100%;border-collapse:collapse;font-size:11px;table-layout:auto">
@@ -1415,7 +1421,7 @@ const T={
        newsEmpty:'등록된 글이 없습니다.',newsTitlePh:'제목을 입력하세요',newsContentPh:'내용을 입력하세요',newsReplyPh:'답변/댓글을 입력하세요',newsDeleteBtn:'삭제',
        newsAttach:'📎 자료 첨부',newsAttachDownload:'첨부파일 다운로드',newsAttachFail:'파일 업로드에 실패했습니다.',
        newsDeleteConfirm:'이 글을 삭제할까요?',newsReplyDeleteConfirm:'이 답변을 삭제할까요?',newsRepliesLabel:n=>`답변 ${n}개`,newsFillAll:'제목과 내용을 모두 입력해주세요.',newsFillReply:'내용을 입력해주세요.',
-       adminBtn:'관리자',adminTitle:'회원 및 주문관리',adminXls:'엑셀 다운로드',adminEmpty:'등록된 주문이 없습니다.',adminCount:n=>`총 ${n}건`,
+       adminBtn:'관리자',adminTitle:'회원 및 주문관리',adminXls:'엑셀 다운로드',adminSend:'전송',adminSendNone:'전송할 변경이 없습니다.',adminSendConfirm:n=>`${n}건의 즉시공급 수량을 상대방에게 전송할까요?`,adminSendDone:'전송되었습니다.',adminSendFail:'전송에 실패했습니다.',adminEmpty:'등록된 주문이 없습니다.',adminCount:n=>`총 ${n}건`,
        adminTabOrders:'주문 접수',adminTabMyOrders:'주문',adminTabRequests:'취소·변경 요청',adminTabSignups:'회원관리 및 가입승인',adminGroupOrders:'주문관리',
        signupEmpty:'등록된 회원이 없습니다.',signupApprove:'승인',signupReject:'거부',signupDelete:'삭제',signupEdit:'수정',
        editMemberTitle:'회원 정보 수정',editMemberId:'아이디',editMemberCompany:'회사명',editMemberContact:'담당자명',editMemberPhone:'휴대폰',editMemberEmail:'이메일',
@@ -1508,7 +1514,7 @@ const T={
        newsEmpty:'Записей пока нет.',newsTitlePh:'Введите заголовок',newsContentPh:'Введите содержание',newsReplyPh:'Введите ответ/комментарий',newsDeleteBtn:'Удалить',
        newsAttach:'📎 Прикрепить файл',newsAttachDownload:'Скачать вложение',newsAttachFail:'Не удалось загрузить файл.',
        newsDeleteConfirm:'Удалить эту запись?',newsReplyDeleteConfirm:'Удалить этот ответ?',newsRepliesLabel:n=>`Ответов: ${n}`,newsFillAll:'Пожалуйста, заполните заголовок и содержание.',newsFillReply:'Пожалуйста, введите текст.',
-       adminBtn:'Админ',adminTitle:'Управление участниками и заказами',adminXls:'Скачать Excel',adminEmpty:'Заказов пока нет.',adminCount:n=>`Всего: ${n}`,
+       adminBtn:'Админ',adminTitle:'Управление участниками и заказами',adminXls:'Скачать Excel',adminSend:'Отправить',adminSendNone:'Нет изменений для отправки.',adminSendConfirm:n=>`Отправить количество (${n} шт.) получателю?`,adminSendDone:'Отправлено.',adminSendFail:'Ошибка отправки.',adminEmpty:'Заказов пока нет.',adminCount:n=>`Всего: ${n}`,
        adminTabOrders:'Принятые заказы',adminTabMyOrders:'Заказы',adminTabRequests:'Запросы отмены/изменения',adminTabSignups:'Управление участниками и одобрение',adminGroupOrders:'Управление заказами',
        signupEmpty:'Нет зарегистрированных участников.',signupApprove:'Одобрить',signupReject:'Отклонить',signupDelete:'Удалить',signupEdit:'Изменить',
        editMemberTitle:'Изменить участника',editMemberId:'Логин',editMemberCompany:'Компания',editMemberContact:'Контактное лицо',editMemberPhone:'Мобильный',editMemberEmail:'Email',
@@ -3554,17 +3560,39 @@ async function loadOrderAllocations(){
   orderAllocations={};
   (data||[]).forEach(a=>{ orderAllocations[a.company+'||'+a.rep]={allocated:a.allocated||0, agreed:!!a.agreed}; });
 }
-async function updateGroupAllocation(company, rep, value){
-  const t=T[lang];
+// 즉시공급 수량 편집은 곧바로 상대방에게 전달하지 않고 '전송 대기'로 쌓아둔다.
+// 실제 전달은 sendAllocations()(전송 버튼)에서 일괄 upsert 한다.
+let pendingAllocations={}; // key company||rep -> 전송 대기 중인 즉시공급 수량
+function stageGroupAllocation(company, rep, value){
+  const key=company+'||'+rep;
   const newVal=Math.max(0, parseInt(value,10)||0);
-  // 배분 수량을 새로 입력/수정하면 새로운 제안이므로, 상대방의 동의 상태는 다시 초기화합니다.
-  const { error } = await sb.from('kt_order_allocations').upsert(
-    [{ target_company: currentUser.company, company, rep, allocated:newVal, agreed:false }],
-    { onConflict:'target_company,company,rep' }
-  );
-  if(error){ alert(t.reqFail+'\n\n['+(error.message||error.code)+']'); return; }
-  orderAllocations[company+'||'+rep]={allocated:newVal, agreed:false};
+  const cur=(orderAllocations[key]&&orderAllocations[key].allocated)||0;
+  if(newVal===cur) delete pendingAllocations[key];   // 원래 값으로 되돌리면 대기 취소
+  else pendingAllocations[key]=newVal;
+  renderAdminOrders();   // 향후공급·미전송 표시 즉시 반영 (onchange 라 포커스는 이미 떠남)
+}
+function updateAdminSendBtn(){
+  const btn=document.getElementById('adminSendBtn'); if(!btn) return;
+  const n=Object.keys(pendingAllocations).length;
+  btn.disabled = n===0;
+  btn.style.opacity = n===0 ? '.5' : '1';
+  const cnt=document.getElementById('adminSendCount'); if(cnt) cnt.textContent = n>0 ? ` (${n})` : '';
+}
+async function sendAllocations(){
+  const t=T[lang];
+  const keys=Object.keys(pendingAllocations);
+  if(!keys.length){ alert(t.adminSendNone); return; }
+  if(!confirm(t.adminSendConfirm(keys.length))) return;
+  const btn=document.getElementById('adminSendBtn');
+  if(btn) btn.disabled=true;
+  // 새로 제안하는 수량이므로 상대방의 동의 상태(agreed)는 다시 초기화한다.
+  const rows=keys.map(k=>{ const i=k.indexOf('||'); const company=k.slice(0,i), rep=k.slice(i+2); return { target_company: currentUser.company, company, rep, allocated: pendingAllocations[k], agreed:false }; });
+  const { error } = await sb.from('kt_order_allocations').upsert(rows, { onConflict:'target_company,company,rep' });
+  if(error){ alert(t.adminSendFail+'\n\n['+(error.message||error.code)+']'); if(btn) btn.disabled=false; return; }
+  keys.forEach(k=>{ orderAllocations[k]={allocated:pendingAllocations[k], agreed:false}; });
+  pendingAllocations={};
   renderAdminOrders();
+  alert(t.adminSendDone);
 }
 let myOrderAllocations={}; // key: rep -> {allocated, agreed} (내가 신청한 주문내역: 내 구매처가 나에게 제안한 공급가능 수량과 내 동의 여부)
 async function loadMyOrderAllocations(){
@@ -3670,8 +3698,15 @@ function buildAdminOrderGroups(){
 
     const allocInfo=orderAllocations[g.company+'||'+g.rep]||{allocated:0, agreed:false};
     g.allocated=allocInfo.allocated; // 즉시공급
-    g.futureSupply=Math.max(0, g.totalOrderQty-g.allocated); // 향후공급
     g.agreed=allocInfo.agreed;
+    // 전송 대기(수기 편집 후 아직 전송 안 함)가 있으면 그 값을 미리 반영해서 보여준다.
+    const pk=g.company+'||'+g.rep;
+    if(pendingAllocations[pk]!==undefined){
+      g.allocated=pendingAllocations[pk];
+      g.agreed=false;
+      g.pendingDirty=true;   // 미전송 표시용
+    }
+    g.futureSupply=Math.max(0, g.totalOrderQty-g.allocated); // 향후공급
 
     g.notSupplied=Math.max(0, g.totalOrderQty-g.totalSuppliedQty);
     g.supplyRate=g.totalOrderQty>0 ? (g.totalSuppliedQty/g.totalOrderQty) : 0;
@@ -3729,8 +3764,10 @@ function renderAdminOrders(){
 
   if(!groups.length){
     tbody.innerHTML='';
+    const cl=document.getElementById('adminOrderCardList'); if(cl) cl.innerHTML='';
     emptyEl.textContent=t.adminEmpty;
     emptyEl.style.display='block';
+    updateAdminSendBtn();
     return;
   }
   emptyEl.style.display='none';
@@ -3755,8 +3792,9 @@ function renderAdminOrders(){
       <td style="padding:9px 16px 9px 12px;text-align:right">${g.totalOrderQty}</td>
       <td style="padding:9px 16px 9px 12px;text-align:right;border-left:2px solid var(--border);color:var(--muted)">${stockText}</td>
       <td style="padding:9px 12px;text-align:center">
-        <input type="number" min="0" value="${g.allocated}" class="admin-supply-input" style="width:60px;text-align:center;padding:4px;border:1px solid var(--border);border-radius:5px;background:var(--surface);color:var(--text);font-weight:600"
-          onchange="updateGroupAllocation('${companyEsc}','${repEsc}',this.value)">
+        <input type="number" min="0" value="${g.allocated}" class="admin-supply-input" style="width:60px;text-align:center;padding:4px;border:1px solid var(--border);border-radius:5px;background:var(--surface);color:var(--text);font-weight:600;${g.pendingDirty?'border-color:#f59e0b;background:#f59e0b22;':''}"
+          title="${g.pendingDirty?'미전송 — 전송 버튼을 눌러야 전달됩니다':''}"
+          onchange="stageGroupAllocation('${companyEsc}','${repEsc}',this.value)">
       </td>
       <td style="padding:9px 16px 9px 12px;text-align:right">${g.futureSupply||'-'}</td>
       <td style="padding:9px 12px;text-align:center">${g.agreed?`<span style="color:#22c55e">${t.decisionAgreed}</span>`:''}</td>
@@ -3828,7 +3866,7 @@ function renderAdminOrders(){
         <div style="font-weight:700;margin-bottom:4px">${t.grpDecision}</div>
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
           <span style="color:var(--muted)">${t.colStock}: <b style="color:var(--text)">${stockText}</b></span>
-          <span>${t.colImmediateSupply}: <input type="number" min="0" value="${g.allocated}" class="admin-supply-input" style="width:55px;text-align:center;padding:3px;border:1px solid var(--border);border-radius:5px;background:var(--surface);color:var(--text)" onchange="updateGroupAllocation('${companyEsc}','${repEsc}',this.value)"></span>
+          <span>${t.colImmediateSupply}: <input type="number" min="0" value="${g.allocated}" class="admin-supply-input" style="width:55px;text-align:center;padding:3px;border:1px solid var(--border);border-radius:5px;background:var(--surface);color:var(--text);${g.pendingDirty?'border-color:#f59e0b;background:#f59e0b22;':''}" onchange="stageGroupAllocation('${companyEsc}','${repEsc}',this.value)"></span>
           <span style="color:var(--muted)">${t.colFutureSupply}: <b style="color:var(--text)">${g.futureSupply||'-'}</b></span>
           ${g.agreed?`<span style="color:#22c55e">${t.decisionAgreed}</span>`:''}
         </div>
@@ -3845,9 +3883,11 @@ function renderAdminOrders(){
       ${changeCell}
     </div>`;
   }).join('');
+  updateAdminSendBtn();
 }
 async function loadAdminOrdersTab(){
   if(!currentUser) return;
+  pendingAllocations={};   // 탭을 새로 열면 전송 대기 중이던 편집은 버린다(서버값 기준으로 다시 시작)
   document.getElementById('adminOrderTbody').innerHTML='';
   document.getElementById('adminOrderEmpty').style.display='none';
   switchAdminView('orders', false);   // 열자마자 읽음처리하지 않는다 (서브탭 점 유지)
@@ -4629,6 +4669,7 @@ function refreshAdminTexts(){
   setTxt('i18n-adminbtn', t.adminBtn);
   setTxt('i18n-admintitle', t.adminTitle);
   setTxt('i18n-adminxls', t.adminXls);
+  setTxt('i18n-adminsend', t.adminSend);
   setTxt('i18n-adminh-date', t.adminHDate);
   setTxt('i18n-adminh-company', t.adminHCompany);
   setTxt('i18n-adminh-user', t.adminHUser);
