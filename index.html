@@ -1404,7 +1404,7 @@ const T={
        grpExisting:'기존',grpNew:'신규',grpCumulative:'누적',grpTotal:'합계',grpDecision:'공급 결정',grpProgress:'진행여부',
        statusDone:'완료',statusPending:'준비중',statusPartial:'일부완료',
        colOrder:'주문',grpOrderStatus:'주문현황',colSupply:'출고',colStock:'재고',colSupplyRate:'출고율',colNotSupplied:'미출고',colAllocation:'배분',colPreparing:'준비중',colShipped:'출고완료',
-       colDate:'날짜',colStatus:'완료여부',grpStatusHdr:'출고현황',colFinalOrder:'최종주문',colDecision:'의사결정',decisionAgreed:'동의',myOrderReqSection:'구매처의 요청사항',agreeBtn:'동의',colSupplyAvailable:'공급가능',colShippedQty:'수량',colImmediateSupply:'즉시공급',colFutureSupply:'향후공급',
+       colDate:'날짜',colStatus:'완료여부',grpStatusHdr:'출고현황',colFinalOrder:'최종주문',colDecision:'의사결정',decisionAgreed:'동의',decisionConfirmed:'확정',myOrderReqSection:'구매처의 요청사항',agreeBtn:'동의',colSupplyAvailable:'공급가능',colShippedQty:'수량',colImmediateSupply:'즉시공급',colFutureSupply:'향후공급',
        invHBase:'기초재고',invHPostAlloc:'배분후 재고',
        invHAllocRu:'RUSSIA 배분',invHAllocKz:'KAZAK 배분',
        orderSubmit:'주문 제출',orderSubmitting:'제출 중…',orderSubmitOk:'주문이 접수되었습니다.',orderSubmitFail:'주문 제출에 실패했습니다. 잠시 후 다시 시도해주세요.',orderSubmitEmpty:'주문수량을 입력한 품목이 없습니다.',orderPrevQty:'기존 주문수량',orderStock:'보유 재고(배분후)',orderReceived:'주문 접수',orderPrice:'구매가',orderSupply:'공급가',orderNoSupplier:'주문을 보낼 구매처가 지정되어 있지 않습니다.',
@@ -1497,7 +1497,7 @@ const T={
        grpExisting:'Ранее',grpNew:'Новое',grpCumulative:'Всего',grpTotal:'Итого',grpDecision:'Решение о поставке',grpProgress:'Статус',
        statusDone:'Завершено',statusPending:'В процессе',statusPartial:'Частично',
        colOrder:'Заказ',grpOrderStatus:'Статус заказа',colSupply:'Отгрузка',colStock:'Остаток',colSupplyRate:'% отгрузки',colNotSupplied:'Не отгружено',colAllocation:'Выделено',colPreparing:'Готовится',colShipped:'Отгружено',
-       colDate:'Дата',colStatus:'Статус',grpStatusHdr:'Статус отгрузки',colFinalOrder:'Финальный заказ',colDecision:'Решение',decisionAgreed:'Согласен',myOrderReqSection:'Предложение поставщика',agreeBtn:'Согласиться',colSupplyAvailable:'Доступно',colShippedQty:'Кол-во',colImmediateSupply:'Сразу',colFutureSupply:'Позже',
+       colDate:'Дата',colStatus:'Статус',grpStatusHdr:'Статус отгрузки',colFinalOrder:'Финальный заказ',colDecision:'Решение',decisionAgreed:'Согласен',decisionConfirmed:'Подтверждено',myOrderReqSection:'Предложение поставщика',agreeBtn:'Согласиться',colSupplyAvailable:'Доступно',colShippedQty:'Кол-во',colImmediateSupply:'Сразу',colFutureSupply:'Позже',
        invHBase:'Начальный остаток',invHPostAlloc:'Остаток после выделения',
        invHAllocRu:'Выделено RUSSIA',invHAllocKz:'Выделено KAZAK',
        orderSubmit:'Отправить заказ',orderSubmitting:'Отправка…',orderSubmitOk:'Заказ принят.',orderSubmitFail:'Не удалось отправить заказ. Попробуйте позже.',orderSubmitEmpty:'Не указано количество ни для одного товара.',orderPrevQty:'Ранее заказано',orderStock:'Мой склад (после выделения)',orderReceived:'Принято заказов',orderPrice:'Закупочная цена',orderSupply:'Цена поставки',orderNoSupplier:'Поставщик для заказа не указан.',
@@ -3659,6 +3659,22 @@ function statusLabelText(status){
   if(status==='partial') return t.statusPartial;
   return t.statusPending;
 }
+// 의사결정 라벨: 전량 즉시공급이면 '확정'(자동), 부분이라도 구매자가 동의했으면 '동의'.
+function decisionLabelHtml(g){
+  const t=T[lang];
+  if(g.confirmed) return `<span style="color:#3b82f6;font-weight:700">${t.decisionConfirmed}</span>`;
+  if(g.agreed)    return `<span style="color:#22c55e">${t.decisionAgreed}</span>`;
+  return '';
+}
+// 구매자 측 의사결정: 확정/동의는 라벨, 부분공급 미동의면 '동의' 버튼.
+function buyerDecisionHtml(g, repEsc){
+  const t=T[lang];
+  if(g.confirmed) return `<span style="color:#3b82f6;font-weight:700">${t.decisionConfirmed}</span>`;
+  if(g.agreed)    return `<span style="color:#22c55e">${t.decisionAgreed}</span>`;
+  if(g.immediateSupply>0) return `<button class="news-btn-primary" style="padding:4px 10px;font-size:11px" onclick="agreeToAllocation('${repEsc}')">${t.agreeBtn}</button>`;
+  return '';
+}
+function decisionLabelText(g){ const t=T[lang]; return g.confirmed?t.decisionConfirmed:(g.agreed?t.decisionAgreed:''); }
 function buildAdminOrderGroups(){
   const masterRepTotals=computeMasterRepTotals(); // 재고 엑셀의 대표품번 기준 합산 수량(기초재고)
   // 재고에서 빼는 배분 합계. 전송 대기(pending) 편집도 즉시 반영해서, 즉시공급을
@@ -3702,6 +3718,9 @@ function buildAdminOrderGroups(){
     const allocInfo=orderAllocations[g.company+'||'+g.rep]||{allocated:0, agreed:false};
     g.allocated=allocInfo.allocated; // 즉시공급
     g.agreed=allocInfo.agreed;
+    // 확정: 전송된 즉시공급이 주문수량을 전량 커버하면 구매자 동의 없이 자동 확정.
+    // (전송 대기 미리보기 값이 아니라 실제 전송된 값 기준으로 판정)
+    g.confirmed = g.totalOrderQty>0 && (allocInfo.allocated||0)>=g.totalOrderQty;
     // 전송 대기(수기 편집 후 아직 전송 안 함)가 있으면 그 값을 미리 반영해서 보여준다.
     const pk=g.company+'||'+g.rep;
     if(pendingAllocations[pk]!==undefined){
@@ -3800,7 +3819,7 @@ function renderAdminOrders(){
           onchange="stageGroupAllocation('${companyEsc}','${repEsc}',this.value)">
       </td>
       <td style="padding:9px 16px 9px 12px;text-align:right">${g.futureSupply||'-'}</td>
-      <td style="padding:9px 12px;text-align:center">${g.agreed?`<span style="color:#22c55e">${t.decisionAgreed}</span>`:''}</td>
+      <td style="padding:9px 12px;text-align:center">${decisionLabelHtml(g)}</td>
       <td style="padding:9px 12px;border-left:2px solid var(--border)"></td>
       <td style="padding:9px 16px 9px 12px;text-align:right">${g.totalSuppliedQty}</td>
       <td style="padding:9px 16px 9px 12px;text-align:right;color:${g.notSupplied>0?'#ef4444':'var(--text)'}">${g.notSupplied}</td>
@@ -3871,7 +3890,7 @@ function renderAdminOrders(){
           <span style="color:var(--muted)">${t.colStock}: <b style="color:var(--text)">${stockText}</b></span>
           <span>${t.colImmediateSupply}: <input type="number" min="0" value="${g.allocated}" class="admin-supply-input" style="width:55px;text-align:center;padding:3px;border:1px solid var(--border);border-radius:5px;background:var(--surface);color:var(--text);${g.pendingDirty?'border-color:#f59e0b;background:#f59e0b22;':''}" onchange="stageGroupAllocation('${companyEsc}','${repEsc}',this.value)"></span>
           <span style="color:var(--muted)">${t.colFutureSupply}: <b style="color:var(--text)">${g.futureSupply||'-'}</b></span>
-          ${g.agreed?`<span style="color:#22c55e">${t.decisionAgreed}</span>`:''}
+          ${decisionLabelHtml(g)}
         </div>
       </div>
       <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:12px">
@@ -4366,6 +4385,8 @@ function buildMyOrderGroups(){
     g.immediateSupply=allocInfo.allocated; // 즉시공급: 구매처가 지금 배분해준 수량
     g.futureSupply=Math.max(0, g.totalOrderQty-g.immediateSupply); // 향후공급: 주문 수량에서 즉시공급을 뺀 나머지
     g.agreed=allocInfo.agreed;
+    // 확정: 즉시공급이 주문수량을 전량 커버하면 별도 동의 없이 자동 확정.
+    g.confirmed = g.totalOrderQty>0 && g.immediateSupply>=g.totalOrderQty;
 
     g.notSupplied=Math.max(0, g.totalOrderQty-g.totalSuppliedQty);
     g.supplyRate=g.totalOrderQty>0 ? (g.totalSuppliedQty/g.totalOrderQty) : 0;
@@ -4471,9 +4492,7 @@ function renderAdminMyOrders(){
     const ratePct=(g.supplyRate*100).toFixed(1)+'%';
     const stockText=g.stockDisplay===null?'-':g.stockDisplay;
     const repEsc=g.rep.replace(/'/g,"\\'");
-    const decisionCell = g.agreed
-      ? `<span style="color:#22c55e">${t.decisionAgreed}</span>`
-      : (g.immediateSupply>0 ? `<button class="news-btn-primary" style="padding:4px 10px;font-size:11px" onclick="agreeToAllocation('${repEsc}')">${t.agreeBtn}</button>` : '');
+    const decisionCell = buyerDecisionHtml(g, repEsc);
 
     let html=`<tr style="border-bottom:1px solid var(--border);font-weight:700;background:var(--surface2)">
       <td class="wrap-ok" style="padding:9px 12px">${escapeHtml(name)}</td>
@@ -4532,9 +4551,7 @@ function renderAdminMyOrders(){
     const stockText=g.stockDisplay===null?'-':g.stockDisplay;
     const orderLinesHtml=g.orderLines.map(l=>`<div style="display:flex;justify-content:space-between"><span>${escapeHtml(l.date)}</span><b>${l.qty}</b></div>`).join('')||'-';
     const supplyLinesHtml=g.supplyLines.map(l=>`<div style="display:flex;justify-content:space-between"><span>${escapeHtml(l.date)}</span><b>${l.qty}</b></div>`).join('')||'-';
-    const decisionCell = g.agreed
-      ? `<span style="color:#22c55e">${t.decisionAgreed}</span>`
-      : (g.immediateSupply>0 ? `<button class="news-btn-primary" style="padding:4px 10px;font-size:11px" onclick="agreeToAllocation('${repEsc}')">${t.agreeBtn}</button>` : '');
+    const decisionCell = buyerDecisionHtml(g, repEsc);
     const actionCell = (()=>{
       const req=g.changeRequest;
       if(req && req.status==='pending') return `<div style="margin-top:4px;color:#f59e0b">${req.request_type==='cancel'?t.reqTypeCancel:t.reqTypeChange} ${req.request_type==='change'?req.requested_qty:''}</div>`;
@@ -4671,7 +4688,7 @@ function downloadAdminMyOrders(){
     rows.push([
       name, ...(isKo?[g.spec]:[]), g.rep, (g.stockDisplay===null?'':g.stockDisplay),
       '', g.totalOrderQty,
-      g.immediateSupply, g.futureSupply, (g.agreed?t.decisionAgreed:''),
+      g.immediateSupply, g.futureSupply, decisionLabelText(g),
       '', g.totalSuppliedQty,
       g.notSupplied, (g.supplyRate*100).toFixed(1)+'%',
       statusLabelText(g.status)
@@ -4711,7 +4728,7 @@ function downloadAdminOrders(){
     rows.push([
       g.company, g.user_id, name, ...(isKo?[g.spec]:[]), g.rep,
       '', g.totalOrderQty,
-      (g.stockDisplay===null?'':g.stockDisplay), g.allocated, g.futureSupply, (g.agreed?t.decisionAgreed:''),
+      (g.stockDisplay===null?'':g.stockDisplay), g.allocated, g.futureSupply, decisionLabelText(g),
       '', g.totalSuppliedQty,
       g.notSupplied, (g.supplyRate*100).toFixed(1)+'%',
       statusLabelText(g.status)
