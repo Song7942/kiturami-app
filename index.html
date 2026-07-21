@@ -5234,8 +5234,9 @@ function syncSplitTableColumnWidths(hdrColId, bodyColId, tbodyId, mode){
           if(tbodyId==='shipmentsTbody'){
             // KO: 품명|규격|대표품번|품번|거래처|날짜|수량|작업 (8) / RU: 규격 제외 (7)
             // 출고·수정/삭제 열은 러시아어(Отгружено, Изменить/Удалить)가 길어 더 넓게.
-            if(n===8) return { caps:[280,260,110,110,120,84,90,155], noFill:true, rigid:allRigidFrom(2,8) };
-            return { caps:[280,110,110,120,84,90,155], noFill:true, rigid:allRigidFrom(1,7) };
+            // 수정/삭제: 두 버튼 묶음 ~145 + 셀 패딩 → 180 확보.
+            if(n===8) return { caps:[280,260,110,110,120,84,90,180], noFill:true, rigid:allRigidFrom(2,8) };
+            return { caps:[280,110,110,120,84,90,180], noFill:true, rigid:allRigidFrom(1,7) };
           }
           if(tbodyId==='orderTbody'){
             // 도면번호 | 품명 | (규격:KO만) | 대표품번 | 모델열×M | [가격] [주문접수] [보유재고] [주문]
@@ -5416,9 +5417,9 @@ function renderShipmentsList(){
     <td style="padding:9px 12px">${escapeHtml(displayClientName(r.client_name))}</td>
     <td style="padding:9px 12px;color:var(--muted)">${escapeHtml(formatShipDate(r.ship_date))}</td>
     <td style="padding:9px 16px 9px 12px;text-align:right;font-weight:700">${r.qty}</td>
-    <td style="padding:9px 12px;text-align:center;white-space:nowrap">
-      <button class="news-btn-secondary" style="padding:4px 10px;font-size:11px;white-space:nowrap;box-sizing:border-box" onclick="openEditShipmentModal(${r.id})">${t.signupEdit}</button>
-      <button class="news-btn-secondary" style="padding:4px 10px;font-size:11px;white-space:nowrap;box-sizing:border-box" onclick="deleteShipment(${r.id})">${t.signupDelete}</button>
+    <td style="padding:9px 6px;text-align:center;white-space:nowrap">
+      <button class="news-btn-secondary" style="padding:4px 8px;font-size:11px;white-space:nowrap;box-sizing:border-box" onclick="openEditShipmentModal(${r.id})">${t.signupEdit}</button>
+      <button class="news-btn-secondary" style="padding:4px 8px;font-size:11px;white-space:nowrap;box-sizing:border-box" onclick="deleteShipment(${r.id})">${t.signupDelete}</button>
     </td>
   </tr>`;
   }).join('');
