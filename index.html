@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
-<title>KITURAMI 부품 검색</title>
+<title>KITURAMI 서비스 부품 관리</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 :root{--bg:#ffffff;--surface:#ffffff;--surface2:#f1f5f9;--border:#e2e8f0;--accent:#3b82f6;--accent2:#6366f1;--green:#22c55e;--text:#000000;--muted:#475569;--tag-bg:#dbeafe;--tag-text:#1d4ed8;--row-hover:#eef2f7}
@@ -521,7 +521,7 @@ input[type="text"]::placeholder{color:var(--muted)}
 <header>
   <div class="logo">KT</div>
   <div class="hdr-txt">
-    <h1 id="i18n-title">KITURAMI 부품 검색</h1>
+    <h1 id="i18n-title">KITURAMI 서비스 부품 관리</h1>
     
   </div>
   <button class="news-btn" id="newsBtn" onclick="openNewsModal()" style="position:relative">
@@ -1386,7 +1386,7 @@ const ANC_KEYS=new Set(['anc_1524','anc_30','anc_35']);
 const ANCH_KEYS=new Set(['anch_24','anch_35']);
 
 const T={
-  ko:{title:'KITURAMI 부품 검색',sub:'',mbLabel:'모델 선택',mbAll:'전체',mbAllSub:'ALL',mbMulti:'다중',mbMultiTip:'다중 선택',toTopTip:'맨 위로',mbMultiOn:'다중',mbMultiSub2:'',
+  ko:{title:'KITURAMI 서비스 부품 관리',sub:'',mbLabel:'모델 선택',mbAll:'전체',mbAllSub:'ALL',mbMulti:'다중',mbMultiTip:'다중 선택',toTopTip:'맨 위로',mbMultiOn:'다중',mbMultiSub2:'',
        ph:'도면번호, 품명, 대표품번으로 검색…',dl:'엑셀 다운로드',pndl:'엑셀 다운로드',
        thDiag:'도면번호',thDiagBr:'도면<br>번호',thName:'품명',thSpec:'규격',thRep:'대표품번',
        count:n=>`<b>${n}</b>개`,footer:n=>`총 ${n}개`,noResult:'검색 결과가 없습니다.',
@@ -1479,7 +1479,7 @@ const T={
        priceNoSupply:'공급가 데이터가 없습니다. 계산식 탭에서 엑셀을 업로드해 주세요.',
        ddTitle:'모델 선택',ddAllOn:'전체 해제',ddAllOff:'모두 선택',
        diagTitle:'ALPHA PLUS — 분해도',apsDiagTitle:'ALPHA PLUS S — 분해도',diagHint:'번호 클릭 → 해당 부품 강조'},
-  ru:{title:'KITURAMI Поиск запчастей',sub:'',mbLabel:'Модель',mbAll:'Все',mbAllSub:'ALL',mbMulti:'Мн.',mbMultiTip:'Множественный выбор',toTopTip:'Наверх',mbMultiOn:'Мн.',mbMultiSub2:'Выбор',
+  ru:{title:'KITURAMI Управление запчастями',sub:'',mbLabel:'Модель',mbAll:'Все',mbAllSub:'ALL',mbMulti:'Мн.',mbMultiTip:'Множественный выбор',toTopTip:'Наверх',mbMultiOn:'Мн.',mbMultiSub2:'Выбор',
        ph:'Поиск по №чертежа, названию, артикулу…',dl:'Скачать Excel',pndl:'Скачать Excel',
        thDiag:'№ чертежа',thName:'Наименование',thSpec:'Спецификация',thRep:'Осн. артикул',
        count:n=>`<b>${n}</b>`,footer:n=>`Итого: ${n}`,noResult:'Результаты не найдены.',
