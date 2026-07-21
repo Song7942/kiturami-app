@@ -3950,11 +3950,12 @@ function _focusedEditableIn(paneId){
   return p && a && p.contains(a) && /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName);
 }
 async function liveTick(){
-  if(!currentUser || document.hidden) return;   // 로그아웃/백그라운드면 건너뜀
+  if(!currentUser) return;
   try{
-    // 알림 점은 항상 갱신 (가벼운 조회)
+    // 알림 점은 항상 갱신 — 백그라운드 탭에서도 갱신해, 탭을 다시 보면 이미 점이 떠있게 한다.
     loadOrderFeedStamps().then(updateOrderUnreadDots);
     refreshSignupDot();
+    if(document.hidden) return;   // 무거운 '내용' 갱신만 화면이 보일 때 한다
     const active=(id)=>{ const p=document.getElementById(id); return p && p.classList.contains('active'); };
     // 주문관리 화면: 전송 대기 편집이 있거나 입력칸에 포커스가 있으면 방해하지 않는다.
     if(active('pane-adminOrders')){
@@ -3968,10 +3969,26 @@ async function liveTick(){
     }
   }catch(e){ /* 폴링은 부가기능이라 조용히 무시 */ }
 }
-function startLive(){ if(_liveTimer) return; _liveTimer=setInterval(()=>{ liveTick(); }, 15000); }
+function startLive(){ if(_liveTimer) return; _liveTimer=setInterval(()=>{ liveTick(); }, 8000); }
 function stopLive(){ if(_liveTimer){ clearInterval(_liveTimer); _liveTimer=null; } }
 // 탭을 다시 보게 되면(백그라운드→포그라운드) 즉시 한 번 갱신
 document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) liveTick(); });
+
+// ── 진짜 실시간: Supabase Realtime 구독 (활성화돼 있으면 즉시 반영, 아니면 폴링이 커버) ──
+let _rtChannel=null;
+function startRealtime(){
+  if(_rtChannel || !currentUser || !sb || typeof sb.channel!=='function') return;
+  try{
+    _rtChannel = sb.channel('kt-live-'+String(currentUser.id||''))
+      .on('postgres_changes', {event:'*',schema:'public',table:'kt_order_allocations'}, ()=>liveTick())
+      .on('postgres_changes', {event:'*',schema:'public',table:'kt_orders'}, ()=>liveTick())
+      .on('postgres_changes', {event:'*',schema:'public',table:'kt_shipments'}, ()=>liveTick())
+      .on('postgres_changes', {event:'*',schema:'public',table:'kt_group_change_requests'}, ()=>liveTick())
+      .on('postgres_changes', {event:'*',schema:'public',table:'kt_users'}, ()=>refreshSignupDot())
+      .subscribe();
+  }catch(e){ console.warn('realtime off', e); _rtChannel=null; }
+}
+function stopRealtime(){ if(_rtChannel){ try{ sb.removeChannel(_rtChannel); }catch(e){} _rtChannel=null; } }
 async function loadMemberManagementTab(){
   if(!currentUser) return;
   await refreshCurrentUser();
@@ -4633,14 +4650,15 @@ async function loadOrderFeedStamps(){
       // 구매처가 나에게 즉시공급(배분)한 내역. 타임스탬프가 없어 지문으로 새 활동을 감지한다.
       // 지문에 '확정'(배분이 주문 전량 → 자동확정) 여부까지 넣어, 수량이 그대로여도
       // 확정으로 바뀌면 새 소식으로 잡히게 한다.
+      // 주문 합계 조회가 실패해도 배분 지문 자체는 만든다(부분공급 알림이 사라지지 않게).
       safe(async()=>{
-        const [ar, or] = await Promise.all([
-          sb.from('kt_order_allocations').select('rep,allocated').ilike('target_company', sup).ilike('company', co),
-          sb.from('kt_orders').select('items').ilike('company', co)
-        ]);
+        const { data: allocs } = await sb.from('kt_order_allocations').select('rep,allocated').ilike('target_company', sup).ilike('company', co);
         const orderQtyByRep={};
-        (or.data||[]).forEach(o=>(o.items||[]).forEach(it=>{ const rep=findMasterRep(it.rep)||it.rep; orderQtyByRep[rep]=(orderQtyByRep[rep]||0)+(it.qty||0); }));
-        orderFeedLatest.mineAllocFp=(ar.data||[]).filter(a=>Number(a.allocated)>0).map(a=>{
+        try{
+          const { data: myOrders } = await sb.from('kt_orders').select('items').ilike('company', co);
+          (myOrders||[]).forEach(o=>(o.items||[]).forEach(it=>{ const rep=findMasterRep(it.rep)||it.rep; orderQtyByRep[rep]=(orderQtyByRep[rep]||0)+(it.qty||0); }));
+        }catch(e){ /* 주문 합계 실패해도 배분 지문은 만든다 */ }
+        orderFeedLatest.mineAllocFp=(allocs||[]).filter(a=>Number(a.allocated)>0).map(a=>{
           const ord=orderQtyByRep[a.rep]||0;
           const conf=(ord>0 && Number(a.allocated)>=ord)?'C':'';   // 확정 표시
           return `${a.rep}:${a.allocated}:${conf}`;
@@ -7854,6 +7872,7 @@ async function saveMyInfo(){
 function doLogout(){
   currentUser=null;
   stopLive();
+  stopRealtime();
   sessionStorage.removeItem(AUTH_SESSION_KEY);
   document.getElementById('appRoot').style.display='none';
   document.getElementById('authOverlay').style.display='flex';
@@ -7961,7 +7980,8 @@ function enterApp(user){
   if(tabReset) tabReset.style.display = (user.is_admin && !user.supplier_company && !role.isKituramiHQ) ? 'block' : 'none';
   loadOrderFeedStamps().then(updateOrderUnreadDots);   // 주문 알림 점 (탭을 열기 전에도 보이게)
   refreshSignupDot();                                  // 회원관리 알림 점 (대기 가입 신청)
-  startLive();                                         // 15초 폴링으로 실시간처럼 갱신
+  startLive();                                         // 폴링(8초)으로 실시간처럼 갱신
+  startRealtime();                                     // Realtime 구독(활성화 시 즉시 반영)
   Promise.all([loadMyOrderTotals(), loadInventory(), loadGlobalSuppliedTotals(), loadReceivedOrderTotals(), loadPrices(), loadPNOverrides(), loadCompanyPrices(),
                (role.region==='kz'?Promise.all([loadPriceSettings(),loadPriceCalc()]):Promise.resolve())]).then(()=>{
     if(document.getElementById('pane-order').classList.contains('active')) renderOrderTable();
