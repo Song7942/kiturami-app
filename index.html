@@ -914,11 +914,11 @@ input[type="text"]::placeholder{color:var(--muted)}
     <div style="display:flex;gap:6px;margin-bottom:10px;border-bottom:1px solid var(--border)">
       <button class="news-tab active" id="adminTabOrders" onclick="switchAdminView('orders')" style="flex:1;text-align:center;position:relative">
         <span id="i18n-admintab-orders">주문 접수</span>
-        <span id="recvUnreadDot" style="display:none;position:absolute;top:4px;right:6px;width:8px;height:8px;border-radius:50%;background:#ef4444;box-shadow:0 0 0 2px var(--bg)"></span>
+        <span id="recvUnreadDot" style="display:none;margin-left:5px;vertical-align:middle;width:8px;height:8px;border-radius:50%;background:#ef4444"></span>
       </button>
       <button class="news-tab" id="adminTabMyOrders" onclick="switchAdminView('myorders')" style="flex:1;text-align:center;position:relative">
         <span id="i18n-admintab-myorders">주문</span>
-        <span id="myOrdersUnreadDot" style="display:none;position:absolute;top:4px;right:6px;width:8px;height:8px;border-radius:50%;background:#ef4444;box-shadow:0 0 0 2px var(--bg)"></span>
+        <span id="myOrdersUnreadDot" style="display:none;margin-left:5px;vertical-align:middle;width:8px;height:8px;border-radius:50%;background:#ef4444"></span>
       </button>
     </div>
     <div id="adminOrdersView" style="display:flex;flex-direction:column;flex:1;min-height:0">
@@ -4515,7 +4515,7 @@ async function loadOrderFeedStamps(){
 function _orderSeenKey(kind){ return 'kt_order_seen_'+kind+'_'+String(currentUser&&currentUser.id||''); }
 function _orderSeenFpKey(){ return 'kt_order_seenfp_mine_'+String(currentUser&&currentUser.id||''); }
 function updateOrderUnreadDots(){
-  const show=(id,on)=>{ const el=document.getElementById(id); if(el) el.style.display=on?'block':'none'; };
+  const show=(id,on)=>{ const el=document.getElementById(id); if(el) el.style.display=on?'inline-block':'none'; };
   const newRecv = orderFeedLatest.recv > Number(localStorage.getItem(_orderSeenKey('recv'))||0);
   // 주문(mine): 출고·요청처리(시각) 또는 배분 지문 변화 중 하나라도 새로우면
   const seenFp = localStorage.getItem(_orderSeenFpKey()) || '';
