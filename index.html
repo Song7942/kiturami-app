@@ -3661,10 +3661,13 @@ function statusLabelText(status){
 }
 function buildAdminOrderGroups(){
   const masterRepTotals=computeMasterRepTotals(); // 재고 엑셀의 대표품번 기준 합산 수량(기초재고)
+  // 재고에서 빼는 배분 합계. 전송 대기(pending) 편집도 즉시 반영해서, 즉시공급을
+  // 고치면 전송 전에도 재고가 바로 바뀌게 한다.
   const globalAllocByRep={};
-  Object.keys(orderAllocations).forEach(k=>{
-    const rep=k.split('||')[1];
-    globalAllocByRep[rep]=(globalAllocByRep[rep]||0)+(orderAllocations[k].allocated||0);
+  new Set([...Object.keys(orderAllocations), ...Object.keys(pendingAllocations)]).forEach(k=>{
+    const rep=k.slice(k.indexOf('||')+2);
+    const eff = pendingAllocations[k]!==undefined ? pendingAllocations[k] : (orderAllocations[k]?orderAllocations[k].allocated||0:0);
+    globalAllocByRep[rep]=(globalAllocByRep[rep]||0)+eff;
   });
 
   const groups={};
