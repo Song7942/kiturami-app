@@ -6724,6 +6724,12 @@ async function applyCostPriceList(arr, event, cols){
       if(cols.ruSup!=null) rec.ruSup=_cellNumOf(row[cols.ruSup]);
       if(cols.kzSup!=null) rec.kzSup=_cellNumOf(row[cols.kzSup]);
       if(cols.ship!=null)  rec.ship =_cellNumOf(row[cols.ship]);
+      // '원가' 머리글이 따로 없으면: 품번·인식된 열을 뺀 첫 숫자 칸을 원가로 본다.
+      // (공급가 등 다른 라벨이 있어도, 품번 옆 라벨 없는 숫자는 원가라는 규칙을 유지)
+      if(cols.cost==null){
+        const used=new Set([codeCol, cols.ruSup, cols.kzSup, cols.ship].filter(x=>x!=null));
+        for(let c=0;c<row.length;c++){ if(used.has(c)) continue; const n=_cellNumOf(row[c]); if(n!=null){ rec.cost=n; break; } }
+      }
     } else {
       // 머리글이 없으면 그 행에서 품번을 뺀 '첫 숫자 칸'을 원가로 읽는다.
       // (품번과 숫자 사이에 빈 칸이 끼어 있거나 숫자가 어느 쪽에 있어도 잡히도록)
