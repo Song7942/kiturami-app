@@ -6725,7 +6725,11 @@ async function applyCostPriceList(arr, event, cols){
       if(cols.kzSup!=null) rec.kzSup=_cellNumOf(row[cols.kzSup]);
       if(cols.ship!=null)  rec.ship =_cellNumOf(row[cols.ship]);
     } else {
-      rec.cost=_cellNumOf(row[codeCol+1]);   // 머리글이 없으면 바로 오른쪽 칸이 원가
+      // 머리글이 없으면 그 행에서 품번을 뺀 '첫 숫자 칸'을 원가로 읽는다.
+      // (품번과 숫자 사이에 빈 칸이 끼어 있거나 숫자가 어느 쪽에 있어도 잡히도록)
+      let v=null;
+      for(let c=0;c<row.length;c++){ if(c===codeCol) continue; const n=_cellNumOf(row[c]); if(n!=null){ v=n; break; } }
+      rec.cost=v;
     }
     // 값이 하나도 없는 줄은 건너뛴다 (그래야 빈칸이 기존 값을 지우지 않는다)
     if(rec.cost==null && rec.ruSup==null && rec.kzSup==null && rec.ship==null) continue;
