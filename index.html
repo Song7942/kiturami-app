@@ -2828,9 +2828,11 @@ function orderPriceText(rep){
 //   일반 회원   : 보유재고만 (주문 불가)
 function orderColVis(){
   const role=userRole(currentUser);
-  if(role.usesMasterView) return { price:false, received:false, stock:false, qty:false };
+  if(role.usesMasterView) return { price:false, received:false, supplierStock:false, stock:false, qty:false };
   const canOrder = role.isCompanyAdmin;
-  return { price: canOrder || role.isRegion, received: canOrder, stock: true, qty: canOrder };
+  // 구매처 재고: 구매처가 있는 계정(회사·일반회원)만. KITURAMI사(RUSSIA·KAZAK 포함)·MASTER 는 구매처가 없어 뺀다.
+  const supplierStock = !isKituramiCompany(currentUser) && !role.isMaster;
+  return { price: canOrder || role.isRegion, received: canOrder, supplierStock, stock: true, qty: canOrder };
 }
 // MASTER·KITURAMI 의 주문탭은 주문 열이 없으므로 '부품조회'로 부른다.
 function applyOrderTabLabel(){
@@ -2845,6 +2847,7 @@ function orderTailTh(t){
   let s='';
   if(v.price)    s+=`<th rowspan="2" style="${R}">${orderPriceLabel()}</th>`;
   if(v.received) s+=`<th rowspan="2" style="${R}">${t.orderReceived}</th>`;
+  if(v.supplierStock) s+=`<th rowspan="2" style="${R}">${t.invHSupplierStock}</th>`;
   if(v.stock)    s+=`<th rowspan="2" style="${R}">${t.orderStock}</th>`;
   if(v.qty)      s+=`<th rowspan="2" class="center">${t.orderQty}</th>`;
   return s;
@@ -2854,6 +2857,7 @@ function orderTailCols(){
   let s='';
   if(v.price)    s+='<col style="width:90px">';
   if(v.received) s+='<col style="width:80px">';
+  if(v.supplierStock) s+='<col style="width:100px">';
   if(v.stock)    s+='<col style="width:100px">';
   if(v.qty)      s+='<col style="width:100px">';
   return s;
@@ -2941,6 +2945,12 @@ function renderOrderTable(){
     if(base===undefined) return null;
     return Math.max(0, base-(globalSuppliedTotals[rep]||0));
   }
+  // 구매처 재고 = 구매처의 배분후 재고 (구매처 총재고 − 구매처가 배분해 나간 수량)
+  const supplierMasterTotals=computeMasterRepTotals(supplierInventoryData);
+  function getSupplierStockFor(rep){
+    if(supplierMasterTotals[rep]===undefined) return null;
+    return Math.max(0, supplierMasterTotals[rep]-(supplierSuppliedTotals[rep]||0));
+  }
 
   document.getElementById('orderTbody').innerHTML=rows.map(d=>{
     const key=orderKey(d);
@@ -2959,6 +2969,7 @@ function renderOrderTable(){
     let tail='';
     if(vis.price)    tail+=`<td style="text-align:right;padding-right:16px;color:var(--muted)">${priceText}</td>`;
     if(vis.received) tail+=`<td style="text-align:right;padding-right:16px;color:var(--muted)">${receivedQty}</td>`;
+    if(vis.supplierStock){ const sv=getSupplierStockFor(d.rep); tail+=`<td style="text-align:right;padding-right:16px;color:var(--muted)">${sv===null?'-':sv}</td>`; }
     if(vis.stock)    tail+=`<td style="text-align:right;padding-right:16px;color:var(--muted)">${stockText}</td>`;
     if(vis.qty)      tail+=`<td class="center" onclick="event.stopPropagation()"><input type="number" min="0" class="order-qty-input" value="${qty}" data-key="${key.replace(/"/g,'&quot;')}" oninput="setOrderQty(this)" style="width:100%;max-width:68px;box-sizing:border-box;text-align:center;padding:5px 2px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text)"></td>`;
     return `<tr onclick="onRowClickHighlight('${d.diag}','${d.rep.replace(/'/g,"\\'")}',true)"><td class="center" style="color:var(--muted);font-size:11px">${d.diag}</td>${nc}<td style="text-align:center"><span class="code">${d.rep}</span></td>${modelCells}${tail}</tr>`;
@@ -3005,6 +3016,10 @@ function renderOrderTable(){
             <div style="font-size:10px;color:var(--muted)">${t.orderReceived}</div>
             <div style="font-size:15px;font-weight:700;color:var(--text)">${receivedQty}</div>
           </div>`:''}
+          ${cardVis.supplierStock?(()=>{const sv=getSupplierStockFor(d.rep);return `<div style="text-align:center">
+            <div style="font-size:10px;color:var(--muted)">${t.invHSupplierStock}</div>
+            <div style="font-size:15px;font-weight:700;color:var(--text)">${sv===null?'-':sv}</div>
+          </div>`;})():''}
           ${cardVis.stock?`<div style="text-align:center">
             <div style="font-size:10px;color:var(--muted)">${t.orderStock}</div>
             <div style="font-size:15px;font-weight:700;color:var(--text)">${stockText}</div>
@@ -5263,6 +5278,7 @@ function syncSplitTableColumnWidths(hdrColId, bodyColId, tbodyId, mode){
             const tailW=[];
             if(vis.price)    tailW.push(72);
             if(vis.received) tailW.push(68);
+            if(vis.supplierStock) tailW.push(68);
             if(vis.stock)    tailW.push(68);
             if(vis.qty)      tailW.push(76);
             // 품명·규격 상한은 다른 탭과 동일하게 맞춘다.
