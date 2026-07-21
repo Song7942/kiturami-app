@@ -5233,33 +5233,54 @@ async function handleShipmentsUpload(event){
           if(colQty===-1 && val.startsWith('Количество')) colQty=c;
         }
       }
-      if(colArtikul===-1) colArtikul=2; // 이 리포트 양식의 기본 위치(열 C)로 대체
-      if(colQty===-1) colQty=3; // 기본 위치(열 D)
-
-      const colName=0; // 거래처명/품명이 함께 있는 첫 번째 열
+      const hasHeader = (colArtikul!==-1 || colQty!==-1);
       const rows=[];
       let currentClient=null;
-      for(let r=0;r<aoa.length;r++){
-        const row=aoa[r]||[];
-        const nameVal=String(row[colName]||'').trim();
-        const artikulVal=String(row[colArtikul]||'').trim();
-        if(!nameVal && !artikulVal) continue;
-        if(nameVal && artikulVal && nameVal===artikulVal){
-          // 거래처명 구분 행: 품명 열과 품번 열에 같은 텍스트(거래처명)가 반복됩니다.
-          currentClient=nameVal;
-          continue;
+
+      if(hasHeader){
+        // ── 러시아 창고 리포트(헤더 있음): 기존 방식 그대로 ──
+        if(colArtikul===-1) colArtikul=2; // 기본 위치(열 C)
+        if(colQty===-1) colQty=3;         // 기본 위치(열 D)
+        const colName=0; // 거래처명/품명이 함께 있는 첫 번째 열
+        for(let r=0;r<aoa.length;r++){
+          const row=aoa[r]||[];
+          const nameVal=String(row[colName]||'').trim();
+          const artikulVal=String(row[colArtikul]||'').trim();
+          if(!nameVal && !artikulVal) continue;
+          if(nameVal && artikulVal && nameVal===artikulVal){
+            currentClient=nameVal; // 거래처명 구분 행: 이름 열과 품번 열에 같은 텍스트
+            continue;
+          }
+          if(!artikulVal || !currentClient) continue; // 소계/합계 등 건너뜀
+          const qty=Number(row[colQty]);
+          if(isNaN(qty) || qty<=0) continue;
+          rows.push({ company: currentUser.company, rep: artikulVal, client_name: currentClient, ship_date: reportDate, qty });
         }
-        if(!artikulVal || !currentClient) continue; // 창고 소계/합계 등 품번 없는 행은 건너뜀
-        const qtyRaw=row[colQty];
-        const qty=Number(qtyRaw);
-        if(isNaN(qty) || qty<=0) continue;
-        rows.push({
-          company: currentUser.company,
-          rep: artikulVal,
-          client_name: currentClient,
-          ship_date: reportDate,
-          qty
-        });
+      } else {
+        // ── 자유 양식(헤더 없음): 내용으로 품번·수량·거래처 감지 ──
+        // 거래처명은 자기 줄에 홀로(예: "KITURAMI RUS"), 그 아래로 [품번 | 수량] 줄들.
+        // 품번 열은 대표품번으로 인식되는 셀이 가장 많은 열로 잡되, 행 안에서 직접 찾기도 한다.
+        const cnt={};
+        aoa.forEach(row=>(row||[]).forEach((v,c)=>{ const s=String(v==null?'':v).trim(); if(s && findMasterRep(s)) cnt[c]=(cnt[c]||0)+1; }));
+        let partCol=-1, best=0; Object.keys(cnt).forEach(c=>{ if(cnt[c]>best){ best=cnt[c]; partCol=+c; } });
+        for(let r=0;r<aoa.length;r++){
+          const row=aoa[r]||[];
+          if(!row.some(v=>String(v==null?'':v).trim()!=='')) continue; // 빈 줄
+          // 품번 셀 찾기 (감지된 열 우선, 없으면 행 안에서 대표품번인 셀)
+          let artikul='', partIdx=-1;
+          if(partCol>=0 && findMasterRep(String(row[partCol]==null?'':row[partCol]).trim())){ artikul=String(row[partCol]).trim(); partIdx=partCol; }
+          else { for(let c=0;c<row.length;c++){ const s=String(row[c]==null?'':row[c]).trim(); if(s && findMasterRep(s)){ artikul=s; partIdx=c; break; } } }
+          if(artikul){
+            // 수량: 품번 칸을 뺀 첫 숫자 칸
+            let qty=null;
+            for(let c=0;c<row.length;c++){ if(c===partIdx) continue; const n=_cellNumOf(row[c]); if(n!=null){ qty=n; break; } }
+            if(qty!=null && qty>0){ rows.push({ company: currentUser.company, rep: artikul, client_name: currentClient||'', ship_date: reportDate, qty: Math.round(qty) }); continue; }
+          }
+          // 품번 줄이 아니면 거래처 구분 줄로 본다: 숫자가 아닌 첫 텍스트 셀
+          let txt='';
+          for(let c=0;c<row.length;c++){ const s=String(row[c]==null?'':row[c]).trim(); if(s && _cellNumOf(row[c])==null){ txt=s; break; } }
+          if(txt && !findMasterRep(txt)) currentClient=txt;
+        }
       }
       if(!rows.length){ alert(t.shipUploadEmpty); event.target.value=''; return; }
 
