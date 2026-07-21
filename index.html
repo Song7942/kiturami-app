@@ -3767,7 +3767,7 @@ function renderAdminOrders(){
     return `<div class="order-card">
       <div style="display:flex;justify-content:space-between;align-items:start">
         <div>
-          <div class="pc-name">${escapeHtml(name)} ${g.changeHistory?`<span style="color:#3b82f6;font-size:11px;font-weight:700">[${t.changeHistoryLabel}]</span>`:''}</div>
+          <div class="pc-name">${escapeHtml(name)} ${g.changeHistory?`<span style="color:#3b82f6;font-size:11px;font-weight:700;text-decoration:underline;cursor:pointer" onclick="openAdminChangeHistoryModal('${String(g.company).replace(/'/g,"\\'")}','${String(g.rep).replace(/'/g,"\\'")}')">[${t.changeHistoryLabel}]</span>`:''}</div>
           ${isKo?`<div class="pc-spec">${escapeHtml(g.spec)}</div>`:''}
           <div class="code" style="margin-top:4px">${escapeHtml(g.rep)}</div>
         </div>
@@ -4388,7 +4388,7 @@ function renderAdminMyOrders(){
       </div>`;
     })();
     return `<div class="order-card">
-      <div class="pc-name">${escapeHtml(name)} ${g.changeHistory?`<span style="color:#3b82f6;font-size:11px;font-weight:700">[${t.changeHistoryLabel}]</span>`:''}</div>
+      <div class="pc-name">${escapeHtml(name)} ${g.changeHistory?`<span style="color:#3b82f6;font-size:11px;font-weight:700;text-decoration:underline;cursor:pointer" onclick="openChangeHistoryModal('${String(g.rep).replace(/'/g,"\\'")}')">[${t.changeHistoryLabel}]</span>`:''}</div>
       ${isKo?`<div class="pc-spec">${escapeHtml(g.spec)}</div>`:''}
       <div class="code" style="margin-top:4px">${escapeHtml(g.rep)}</div>
       <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:12px">
