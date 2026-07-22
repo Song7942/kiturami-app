@@ -4196,9 +4196,35 @@ async function rejectSignup(id){
   await loadPendingSignups();
   renderPendingSignups();
 }
+// 확인 단어를 입력받는 커스텀 모달. 네이티브 prompt() 는 확인/취소 버튼이 브라우저
+// 언어(한글)로 나와서, 앱 언어(러시아어 등)에 맞는 버튼을 쓰려면 직접 만든 모달이 필요하다.
+// 입력값(문자열)을 반환하고, 취소하면 null 을 반환한다.
+function confirmWord(message, word){
+  return new Promise(resolve=>{
+    const ru = lang==='ru';
+    const okLabel = ru?'OK':'확인';
+    const cancelLabel = ru?'Отмена':'취소';
+    const ov=document.createElement('div');
+    ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:99999;padding:16px';
+    ov.innerHTML=`<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;max-width:440px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.35)">
+      <div style="white-space:pre-line;color:var(--text);font-size:14px;line-height:1.55;margin-bottom:14px">${escapeHtml(String(message))}</div>
+      <input type="text" class="_cwInput" autocomplete="off" style="width:100%;box-sizing:border-box;padding:9px 11px;border:1px solid var(--border);border-radius:7px;background:var(--surface2);color:var(--text);margin-bottom:16px;font-size:14px">
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="_cwCancel news-btn-secondary" style="padding:7px 18px">${cancelLabel}</button>
+        <button class="_cwOk news-btn-primary" style="padding:7px 18px">${okLabel}</button>
+      </div></div>`;
+    document.body.appendChild(ov);
+    const input=ov.querySelector('._cwInput'); setTimeout(()=>input.focus(),0);
+    const done=v=>{ ov.remove(); resolve(v); };
+    ov.querySelector('._cwCancel').onclick=()=>done(null);
+    ov.querySelector('._cwOk').onclick=()=>done(input.value);
+    input.addEventListener('keydown',e=>{ if(e.key==='Enter')done(input.value); else if(e.key==='Escape')done(null); });
+    ov.addEventListener('mousedown',e=>{ if(e.target===ov)done(null); });
+  });
+}
 async function resetAllOrderData(){
   const t=T[lang];
-  const typed = prompt(t.resetOrdersConfirmPrompt(t.resetAllConfirmWord));
+  const typed = await confirmWord(t.resetOrdersConfirmPrompt(t.resetAllConfirmWord), t.resetAllConfirmWord);
   if(typed===null) return;
   if(typed.trim()!==t.resetAllConfirmWord){ alert(t.resetAllCancelled); return; }
   // 회원 계정은 그대로 두고, 주문·재고·출고내역 관련 데이터만 전부 지웁니다.
@@ -4217,7 +4243,7 @@ async function resetAllOrderData(){
 }
 async function resetOrdersOnly(){
   const t=T[lang];
-  const typed = prompt(t.resetOnlyOrdersPrompt(t.resetAllConfirmWord));
+  const typed = await confirmWord(t.resetOnlyOrdersPrompt(t.resetAllConfirmWord), t.resetAllConfirmWord);
   if(typed===null) return;
   if(typed.trim()!==t.resetAllConfirmWord){ alert(t.resetAllCancelled); return; }
   // 주문 수량 관련 데이터만 삭제 (재고/출고는 유지)
@@ -4230,7 +4256,7 @@ async function resetOrdersOnly(){
 }
 async function resetInventoryOnly(){
   const t=T[lang];
-  const typed = prompt(t.resetOnlyInvPrompt(t.resetAllConfirmWord));
+  const typed = await confirmWord(t.resetOnlyInvPrompt(t.resetAllConfirmWord), t.resetAllConfirmWord);
   if(typed===null) return;
   if(typed.trim()!==t.resetAllConfirmWord){ alert(t.resetAllCancelled); return; }
   const { error } = await sb.from('kt_inventory').delete().not('rep','is',null);
@@ -4240,7 +4266,7 @@ async function resetInventoryOnly(){
 }
 async function resetShipmentsOnly(){
   const t=T[lang];
-  const typed = prompt(t.resetOnlyShipPrompt(t.resetAllConfirmWord));
+  const typed = await confirmWord(t.resetOnlyShipPrompt(t.resetAllConfirmWord), t.resetAllConfirmWord);
   if(typed===null) return;
   if(typed.trim()!==t.resetAllConfirmWord){ alert(t.resetAllCancelled); return; }
   const { error } = await sb.from('kt_shipments').delete().not('id','is',null);
@@ -4250,7 +4276,7 @@ async function resetShipmentsOnly(){
 }
 async function resetAllMembers(){
   const t=T[lang];
-  const typed = prompt(t.resetAllConfirmPrompt(t.resetAllConfirmWord));
+  const typed = await confirmWord(t.resetAllConfirmPrompt(t.resetAllConfirmWord), t.resetAllConfirmWord);
   if(typed===null) return;
   if(typed.trim()!==t.resetAllConfirmWord){ alert(t.resetAllCancelled); return; }
   // 회원을 전부 초기화하면, 그 회원들이 넣었던 주문/취소변경요청도 유령 데이터로 남지 않도록 함께 지웁니다.
