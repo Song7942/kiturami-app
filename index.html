@@ -1055,7 +1055,7 @@ input[type="text"]::placeholder{color:var(--muted)}
 </div>
 
 <!-- News (공지/질문답변) 모달 -->
-<div id="newsModal" class="news-modal" onclick="closeNewsModalBg(event)">
+<div id="newsModal" class="news-modal" onmousedown="closeNewsModalBg(event)">
   <div class="news-modal-inner" onclick="event.stopPropagation()">
     <div class="news-modal-hdr">
       <span id="i18n-newstitle">News</span>
@@ -1120,7 +1120,7 @@ input[type="text"]::placeholder{color:var(--muted)}
 <!-- 내 정보 수정 모달 -->
 <!-- 관리자 - 회원 정보 수정 모달 -->
 <!-- 출고내역 - 수정 모달 -->
-<div id="editShipmentModal" class="news-modal" onclick="closeEditShipmentModalBg(event)">
+<div id="editShipmentModal" class="news-modal" onmousedown="closeEditShipmentModalBg(event)">
   <div class="news-modal-inner" onclick="event.stopPropagation()" style="max-width:420px">
     <div class="news-modal-hdr">
       <span id="i18n-editshiptitle">출고내역 수정</span>
@@ -1161,7 +1161,7 @@ input[type="text"]::placeholder{color:var(--muted)}
   </div>
 </div>
 
-<div id="editMemberModal" class="news-modal" onclick="closeEditMemberModalBg(event)">
+<div id="editMemberModal" class="news-modal" onmousedown="closeEditMemberModalBg(event)">
   <div class="news-modal-inner" onclick="event.stopPropagation()" style="max-width:420px">
     <div class="news-modal-hdr">
       <span id="i18n-editmembertitle">회원 정보 수정</span>
@@ -1226,7 +1226,7 @@ input[type="text"]::placeholder{color:var(--muted)}
   </div>
 </div>
 
-<div id="changeHistoryModal" class="news-modal" onclick="closeChangeHistoryModalBg(event)">
+<div id="changeHistoryModal" class="news-modal" onmousedown="closeChangeHistoryModalBg(event)">
   <div class="news-modal-inner" onclick="event.stopPropagation()" style="max-width:460px">
     <div class="news-modal-hdr">
       <span id="i18n-chtitle">변경이력</span>
@@ -1240,7 +1240,7 @@ input[type="text"]::placeholder{color:var(--muted)}
   </div>
 </div>
 
-<div id="myInfoModal" class="news-modal" onclick="closeMyInfoModalBg(event)">
+<div id="myInfoModal" class="news-modal" onmousedown="closeMyInfoModalBg(event)">
   <div class="news-modal-inner" onclick="event.stopPropagation()" style="max-width:420px">
     <div class="news-modal-hdr">
       <span id="i18n-myinfotitle">내 정보 수정</span>
@@ -1299,7 +1299,7 @@ input[type="text"]::placeholder{color:var(--muted)}
 </div>
 
 <!-- 내 주문내역 모달 -->
-<div id="myOrdersModal" class="news-modal" onclick="closeMyOrdersModalBg(event)">
+<div id="myOrdersModal" class="news-modal" onmousedown="closeMyOrdersModalBg(event)">
   <div class="news-modal-inner" onclick="event.stopPropagation()" style="max-width:1200px;width:95vw;max-height:90vh">
     <div class="news-modal-hdr">
       <span id="i18n-myorderstitle">내 주문내역</span>
