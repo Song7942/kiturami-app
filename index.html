@@ -4256,7 +4256,10 @@ async function resetAllMembers(){
   // 회원을 전부 초기화하면, 그 회원들이 넣었던 주문/취소변경요청도 유령 데이터로 남지 않도록 함께 지웁니다.
   await sb.from('kt_order_requests').delete().not('id','is',null);
   await sb.from('kt_orders').delete().not('id','is',null);
-  const { error } = await sb.from('kt_users').delete().not('supplier_company','is',null);
+  // KITURAMI 소속(구매처가 없는 계정: 본사·RUSSIA·KAZAK 등)까지 전부 삭제한다.
+  // 단, 초기화를 실행한 관리자 계정과 MASTER 는 자기 잠김 방지를 위해 남긴다.
+  const meId = currentUser ? currentUser.id : '';
+  const { error } = await sb.from('kt_users').delete().neq('id','MASTER').neq('id', meId);
   if(error){ alert(t.reqFail+'\n\n['+(error.message||error.code)+']'); return; }
   await loadPendingSignups();
   renderPendingSignups();
