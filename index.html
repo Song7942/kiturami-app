@@ -7434,7 +7434,7 @@ async function applyShipQtyList(arr, event){
 // 그래서 '원가 KRW' 를 한 칸에 써도, 두 줄로 나눠 써도 같은 라벨이 된다.
 const _normHdr=s=>String(s==null?'':s).replace(/\s/g,'').toUpperCase();
 function mapCalcColumns(arr){
-  const out={ name:null, spec:null, rep:null, compat:null, final:null, ship:null, cost:null, ruSup:null, kzSup:null, dataStart:0 };
+  const out={ name:null, nameKo:null, nameRu:null, spec:null, rep:null, compat:null, final:null, ship:null, cost:null, ruSup:null, kzSup:null, dataStart:0 };
   // 헤더 줄: 아는 머리글이 하나라도 있는 첫 줄.
   // '품명'을 기준으로 삼으면 품명 열이 없는 시세표(품번·원가·공급가만 있는 파일)를 놓친다.
   const KEY=['품명','규격','대표품번','호환품번','최종품번','출고','원가','공급가','품번'];
@@ -7470,9 +7470,10 @@ function mapCalcColumns(arr){
   }
   const has=(l,...ws)=>ws.every(w=>l.includes(w));
   const noRegion=[];
+  const nameCands=[];
   labels.forEach((L,c)=>{
     if(!L) return;
-    if(out.name==null && has(L,'품명')) { out.name=c; return; }
+    if(has(L,'품명')) { nameCands.push(c); return; }   // 품명 열은 여러 개일 수 있어(품명/품명2) 모아둔다
     if(out.spec==null && has(L,'규격')) { out.spec=c; return; }
     if(out.rep==null && has(L,'대표품번')) { out.rep=c; return; }
     if(out.compat==null && has(L,'호환품번')) { out.compat=c; return; }
@@ -7490,6 +7491,25 @@ function mapCalcColumns(arr){
     // 원가 RUB/USD·공급가 RUB/USD·GP 는 환율과 원가에서 계산되는 값이라 읽지 않는다
   });
   noRegion.forEach(c=>{ if(out.ruSup==null) out.ruSup=c; else if(out.kzSup==null) out.kzSup=c; });
+  // 품명 열을 내용(한글 vs 러시아어)으로 나눈다 — 헤더 라벨이 반대(품명=러/품명2=한)여도 내용으로 잡는다.
+  const scriptCount=(c)=>{
+    let ko=0,ru=0;
+    for(let i=out.dataStart;i<Math.min(out.dataStart+60,arr.length);i++){
+      const s=String((arr[i]||[])[c]==null?'':(arr[i]||[])[c]);
+      for(let k=0;k<s.length;k++){ const code=s.charCodeAt(k);
+        if(code>=0xAC00&&code<=0xD7A3) ko++; else if(code>=0x0400&&code<=0x04FF) ru++; }
+    }
+    return {ko,ru};
+  };
+  nameCands.forEach(c=>{ const s=scriptCount(c);
+    if(s.ru>s.ko){ if(out.nameRu==null) out.nameRu=c; }
+    else { if(out.nameKo==null) out.nameKo=c; } });
+  if(nameCands.length>=2){   // 한쪽만 잡혔으면 나머지를 반대편으로
+    if(out.nameKo==null) out.nameKo=nameCands.find(c=>c!==out.nameRu);
+    if(out.nameRu==null) out.nameRu=nameCands.find(c=>c!==out.nameKo);
+  }
+  if(out.nameKo==null && nameCands.length) out.nameKo=nameCands[0];
+  out.name=out.nameKo!=null?out.nameKo:(nameCands.length?nameCands[0]:null);   // 하위호환
   return out;
 }
 // 라벨(예: 기준환율 KRW/RUB)을 찾아 그 오른쪽의 첫 숫자를 돌려준다
@@ -7542,8 +7562,10 @@ async function handlePriceCalcUpload(event){
       for(let i=cols.dataStart;i<arr.length;i++){
         const a=arr[i]; if(!a) continue;
         const at=k=>cols[k]==null?'':String(a[cols[k]]==null?'':a[cols[k]]).trim();
-        const rep=at('rep'), name=at('name');
-        if(!rep && !name) continue;
+        const rep=at('rep');
+        const nameKo=cols.nameKo!=null?String(a[cols.nameKo]==null?'':a[cols.nameKo]).trim():'';
+        const nameRu=cols.nameRu!=null?String(a[cols.nameRu]==null?'':a[cols.nameRu]).trim():'';
+        if(!rep && !nameKo && !nameRu) continue;
         const cellNum=v=>{ if(v===''||v==null) return null; if(typeof v==='string'&&v.trim().startsWith('=')) return null; const n=Number(String(v).replace(/,/g,'')); return isNaN(n)?null:n; };
         const numAt=k=>cols[k]==null?null:cellNum(a[cols[k]]);
         let ruCost=numAt('cost');
@@ -7555,16 +7577,24 @@ async function handlePriceCalcUpload(event){
         // 새 원가 + 공급가 없음 → 자동 계산 (원가/(1-기준GP) 올림)
         if((ruSupply==null||ruSupply===0)&&ruCost!=null&&ruCost>0) ruSupply=Math.ceil(ruCost/(1-priceSettings.ru_gp));
         if((kzSupply==null||kzSupply===0)&&ruCost!=null&&ruCost>0) kzSupply=Math.ceil(ruCost/(1-priceSettings.kz_gp));
-        rows.push({ row_no:rows.length+1, name_ko:name, spec:at('spec'), rep, compat:at('compat'), final:at('final'), ship_qty:numAt('ship'), ru_cost:ruCost, ru_supply_krw:ruSupply, kz_supply_krw:kzSupply, updated_at:new Date().toISOString() });
+        rows.push({ row_no:rows.length+1, name_ko:nameKo, name_ru:nameRu, spec:at('spec'), rep, compat:at('compat'), final:at('final'), ship_qty:numAt('ship'), ru_cost:ruCost, ru_supply_krw:ruSupply, kz_supply_krw:kzSupply, updated_at:new Date().toISOString() });
       }
       if(!rows.length){ alert('업로드할 데이터가 없습니다. 계산식 시트 형식을 확인해 주세요.'); event.target.value=''; return; }
       if(!confirm(`계산식 데이터 ${rows.length}행을 업로드합니다.\n기존 계산식 데이터는 교체됩니다. 계속하시겠습니까?`)){ event.target.value=''; return; }
       // 설정 저장
       await sb.from('kt_price_settings').upsert({ id:1, rub_rate:priceSettings.rub_rate, usd_rate:priceSettings.usd_rate, ru_gp:priceSettings.ru_gp, kz_gp:priceSettings.kz_gp, rate_month:priceSettings.rate_month||new Date().toISOString().slice(0,7), updated_at:new Date().toISOString() },{onConflict:'id'});
-      // 기존 삭제 후 삽입
+      // 기존 삭제 후 삽입. name_ru 컬럼이 없으면(현재 스키마) 제외하고 저장하되
+      // 화면 표시용 priceCalcData 에는 name_ru 를 남긴다(러시아어 품명 즉시 반영).
       await sb.from('kt_price_calc').delete().not('row_no','is',null);
+      const stripRu=r=>{ const {name_ru, ...rest}=r; return rest; };
+      let useRu=true;
       for(let i=0;i<rows.length;i+=500){
-        const { error } = await sb.from('kt_price_calc').insert(rows.slice(i,i+500));
+        const batch=rows.slice(i,i+500);
+        let { error } = await sb.from('kt_price_calc').insert(useRu?batch:batch.map(stripRu));
+        if(error && useRu && /name_ru|column|schema/i.test(error.message||'')){
+          useRu=false;   // 컬럼 없음 → 이후 전부 name_ru 제외
+          ({ error } = await sb.from('kt_price_calc').insert(batch.map(stripRu)));
+        }
         if(error){ alert('업로드 실패\n['+(error.message||error.code)+']'); event.target.value=''; return; }
       }
       priceCalcData=rows;
