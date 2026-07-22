@@ -4552,7 +4552,8 @@ async function loadAllMemberPerms(){
     (data||[]).forEach(r=>{ memberPermsById[String(r.rep||'').trim().toUpperCase()]=Number(r.buy_price)||0; }); }catch(e){}
 }
 // 현재 사용자 관점의 권한. MASTER=전부 허용. 권한 미설정 회원은 null → 기존 역할 규칙을 그대로 쓴다.
-function _myPermObj(){ if(!currentUser) return null; const k=String(currentUser.id||'').trim().toUpperCase(); return memberPermsById[k]!==undefined?decodePerms(memberPermsById[k]):null; }
+// MASTER 는 어떤 권한 기록이 있어도 항상 전체 접근(예외). 기록을 무시한다.
+function _myPermObj(){ if(!currentUser) return null; if(userRole(currentUser).isMaster) return null; const k=String(currentUser.id||'').trim().toUpperCase(); return memberPermsById[k]!==undefined?decodePerms(memberPermsById[k]):null; }
 function permView(cat){ if(userRole(currentUser).isMaster) return true; const p=_myPermObj(); return p?!!(p[cat]&&p[cat].v):null; }
 function permWrite(cat){ if(userRole(currentUser).isMaster) return true; const p=_myPermObj(); return p?!!(p[cat]&&p[cat].w):null; }
 function permDelete(cat){ if(userRole(currentUser).isMaster) return true; const p=_myPermObj(); return p?!!(p[cat]&&p[cat].d):null; }
@@ -4609,6 +4610,9 @@ function openPermModal(id){
   ov.querySelector('._pmClose').onclick=close;
   ov.addEventListener('mousedown',e=>{ if(e.target===ov)close(); });
   ov.querySelector('._pmSave').onclick=async()=>{
+    // MASTER·지역(RUSSIA/KAZAK) 계정은 항상 전체 권한이라 권한 설정을 저장하지 않는다.
+    const idU=String(id).trim().toUpperCase();
+    if(idU==='MASTER'||idU==='RUSSIA'||idU==='KAZAK'){ alert(lang==='ru'?'Этому аккаунту права не задаются.':'이 계정은 권한을 설정하지 않습니다(항상 전체).'); close(); return; }
     const np={add:ov.querySelector('._pmAdd').checked, engName:ov.querySelector('._pmEng').checked};
     PERM_CATS.forEach(c=>{ np[c.key]={}; });
     ov.querySelectorAll('input[data-cat]').forEach(cb=>{ np[cb.dataset.cat][cb.dataset.act]=cb.checked; });
