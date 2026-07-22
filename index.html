@@ -2473,6 +2473,7 @@ function renderHeader(){
   // 헤더 고정 테이블
   let r1=`<th rowspan="2">${t.thDiag}</th><th rowspan="2">${t.thName}</th>`;
   if(lang==='ko')r1+=`<th rowspan="2">${t.thSpec}</th>`;
+  if(canViewEngName())r1+=`<th rowspan="2">${lang==='ru'?'Англ. название':'영문품명'}</th>`;
   r1+=`<th rowspan="2">${t.thRep}</th>`;
   let r2='';
   go.forEach(g=>{
@@ -2505,7 +2506,8 @@ function renderTable(){
   noR.textContent=t.noResult;noR.style.display=rows.length?'none':'block';
   const od=renderHeader();
   document.getElementById('tbody').innerHTML=rows.map(d=>{
-    const nc=lang==='ko'?`<td style="font-weight:500;text-align:center">${hl(d.name_ko,kw)}${engNameHtml(d.rep)}</td><td style="color:var(--muted);font-size:10px;text-align:center">${hl(d.spec,kw)}</td>`:`<td style="font-weight:500;text-align:center">${hl(d.name_ru,kw)}${engNameHtml(d.rep)}</td>`;
+    const engTd=canViewEngName()?`<td style="text-align:center;color:var(--accent2);font-weight:600;font-size:11px">${escapeHtml(engNameText(d.rep))}</td>`:'';
+    const nc=lang==='ko'?`<td style="font-weight:500;text-align:center">${hl(d.name_ko,kw)}</td><td style="color:var(--muted);font-size:10px;text-align:center">${hl(d.spec,kw)}</td>${engTd}`:`<td style="font-weight:500;text-align:center">${hl(d.name_ru,kw)}</td>${engTd}`;
     return `<tr data-diag="${d.diag}" onclick="onRowClickHighlight('${d.diag}','${d.rep.replace(/'/g,"\\'")}',false)"><td class="center" style="color:var(--muted);font-size:11px">${hl(d.diag,kw)}</td>${nc}<td style="text-align:center"><span class="code">${hl(d.rep,kw)}</span></td>${od.map(m=>{const sel=selectedKeys!==null&&selectedKeys.has(m.key);return `<td class="center"${sel?` style="background:${m.color}18"`:''}>${dot(d.models[m.key])}</td>`;}).join('')}</tr>`;
   }).join('');
   const cl=document.getElementById('cardList');cl.querySelectorAll('.part-card').forEach(e=>e.remove());
@@ -2514,7 +2516,8 @@ function renderTable(){
     const applied=MODEL_DEFS.filter(m=>d.models[m.key]);
     const el=document.createElement('div');el.className='part-card';el.dataset.diag=d.diag;
     el.addEventListener('click',()=>onRowClickHighlight(String(d.diag), d.rep, false));
-    const nh=lang==='ko'?`<span class="pc-name">${hl(d.name_ko,kw)}${engNameHtml(d.rep)}</span></div><div class="pc-spec">${hl(d.spec,kw)}`:`<span class="pc-name">${hl(d.name_ru,kw)}${engNameHtml(d.rep)}</span>`;
+    const engLine=canViewEngName()&&engNameText(d.rep)?`<div style="font-size:11px;color:var(--accent2);font-weight:600">${escapeHtml(engNameText(d.rep))}</div>`:'';
+    const nh=lang==='ko'?`<span class="pc-name">${hl(d.name_ko,kw)}</span>${engLine}</div><div class="pc-spec">${hl(d.spec,kw)}`:`<span class="pc-name">${hl(d.name_ru,kw)}</span>${engLine}`;
     el.innerHTML=`<div class="pc-top"><span class="pc-diag" data-diag="${escapeHtml(String(d.diag))}" data-rep="${escapeHtml(d.rep)}">${T[lang].thDiag} ${hl(d.diag,kw)}</span>${nh}</div><div class="pc-code"><span class="code">${hl(d.rep,kw)}</span></div><div class="model-tags">${applied.map(m=>`<span class="mt" style="color:${m.color};background:${m.color}22;border-color:${m.color}44">${m.group} ${m.label}</span>`).join('')}</div>`;
     frag.appendChild(el);
   });
@@ -2889,10 +2892,12 @@ function orderTailCols(){
 }
 function renderOrderHeader(){
   const t=T[lang];
-  const fixedWidths = lang==='ko' ? [70,170,150,140] : [70,250,140];
+  const showEng=canViewEngName();
+  const fixedWidths = lang==='ko' ? (showEng?[70,170,150,220,140]:[70,170,150,140]) : (showEng?[70,250,220,140]:[70,250,140]);
   // 도면번호는 좁은 열이라 '도면번/호'로 어색하게 끊긴다 → '도면/번호'로 직접 줄바꿈한다.
   let r1=`<th rowspan="2">${t.thDiagBr||t.thDiag}</th><th rowspan="2">${t.thName}</th>`;
   if(lang==='ko')r1+=`<th rowspan="2">${t.thSpec}</th>`;
+  if(showEng)r1+=`<th rowspan="2">${lang==='ru'?'Англ. название':'영문품명'}</th>`;
   r1+=`<th rowspan="2">${t.thRep}</th>`;
 
   let cols = fixedWidths.map(w=>`<col style="width:${w}px">`).join('');
@@ -2988,7 +2993,8 @@ function renderOrderTable(){
     }
     const qty=orderQty[key]||'';
     const priceText=orderPriceText(d.rep);
-    const nc=isKo?`<td style="font-weight:500;text-align:center">${d.name_ko}${engNameHtml(d.rep)}</td><td style="color:var(--muted);font-size:10px;text-align:center">${d.spec}</td>`:`<td style="font-weight:500;text-align:center">${d.name_ru}${engNameHtml(d.rep)}</td>`;
+    const engTdO=canViewEngName()?`<td style="text-align:center;color:var(--accent2);font-weight:600;font-size:11px">${escapeHtml(engNameText(d.rep))}</td>`:'';
+    const nc=isKo?`<td style="font-weight:500;text-align:center">${d.name_ko}</td><td style="color:var(--muted);font-size:10px;text-align:center">${d.spec}</td>${engTdO}`:`<td style="font-weight:500;text-align:center">${d.name_ru}</td>${engTdO}`;
     const modelCells=columns.map(col=>{const hlStyle=col.selected?` style="background:${col.color}18"`:'';return `<td class="center"${hlStyle}>${dot(isColumnApplied(d,col))}</td>`;}).join('');
     const vis=orderColVis();
     let tail='';
@@ -3027,7 +3033,8 @@ function renderOrderTable(){
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
         <div style="flex:1;min-width:0">
           <div class="pc-diag" data-diag="${escapeHtml(String(d.diag))}" data-rep="${escapeHtml(d.rep)}" style="font-size:11px;color:var(--muted)">${t.thDiag} ${d.diag}</div>
-          <div class="pc-name">${nm}${engNameHtml(d.rep)}</div>
+          <div class="pc-name">${nm}</div>
+          ${canViewEngName()&&engNameText(d.rep)?`<div style="font-size:11px;color:var(--accent2);font-weight:600;margin-top:2px">${escapeHtml(engNameText(d.rep))}</div>`:''}
           ${specHtml}
           <div class="code" style="margin-top:4px">${d.rep}</div>
           ${modelHtml}
@@ -5780,10 +5787,12 @@ function syncSplitTableColumnWidths(hdrColId, bodyColId, tbodyId, mode){
             // 뒤: 기초재고|배분후재고(|공급처재고) — KITURAMI 는 공급처재고 열이 없어 하나 적다.
             // KO 6열(KITURAMI)과 RU 6열이 개수만으로는 구분되지 않아 lang 으로 앞부분을 정한다.
             const isKoI=(typeof lang!=='undefined' && lang==='ko');
-            const lead=isKoI?[280,260,110,110]:[280,110,110];
+            const engI=canViewEngName();
+            // 품명|[규격]|[영문품명]|대표품번|품번
+            const lead=isKoI?(engI?[280,260,220,110,110]:[280,260,110,110]):(engI?[280,220,110,110]:[280,110,110]);
             const qty=new Array(Math.max(0,n-lead.length)).fill(80);
             if(qty.length) qty[0]=72;   // 기초재고
-            return { caps:[...lead, ...qty], noFill:true, rigid:allRigidFrom(isKoI?2:1, n) };
+            return { caps:[...lead, ...qty], noFill:true, rigid:allRigidFrom((isKoI?2:1)+(engI?1:0), n) };
           }
           if(tbodyId==='shipmentsTbody'){
             // KO: 품명|규격|대표품번|품번|거래처|날짜|수량|작업 (8) / RU: 규격 제외 (7)
@@ -5805,9 +5814,11 @@ function syncSplitTableColumnWidths(hdrColId, bodyColId, tbodyId, mode){
             if(vis.stock)    tailW.push(68);
             if(vis.qty)      tailW.push(76);
             // 품명·규격 상한은 다른 탭과 동일하게 맞춘다.
+            const eng=canViewEngName();
             const caps=new Array(n).fill(48); // 기본(모델 열)
             caps[0]=48; caps[1]=280;
             let i=2; if(isKo){ caps[2]=260; i=3; }
+            if(eng){ caps[i]=220; i++; }   // 영문품명
             caps[i]=110; // 대표품번
             tailW.forEach((w,k)=>{ const idx=n-tailW.length+k; if(idx>i) caps[idx]=w; });
             const flex=isKo?[1,2]:[1];
@@ -6156,8 +6167,9 @@ function renderInventoryList(){
   // 감독 계정(MASTER·KITURAMI)은 데스크별 배분 내역을 함께 본다.
   // RUSSIA·KAZAK 계정은 자기 몫만 보면 되므로 종전대로 기초/배분후만 표시.
   const showDeskCols = roleNow.isMaster || roleNow.isKituramiHQ;
+  const showEng = canViewEngName();
   const cols = [
-    t.adminHName, ...(isKo?[t.thSpec]:[]), t.invHMaster, t.invHRep,
+    t.adminHName, ...(isKo?[t.thSpec]:[]), ...(showEng?[lang==='ru'?'Англ. название':'영문품명']:[]), t.invHMaster, t.invHRep,
     t.invHBase,
     ...(showDeskCols?[t.invHAllocRu, t.invHAllocKz]:[]),
     t.invHPostAlloc, ...(showSupplierStock?[t.invHSupplierStock]:[])
@@ -6206,11 +6218,13 @@ function renderInventoryList(){
     const nameText = pnInfo ? (isKo ? pnInfo.name_ko : (pnInfo.name_ru||pnInfo.name_ko)) : '';
     const specTd = isKo ? `<td class="wrap-ok" style="padding:9px 12px;color:var(--muted)">${escapeHtml(pnInfo?pnInfo.spec:'')}</td>` : '';
     const specHtml = isKo && pnInfo && pnInfo.spec ? `<div style="color:var(--muted);font-size:11px;margin-top:2px">${escapeHtml(pnInfo.spec)}</div>` : '';
+    const engTd = showEng ? `<td class="wrap-ok" style="padding:9px 12px;color:var(--accent2);font-weight:600">${escapeHtml(g.master?engNameText(g.master):'')}</td>` : '';
+    const emptyEngTd = showEng ? `<td style="padding:9px 12px"></td>` : '';
     let html='';
     if(g.master && items.length>1){
       html+=`<tr style="background:var(--surface2)">
-        <td class="sticky-col1 wrap-ok" style="padding:9px 12px;font-weight:600;background:var(--surface2)">${escapeHtml(nameText)}${engNameHtml(g.master)}</td>
-        ${specTd}
+        <td class="sticky-col1 wrap-ok" style="padding:9px 12px;font-weight:600;background:var(--surface2)">${escapeHtml(nameText)}</td>
+        ${specTd}${engTd}
         <td style="padding:9px 12px"><span class="code">${escapeHtml(g.master)}</span></td>
         <td style="padding:9px 12px"></td>
         <td style="padding:9px 16px 9px 12px;text-align:right;font-weight:700">${total}</td>
@@ -6222,7 +6236,7 @@ function renderInventoryList(){
         const emptySpecTd = isKo ? `<td style="padding:9px 12px"></td>` : '';
         html+=`<tr>
           <td class="sticky-col1" style="padding:9px 12px"></td>
-          ${emptySpecTd}
+          ${emptySpecTd}${emptyEngTd}
           <td style="padding:9px 12px"></td>
           <td style="padding:9px 12px"><span class="code">${escapeHtml(it.articul)}</span></td>
           <td style="padding:9px 16px 9px 12px;text-align:right">${it.qty}</td>
@@ -6234,8 +6248,8 @@ function renderInventoryList(){
     } else {
       const it=items[0];
       html+=`<tr>
-        <td class="sticky-col1 wrap-ok" style="padding:9px 12px;font-weight:600">${escapeHtml(nameText)}${engNameHtml(g.master)}</td>
-        ${specTd}
+        <td class="sticky-col1 wrap-ok" style="padding:9px 12px;font-weight:600">${escapeHtml(nameText)}</td>
+        ${specTd}${engTd}
         <td style="padding:9px 12px">${g.master?`<span class="code">${escapeHtml(g.master)}</span>`:''}</td>
         <td style="padding:9px 12px"><span class="code">${escapeHtml(it.articul)}</span></td>
         <td style="padding:9px 16px 9px 12px;text-align:right">${it.qty}</td>
@@ -6251,7 +6265,8 @@ function renderInventoryList(){
       ? `<div style="margin-top:8px;font-size:11px;color:var(--muted)">${items.map(it=>`<span class="code" style="margin-right:4px">${escapeHtml(it.articul)} (${it.qty})</span>`).join(' ')}</div>`
       : '';
     cardsHtml.push(`<div class="order-card">
-      ${nameText?`<div class="pc-name">${escapeHtml(nameText)}${engNameHtml(g.master)}</div>`:''}
+      ${nameText?`<div class="pc-name">${escapeHtml(nameText)}</div>`:''}
+      ${showEng&&g.master&&engNameText(g.master)?`<div style="font-size:11px;color:var(--accent2);font-weight:600;margin-top:2px">${escapeHtml(engNameText(g.master))}</div>`:''}
       ${specHtml}
       <div class="code" style="margin-top:4px">${escapeHtml(g.master||items[0].articul)}</div>
       ${variantsHtml}
