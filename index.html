@@ -2849,7 +2849,7 @@ function orderPriceText(rep){
 //   일반 회원   : 보유재고만 (주문 불가)
 function orderColVis(){
   const role=userRole(currentUser);
-  if(role.usesMasterView) return { price:false, received:false, supplierStock:false, stock:false, qty:false };
+  if(role.usesMasterView || _partsLookupOnly()) return { price:false, received:false, supplierStock:false, stock:false, qty:false };
   const canOrder = role.isCompanyAdmin;
   // 구매처 재고: 구매처가 있는 계정(회사·일반회원)만. KITURAMI사(RUSSIA·KAZAK 포함)·MASTER 는 구매처가 없어 뺀다.
   const supplierStock = !isKituramiCompany(currentUser) && !role.isMaster;
@@ -2860,7 +2860,7 @@ function applyOrderTabLabel(){
   const el=document.getElementById('tab-order');
   if(!el) return;
   const t=T[lang];
-  el.textContent = userRole(currentUser).usesMasterView ? (t.tabOrderParts||t.tabOrder) : t.tabOrder;
+  el.textContent = (userRole(currentUser).usesMasterView || _partsLookupOnly()) ? (t.tabOrderParts||t.tabOrder) : t.tabOrder;
 }
 function orderTailTh(t){
   const v=orderColVis();
@@ -4603,6 +4603,13 @@ async function loadAllMemberPerms(){
 // 현재 사용자 관점의 권한. MASTER=전부 허용. 권한 미설정 회원은 null → 기존 역할 규칙을 그대로 쓴다.
 // MASTER 는 어떤 권한 기록이 있어도 항상 전체 접근(예외). 기록을 무시한다.
 function _myPermObj(){ if(!currentUser) return null; if(userRole(currentUser).isMaster) return null; const k=String(currentUser.id||'').trim().toUpperCase(); return memberPermsById[k]!==undefined?decodePerms(memberPermsById[k]):null; }
+// '부품검색' 권한 = MASTER 의 '부품조회'(조회 전용) 화면. 주문 탭을 조회전용(master-view)으로 보여준다.
+// 부품검색만 있고 주문 권한이 없는 비-MASTER 회원이 대상. (주문 권한이 있으면 주문 화면이 우선)
+function _partsLookupOnly(){
+  if(userRole(currentUser).usesMasterView) return false;   // MASTER/KITURAMI 는 원래 부품조회
+  const p=_myPermObj();
+  return !!(p && p.parts && p.parts.v && !(p.order && p.order.v));
+}
 function permView(cat){ if(userRole(currentUser).isMaster) return true; const p=_myPermObj(); return p?!!(p[cat]&&p[cat].v):null; }
 function permWrite(cat){ if(userRole(currentUser).isMaster) return true; const p=_myPermObj(); return p?!!(p[cat]&&p[cat].w):null; }
 function permDelete(cat){ if(userRole(currentUser).isMaster) return true; const p=_myPermObj(); return p?!!(p[cat]&&p[cat].d):null; }
@@ -4616,8 +4623,16 @@ function applyPermTabVisibility(){
   const pobj=_myPermObj();
   if(!pobj) return;   // 권한 미설정 회원은 기존 역할 규칙 그대로
   // 권한이 설정된 회원은 매핑된 탭을 권한값대로 부여/제한한다(체크=보임, 미체크=숨김).
-  const map={ 'tab-parts':'parts','tab-pn':'pn','tab-order':'order','tab-adminOrders':'adminOrders','tab-inventory':'inventory','tab-shipments':'shipments','tab-price':'price','tab-memberManagement':'memberManagement' };
+  const map={ 'tab-pn':'pn','tab-adminOrders':'adminOrders','tab-inventory':'inventory','tab-shipments':'shipments','tab-price':'price','tab-memberManagement':'memberManagement' };
   Object.keys(map).forEach(tabId=>{ const el=document.getElementById(tabId); if(el) el.style.display = pobj[map[tabId]].v ? '' : 'none'; });
+  // 주문 탭: '주문' 또는 '부품검색(=부품조회)' 권한이 있으면 노출. (부품검색만 있으면 조회전용으로 렌더)
+  const ordEl=document.getElementById('tab-order');
+  if(ordEl) ordEl.style.display = (pobj.order.v || pobj.parts.v) ? '' : 'none';
+  // 죽은 '부품검색' 탭(pane-parts)은 주문 탭이 부품조회를 대신하므로 항상 숨긴다.
+  const pEl=document.getElementById('tab-parts'); if(pEl) pEl.style.display='none';
+  // 라벨(주문↔부품조회)·열 구성을 현재 권한 기준으로 다시 맞춘다.
+  applyOrderTabLabel();
+  if(document.getElementById('pane-order') && document.getElementById('pane-order').classList.contains('active')) renderOrderTable();
 }
 
 // 권한 편집 모달 (MASTER 전용)
