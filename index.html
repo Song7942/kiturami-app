@@ -2461,7 +2461,7 @@ function getFilteredParts(){
   let rows=PARTS;
   if(selectedKeys!==null)rows=rows.filter(d=>[...selectedKeys].some(k=>d.models[k]));
   const kw=searchKw.toLowerCase();
-  if(kw)rows=rows.filter(d=>String(d.diag).toLowerCase().includes(kw)||d.name_ru.toLowerCase().includes(kw)||d.name_ko.toLowerCase().includes(kw)||d.spec.toLowerCase().includes(kw)||d.rep.toLowerCase().includes(kw));
+  if(kw)rows=rows.filter(d=>String(d.diag).toLowerCase().includes(kw)||searchRow(d.rep, kw, [d.name_ko,d.name_ru,d.spec]));
   return rows;
 }
 
@@ -2598,14 +2598,7 @@ function renderPN(){
   const kw=document.getElementById('pnInput').value.trim().toLowerCase();const t=T[lang];
   const engBtn=document.getElementById('engNameUploadBtn'); if(engBtn) engBtn.style.display=userRole(currentUser).isMaster?'':'none';
   let rows=PN_DATA;
-  if(kw)rows=rows.filter(r=>
-    r.rep.toLowerCase().includes(kw)||
-    r.compats.some(c=>c.toLowerCase().includes(kw))||
-    r.final.toLowerCase().includes(kw)||
-    (r.name_ko||'').toLowerCase().includes(kw)||
-    (r.name_ru||'').toLowerCase().includes(kw)||
-    (r.spec||'').toLowerCase().includes(kw)
-  );
+  if(kw)rows=rows.filter(r=>searchRow(r.rep, kw, [r.name_ko,r.name_ru,r.spec,r.final,...(r.compats||[])]));
   document.getElementById('pnBadge').innerHTML=`<b>${rows.length}</b>`;
   const noR=document.getElementById('pnNoResult');noR.textContent=t.pnNoResult;noR.style.display=rows.length?'none':'block';
   // hlPN은 renderPNChunk에서 처리
@@ -2779,7 +2772,7 @@ function getFilteredOrderParts(){
   let rows=PARTS;
   if(selectedKeys!==null)rows=rows.filter(d=>[...selectedKeys].some(k=>d.models[k]));
   const kw=orderSearchKw.toLowerCase();
-  if(kw)rows=rows.filter(d=>String(d.diag).toLowerCase().includes(kw)||d.name_ru.toLowerCase().includes(kw)||d.name_ko.toLowerCase().includes(kw)||d.spec.toLowerCase().includes(kw)||d.rep.toLowerCase().includes(kw));
+  if(kw)rows=rows.filter(d=>String(d.diag).toLowerCase().includes(kw)||searchRow(d.rep, kw, [d.name_ko,d.name_ru,d.spec]));
   return rows;
 }
 
@@ -4501,6 +4494,29 @@ function engNameText(rep){ if(!canViewEngName()) return ''; return engNameByRep[
 function engColHtml(){ return canViewEngName()?'<col>':''; }
 function engThHtml(style){ return canViewEngName()?`<th ${style||''}>${lang==='ru'?'Англ. название':'영문품명'}</th>`:''; }
 function engTdHtml(rep, style){ return canViewEngName()?`<td ${style||''}>${escapeHtml(engNameText(rep))}</td>`:''; }
+// ── 통합 검색 매칭 ──
+// 품명(한/러)·규격·영문품명·대표품번·호환품번·최종품번 어떤 것으로도 검색되게 한다.
+// fields: 그 행이 직접 가진 텍스트(품명·규격 등). rep 로 품번조회(PN_DATA)를 조회해
+// 규격·품명·호환품번·최종품번·영문품명까지 함께 본다. 모든 탭에서 이 함수를 쓴다.
+function searchRow(rep, kw, fields){
+  if(!kw) return true;
+  kw=String(kw).toLowerCase();
+  if(fields){ for(const f of fields){ if(f!=null && String(f).toLowerCase().includes(kw)) return true; } }
+  const r=String(rep==null?'':rep).trim();
+  if(!r) return false;
+  if(r.toLowerCase().includes(kw)) return true;
+  const info=(typeof getPNInfo==='function')?getPNInfo(r):null;
+  if(info){
+    if(info.final && String(info.final).toLowerCase().includes(kw)) return true;
+    if(info.spec && String(info.spec).toLowerCase().includes(kw)) return true;
+    if(info.name_ko && String(info.name_ko).toLowerCase().includes(kw)) return true;
+    if(info.name_ru && String(info.name_ru).toLowerCase().includes(kw)) return true;
+    if(Array.isArray(info.compats) && info.compats.some(c=>String(c||'').toLowerCase().includes(kw))) return true;
+  }
+  const en=engNameText(r);
+  if(en && en.toLowerCase().includes(kw)) return true;
+  return false;
+}
 // 영문명 엑셀 업로드 (MASTER 전용). '품번 | 영문명' 자유 양식.
 function handleEngNameUpload(event){
   if(!userRole(currentUser).isMaster){ event.target.value=''; return; }
@@ -5952,7 +5968,7 @@ function renderShipmentsList(){
   const kw=(kwEl?kwEl.value:'').trim().toLowerCase();
   let rows=shipmentsData;
   if(kw){
-    rows=rows.filter(r=>String(r.rep||'').toLowerCase().includes(kw) || displayClientName(r.client_name).toLowerCase().includes(kw));
+    rows=rows.filter(r=>searchRow(findMasterRep(r.rep)||r.rep, kw, [r.rep, displayClientName(r.client_name)]));
   }
   document.getElementById('shipCountBadge').innerHTML=t.invCount(rows.length);
 
@@ -6146,8 +6162,7 @@ function renderInventoryList(){
   if(kw){
     keys=keys.filter(k=>{
       const g=groups[k];
-      if(g.master.toLowerCase().includes(kw)) return true;
-      return g.items.some(it=>it.articul.toLowerCase().includes(kw));
+      return searchRow(g.master, kw, g.items.map(it=>it.articul));
     });
   }
   keys.sort((a,b)=>(groups[a].master||groups[a].items[0].articul).localeCompare(groups[b].master||groups[b].items[0].articul));
@@ -6720,7 +6735,7 @@ function priceFilterRows(){
   const kwEl=document.getElementById('priceSearchInput');
   const kw=(kwEl?kwEl.value:'').trim().toLowerCase();
   if(!kw) return priceCalcData;
-  return priceCalcData.filter(r=>priceMatchesKw(r.rep, kw, [r.name_ko, r.name_ru, r.final, r.compat]));
+  return priceCalcData.filter(r=>searchRow(r.rep, kw, [r.name_ko, r.name_ru, r.spec, r.final, r.compat]));
 }
 function renderPriceCalc(){
   const rows=priceFilterRows();
@@ -6790,7 +6805,7 @@ function renderPriceSupply(){
   const kwEl=document.getElementById('priceSearchInput');
   const kw=(kwEl?kwEl.value:'').trim().toLowerCase();
   let list=Object.values(map).sort((a,b)=>a.rep.localeCompare(b.rep));
-  if(kw) list=list.filter(m=>priceMatchesKw(m.rep, kw, [m.name_ko, m.name_ru, m.final].concat(m.compats||[])));
+  if(kw) list=list.filter(m=>searchRow(m.rep, kw, [m.name_ko, m.name_ru, m.spec, m.final].concat(m.compats||[])));
   const t=T[lang];
   const isKo=lang==='ko';   // RU 에는 러시아어 규격이 없어 규격 열을 뺀다 (품번조회 탭과 동일)
   document.getElementById('priceCountBadge').innerHTML=t.priceCount(list.length);
@@ -7005,7 +7020,7 @@ function renderPriceRegion(region){
   const kw=(kwEl?kwEl.value:'').trim().toLowerCase();
   const isKz=region==='kz';
   let list=Object.values(map).filter(m=>(isKz?m.usd:m.rub)!=null).sort((a,b)=>a.rep.localeCompare(b.rep));
-  if(kw) list=list.filter(m=>priceMatchesKw(m.rep, kw, [m.name_ko, m.name_ru, m.final].concat(m.compats||[])));
+  if(kw) list=list.filter(m=>searchRow(m.rep, kw, [m.name_ko, m.name_ru, m.spec, m.final].concat(m.compats||[])));
   const t=T[lang];
   const isKo=lang==='ko';   // RU 에는 러시아어 규격이 없어 규격 열을 뺀다 (품번조회 탭과 동일)
   document.getElementById('priceCountBadge').innerHTML=t.priceCount(list.length);
@@ -7065,7 +7080,7 @@ function companyPriceRows(){
     const supplyD=companySupplyFrom(buy, companySupplyGp.d);
     return { ...m, autoBuy, buyRaw:saved.buy_price, buy, supplyA, supplyB, supplyC, supplyD };
   });
-  if(kw) list=list.filter(m=>priceMatchesKw(m.rep, kw, [m.name_ko, m.name_ru, m.final].concat(m.compats||[])));
+  if(kw) list=list.filter(m=>searchRow(m.rep, kw, [m.name_ko, m.name_ru, m.spec, m.final].concat(m.compats||[])));
   return list;
 }
 function renderPriceCompany(){
