@@ -974,6 +974,11 @@ input[type="text"]::placeholder{color:var(--muted)}
         </button>
       </div>
       <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;margin:8px 0 12px">
+        <button class="dl-btn" id="engNameUploadBtn" onclick="document.getElementById('engNameFileInput').click()" style="display:none">
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 20h16"/><path d="M12 4v12"/><polyline points="7 9 12 4 17 9"/></svg>
+          <span id="i18n-engnameupload">영문명 업로드</span>
+        </button>
+        <input type="file" id="engNameFileInput" accept=".xlsx,.xls" style="display:none" onchange="handleEngNameUpload(event)">
         <button class="dl-btn" id="addMemberBtn" onclick="openAddMemberModal()" style="display:none;background:var(--accent);border-color:var(--accent);color:#fff">
           <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           <span id="i18n-addmember">회원 추가</span>
@@ -2500,7 +2505,7 @@ function renderTable(){
   noR.textContent=t.noResult;noR.style.display=rows.length?'none':'block';
   const od=renderHeader();
   document.getElementById('tbody').innerHTML=rows.map(d=>{
-    const nc=lang==='ko'?`<td style="font-weight:500;text-align:center">${hl(d.name_ko,kw)}</td><td style="color:var(--muted);font-size:10px;text-align:center">${hl(d.spec,kw)}</td>`:`<td style="font-weight:500;text-align:center">${hl(d.name_ru,kw)}</td>`;
+    const nc=lang==='ko'?`<td style="font-weight:500;text-align:center">${hl(d.name_ko,kw)}${engNameHtml(d.rep)}</td><td style="color:var(--muted);font-size:10px;text-align:center">${hl(d.spec,kw)}</td>`:`<td style="font-weight:500;text-align:center">${hl(d.name_ru,kw)}${engNameHtml(d.rep)}</td>`;
     return `<tr data-diag="${d.diag}" onclick="onRowClickHighlight('${d.diag}','${d.rep.replace(/'/g,"\\'")}',false)"><td class="center" style="color:var(--muted);font-size:11px">${hl(d.diag,kw)}</td>${nc}<td style="text-align:center"><span class="code">${hl(d.rep,kw)}</span></td>${od.map(m=>{const sel=selectedKeys!==null&&selectedKeys.has(m.key);return `<td class="center"${sel?` style="background:${m.color}18"`:''}>${dot(d.models[m.key])}</td>`;}).join('')}</tr>`;
   }).join('');
   const cl=document.getElementById('cardList');cl.querySelectorAll('.part-card').forEach(e=>e.remove());
@@ -2509,7 +2514,7 @@ function renderTable(){
     const applied=MODEL_DEFS.filter(m=>d.models[m.key]);
     const el=document.createElement('div');el.className='part-card';el.dataset.diag=d.diag;
     el.addEventListener('click',()=>onRowClickHighlight(String(d.diag), d.rep, false));
-    const nh=lang==='ko'?`<span class="pc-name">${hl(d.name_ko,kw)}</span></div><div class="pc-spec">${hl(d.spec,kw)}`:`<span class="pc-name">${hl(d.name_ru,kw)}</span>`;
+    const nh=lang==='ko'?`<span class="pc-name">${hl(d.name_ko,kw)}${engNameHtml(d.rep)}</span></div><div class="pc-spec">${hl(d.spec,kw)}`:`<span class="pc-name">${hl(d.name_ru,kw)}${engNameHtml(d.rep)}</span>`;
     el.innerHTML=`<div class="pc-top"><span class="pc-diag" data-diag="${escapeHtml(String(d.diag))}" data-rep="${escapeHtml(d.rep)}">${T[lang].thDiag} ${hl(d.diag,kw)}</span>${nh}</div><div class="pc-code"><span class="code">${hl(d.rep,kw)}</span></div><div class="model-tags">${applied.map(m=>`<span class="mt" style="color:${m.color};background:${m.color}22;border-color:${m.color}44">${m.group} ${m.label}</span>`).join('')}</div>`;
     frag.appendChild(el);
   });
@@ -2545,7 +2550,7 @@ function renderPNChunk(startFrom=0){
     const name=isKo?hlPN(r.name_ko,kw):hlPN(r.name_ru||r.name_ko,kw);
     const spec=isKo?`<td style="font-size:11px;color:var(--muted)">${hlPN(r.spec,kw)}</td>`:'';
     return `<tr>
-      <td class="sticky-col1" style="font-weight:500;font-size:11px">${name}</td>
+      <td class="sticky-col1" style="font-weight:500;font-size:11px">${name}${engNameHtml(r.rep)}</td>
       ${spec}
       <td><span class="pn-badge pn-rep">${hlPN(r.rep,kw)}</span></td>
       <td>${(r.compats||[]).map(c=>`<span class="pn-badge pn-cur">${hlPN(c,kw)}</span>`).join(' ')}</td>
@@ -2563,7 +2568,7 @@ function renderPNChunk(startFrom=0){
     const compatsHtml=(r.compats||[]).map(c=>`<span class="pn-badge pn-cur">${hlPN(c,kw)}</span>`).join(' ')||'<span style="font-size:11px;color:var(--muted)">-</span>';
     const finalHtml=r.final?`<span class="pn-badge pn-fin">${hlPN(r.final,kw)}</span>`:'<span style="font-size:11px;color:var(--muted)">-</span>';
     return `<div class="part-card" style="border-bottom:1px solid var(--border);padding:10px 0">
-      <div class="pc-name" style="font-weight:600">${name}</div>
+      <div class="pc-name" style="font-weight:600">${name}${engNameHtml(r.rep)}</div>
       ${specHtml}
       <div style="margin-top:8px;display:flex;flex-direction:column;gap:6px">
         <div><span style="font-size:10px;color:var(--muted);display:block;margin-bottom:2px">${t.pnH1}</span><span class="pn-badge pn-rep">${hlPN(r.rep,kw)}</span></div>
@@ -2975,7 +2980,7 @@ function renderOrderTable(){
     }
     const qty=orderQty[key]||'';
     const priceText=orderPriceText(d.rep);
-    const nc=isKo?`<td style="font-weight:500;text-align:center">${d.name_ko}</td><td style="color:var(--muted);font-size:10px;text-align:center">${d.spec}</td>`:`<td style="font-weight:500;text-align:center">${d.name_ru}</td>`;
+    const nc=isKo?`<td style="font-weight:500;text-align:center">${d.name_ko}${engNameHtml(d.rep)}</td><td style="color:var(--muted);font-size:10px;text-align:center">${d.spec}</td>`:`<td style="font-weight:500;text-align:center">${d.name_ru}${engNameHtml(d.rep)}</td>`;
     const modelCells=columns.map(col=>{const hlStyle=col.selected?` style="background:${col.color}18"`:'';return `<td class="center"${hlStyle}>${dot(isColumnApplied(d,col))}</td>`;}).join('');
     const vis=orderColVis();
     let tail='';
@@ -3014,7 +3019,7 @@ function renderOrderTable(){
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
         <div style="flex:1;min-width:0">
           <div class="pc-diag" data-diag="${escapeHtml(String(d.diag))}" data-rep="${escapeHtml(d.rep)}" style="font-size:11px;color:var(--muted)">${t.thDiag} ${d.diag}</div>
-          <div class="pc-name">${nm}</div>
+          <div class="pc-name">${nm}${engNameHtml(d.rep)}</div>
           ${specHtml}
           <div class="code" style="margin-top:4px">${d.rep}</div>
           ${modelHtml}
@@ -3830,7 +3835,7 @@ function renderAdminOrders(){
     let html=`<tr style="border-bottom:1px solid var(--border);font-weight:700;background:var(--surface2)">
       <td style="padding:9px 12px">${escapeHtml(g.company)}</td>
       <td style="padding:9px 12px">${escapeHtml(g.user_id)}</td>
-      <td class="wrap-ok" style="padding:9px 12px">${escapeHtml(name)}</td>
+      <td class="wrap-ok" style="padding:9px 12px">${escapeHtml(name)}${engNameHtml(g.rep)}</td>
       ${specTd}
       <td style="padding:9px 12px"><span class="code">${escapeHtml(g.rep)}</span></td>
       <td style="padding:9px 12px;border-left:2px solid var(--border)"></td>
@@ -3897,7 +3902,7 @@ function renderAdminOrders(){
     return `<div class="order-card">
       <div style="display:flex;justify-content:space-between;align-items:start">
         <div>
-          <div class="pc-name">${escapeHtml(name)} ${g.changeHistory?`<span style="color:#3b82f6;font-size:11px;font-weight:700;text-decoration:underline;cursor:pointer" onclick="openAdminChangeHistoryModal('${String(g.company).replace(/'/g,"\\'")}','${String(g.rep).replace(/'/g,"\\'")}')">[${t.changeHistoryLabel}]</span>`:''}</div>
+          <div class="pc-name">${escapeHtml(name)}${engNameHtml(g.rep)} ${g.changeHistory?`<span style="color:#3b82f6;font-size:11px;font-weight:700;text-decoration:underline;cursor:pointer" onclick="openAdminChangeHistoryModal('${String(g.company).replace(/'/g,"\\'")}','${String(g.rep).replace(/'/g,"\\'")}')">[${t.changeHistoryLabel}]</span>`:''}</div>
           ${isKo?`<div class="pc-spec">${escapeHtml(g.spec)}</div>`:''}
           <div class="code" style="margin-top:4px">${escapeHtml(g.rep)}</div>
         </div>
@@ -4118,6 +4123,7 @@ function renderPendingSignups(){
   const t=T[lang];
   const addBtn=document.getElementById('addMemberBtn'); if(addBtn) addBtn.style.display = canAddMembersNow() ? '' : 'none';
   const isMasterNow=userRole(currentUser).isMaster;
+  const engBtn=document.getElementById('engNameUploadBtn'); if(engBtn) engBtn.style.display = isMasterNow ? '' : 'none';
   const permBtnHtml=(idEsc)=> isMasterNow ? `<button class="news-btn-secondary" onclick="openPermModal('${idEsc}')">${lang==='ru'?'Права':'권한'}</button>` : '';
   const tbody=document.getElementById('adminSignupsList');
   const emptyEl=document.getElementById('adminSignupsEmpty');
@@ -4454,8 +4460,77 @@ const PERM_CATS=[
 ];
 const _PA=['v','w','d'];
 const PERM_ADD_BIT=24;
-function encodePerms(p){ let n=0; PERM_CATS.forEach((c,i)=>_PA.forEach((a,j)=>{ if(p&&p[c.key]&&p[c.key][a]) n|=(1<<(i*3+j)); })); if(p&&p.add) n|=(1<<PERM_ADD_BIT); return n>>>0; }
-function decodePerms(n){ n=Number(n)||0; const p={add:!!(n&(1<<PERM_ADD_BIT))}; PERM_CATS.forEach((c,i)=>{ p[c.key]={}; _PA.forEach((a,j)=>{ p[c.key][a]=!!(n&(1<<(i*3+j))); }); }); return p; }
+const PERM_ENGNAME_BIT=25;   // 영문명 보기 권한
+function encodePerms(p){ let n=0; PERM_CATS.forEach((c,i)=>_PA.forEach((a,j)=>{ if(p&&p[c.key]&&p[c.key][a]) n|=(1<<(i*3+j)); })); if(p&&p.add) n|=(1<<PERM_ADD_BIT); if(p&&p.engName) n|=(1<<PERM_ENGNAME_BIT); return n>>>0; }
+function decodePerms(n){ n=Number(n)||0; const p={add:!!(n&(1<<PERM_ADD_BIT)), engName:!!(n&(1<<PERM_ENGNAME_BIT))}; PERM_CATS.forEach((c,i)=>{ p[c.key]={}; _PA.forEach((a,j)=>{ p[c.key][a]=!!(n&(1<<(i*3+j))); }); }); return p; }
+// ── 영문명 (kt_names_en: rep, name_en). MASTER 가 권한 준 회원만 본다 ──
+let engNameByRep={};   // 대표품번(대문자) -> 영문명
+function canViewEngName(){ if(userRole(currentUser).isMaster) return true; const p=_myPermObj(); return !!(p&&p.engName); }
+async function loadEngNames(){
+  engNameByRep={};
+  if(!canViewEngName()) return;   // 권한 없으면 데이터 자체를 받지 않는다(브라우저에도 안 남게)
+  try{ const { data } = await sb.from('kt_names_en').select('rep,name_en');
+    (data||[]).forEach(r=>{ const k=String(r.rep||'').trim().toUpperCase(); if(k && r.name_en) engNameByRep[k]=String(r.name_en); }); }catch(e){}
+}
+// 품명 옆에 붙일 영문명 조각(HTML). 권한 없거나 값 없으면 빈 문자열.
+function engNameHtml(rep){
+  if(!canViewEngName()) return '';
+  const en=engNameByRep[String(rep||'').trim().toUpperCase()];
+  return en ? ` <span class="eng-name" style="color:var(--accent2);font-weight:600">(${escapeHtml(en)})</span>` : '';
+}
+function engNameText(rep){ if(!canViewEngName()) return ''; return engNameByRep[String(rep||'').trim().toUpperCase()]||''; }
+// 영문명 엑셀 업로드 (MASTER 전용). '품번 | 영문명' 자유 양식.
+function handleEngNameUpload(event){
+  if(!userRole(currentUser).isMaster){ event.target.value=''; return; }
+  const file=event.target.files[0]; if(!file){ event.target.value=''; return; }
+  const reader=new FileReader();
+  reader.onload=async function(e){
+    try{
+      const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
+      const arr=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:true,defval:''});
+      // 품번 열: 대표품번으로 인식되는 셀이 가장 많은 열
+      const cnt={};
+      arr.forEach(row=>(row||[]).forEach((v,c)=>{ const s=String(v==null?'':v).trim(); if(s&&findMasterRep(s)) cnt[c]=(cnt[c]||0)+1; }));
+      let partCol=-1,best=0; Object.keys(cnt).forEach(c=>{ if(cnt[c]>best){best=cnt[c];partCol=+c;} });
+      const uniq={};
+      for(const row of arr){
+        if(!row) continue;
+        let rep='', idx=-1;
+        if(partCol>=0 && findMasterRep(String(row[partCol]==null?'':row[partCol]).trim())){ rep=findMasterRep(String(row[partCol]).trim()); idx=partCol; }
+        else { for(let c=0;c<row.length;c++){ const s=String(row[c]==null?'':row[c]).trim(); if(s&&findMasterRep(s)){ rep=findMasterRep(s); idx=c; break; } } }
+        if(!rep) continue;
+        // 영문명: 품번 바로 오른쪽 텍스트 우선, 없으면 품번 칸을 뺀 첫 텍스트(숫자 아님) 칸
+        let en=String(row[idx+1]==null?'':row[idx+1]).trim();
+        if(!en || !isNaN(Number(en))){ en=''; for(let c=0;c<row.length;c++){ if(c===idx)continue; const s=String(row[c]==null?'':row[c]).trim(); if(s && isNaN(Number(s))){ en=s; break; } } }
+        if(en) uniq[rep]=en;
+      }
+      const payload=Object.keys(uniq).map(rep=>({ rep, name_en: uniq[rep] }));
+      if(!payload.length){ alert(lang==='ru'?'Не найдено (артикул + англ. название).':'품번과 영문명을 찾지 못했습니다.'); event.target.value=''; return; }
+      for(let i=0;i<payload.length;i+=500){
+        const { error } = await sb.from('kt_names_en').upsert(payload.slice(i,i+500),{onConflict:'rep'});
+        if(error){ alert((lang==='ru'?'Ошибка загрузки':'업로드 실패')+'\n['+(error.message||error.code)+']'); event.target.value=''; return; }
+      }
+      await loadEngNames();
+      rerenderActiveTab();
+      alert(lang==='ru'?('Загружено: '+payload.length):('영문명 '+payload.length+'건을 반영했습니다.'));
+    }catch(err){ console.error(err); alert(lang==='ru'?'Ошибка загрузки.':'업로드에 실패했습니다.'); }
+    event.target.value='';
+  };
+  reader.readAsArrayBuffer(file);
+}
+// 영문명 로드 후 현재 보고 있는 탭만 다시 그린다.
+function rerenderActiveTab(){
+  const A=id=>{ const e=document.getElementById(id); return e && e.classList.contains('active'); };
+  try{
+    if(A('pane-parts')) renderTable();
+    else if(A('pane-pn')) renderPN();
+    else if(A('pane-order')) renderOrderTable();
+    else if(A('pane-inventory')) renderInventoryList();
+    else if(A('pane-shipments')) renderShipmentsList();
+    else if(A('pane-price')) renderPriceActive();
+    else if(A('pane-adminOrders')){ renderAdminOrders(); renderAdminMyOrders(); }
+  }catch(e){}
+}
 let memberPermsById={};   // 아이디(대문자) -> 권한 비트마스크 (설정된 회원만)
 async function loadAllMemberPerms(){
   memberPermsById={};
@@ -4508,6 +4583,9 @@ function openPermModal(id){
       <label style="display:flex;align-items:center;gap:8px;margin-top:14px;color:var(--text);font-size:13px;cursor:pointer">
         <input type="checkbox" class="_pmAdd" ${p.add?'checked':''} style="width:16px;height:16px"> ${ru?'Право добавлять участников':'회원추가 권한'}
       </label>
+      <label style="display:flex;align-items:center;gap:8px;margin-top:10px;color:var(--text);font-size:13px;cursor:pointer">
+        <input type="checkbox" class="_pmEng" ${p.engName?'checked':''} style="width:16px;height:16px"> ${ru?'Видеть англ. название':'영문명 보기 권한'}
+      </label>
       <div style="font-size:11px;color:var(--muted);margin-top:8px">${ru?'Ничего не отмечено = стандартные права по роли.':'아무것도 체크 안 하면 역할 기본값으로 동작합니다.'}</div>
       <button class="_pmSave news-btn-primary" style="width:100%;padding:11px;margin-top:16px">${ru?'Сохранить':'저장'}</button>
     </div>
@@ -4517,7 +4595,7 @@ function openPermModal(id){
   ov.querySelector('._pmClose').onclick=close;
   ov.addEventListener('mousedown',e=>{ if(e.target===ov)close(); });
   ov.querySelector('._pmSave').onclick=async()=>{
-    const np={add:ov.querySelector('._pmAdd').checked};
+    const np={add:ov.querySelector('._pmAdd').checked, engName:ov.querySelector('._pmEng').checked};
     PERM_CATS.forEach(c=>{ np[c.key]={}; });
     ov.querySelectorAll('input[data-cat]').forEach(cb=>{ np[cb.dataset.cat][cb.dataset.act]=cb.checked; });
     const n=encodePerms(np);
@@ -4715,7 +4793,7 @@ function renderAdminMyOrders(){
     const decisionCell = buyerDecisionHtml(g, repEsc);
 
     let html=`<tr style="border-bottom:1px solid var(--border);font-weight:700;background:var(--surface2)">
-      <td class="wrap-ok" style="padding:9px 12px">${escapeHtml(name)}</td>
+      <td class="wrap-ok" style="padding:9px 12px">${escapeHtml(name)}${engNameHtml(g.rep)}</td>
       ${specTd}
       <td style="padding:9px 12px"><span class="code">${escapeHtml(g.rep)}</span></td>
       <td style="padding:9px 16px 9px 12px;text-align:right;border-left:2px solid var(--border);color:var(--muted)">${stockText}</td>
@@ -4784,7 +4862,7 @@ function renderAdminMyOrders(){
       </div>`;
     })();
     return `<div class="order-card">
-      <div class="pc-name">${escapeHtml(name)} ${g.changeHistory?`<span style="color:#3b82f6;font-size:11px;font-weight:700;text-decoration:underline;cursor:pointer" onclick="openChangeHistoryModal('${String(g.rep).replace(/'/g,"\\'")}')">[${t.changeHistoryLabel}]</span>`:''}</div>
+      <div class="pc-name">${escapeHtml(name)}${engNameHtml(g.rep)} ${g.changeHistory?`<span style="color:#3b82f6;font-size:11px;font-weight:700;text-decoration:underline;cursor:pointer" onclick="openChangeHistoryModal('${String(g.rep).replace(/'/g,"\\'")}')">[${t.changeHistoryLabel}]</span>`:''}</div>
       ${isKo?`<div class="pc-spec">${escapeHtml(g.spec)}</div>`:''}
       <div class="code" style="margin-top:4px">${escapeHtml(g.rep)}</div>
       <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:12px">
@@ -5020,6 +5098,7 @@ function refreshAdminTexts(){
   setTxt('i18n-signup-th-status', t.signupThStatus);
   setTxt('i18n-memberdl', t.orderDl);
   setTxt('i18n-addmember', lang==='ru'?'Добавить участника':'회원 추가');
+  setTxt('i18n-engnameupload', lang==='ru'?'Загрузить англ.':'영문명 업로드');
   setTxt('i18n-signup-th-actions', lang==='ru'?'Изм./Удал.':'수정/삭제');
   setTxt('i18n-resetallmembers', t.resetAllMembersBtn);
   setTxt('i18n-resetallorders', t.resetAllOrdersBtn);
@@ -5269,7 +5348,7 @@ function renderMyOrders(){
     }
     rowsHtml.push(`<tr style="border-bottom:1px solid var(--border)">
       <td style="padding:9px 12px;color:var(--muted);white-space:nowrap">${escapeHtml(r.date)}</td>
-      <td style="padding:9px 12px">${escapeHtml(name)}</td>
+      <td style="padding:9px 12px">${escapeHtml(name)}${engNameHtml(r.rep)}</td>
       ${isKo?`<td style="padding:9px 12px;color:var(--muted)">${escapeHtml(r.spec)}</td>`:''}
       <td style="padding:9px 12px"><span class="code">${escapeHtml(r.rep)}</span></td>
       ${modelTd}
@@ -5283,7 +5362,7 @@ function renderMyOrders(){
     const specHtml=isKo?`<div style="color:var(--muted);font-size:11px;margin-top:2px">${escapeHtml(r.spec)}</div>`:'';
     cardsHtml.push(`<div class="order-card">
       <div style="font-size:10px;color:var(--muted)">${escapeHtml(r.date)}</div>
-      <div class="pc-name" style="margin-top:2px">${escapeHtml(name)}</div>
+      <div class="pc-name" style="margin-top:2px">${escapeHtml(name)}${engNameHtml(r.rep)}</div>
       ${specHtml}
       <div class="code" style="margin-top:4px">${escapeHtml(r.rep)}</div>
       ${tagHtml?`<div class="model-tags" style="margin-top:4px">${tagHtml}</div>`:''}
@@ -5864,7 +5943,7 @@ function renderShipmentsList(){
     const nameText=pnInfo ? (isKo?pnInfo.name_ko:(pnInfo.name_ru||pnInfo.name_ko)) : '';
     const specTd=isKo?`<td class="wrap-ok" style="padding:9px 12px;color:var(--muted)">${escapeHtml(pnInfo?pnInfo.spec:'')}</td>`:'';
     return `<tr>
-    <td class="wrap-ok" style="padding:9px 12px;font-weight:500">${escapeHtml(nameText)}</td>
+    <td class="wrap-ok" style="padding:9px 12px;font-weight:500">${escapeHtml(nameText)}${engNameHtml(masterRep)}</td>
     ${specTd}
     <td style="padding:9px 12px">${masterRep?`<span class="code">${escapeHtml(masterRep)}</span>`:''}</td>
     <td style="padding:9px 12px"><span class="code">${escapeHtml(r.rep)}</span></td>
@@ -5884,7 +5963,7 @@ function renderShipmentsList(){
     const specHtml=isKo && pnInfo && pnInfo.spec ? `<div class="pc-spec">${escapeHtml(pnInfo.spec)}</div>` : '';
     const masterHtml=masterRep?`<div style="font-size:11px;color:var(--muted);margin-top:2px">${t.invHMaster}: <span class="code">${escapeHtml(masterRep)}</span></div>`:'';
     return `<div class="order-card">
-    <div class="pc-name">${escapeHtml(nameText)}</div>
+    <div class="pc-name">${escapeHtml(nameText)}${engNameHtml(masterRep)}</div>
     ${specHtml}
     <div class="code" style="margin-top:4px">${escapeHtml(r.rep)}</div>
     ${masterHtml}
@@ -6100,7 +6179,7 @@ function renderInventoryList(){
     let html='';
     if(g.master && items.length>1){
       html+=`<tr style="background:var(--surface2)">
-        <td class="sticky-col1 wrap-ok" style="padding:9px 12px;font-weight:600;background:var(--surface2)">${escapeHtml(nameText)}</td>
+        <td class="sticky-col1 wrap-ok" style="padding:9px 12px;font-weight:600;background:var(--surface2)">${escapeHtml(nameText)}${engNameHtml(g.master)}</td>
         ${specTd}
         <td style="padding:9px 12px"><span class="code">${escapeHtml(g.master)}</span></td>
         <td style="padding:9px 12px"></td>
@@ -6125,7 +6204,7 @@ function renderInventoryList(){
     } else {
       const it=items[0];
       html+=`<tr>
-        <td class="sticky-col1 wrap-ok" style="padding:9px 12px;font-weight:600">${escapeHtml(nameText)}</td>
+        <td class="sticky-col1 wrap-ok" style="padding:9px 12px;font-weight:600">${escapeHtml(nameText)}${engNameHtml(g.master)}</td>
         ${specTd}
         <td style="padding:9px 12px">${g.master?`<span class="code">${escapeHtml(g.master)}</span>`:''}</td>
         <td style="padding:9px 12px"><span class="code">${escapeHtml(it.articul)}</span></td>
@@ -6142,7 +6221,7 @@ function renderInventoryList(){
       ? `<div style="margin-top:8px;font-size:11px;color:var(--muted)">${items.map(it=>`<span class="code" style="margin-right:4px">${escapeHtml(it.articul)} (${it.qty})</span>`).join(' ')}</div>`
       : '';
     cardsHtml.push(`<div class="order-card">
-      ${nameText?`<div class="pc-name">${escapeHtml(nameText)}</div>`:''}
+      ${nameText?`<div class="pc-name">${escapeHtml(nameText)}${engNameHtml(g.master)}</div>`:''}
       ${specHtml}
       <div class="code" style="margin-top:4px">${escapeHtml(g.master||items[0].articul)}</div>
       ${variantsHtml}
@@ -6561,14 +6640,14 @@ function renderPriceActive(){
 function fmtN(x){ return (x==null||isNaN(x))?'':Number(x).toLocaleString(); }
 function fmtGp(x){ return (x==null||isNaN(x))?'':(Math.round(x*1000)/10)+'%'; }
 // 모바일 카드 한 장. name=품명, spec=규격, codes=[{label,val}] 품번칩, fields=[{label,val}] 값들
-function priceCardHtml(name, spec, codes, fields){
+function priceCardHtml(name, spec, codes, fields, rep){
   const specHtml = spec ? `<div class="pc-spec">${escapeHtml(spec)}</div>` : '';
   const codeHtml = (codes||[]).filter(c=>c.val).map(c=>
     `<div style="font-size:11px;color:var(--muted);margin-top:3px">${escapeHtml(c.label)}: <span class="code" style="font-size:12.5px;padding:1px 2px">${escapeHtml(c.val)}</span></div>`).join('');
   const fieldHtml = (fields||[]).filter(f=>f.val!=null && f.val!=='').map(f=>
     `<div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:2px 0"><span style="color:var(--muted)">${escapeHtml(f.label)}</span><b style="color:var(--text)">${f.val}</b></div>`).join('');
   return `<div class="order-card">
-    <div class="pc-name">${escapeHtml(name||'')}</div>
+    <div class="pc-name">${escapeHtml(name||'')}${rep?engNameHtml(rep):''}</div>
     ${specHtml}${codeHtml}
     <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">${fieldHtml}</div>
   </div>`;
@@ -6618,7 +6697,7 @@ function renderPriceCalc(){
   tbody.innerHTML=rows.map(r=>{
     const c=calcPriceRow(r);
     return `<tr style="border-bottom:1px solid var(--border);font-size:11px" class="price-row">
-      <td style="padding:3px 4px;word-break:break-all">${escapeHtml(priceNameFor(r))}</td>
+      <td style="padding:3px 4px;word-break:break-all">${escapeHtml(priceNameFor(r))}${engNameHtml(r.rep)}</td>
       ${isKo?`<td style="padding:3px 4px;color:var(--muted);font-size:10px;word-break:break-all">${escapeHtml(r.spec||'')}</td>`:''}
       <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(r.rep||'')}</span></td>
       <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(r.compat||'')}</span></td>
@@ -6642,7 +6721,7 @@ function renderPriceCalc(){
       [{label:t.pnH1,val:r.rep},{label:t.pnH2,val:r.compat},{label:t.pnH3,val:r.final},{label:t.priceThShip.replace('<br>',' '),val:fmtN(r.ship_qty)}],
       [{label:t.priceThCost+' KRW',val:fmtN(c.ruCost)},{label:t.priceThCost+' RUB',val:fmtN(c.costRub)},{label:t.priceThCost+' USD',val:fmtN(c.costUsd)},
        {label:t.priceThRu+' '+t.priceThSupply+' KRW',val:fmtN(c.ruSupply)},{label:t.priceThRu+' '+t.priceThSupply+' RUB',val:fmtN(c.ruRub)},{label:t.priceThRu+' '+t.priceThGp,val:fmtGp(c.ruGpVal)},
-       {label:t.priceThKz+' '+t.priceThSupply+' KRW',val:fmtN(c.kzSupply)},{label:t.priceThKz+' '+t.priceThSupply+' USD',val:fmtN(c.kzUsd)},{label:t.priceThKz+' '+t.priceThGp,val:fmtGp(c.kzGpVal)}]
+       {label:t.priceThKz+' '+t.priceThSupply+' KRW',val:fmtN(c.kzSupply)},{label:t.priceThKz+' '+t.priceThSupply+' USD',val:fmtN(c.kzUsd)},{label:t.priceThKz+' '+t.priceThGp,val:fmtGp(c.kzGpVal)}], r.rep
     );
   }).join(''));
   scheduleSplitTableResync('pricecalc-hdr-col','pricecalc-body-col','priceCalcTbody','fixed');
@@ -6672,7 +6751,7 @@ function renderPriceSupply(){
   if(!list.length){ tbody.innerHTML=''; setPriceCards(''); emptyEl.textContent=t.priceNoSupply; emptyEl.style.display='block'; return; }
   emptyEl.style.display='none';
   tbody.innerHTML=list.map(m=>`<tr style="border-bottom:1px solid var(--border);font-size:11px" class="price-row">
-      <td style="padding:3px 4px;word-break:break-all">${escapeHtml(priceNameFor(m))}</td>
+      <td style="padding:3px 4px;word-break:break-all">${escapeHtml(priceNameFor(m))}${engNameHtml(m.rep)}</td>
       ${isKo?`<td style="padding:3px 4px;color:var(--muted);font-size:10px;word-break:break-all">${escapeHtml(m.spec||'')}</td>`:''}
       <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(m.rep)}</span></td>
       <td style="padding:3px 4px">${m.compats.map(c=>`<span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(c)}</span>`).join('<br>')}</td>
@@ -6683,7 +6762,7 @@ function renderPriceSupply(){
   setPriceCards(list.map(m=>priceCardHtml(priceNameFor(m), isKo?m.spec:'',
     [{label:t.pnH1,val:m.rep},{label:t.pnH2,val:(m.compats||[]).join(', ')},{label:t.pnH3,val:m.final}],
     [{label:t.priceThSupply+' (RUB)',val:fmtN(m.rub)},{label:t.priceThSupply+' (USD)',val:fmtN(m.usd)}]
-  )).join(''));
+  , m.rep)).join(''));
   scheduleSplitTableResync('pricesupply-hdr-col','pricesupply-body-col','priceSupplyTbody','fixed');
 }
 
@@ -6893,7 +6972,7 @@ function renderPriceRegion(region){
   if(!list.length){ tbody.innerHTML=''; setPriceCards(''); emptyEl.textContent=t.priceNoData; emptyEl.style.display='block'; return; }
   emptyEl.style.display='none';
   tbody.innerHTML=list.map(m=>`<tr style="border-bottom:1px solid var(--border);font-size:11px" class="price-row">
-      <td style="padding:3px 4px;word-break:break-all">${escapeHtml(priceNameFor(m))}</td>
+      <td style="padding:3px 4px;word-break:break-all">${escapeHtml(priceNameFor(m))}${engNameHtml(m.rep)}</td>
       ${isKo?`<td style="padding:3px 4px;color:var(--muted);font-size:10px;word-break:break-all">${escapeHtml(m.spec||'')}</td>`:''}
       <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(m.rep)}</span></td>
       <td style="padding:3px 4px">${m.compats.map(c=>`<span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(c)}</span>`).join('<br>')}</td>
@@ -6906,7 +6985,7 @@ function renderPriceRegion(region){
   setPriceCards(list.map(m=>priceCardHtml(priceNameFor(m), isKo?m.spec:'',
     [{label:t.pnH1,val:m.rep},{label:t.pnH2,val:(m.compats||[]).join(', ')},{label:t.pnH3,val:m.final}],
     [{label:t.priceThCost+' KRW',val:fmtN(m.cost)},{label:t.priceThCost+' '+cur,val:fmtN(isKz?m.costUsd:m.costRub)},{label:t.priceThSupply+' '+cur,val:fmtN(isKz?m.usd:m.rub)},{label:t.priceThGp,val:fmtGp(isKz?m.kzGp:m.ruGp)}]
-  )).join(''));
+  , m.rep)).join(''));
   scheduleSplitTableResync('pricecalc-hdr-col','pricecalc-body-col','priceCalcTbody','fixed');
 }
 // ── 회사 계정: 구매가 · 공급가 · GP ──
@@ -6959,7 +7038,7 @@ function renderPriceCompany(){
   tbody.innerHTML=list.map(m=>{
     const repEsc=String(m.rep).replace(/'/g,"\\'");
     return `<tr style="border-bottom:1px solid var(--border);font-size:11px" class="price-row">
-      <td style="padding:3px 4px;word-break:break-all">${escapeHtml(priceNameFor(m))}</td>
+      <td style="padding:3px 4px;word-break:break-all">${escapeHtml(priceNameFor(m))}${engNameHtml(m.rep)}</td>
       ${isKo?`<td style="padding:3px 4px;color:var(--muted);font-size:10px;word-break:break-all">${escapeHtml(m.spec||'')}</td>`:''}
       <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(m.rep)}</span></td>
       <td style="padding:3px 4px">${m.compats.map(c=>`<span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(c)}</span>`).join('<br>')}</td>
@@ -6972,7 +7051,7 @@ function renderPriceCompany(){
   setPriceCards(list.map(m=>priceCardHtml(priceNameFor(m), isKo?m.spec:'',
     [{label:t.pnH1,val:m.rep},{label:t.pnH2,val:(m.compats||[]).join(', ')},{label:t.pnH3,val:m.final}],
     [{label:t.priceThBuy,val:fmtN(m.buy)},{label:t.priceThSupplyA,val:fmtN(m.supplyA)},{label:t.priceThSupplyB,val:fmtN(m.supplyB)},{label:t.priceThSupplyC,val:fmtN(m.supplyC)},{label:t.priceThSupplyD,val:fmtN(m.supplyD)}]
-  )).join(''));
+  , m.rep)).join(''));
   scheduleSplitTableResync('pricecalc-hdr-col','pricecalc-body-col','priceCalcTbody','fixed');
 }
 async function onCompanyPriceEdit(rep, field, value){
@@ -8216,7 +8295,7 @@ function enterApp(user){
   if(tabReset) tabReset.style.display = (user.is_admin && !user.supplier_company && !role.isKituramiHQ) ? 'block' : 'none';
   loadOrderFeedStamps().then(updateOrderUnreadDots);   // 주문 알림 점 (탭을 열기 전에도 보이게)
   refreshSignupDot();                                  // 회원관리 알림 점 (대기 가입 신청)
-  loadAllMemberPerms().then(applyPermTabVisibility);   // 회원별 권한 로드 후 탭 노출 적용
+  loadAllMemberPerms().then(()=>{ applyPermTabVisibility(); return loadEngNames(); }).then(rerenderActiveTab);   // 권한→탭노출→영문명 로드→재렌더
   startLive();                                         // 폴링(8초)으로 실시간처럼 갱신
   startRealtime();                                     // Realtime 구독(활성화 시 즉시 반영)
   Promise.all([loadMyOrderTotals(), loadInventory(), loadGlobalSuppliedTotals(), loadReceivedOrderTotals(), loadPrices(), loadPNOverrides(), loadCompanyPrices(),
