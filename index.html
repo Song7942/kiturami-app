@@ -7593,7 +7593,27 @@ async function handlePriceCalcUpload(event){
         rows.push({ row_no:rows.length+1, name_ko:nameKo, name_ru:nameRu, spec:at('spec'), rep, compat:at('compat'), final:at('final'), ship_qty:numAt('ship'), ru_cost:ruCost, ru_supply_krw:ruSupply, kz_supply_krw:kzSupply, updated_at:new Date().toISOString() });
       }
       if(!rows.length){ alert('업로드할 데이터가 없습니다. 계산식 시트 형식을 확인해 주세요.'); event.target.value=''; return; }
-      if(!confirm(`계산식 데이터 ${rows.length}행을 업로드합니다.\n기존 계산식 데이터는 교체됩니다. 계속하시겠습니까?`)){ event.target.value=''; return; }
+      // 품번조회(PN_DATA)에 있는 품목만 반영한다. 행의 대표/호환/최종품번 중 하나라도
+      // 품번조회에서 대표품번을 찾을 수 있어야 한다. 같은 대표품번이 여러 행이면
+      // 가장 높은 가격(원가 KRW 우선, 없으면 공급가)을 채택해 한 행으로 통합한다.
+      const byMaster={};
+      let dropped=0;
+      for(const r of rows){
+        const master=findMasterRep(r.rep)||findMasterRep(r.compat)||findMasterRep(r.final);
+        if(!master){ dropped++; continue; }
+        r.rep=master;
+        const price=r.ru_cost!=null?r.ru_cost:(r.ru_supply_krw||0);
+        const prev=byMaster[master];
+        const prevPrice=prev?(prev.ru_cost!=null?prev.ru_cost:(prev.ru_supply_krw||0)):-Infinity;
+        if(!prev || price>prevPrice) byMaster[master]=r;
+      }
+      const rowsFinal=Object.values(byMaster);
+      rowsFinal.forEach((r,i)=>{ r.row_no=i+1; });
+      if(!rowsFinal.length){ alert('품번조회에 해당하는 품목이 없습니다.\n엑셀의 대표/호환/최종품번이 품번조회에 있는지 확인해 주세요.'); event.target.value=''; return; }
+      const msg=`품번조회에 있는 품목 ${rowsFinal.length}건을 가격정보에 반영합니다.`
+        + (dropped?`\n(품번조회에 없어 제외: ${dropped}건)`:'')
+        + `\n\n기존 계산식 데이터는 교체됩니다. 계속하시겠습니까?`;
+      if(!confirm(msg)){ event.target.value=''; return; }
       // 설정 저장
       await sb.from('kt_price_settings').upsert({ id:1, rub_rate:priceSettings.rub_rate, usd_rate:priceSettings.usd_rate, ru_gp:priceSettings.ru_gp, kz_gp:priceSettings.kz_gp, rate_month:priceSettings.rate_month||new Date().toISOString().slice(0,7), updated_at:new Date().toISOString() },{onConflict:'id'});
       // 기존 삭제 후 삽입. name_ru 컬럼이 없으면(현재 스키마) 제외하고 저장하되
@@ -7601,8 +7621,8 @@ async function handlePriceCalcUpload(event){
       await sb.from('kt_price_calc').delete().not('row_no','is',null);
       const stripRu=r=>{ const {name_ru, ...rest}=r; return rest; };
       let useRu=true;
-      for(let i=0;i<rows.length;i+=500){
-        const batch=rows.slice(i,i+500);
+      for(let i=0;i<rowsFinal.length;i+=500){
+        const batch=rowsFinal.slice(i,i+500);
         let { error } = await sb.from('kt_price_calc').insert(useRu?batch:batch.map(stripRu));
         if(error && useRu && /name_ru|column|schema/i.test(error.message||'')){
           useRu=false;   // 컬럼 없음 → 이후 전부 name_ru 제외
@@ -7610,11 +7630,11 @@ async function handlePriceCalcUpload(event){
         }
         if(error){ alert('업로드 실패\n['+(error.message||error.code)+']'); event.target.value=''; return; }
       }
-      priceCalcData=rows;
+      priceCalcData=rowsFinal;
       await syncKtPricesFromCalc();
       fillParamInputs();
       renderPriceActive();
-      alert(`계산식 ${rows.length}행이 업로드되었습니다.\n공급가와 주문 탭 가격(RUB)에도 반영되었습니다.`);
+      alert(`가격정보 ${rowsFinal.length}건이 업로드되었습니다.`+(dropped?`\n(품번조회에 없어 제외: ${dropped}건)`:'')+`\n공급가와 주문 탭 가격(RUB)에도 반영되었습니다.`);
     }catch(err){ console.error(err); alert('업로드 처리 중 오류가 발생했습니다.'); }
     event.target.value='';
   };
