@@ -710,16 +710,16 @@ input[type="text"]::placeholder{color:var(--muted)}
           <input type="text" id="pnInput" placeholder="대표품번, 호환품번, 최종품번으로 검색…" oninput="debouncedRenderPN()">
         </div>
         <div class="count-badge" id="pnBadge"></div>
+        <button class="dl-btn" id="engNameUploadBtn" onclick="document.getElementById('engNameFileInput').click()" style="display:none;background:#f59e0b;border-color:#f59e0b;color:#fff">
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 20h16"/><path d="M12 4v12"/><polyline points="7 9 12 4 17 9"/></svg>
+          <span id="i18n-engnameupload">영문명 업로드</span>
+        </button>
+        <input type="file" id="engNameFileInput" accept=".xlsx,.xls" style="display:none" onchange="handleEngNameUpload(event)">
         <button class="dl-btn" id="pnUploadBtn" onclick="document.getElementById('pnFileInput').click()" style="background:var(--accent2);border-color:var(--accent2);color:#fff">
           <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
           <span id="i18n-pnupload">엑셀 업로드</span>
         </button>
         <input type="file" id="pnFileInput" accept=".xlsx,.xls" style="display:none" onchange="handlePNUpload(event)">
-        <button class="dl-btn" id="engNameUploadBtn" onclick="document.getElementById('engNameFileInput').click()" style="display:none">
-          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 20h16"/><path d="M12 4v12"/><polyline points="7 9 12 4 17 9"/></svg>
-          <span id="i18n-engnameupload">영문명 업로드</span>
-        </button>
-        <input type="file" id="engNameFileInput" accept=".xlsx,.xls" style="display:none" onchange="handleEngNameUpload(event)">
         <button class="dl-btn" onclick="downloadPN()">
           <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           <span id="i18n-pndl">엑셀 다운로드</span>
