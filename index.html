@@ -6662,11 +6662,24 @@ function setPriceCards(html){
   const el=document.getElementById('priceCardList');
   if(el) el.innerHTML=html||'';
 }
+// 대표품번의 모든 호환품번(품번조회 기준) 목록. 가격정보 검색에 쓴다.
+function _pnCompatsFor(rep){
+  const info=(typeof getPNInfo==='function')?getPNInfo(rep):null;
+  return (info && Array.isArray(info.compats)) ? info.compats : [];
+}
+// 가격 행이 검색어와 맞는지: 대표품번·품명(한/러)·최종품번·호환품번 + 품번조회의 모든 호환품번
+function priceMatchesKw(rep, kw, extra){
+  if(!kw) return true;
+  if((rep||'').toLowerCase().includes(kw)) return true;
+  if(extra){ for(const v of extra){ if(v && String(v).toLowerCase().includes(kw)) return true; } }
+  if(_pnCompatsFor(rep).some(c=>String(c||'').toLowerCase().includes(kw))) return true;
+  return false;
+}
 function priceFilterRows(){
   const kwEl=document.getElementById('priceSearchInput');
   const kw=(kwEl?kwEl.value:'').trim().toLowerCase();
   if(!kw) return priceCalcData;
-  return priceCalcData.filter(r=>(r.rep||'').toLowerCase().includes(kw)||(r.name_ko||'').toLowerCase().includes(kw)||(r.final||'').toLowerCase().includes(kw)||(r.compat||'').toLowerCase().includes(kw));
+  return priceCalcData.filter(r=>priceMatchesKw(r.rep, kw, [r.name_ko, r.name_ru, r.final, r.compat]));
 }
 function renderPriceCalc(){
   const rows=priceFilterRows();
@@ -6736,7 +6749,7 @@ function renderPriceSupply(){
   const kwEl=document.getElementById('priceSearchInput');
   const kw=(kwEl?kwEl.value:'').trim().toLowerCase();
   let list=Object.values(map).sort((a,b)=>a.rep.localeCompare(b.rep));
-  if(kw) list=list.filter(m=>m.rep.toLowerCase().includes(kw)||(m.name_ko||'').toLowerCase().includes(kw)||(m.final||'').toLowerCase().includes(kw));
+  if(kw) list=list.filter(m=>priceMatchesKw(m.rep, kw, [m.name_ko, m.name_ru, m.final].concat(m.compats||[])));
   const t=T[lang];
   const isKo=lang==='ko';   // RU 에는 러시아어 규격이 없어 규격 열을 뺀다 (품번조회 탭과 동일)
   document.getElementById('priceCountBadge').innerHTML=t.priceCount(list.length);
@@ -6953,7 +6966,7 @@ function renderPriceRegion(region){
   const kw=(kwEl?kwEl.value:'').trim().toLowerCase();
   const isKz=region==='kz';
   let list=Object.values(map).filter(m=>(isKz?m.usd:m.rub)!=null).sort((a,b)=>a.rep.localeCompare(b.rep));
-  if(kw) list=list.filter(m=>m.rep.toLowerCase().includes(kw)||(m.name_ko||'').toLowerCase().includes(kw)||(m.final||'').toLowerCase().includes(kw)||m.compats.some(c=>c.toLowerCase().includes(kw)));
+  if(kw) list=list.filter(m=>priceMatchesKw(m.rep, kw, [m.name_ko, m.name_ru, m.final].concat(m.compats||[])));
   const t=T[lang];
   const isKo=lang==='ko';   // RU 에는 러시아어 규격이 없어 규격 열을 뺀다 (품번조회 탭과 동일)
   document.getElementById('priceCountBadge').innerHTML=t.priceCount(list.length);
@@ -7013,7 +7026,7 @@ function companyPriceRows(){
     const supplyD=companySupplyFrom(buy, companySupplyGp.d);
     return { ...m, autoBuy, buyRaw:saved.buy_price, buy, supplyA, supplyB, supplyC, supplyD };
   });
-  if(kw) list=list.filter(m=>m.rep.toLowerCase().includes(kw)||(m.name_ko||'').toLowerCase().includes(kw)||(m.final||'').toLowerCase().includes(kw)||m.compats.some(c=>c.toLowerCase().includes(kw)));
+  if(kw) list=list.filter(m=>priceMatchesKw(m.rep, kw, [m.name_ko, m.name_ru, m.final].concat(m.compats||[])));
   return list;
 }
 function renderPriceCompany(){
