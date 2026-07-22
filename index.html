@@ -860,6 +860,11 @@ input[type="text"]::placeholder{color:var(--muted)}
           <span id="i18n-shipqtyupload">출고수량 업로드</span>
         </button>
         <input type="file" id="shipQtyFileInput" accept=".xlsx,.xls" style="display:none" onchange="handleShipQtyUpload(event)">
+        <button class="dl-btn" id="engNameUploadBtn" onclick="document.getElementById('engNameFileInput').click()" style="display:none;background:var(--surface2);border-color:var(--border);color:var(--text)">
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 20h16"/><path d="M12 4v12"/><polyline points="7 9 12 4 17 9"/></svg>
+          <span id="i18n-engnameupload">영문명 업로드</span>
+        </button>
+        <input type="file" id="engNameFileInput" accept=".xlsx,.xls" style="display:none" onchange="handleEngNameUpload(event)">
         <button class="dl-btn" id="priceUploadWrap" onclick="document.getElementById('priceFileInput').click()" style="background:var(--accent2);border-color:var(--accent2);color:#fff">
           <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
           <span id="i18n-priceupload">엑셀 업로드</span>
@@ -974,11 +979,6 @@ input[type="text"]::placeholder{color:var(--muted)}
         </button>
       </div>
       <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;margin:8px 0 12px">
-        <button class="dl-btn" id="engNameUploadBtn" onclick="document.getElementById('engNameFileInput').click()" style="display:none">
-          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 20h16"/><path d="M12 4v12"/><polyline points="7 9 12 4 17 9"/></svg>
-          <span id="i18n-engnameupload">영문명 업로드</span>
-        </button>
-        <input type="file" id="engNameFileInput" accept=".xlsx,.xls" style="display:none" onchange="handleEngNameUpload(event)">
         <button class="dl-btn" id="addMemberBtn" onclick="openAddMemberModal()" style="display:none;background:var(--accent);border-color:var(--accent);color:#fff">
           <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           <span id="i18n-addmember">회원 추가</span>
@@ -4125,7 +4125,6 @@ function renderPendingSignups(){
   const t=T[lang];
   const addBtn=document.getElementById('addMemberBtn'); if(addBtn) addBtn.style.display = canAddMembersNow() ? '' : 'none';
   const isMasterNow=userRole(currentUser).isMaster;
-  const engBtn=document.getElementById('engNameUploadBtn'); if(engBtn) engBtn.style.display = isMasterNow ? '' : 'none';
   const permBtnHtml=(idEsc)=> isMasterNow ? `<button class="news-btn-secondary" onclick="openPermModal('${idEsc}')">${lang==='ru'?'Права':'권한'}</button>` : '';
   const tbody=document.getElementById('adminSignupsList');
   const emptyEl=document.getElementById('adminSignupsEmpty');
@@ -6932,6 +6931,8 @@ function applyPriceTabChrome(){
   show('priceUploadWrap', isMaster ? priceView==='calc' : m==='company');
   // 출고수량 업로드: 출고 열이 있는 계산식 화면에서만
   show('shipQtyUploadWrap', isMaster && priceView==='calc');
+  // 영문명 업로드: MASTER 는 가격정보 어느 화면에서든
+  show('engNameUploadBtn', isMaster);
   // 초기화: MASTER·KITURAMI 만. 계산식·공급가 어느 쪽에서도 같은 데이터를 지운다.
   show('priceResetWrap', isMaster);
   // 지역/회사 뷰는 계산식 슬롯을 재사용한다
