@@ -4341,9 +4341,11 @@ function openEditMemberModal(id){
   const canEditAll=userRole(currentUser).isMaster;
   _memberModalMode='edit';
   const _title=document.getElementById('i18n-editmembertitle'); if(_title) _title.textContent=(lang==='ru'?'Изменить участника':'회원 정보 수정');
-  document.getElementById('emId').value=m.id;
+  document.getElementById('emId').value=m.id;   // 기존 아이디(조회·수정 기준). 표시칸은 MASTER 면 편집 가능.
   const _idd=document.getElementById('emIdDisplay');
-  _idd.value=m.id; _idd.disabled=true; _idd.oninput=null; _idd.style.background='var(--surface2)'; _idd.style.color='var(--muted)';
+  _idd.value=m.id;
+  if(canEditAll){ _idd.disabled=false; _idd.oninput=function(){ this.value=this.value.toUpperCase(); }; _idd.style.background='var(--surface)'; _idd.style.color='var(--text)'; }
+  else { _idd.disabled=true; _idd.oninput=null; _idd.style.background='var(--surface2)'; _idd.style.color='var(--muted)'; }
   document.getElementById('emCompany').value=m.company||'';
   document.getElementById('emSupplier').value=m.supplier_company||'';
   document.getElementById('emSupplierWrap').style.display=canEditAll?'':'none';
@@ -4440,10 +4442,19 @@ async function saveEditMember(){
   // 번호가 비면 '+82 ' 같은 껍데기 대신 빈 값을 저장한다.
   const phoneOut = digits ? phone : '';
   const payload = { company, contact_name: contactName, country, region, phone: phoneOut, email };
-  // 구매처·상태는 MASTER 만 수정할 수 있으므로, 그 외에는 payload 에 담지 않는다.
+  // 구매처·상태·아이디는 MASTER 만 수정할 수 있으므로, 그 외에는 payload 에 담지 않는다.
+  let newId=id;
   if(userRole(currentUser).isMaster){
     payload.supplier_company = document.getElementById('emSupplier').value.trim() || null;
     payload.status = document.getElementById('emStatus').value;
+    // 아이디 변경 (MASTER 전용). 바뀌었으면 중복 확인 후 payload 에 넣는다.
+    newId=document.getElementById('emIdDisplay').value.trim();
+    if(!newId){ errEl.textContent=(lang==='ru'?'Введите ID.':'아이디를 입력해주세요.'); return; }
+    if(newId!==id){
+      const { data: dup } = await sb.from('kt_users').select('id').ilike('id', newId).limit(1);
+      if(dup && dup.length){ errEl.textContent=(lang==='ru'?'Такой ID уже есть.':'이미 존재하는 아이디입니다.'); return; }
+      payload.id=newId;
+    }
   }
   if(newPw){
     if(newPw.length < 4){ errEl.textContent=t.myInfoErrPwShort; return; }
@@ -4452,6 +4463,11 @@ async function saveEditMember(){
 
   const { error } = await sb.from('kt_users').update(payload).eq('id', id);
   if(error){ errEl.textContent=(error.message||error.code); return; }
+  // 아이디가 바뀌었으면 그 계정이 넣은 주문·요청의 user_id 도 함께 바꿔 참조가 끊기지 않게 한다.
+  if(newId!==id){
+    try{ await sb.from('kt_orders').update({user_id:newId}).eq('user_id', id); }catch(e){}
+    try{ await sb.from('kt_order_requests').update({user_id:newId}).eq('user_id', id); }catch(e){}
+  }
   await loadPendingSignups();
   renderPendingSignups();
   closeEditMemberModal();
