@@ -3986,6 +3986,7 @@ async function refreshAdminOrdersData(){
 // Supabase Realtime 은 프로젝트/테이블 설정에 의존하므로, 설정 없이도 확실히 도는
 // 폴링으로 알림 점과 (편집 중이 아닌) 화면 내용을 주기적으로 갱신한다.
 let _liveTimer=null;
+let _permTick=0;
 function _focusedEditableIn(paneId){
   const p=document.getElementById(paneId); const a=document.activeElement;
   return p && a && p.contains(a) && /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName);
@@ -3997,6 +3998,11 @@ async function liveTick(){
     loadOrderFeedStamps().then(updateOrderUnreadDots);
     refreshSignupDot();
     if(document.hidden) return;   // 무거운 '내용' 갱신만 화면이 보일 때 한다
+    // 권한 변경 라이브 반영(비-MASTER): 약 32초마다 권한을 다시 읽어 탭 노출을 갱신한다.
+    if(!userRole(currentUser).isMaster){
+      _permTick=(_permTick+1)%4;
+      if(_permTick===0){ try{ await loadAllMemberPerms(); applyPermTabVisibility(); }catch(e){} }
+    }
     const active=(id)=>{ const p=document.getElementById(id); return p && p.classList.contains('active'); };
     // 주문관리 화면: 전송 대기 편집이 있거나 입력칸에 포커스가 있으면 방해하지 않는다.
     if(active('pane-adminOrders')){
@@ -4606,10 +4612,12 @@ function guardWrite(cat){ if(permWrite(cat)===false){ alert(lang==='ru'?'Нет 
 function guardDelete(cat){ if(permDelete(cat)===false){ alert(lang==='ru'?'Нет прав на удаление.':'삭제 권한이 없습니다.'); return false; } return true; }
 // 보기 권한이 꺼진 탭은 숨긴다(제한만; 역할이 원래 안 주는 탭을 새로 열지는 않는다).
 function applyPermTabVisibility(){
+  if(userRole(currentUser).isMaster) return;   // MASTER 는 항상 전체
   const pobj=_myPermObj();
   if(!pobj) return;   // 권한 미설정 회원은 기존 역할 규칙 그대로
+  // 권한이 설정된 회원은 매핑된 탭을 권한값대로 부여/제한한다(체크=보임, 미체크=숨김).
   const map={ 'tab-parts':'parts','tab-pn':'pn','tab-order':'order','tab-adminOrders':'adminOrders','tab-inventory':'inventory','tab-shipments':'shipments','tab-price':'price','tab-memberManagement':'memberManagement' };
-  Object.keys(map).forEach(tabId=>{ const el=document.getElementById(tabId); if(el && !pobj[map[tabId]].v) el.style.display='none'; });
+  Object.keys(map).forEach(tabId=>{ const el=document.getElementById(tabId); if(el) el.style.display = pobj[map[tabId]].v ? '' : 'none'; });
 }
 
 // 권한 편집 모달 (MASTER 전용)
