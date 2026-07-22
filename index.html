@@ -4489,6 +4489,10 @@ function engNameHtml(rep){
   return en ? ` <span class="eng-name" style="color:var(--accent2);font-weight:600">(${escapeHtml(en)})</span>` : '';
 }
 function engNameText(rep){ if(!canViewEngName()) return ''; return engNameByRep[String(rep||'').trim().toUpperCase()]||''; }
+// 표에 영문품명 '열'을 넣을 때 쓰는 조각들(권한 없으면 빈 문자열 → 열 자체가 없음)
+function engColHtml(){ return canViewEngName()?'<col>':''; }
+function engThHtml(style){ return canViewEngName()?`<th ${style||''}>${lang==='ru'?'Англ. название':'영문품명'}</th>`:''; }
+function engTdHtml(rep, style){ return canViewEngName()?`<td ${style||''}>${escapeHtml(engNameText(rep))}</td>`:''; }
 // 영문명 엑셀 업로드 (MASTER 전용). '품번 | 영문명' 자유 양식.
 function handleEngNameUpload(event){
   if(!userRole(currentUser).isMaster){ event.target.value=''; return; }
@@ -5734,8 +5738,9 @@ function syncSplitTableColumnWidths(hdrColId, bodyColId, tbodyId, mode){
             // 이 슬롯을 세 가지 뷰가 나눠 쓰고, RU 는 규격 열이 빠져 열 수만으로는
             // 구분되지 않는다(회사 KO=8 과 지역 RU=8 이 겹침). 그래서 뷰로 갈라 잡는다.
             const isKoP=(typeof lang!=='undefined' && lang==='ko');
-            const lead=isKoP?LEAD_KO:LEAD_RU;
-            const rigidP=allRigidFrom(isKoP?2:1, n);
+            const engP=canViewEngName();
+            const lead=isKoP?(engP?[280,260,220,110,150,110]:LEAD_KO):(engP?[280,220,110,150,110]:LEAD_RU);
+            const rigidP=allRigidFrom((isKoP?2:1)+(engP?1:0), n);
             const m=(typeof priceMode==='function')?priceMode():null;
             // 회사 계정: 앞 + 구매가 | 공급가 | GP
             if(m==='company') return { caps:[...lead, 84, 76, 76, 76, 76], noFill:true, rigid:rigidP };
@@ -5746,10 +5751,12 @@ function syncSplitTableColumnWidths(hdrColId, bodyColId, tbodyId, mode){
             return { caps:[...lead, 40, 74, 62, 62, 74, 60, 56, 74, 60, 56], noFill:true, rigid:rigidP };
           }
           if(tbodyId==='priceSupplyTbody'){
-            // 공급가 RU 6열: 규격이 빠져 앞이 4열
-            if(n===6) return { caps:[...LEAD_RU, 84, 84], noFill:true, rigid:allRigidFrom(1,6) };
-            // 공급가 7열: 앞 5열 + 공급가 RUB | 공급가 USD
-            return { caps:[...LEAD_KO, 84, 84], noFill:true, rigid:allRigidFrom(2,7) };
+            // 앞: 품명|[규격]|[영문품명]|대표|호환|최종 + 공급가 RUB|USD
+            const isKoS=(typeof lang!=='undefined' && lang==='ko');
+            const engS=canViewEngName();
+            const lead=isKoS?(engS?[280,260,220,110,150,110]:LEAD_KO):(engS?[280,220,110,150,110]:LEAD_RU);
+            const s=(isKoS?2:1)+(engS?1:0);
+            return { caps:[...lead, 84, 84], noFill:true, rigid:allRigidFrom(s, n) };
           }
           if(tbodyId==='pnTbody'){
             // KO: 품명|규격|[영문품명]|대표|호환|최종 / RU: 품명|[영문품명]|대표|호환|최종
@@ -6665,7 +6672,8 @@ function priceCardHtml(name, spec, codes, fields, rep){
   const fieldHtml = (fields||[]).filter(f=>f.val!=null && f.val!=='').map(f=>
     `<div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:2px 0"><span style="color:var(--muted)">${escapeHtml(f.label)}</span><b style="color:var(--text)">${f.val}</b></div>`).join('');
   return `<div class="order-card">
-    <div class="pc-name">${escapeHtml(name||'')}${rep?engNameHtml(rep):''}</div>
+    <div class="pc-name">${escapeHtml(name||'')}</div>
+    ${rep&&canViewEngName()&&engNameText(rep)?`<div style="font-size:11px;color:var(--accent2);font-weight:600;margin-top:2px">${escapeHtml(engNameText(rep))}</div>`:''}
     ${specHtml}${codeHtml}
     <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">${fieldHtml}</div>
   </div>`;
@@ -6706,7 +6714,7 @@ function renderPriceCalc(){
   const thS='padding:4px 2px;text-align:center;vertical-align:middle;overflow:hidden;word-break:break-all';
   const brLabel=(x)=>String(x||'').replace(' (','<br>(');
   thead.innerHTML=`<tr style="border-bottom:1px solid var(--border);color:var(--muted);font-size:11px">
-    <th rowspan="2" style="${thS}">${t.pnH0}</th>${isKo?`<th rowspan="2" style="${thS}">${t.pnH0s}</th>`:''}
+    <th rowspan="2" style="${thS}">${t.pnH0}</th>${isKo?`<th rowspan="2" style="${thS}">${t.pnH0s}</th>`:''}${engThHtml(`rowspan="2" style="${thS}"`)}
     <th rowspan="2" style="${thS}">${brLabel(t.pnH1)}</th><th rowspan="2" style="${thS}">${brLabel(t.pnH2)}</th>
     <th rowspan="2" style="${thS}">${brLabel(t.pnH3)}</th><th rowspan="2" style="${thS}">${t.priceThShip}</th>
     <th colspan="3" style="${thS};border-left:1px solid var(--border)">${t.priceThCost}</th>
@@ -6717,7 +6725,7 @@ function renderPriceCalc(){
     <th style="${thS};border-left:1px solid var(--border)">${t.priceThSupply}<br>KRW</th><th style="${thS}">${t.priceThSupply}<br>RUB</th><th style="${thS}">${t.priceThGp}</th>
     <th style="${thS};border-left:1px solid var(--border)">${t.priceThSupply}<br>KRW</th><th style="${thS}">${t.priceThSupply}<br>USD</th><th style="${thS}">${t.priceThGp}</th></tr>`;
   // 원가는 KRW(입력) · RUB · USD 3열
-  const cols=`<col>${isKo?'<col>':''}<col><col><col><col style="width:40px"><col style="width:68px"><col style="width:62px"><col style="width:62px"><col style="width:72px"><col style="width:66px"><col style="width:48px"><col style="width:72px"><col style="width:62px"><col style="width:48px">`;
+  const cols=`<col>${isKo?'<col>':''}${engColHtml()}<col><col><col><col style="width:40px"><col style="width:68px"><col style="width:62px"><col style="width:62px"><col style="width:72px"><col style="width:66px"><col style="width:48px"><col style="width:72px"><col style="width:62px"><col style="width:48px">`;
   document.getElementById('pricecalc-hdr-col').innerHTML=cols;
   document.getElementById('pricecalc-body-col').innerHTML=cols;
   const tbody=document.getElementById('priceCalcTbody');
@@ -6728,8 +6736,8 @@ function renderPriceCalc(){
   tbody.innerHTML=rows.map(r=>{
     const c=calcPriceRow(r);
     return `<tr style="border-bottom:1px solid var(--border);font-size:11px" class="price-row">
-      <td style="padding:3px 4px;word-break:break-all">${escapeHtml(priceNameFor(r))}${engNameHtml(r.rep)}</td>
-      ${isKo?`<td style="padding:3px 4px;color:var(--muted);font-size:10px;word-break:break-all">${escapeHtml(r.spec||'')}</td>`:''}
+      <td style="padding:3px 4px;word-break:break-all">${escapeHtml(priceNameFor(r))}</td>
+      ${isKo?`<td style="padding:3px 4px;color:var(--muted);font-size:10px;word-break:break-all">${escapeHtml(r.spec||'')}</td>`:''}${engTdHtml(r.rep,'style="padding:3px 4px;color:var(--accent2);font-weight:600;word-break:break-all"')}
       <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(r.rep||'')}</span></td>
       <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(r.compat||'')}</span></td>
       <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(r.final||'')}</span></td>
@@ -6770,11 +6778,11 @@ function renderPriceSupply(){
   const thS2='padding:6px 4px;text-align:center;vertical-align:middle;overflow:hidden;word-break:break-all';
   const brLabel=(x)=>String(x||'').replace(' (','<br>(');
   thead.innerHTML=`<tr style="border-bottom:1px solid var(--border);color:var(--muted)">
-    <th style="${thS2}">${t.pnH0}</th>${isKo?`<th style="${thS2}">${t.pnH0s}</th>`:''}
+    <th style="${thS2}">${t.pnH0}</th>${isKo?`<th style="${thS2}">${t.pnH0s}</th>`:''}${engThHtml(`style="${thS2}"`)}
     <th style="${thS2}">${brLabel(t.pnH1)}</th><th style="${thS2}">${brLabel(t.pnH2)}</th>
     <th style="${thS2}">${brLabel(t.pnH3)}</th>
     <th style="${thS2}">${t.priceThSupply}<br>(RUB)</th><th style="${thS2}">${t.priceThSupply}<br>(USD)</th></tr>`;
-  const cols=`<col>${isKo?'<col>':''}<col><col><col><col style="width:100px"><col style="width:100px">`;
+  const cols=`<col>${isKo?'<col>':''}${engColHtml()}<col><col><col><col style="width:100px"><col style="width:100px">`;
   document.getElementById('pricesupply-hdr-col').innerHTML=cols;
   document.getElementById('pricesupply-body-col').innerHTML=cols;
   const tbody=document.getElementById('priceSupplyTbody');
@@ -6782,8 +6790,8 @@ function renderPriceSupply(){
   if(!list.length){ tbody.innerHTML=''; setPriceCards(''); emptyEl.textContent=t.priceNoSupply; emptyEl.style.display='block'; return; }
   emptyEl.style.display='none';
   tbody.innerHTML=list.map(m=>`<tr style="border-bottom:1px solid var(--border);font-size:11px" class="price-row">
-      <td style="padding:3px 4px;word-break:break-all">${escapeHtml(priceNameFor(m))}${engNameHtml(m.rep)}</td>
-      ${isKo?`<td style="padding:3px 4px;color:var(--muted);font-size:10px;word-break:break-all">${escapeHtml(m.spec||'')}</td>`:''}
+      <td style="padding:3px 4px;word-break:break-all">${escapeHtml(priceNameFor(m))}</td>
+      ${isKo?`<td style="padding:3px 4px;color:var(--muted);font-size:10px;word-break:break-all">${escapeHtml(m.spec||'')}</td>`:''}${engTdHtml(m.rep,'style="padding:3px 4px;color:var(--accent2);font-weight:600;word-break:break-all"')}
       <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(m.rep)}</span></td>
       <td style="padding:3px 4px">${m.compats.map(c=>`<span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(c)}</span>`).join('<br>')}</td>
       <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(m.final||'')}</span></td>
@@ -6990,7 +6998,7 @@ function renderPriceRegion(region){
   // 원가는 '원가' 아래 KRW + 자기 통화(RUB|USD) 2열로 나눈다 → 헤더가 2행이 된다
   const cur=isKz?'USD':'RUB';
   document.getElementById('priceCalcThead').innerHTML=`<tr style="border-bottom:1px solid var(--border);color:var(--muted);font-size:11px">
-    <th rowspan="2" style="${thS}">${t.pnH0}</th>${isKo?`<th rowspan="2" style="${thS}">${t.pnH0s}</th>`:''}
+    <th rowspan="2" style="${thS}">${t.pnH0}</th>${isKo?`<th rowspan="2" style="${thS}">${t.pnH0s}</th>`:''}${engThHtml(`rowspan="2" style="${thS}"`)}
     <th rowspan="2" style="${thS}">${brLabel(t.pnH1)}</th><th rowspan="2" style="${thS}">${brLabel(t.pnH2)}</th>
     <th rowspan="2" style="${thS}">${brLabel(t.pnH3)}</th>
     <th colspan="2" style="${thS};border-left:1px solid var(--border)">${t.priceThCost}</th>
@@ -6998,7 +7006,7 @@ function renderPriceRegion(region){
     <th rowspan="2" style="${thS}">${t.priceThGp}</th></tr>
     <tr style="border-bottom:1px solid var(--border);color:var(--muted);font-size:11px">
     <th style="${thS};border-left:1px solid var(--border)">KRW</th><th style="${thS}">${cur}</th></tr>`;
-  const cols=`<col>${isKo?'<col>':''}<col><col><col><col style="width:78px"><col style="width:70px"><col style="width:84px"><col style="width:56px">`;
+  const cols=`<col>${isKo?'<col>':''}${engColHtml()}<col><col><col><col style="width:78px"><col style="width:70px"><col style="width:84px"><col style="width:56px">`;
   document.getElementById('pricecalc-hdr-col').innerHTML=cols;
   document.getElementById('pricecalc-body-col').innerHTML=cols;
   const tbody=document.getElementById('priceCalcTbody');
@@ -7006,8 +7014,8 @@ function renderPriceRegion(region){
   if(!list.length){ tbody.innerHTML=''; setPriceCards(''); emptyEl.textContent=t.priceNoData; emptyEl.style.display='block'; return; }
   emptyEl.style.display='none';
   tbody.innerHTML=list.map(m=>`<tr style="border-bottom:1px solid var(--border);font-size:11px" class="price-row">
-      <td style="padding:3px 4px;word-break:break-all">${escapeHtml(priceNameFor(m))}${engNameHtml(m.rep)}</td>
-      ${isKo?`<td style="padding:3px 4px;color:var(--muted);font-size:10px;word-break:break-all">${escapeHtml(m.spec||'')}</td>`:''}
+      <td style="padding:3px 4px;word-break:break-all">${escapeHtml(priceNameFor(m))}</td>
+      ${isKo?`<td style="padding:3px 4px;color:var(--muted);font-size:10px;word-break:break-all">${escapeHtml(m.spec||'')}</td>`:''}${engTdHtml(m.rep,'style="padding:3px 4px;color:var(--accent2);font-weight:600;word-break:break-all"')}
       <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(m.rep)}</span></td>
       <td style="padding:3px 4px">${m.compats.map(c=>`<span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(c)}</span>`).join('<br>')}</td>
       <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(m.final||'')}</span></td>
@@ -7052,7 +7060,7 @@ function renderPriceCompany(){
   const thS='padding:6px 4px;text-align:center;vertical-align:middle;overflow:hidden;word-break:break-all';
   const brLabel=(x)=>String(x||'').replace(' (','<br>(');
   document.getElementById('priceCalcThead').innerHTML=`<tr style="border-bottom:1px solid var(--border);color:var(--muted);font-size:11px">
-    <th style="${thS}">${t.pnH0}</th>${isKo?`<th style="${thS}">${t.pnH0s}</th>`:''}
+    <th style="${thS}">${t.pnH0}</th>${isKo?`<th style="${thS}">${t.pnH0s}</th>`:''}${engThHtml(`style="${thS}"`)}
     <th style="${thS}">${brLabel(t.pnH1)}</th><th style="${thS}">${brLabel(t.pnH2)}</th>
     <th style="${thS}">${brLabel(t.pnH3)}</th>
     <th style="${thS};border-left:1px solid var(--border)">${t.priceThBuy}</th>
@@ -7060,7 +7068,7 @@ function renderPriceCompany(){
     <th style="${thS}">${t.priceThSupplyB}</th>
     <th style="${thS}">${t.priceThSupplyC}</th>
     <th style="${thS}">${t.priceThSupplyD}</th></tr>`;
-  const cols=`<col>${isKo?'<col>':''}<col><col><col><col style="width:82px"><col style="width:72px"><col style="width:72px"><col style="width:72px"><col style="width:72px">`;
+  const cols=`<col>${isKo?'<col>':''}${engColHtml()}<col><col><col><col style="width:82px"><col style="width:72px"><col style="width:72px"><col style="width:72px"><col style="width:72px">`;
   document.getElementById('pricecalc-hdr-col').innerHTML=cols;
   document.getElementById('pricecalc-body-col').innerHTML=cols;
   const tbody=document.getElementById('priceCalcTbody');
@@ -7072,8 +7080,8 @@ function renderPriceCompany(){
   tbody.innerHTML=list.map(m=>{
     const repEsc=String(m.rep).replace(/'/g,"\\'");
     return `<tr style="border-bottom:1px solid var(--border);font-size:11px" class="price-row">
-      <td style="padding:3px 4px;word-break:break-all">${escapeHtml(priceNameFor(m))}${engNameHtml(m.rep)}</td>
-      ${isKo?`<td style="padding:3px 4px;color:var(--muted);font-size:10px;word-break:break-all">${escapeHtml(m.spec||'')}</td>`:''}
+      <td style="padding:3px 4px;word-break:break-all">${escapeHtml(priceNameFor(m))}</td>
+      ${isKo?`<td style="padding:3px 4px;color:var(--muted);font-size:10px;word-break:break-all">${escapeHtml(m.spec||'')}</td>`:''}${engTdHtml(m.rep,'style="padding:3px 4px;color:var(--accent2);font-weight:600;word-break:break-all"')}
       <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(m.rep)}</span></td>
       <td style="padding:3px 4px">${m.compats.map(c=>`<span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(c)}</span>`).join('<br>')}</td>
       <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(m.final||'')}</span></td>
