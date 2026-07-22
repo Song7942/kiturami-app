@@ -974,6 +974,10 @@ input[type="text"]::placeholder{color:var(--muted)}
         </button>
       </div>
       <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;margin:8px 0 12px">
+        <button class="dl-btn" id="addMemberBtn" onclick="openAddMemberModal()" style="display:none;background:var(--accent);border-color:var(--accent);color:#fff">
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          <span id="i18n-addmember">회원 추가</span>
+        </button>
         <button class="dl-btn" onclick="downloadMembers()">
           <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           <span id="i18n-memberdl">엑셀 다운로드</span>
@@ -3054,6 +3058,7 @@ function setOrderQty(input){
 
 async function submitOrder(){
   const t=T[lang];
+  if(!guardWrite('order')) return;
   const rows=getFilteredOrderParts().map(d=>({d,qty:orderQty[orderKey(d)]||0})).filter(r=>r.qty>0);
   if(!rows.length){ alert(t.orderSubmitEmpty); return; }
   if(!currentUser || !currentUser.supplier_company){ alert(t.orderNoSupplier||'주문을 보낼 구매처가 지정되어 있지 않습니다.'); return; }
@@ -3580,6 +3585,7 @@ function updateAdminSendBtn(){
 }
 async function sendAllocations(){
   const t=T[lang];
+  if(!guardWrite('adminOrders')) return;
   const keys=Object.keys(pendingAllocations);
   if(!keys.length){ alert(t.adminSendNone); return; }
   if(!confirm(t.adminSendConfirm(keys.length))) return;
@@ -4046,6 +4052,7 @@ async function loadPendingSignups(){
   if(error){ console.error(error); companyMembers=[]; return; }
   companyMembers=data||[];
   await loadMemberGrades();
+  if(role.isMaster) await loadAllMemberPerms();   // 권한 표시/편집을 위해 최신 권한 읽기
   const pendingCount=companyMembers.filter(isPendingMember).length;
   const badge=document.getElementById('adminSignupBadge');
   if(badge){
@@ -4109,6 +4116,9 @@ async function updateMemberGrade(buyerCompany, supplierCompany, grade){
 }
 function renderPendingSignups(){
   const t=T[lang];
+  const addBtn=document.getElementById('addMemberBtn'); if(addBtn) addBtn.style.display = canAddMembersNow() ? '' : 'none';
+  const isMasterNow=userRole(currentUser).isMaster;
+  const permBtnHtml=(idEsc)=> isMasterNow ? `<button class="news-btn-secondary" onclick="openPermModal('${idEsc}')">${lang==='ru'?'Права':'권한'}</button>` : '';
   const tbody=document.getElementById('adminSignupsList');
   const emptyEl=document.getElementById('adminSignupsEmpty');
   if(!companyMembers.length){
@@ -4137,7 +4147,7 @@ function renderPendingSignups(){
     <td style="padding:9px 12px">${escapeHtml(u.email||'')}</td>
     <td style="padding:9px 12px;text-align:center">${statusLabel(u.status)}</td>
     <td style="padding:9px 12px;text-align:center;white-space:nowrap">
-      <span style="display:inline-flex;gap:4px;justify-content:center;flex-wrap:wrap">${approveBtn}${rejectBtn}<button class="news-btn-secondary" onclick="openEditMemberModal('${idEsc}')">${t.signupEdit}</button><button class="news-btn-secondary" onclick="deleteMember('${idEsc}')">${t.signupDelete}</button></span>
+      <span style="display:inline-flex;gap:4px;justify-content:center;flex-wrap:wrap">${approveBtn}${rejectBtn}${permBtnHtml(idEsc)}<button class="news-btn-secondary" onclick="openEditMemberModal('${idEsc}')">${t.signupEdit}</button><button class="news-btn-secondary" onclick="deleteMember('${idEsc}')">${t.signupDelete}</button></span>
     </td>
   </tr>`;
   }).join('');
@@ -4163,6 +4173,7 @@ function renderPendingSignups(){
       </div>
       <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
         ${approveBtn}${rejectBtn}
+        ${isMasterNow?`<button class="news-btn-secondary" style="padding:5px 10px;font-size:12px" onclick="openPermModal('${idEsc}')">${lang==='ru'?'Права':'권한'}</button>`:''}
         <button class="news-btn-secondary" style="padding:5px 10px;font-size:12px" onclick="openEditMemberModal('${idEsc}')">${t.signupEdit}</button>
         <button class="news-btn-secondary" style="padding:5px 10px;font-size:12px" onclick="deleteMember('${idEsc}')">${t.signupDelete}</button>
       </div>
@@ -4293,6 +4304,7 @@ async function resetAllMembers(){
 }
 async function deleteMember(id){
   const t=T[lang];
+  if(!guardDelete('memberManagement')) return;
   if(!confirm(t.signupDeleteConfirm(id))) return;
   // 계정을 삭제할 때, 그 계정이 넣었던 주문/요청도 함께 지워서 유령 데이터로 남지 않게 합니다.
   await sb.from('kt_orders').delete().eq('user_id', id);
@@ -4308,8 +4320,11 @@ function openEditMemberModal(id){
   const t=T[lang];
   // 구매처·상태는 표에는 보이지만 종전에 수정할 수 없었다. MASTER 에게만 연다.
   const canEditAll=userRole(currentUser).isMaster;
+  _memberModalMode='edit';
+  const _title=document.getElementById('i18n-editmembertitle'); if(_title) _title.textContent=(lang==='ru'?'Изменить участника':'회원 정보 수정');
   document.getElementById('emId').value=m.id;
-  document.getElementById('emIdDisplay').value=m.id;
+  const _idd=document.getElementById('emIdDisplay');
+  _idd.value=m.id; _idd.disabled=true; _idd.oninput=null; _idd.style.background='var(--surface2)'; _idd.style.color='var(--muted)';
   document.getElementById('emCompany').value=m.company||'';
   document.getElementById('emSupplier').value=m.supplier_company||'';
   document.getElementById('emSupplierWrap').style.display=canEditAll?'':'none';
@@ -4361,6 +4376,28 @@ async function saveEditMember(){
 
   const { callingCode, digits, phone } = readE164FromModal('em');
 
+  // ── 회원 추가 모드: 아이디·비밀번호만 있으면 나머지 항목이 비어도 등록한다 ──
+  if(_memberModalMode==='add'){
+    if(!canAddMembersNow()){ errEl.textContent=(lang==='ru'?'Нет прав.':'권한이 없습니다.'); return; }
+    const newId=document.getElementById('emIdDisplay').value.trim();
+    if(!newId){ errEl.textContent=(lang==='ru'?'Введите ID.':'아이디를 입력해주세요.'); return; }
+    if(!newPw || newPw.length<4){ errEl.textContent=(lang==='ru'?'Пароль не менее 4 символов.':'비밀번호를 4자 이상 입력해주세요.'); return; }
+    const { data: dup } = await sb.from('kt_users').select('id').ilike('id', newId).limit(1);
+    if(dup && dup.length){ errEl.textContent=(lang==='ru'?'Такой ID уже есть.':'이미 존재하는 아이디입니다.'); return; }
+    const insertRow={ id:newId, company: company||newId, contact_name:contactName, country, region,
+      phone: (digits?phone:''), email,
+      supplier_company: (document.getElementById('emSupplier').value.trim()||null),
+      status: document.getElementById('emStatus').value||'approved',
+      password_hash: await sha256Hex(newPw) };
+    const { error } = await sb.from('kt_users').insert(insertRow);
+    if(error){ errEl.textContent=(error.message||error.code); return; }
+    await loadPendingSignups();
+    renderPendingSignups();
+    closeEditMemberModal();
+    alert(lang==='ru'?'Участник добавлен.':'회원이 추가되었습니다.');
+    return;
+  }
+
   // MASTER 는 검증 없이 저장한다. 오래된·불완전한 회원 데이터를 손보는 계정이라
   // 필수값·형식을 강제하면 정작 고쳐야 할 행을 저장할 수 없다.
   const isMasterEdit = userRole(currentUser).isMaster;
@@ -4399,6 +4436,126 @@ async function saveEditMember(){
   renderPendingSignups();
   closeEditMemberModal();
   alert(t.myInfoSaved);
+}
+
+// ═══ 회원별 권한 (MASTER 전용) ═══
+// DB 컬럼을 못 늘리므로 kt_company_prices 에 숨김행으로 저장한다:
+//   company='@PERMS', rep=<회원 아이디>, buy_price=<권한 비트마스크 정수>
+// 카테고리 8개 × (보기 v / 쓰기 w / 삭제 d) = 24비트 + 회원추가(24번 비트).
+const PERM_CATS=[
+  {key:'parts',ko:'부품검색',ru:'Поиск деталей'},
+  {key:'pn',ko:'품번조회',ru:'Артикулы'},
+  {key:'order',ko:'주문',ru:'Заказ'},
+  {key:'adminOrders',ko:'주문관리',ru:'Упр. заказами'},
+  {key:'inventory',ko:'재고관리',ru:'Склад'},
+  {key:'shipments',ko:'출고관리',ru:'Отгрузки'},
+  {key:'price',ko:'가격정보',ru:'Цены'},
+  {key:'memberManagement',ko:'회원관리',ru:'Участники'}
+];
+const _PA=['v','w','d'];
+const PERM_ADD_BIT=24;
+function encodePerms(p){ let n=0; PERM_CATS.forEach((c,i)=>_PA.forEach((a,j)=>{ if(p&&p[c.key]&&p[c.key][a]) n|=(1<<(i*3+j)); })); if(p&&p.add) n|=(1<<PERM_ADD_BIT); return n>>>0; }
+function decodePerms(n){ n=Number(n)||0; const p={add:!!(n&(1<<PERM_ADD_BIT))}; PERM_CATS.forEach((c,i)=>{ p[c.key]={}; _PA.forEach((a,j)=>{ p[c.key][a]=!!(n&(1<<(i*3+j))); }); }); return p; }
+let memberPermsById={};   // 아이디(대문자) -> 권한 비트마스크 (설정된 회원만)
+async function loadAllMemberPerms(){
+  memberPermsById={};
+  try{ const { data } = await sb.from('kt_company_prices').select('rep,buy_price').eq('company','@PERMS');
+    (data||[]).forEach(r=>{ memberPermsById[String(r.rep||'').trim().toUpperCase()]=Number(r.buy_price)||0; }); }catch(e){}
+}
+// 현재 사용자 관점의 권한. MASTER=전부 허용. 권한 미설정 회원은 null → 기존 역할 규칙을 그대로 쓴다.
+function _myPermObj(){ if(!currentUser) return null; const k=String(currentUser.id||'').trim().toUpperCase(); return memberPermsById[k]!==undefined?decodePerms(memberPermsById[k]):null; }
+function permView(cat){ if(userRole(currentUser).isMaster) return true; const p=_myPermObj(); return p?!!(p[cat]&&p[cat].v):null; }
+function permWrite(cat){ if(userRole(currentUser).isMaster) return true; const p=_myPermObj(); return p?!!(p[cat]&&p[cat].w):null; }
+function permDelete(cat){ if(userRole(currentUser).isMaster) return true; const p=_myPermObj(); return p?!!(p[cat]&&p[cat].d):null; }
+function canAddMembersNow(){ if(userRole(currentUser).isMaster) return true; const p=_myPermObj(); return !!(p&&p.add); }
+// 쓰기/삭제 차단 안내. 권한 미설정(null)이면 기존대로 통과.
+function guardWrite(cat){ if(permWrite(cat)===false){ alert(lang==='ru'?'Нет прав на изменение.':'수정(쓰기) 권한이 없습니다.'); return false; } return true; }
+function guardDelete(cat){ if(permDelete(cat)===false){ alert(lang==='ru'?'Нет прав на удаление.':'삭제 권한이 없습니다.'); return false; } return true; }
+// 보기 권한이 꺼진 탭은 숨긴다(제한만; 역할이 원래 안 주는 탭을 새로 열지는 않는다).
+function applyPermTabVisibility(){
+  const pobj=_myPermObj();
+  if(!pobj) return;   // 권한 미설정 회원은 기존 역할 규칙 그대로
+  const map={ 'tab-parts':'parts','tab-pn':'pn','tab-order':'order','tab-adminOrders':'adminOrders','tab-inventory':'inventory','tab-shipments':'shipments','tab-price':'price','tab-memberManagement':'memberManagement' };
+  Object.keys(map).forEach(tabId=>{ const el=document.getElementById(tabId); if(el && !pobj[map[tabId]].v) el.style.display='none'; });
+}
+
+// 권한 편집 모달 (MASTER 전용)
+function openPermModal(id){
+  if(!userRole(currentUser).isMaster) return;
+  const ru=lang==='ru';
+  const p=decodePerms(memberPermsById[String(id).trim().toUpperCase()]||0);
+  const rows=PERM_CATS.map(c=>`<tr>
+    <td style="padding:6px 8px;color:var(--text)">${ru?c.ru:c.ko}</td>
+    ${_PA.map(a=>`<td style="text-align:center;padding:6px 8px"><input type="checkbox" data-cat="${c.key}" data-act="${a}" ${p[c.key][a]?'checked':''} style="width:16px;height:16px;cursor:pointer"></td>`).join('')}
+  </tr>`).join('');
+  const ov=document.createElement('div');
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:99999;padding:16px';
+  ov.innerHTML=`<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;max-width:460px;width:100%;max-height:90vh;overflow:auto;box-shadow:0 12px 40px rgba(0,0,0,.35)">
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--border)">
+      <b style="color:var(--text)">${(ru?'Права: ':'권한: ')+escapeHtml(String(id))}</b>
+      <button class="_pmClose" style="background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer">✕</button>
+    </div>
+    <div style="padding:16px 20px">
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead><tr style="color:var(--muted);border-bottom:1px solid var(--border)">
+          <th style="text-align:left;padding:6px 8px">${ru?'Раздел':'카테고리'}</th>
+          <th style="padding:6px 8px">${ru?'Просм.':'보기'}</th>
+          <th style="padding:6px 8px">${ru?'Изм.':'쓰기'}</th>
+          <th style="padding:6px 8px">${ru?'Удал.':'삭제'}</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <label style="display:flex;align-items:center;gap:8px;margin-top:14px;color:var(--text);font-size:13px;cursor:pointer">
+        <input type="checkbox" class="_pmAdd" ${p.add?'checked':''} style="width:16px;height:16px"> ${ru?'Право добавлять участников':'회원추가 권한'}
+      </label>
+      <div style="font-size:11px;color:var(--muted);margin-top:8px">${ru?'Ничего не отмечено = стандартные права по роли.':'아무것도 체크 안 하면 역할 기본값으로 동작합니다.'}</div>
+      <button class="_pmSave news-btn-primary" style="width:100%;padding:11px;margin-top:16px">${ru?'Сохранить':'저장'}</button>
+    </div>
+  </div>`;
+  document.body.appendChild(ov);
+  const close=()=>ov.remove();
+  ov.querySelector('._pmClose').onclick=close;
+  ov.addEventListener('mousedown',e=>{ if(e.target===ov)close(); });
+  ov.querySelector('._pmSave').onclick=async()=>{
+    const np={add:ov.querySelector('._pmAdd').checked};
+    PERM_CATS.forEach(c=>{ np[c.key]={}; });
+    ov.querySelectorAll('input[data-cat]').forEach(cb=>{ np[cb.dataset.cat][cb.dataset.act]=cb.checked; });
+    const n=encodePerms(np);
+    const { error } = await sb.from('kt_company_prices').upsert({ company:'@PERMS', rep:String(id).trim(), buy_price:n, supply_price:null, updated_at:new Date().toISOString() },{onConflict:'company,rep'});
+    if(error){ alert((lang==='ru'?'Ошибка сохранения':'저장 실패')+'\n['+(error.message||error.code)+']'); return; }
+    memberPermsById[String(id).trim().toUpperCase()]=n;
+    close();
+    alert(lang==='ru'?'Права сохранены.':'권한이 저장되었습니다.');
+  };
+}
+
+// 회원 추가 (editMemberModal 을 '추가 모드'로 재사용)
+let _memberModalMode='edit';
+function openAddMemberModal(){
+  if(!canAddMembersNow()) return;
+  const t=T[lang];
+  _memberModalMode='add';
+  document.getElementById('emId').value='';
+  const idd=document.getElementById('emIdDisplay');
+  idd.value=''; idd.disabled=false; idd.style.background='var(--surface)'; idd.style.color='var(--text)';
+  idd.oninput=function(){ this.value=this.value.toUpperCase(); };
+  document.getElementById('emCompany').value='';
+  document.getElementById('emSupplier').value='';
+  document.getElementById('emSupplierWrap').style.display=userRole(currentUser).isMaster?'':'none';
+  document.getElementById('emContactName').value='';
+  document.getElementById('emCountry').value='';
+  document.getElementById('emRegion').value='';
+  applyPhoneToModal('em','','');
+  document.getElementById('emEmail').value='';
+  const statusSel=document.getElementById('emStatus');
+  statusSel.innerHTML=[['approved',t.signupStatusApproved],['pending',t.signupStatusPending],['rejected',t.signupStatusRejected]]
+    .map(([v,label])=>`<option value="${v}">${escapeHtml(label)}</option>`).join('');
+  statusSel.value='approved';
+  document.getElementById('emStatusWrap').style.display='';
+  document.getElementById('emNewPw').value='';
+  document.getElementById('editMemberErr').textContent='';
+  const title=document.getElementById('i18n-editmembertitle'); if(title) title.textContent=(lang==='ru'?'Добавить участника':'회원 추가');
+  document.getElementById('editMemberModal').classList.add('show');
 }
 let myCompanyOrderRows=[]; // 내가 신청한 주문내역(회사 전체, 그룹화용)
 async function loadMyCompanyOrders(){
@@ -4862,6 +5019,7 @@ function refreshAdminTexts(){
   setTxt('i18n-signup-th-supplier', t.signupThSupplier);
   setTxt('i18n-signup-th-status', t.signupThStatus);
   setTxt('i18n-memberdl', t.orderDl);
+  setTxt('i18n-addmember', lang==='ru'?'Добавить участника':'회원 추가');
   setTxt('i18n-signup-th-actions', lang==='ru'?'Изм./Удал.':'수정/삭제');
   setTxt('i18n-resetallmembers', t.resetAllMembersBtn);
   setTxt('i18n-resetallorders', t.resetAllOrdersBtn);
@@ -5232,6 +5390,7 @@ function displayClientName(name){
 }
 async function handleShipmentsUpload(event){
   const t=T[lang];
+  if(!guardWrite('shipments')){ event.target.value=''; return; }
   const file=event.target.files[0];
   if(!file) return;
   const reader=new FileReader();
@@ -5399,6 +5558,7 @@ async function saveEditShipment(){
 }
 async function deleteShipment(id){
   const t=T[lang];
+  if(!guardDelete('shipments')) return;
   if(!confirm(t.shipDeleteConfirm)) return;
   const { error } = await sb.from('kt_shipments').delete().eq('id', id);
   if(error){ alert(t.reqFail+'\n\n['+(error.message||error.code)+']'); return; }
@@ -6044,6 +6204,7 @@ function downloadInventoryTemplate(){
 }
 async function handleInventoryUpload(event){
   const t=T[lang];
+  if(!guardWrite('inventory')){ event.target.value=''; return; }
   const file=event.target.files[0];
   if(!file) return;
   const reader=new FileReader();
@@ -8055,6 +8216,7 @@ function enterApp(user){
   if(tabReset) tabReset.style.display = (user.is_admin && !user.supplier_company && !role.isKituramiHQ) ? 'block' : 'none';
   loadOrderFeedStamps().then(updateOrderUnreadDots);   // 주문 알림 점 (탭을 열기 전에도 보이게)
   refreshSignupDot();                                  // 회원관리 알림 점 (대기 가입 신청)
+  loadAllMemberPerms().then(applyPermTabVisibility);   // 회원별 권한 로드 후 탭 노출 적용
   startLive();                                         // 폴링(8초)으로 실시간처럼 갱신
   startRealtime();                                     // Realtime 구독(활성화 시 즉시 반영)
   Promise.all([loadMyOrderTotals(), loadInventory(), loadGlobalSuppliedTotals(), loadReceivedOrderTotals(), loadPrices(), loadPNOverrides(), loadCompanyPrices(),
