@@ -3576,6 +3576,7 @@ async function loadOrderAllocations(){
 // 실제 전달은 sendAllocations()(전송 버튼)에서 일괄 upsert 한다.
 let pendingAllocations={}; // key company||rep -> 전송 대기 중인 즉시공급 수량
 function stageGroupAllocation(company, rep, value){
+  if(!guardWrite('adminOrders')){ renderAdminOrders(); return; }
   const key=company+'||'+rep;
   const newVal=Math.max(0, parseInt(value,10)||0);
   const cur=(orderAllocations[key]&&orderAllocations[key].allocated)||0;
@@ -4101,6 +4102,7 @@ function gradeSelectHtml(u){
   return `<select onchange="updateMemberGrade('${cEsc}','${sEsc}',this.value)" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px">${opts}</select>`;
 }
 async function updateMemberGrade(buyerCompany, supplierCompany, grade){
+  if(!guardWrite('memberManagement')){ renderPendingSignups(); return; }
   const role=userRole(currentUser);
   if(!role.isMaster && !role.isCompanyAdmin) return;
   const buyer=String(buyerCompany||'').trim().toUpperCase();
@@ -4405,6 +4407,7 @@ async function saveEditMember(){
     return;
   }
 
+  if(!guardWrite('memberManagement')) return;   // 회원 정보 수정은 회원관리 쓰기 권한
   // MASTER 는 검증 없이 저장한다. 오래된·불완전한 회원 데이터를 손보는 계정이라
   // 필수값·형식을 강제하면 정작 고쳐야 할 행을 저장할 수 없다.
   const isMasterEdit = userRole(currentUser).isMaster;
@@ -5618,6 +5621,7 @@ function openEditShipmentModal(id){
 function closeEditShipmentModal(){ document.getElementById('editShipmentModal').classList.remove('show'); }
 function closeEditShipmentModalBg(e){ if(e.target===document.getElementById('editShipmentModal')) closeEditShipmentModal(); }
 async function saveEditShipment(){
+  if(!guardWrite('shipments')) return;
   const t=T[lang];
   const errEl=document.getElementById('editShipmentErr');
   errEl.textContent='';
@@ -6878,6 +6882,7 @@ function fillCompanyGpInputs(){
   if(g('cgpD')) g('cgpD').value=Math.round(companySupplyGp.d*1000)/10;
 }
 async function saveCompanyGp(){
+  if(!guardWrite('price')) return;
   const role=userRole(currentUser);
   if(!role.isCompanyAdmin) return;
   const read=id=>Number(document.getElementById(id).value)/100;
@@ -7058,6 +7063,7 @@ function renderPriceCompany(){
   scheduleSplitTableResync('pricecalc-hdr-col','pricecalc-body-col','priceCalcTbody','fixed');
 }
 async function onCompanyPriceEdit(rep, field, value){
+  if(!guardWrite('price')){ renderPriceActive(); return; }
   const role=userRole(currentUser);
   if(!role.isCompanyAdmin) return;
   const num=value===''?null:Number(value);
@@ -7146,6 +7152,7 @@ function downloadPriceCompany(){
 
 // ── 인라인 수정 ──
 async function onPriceCellEdit(rowNo, field, value){
+  if(!guardWrite('price')){ renderPriceActive(); return; }
   const r=priceCalcData.find(x=>x.row_no===rowNo);
   if(!r) return;
   let num=value===''?null:Number(value);
