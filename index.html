@@ -2546,12 +2546,14 @@ function renderPNChunk(startFrom=0){
   }
   const kw=document.getElementById('pnInput').value.trim().toLowerCase();
   const chunk=_pnFiltered.slice(startFrom, startFrom+_pnChunk);
+  const showEng=canViewEngName();
+  const engTd=r=>showEng?`<td style="font-size:11px;color:var(--accent2);font-weight:600">${escapeHtml(engNameText(r.rep))}</td>`:'';
   const rows=chunk.map(r=>{
     const name=isKo?hlPN(r.name_ko,kw):hlPN(r.name_ru||r.name_ko,kw);
     const spec=isKo?`<td style="font-size:11px;color:var(--muted)">${hlPN(r.spec,kw)}</td>`:'';
     return `<tr>
-      <td class="sticky-col1" style="font-weight:500;font-size:11px">${name}${engNameHtml(r.rep)}</td>
-      ${spec}
+      <td class="sticky-col1" style="font-weight:500;font-size:11px">${name}</td>
+      ${spec}${engTd(r)}
       <td><span class="pn-badge pn-rep">${hlPN(r.rep,kw)}</span></td>
       <td>${(r.compats||[]).map(c=>`<span class="pn-badge pn-cur">${hlPN(c,kw)}</span>`).join(' ')}</td>
       <td>${r.final?`<span class="pn-badge pn-fin">${hlPN(r.final,kw)}</span>`:''}</td>
@@ -2568,7 +2570,8 @@ function renderPNChunk(startFrom=0){
     const compatsHtml=(r.compats||[]).map(c=>`<span class="pn-badge pn-cur">${hlPN(c,kw)}</span>`).join(' ')||'<span style="font-size:11px;color:var(--muted)">-</span>';
     const finalHtml=r.final?`<span class="pn-badge pn-fin">${hlPN(r.final,kw)}</span>`:'<span style="font-size:11px;color:var(--muted)">-</span>';
     return `<div class="part-card" style="border-bottom:1px solid var(--border);padding:10px 0">
-      <div class="pc-name" style="font-weight:600">${name}${engNameHtml(r.rep)}</div>
+      <div class="pc-name" style="font-weight:600">${name}</div>
+      ${showEng&&engNameText(r.rep)?`<div style="font-size:11px;color:var(--accent2);font-weight:600;margin-top:2px">${escapeHtml(engNameText(r.rep))}</div>`:''}
       ${specHtml}
       <div style="margin-top:8px;display:flex;flex-direction:column;gap:6px">
         <div><span style="font-size:10px;color:var(--muted);display:block;margin-bottom:2px">${t.pnH1}</span><span class="pn-badge pn-rep">${hlPN(r.rep,kw)}</span></div>
@@ -2605,15 +2608,18 @@ function renderPN(){
 
   // colgroup & 헤더 업데이트
   const isKo=lang==='ko';
-  const cols = isKo ? '<col><col><col><col><col>' : '<col><col><col><col>';
+  const showEng=canViewEngName();
+  const engCol=showEng?'<col>':'';
+  const cols = isKo ? ('<col><col>'+engCol+'<col><col><col>') : ('<col>'+engCol+'<col><col><col>');
   ['pn-hdr-col','pn-body-col'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=cols;});
 
   const thead=document.getElementById('pn-thead');
   if(thead){
     const brLabel=(x)=>String(x||'').replace(' (','<br>(');
+    const engTh=showEng?`<th>${lang==='ru'?'Англ. название':'영문품명'}</th>`:'';
     thead.innerHTML=isKo
-      ? `<tr><th class="sticky-col1">${t.pnH0}</th><th>${t.pnH0s}</th><th id="pn-th1">${brLabel(t.pnH1)}</th><th id="pn-th2">${brLabel(t.pnH2)}</th><th id="pn-th3">${brLabel(t.pnH3)}</th></tr>`
-      : `<tr><th class="sticky-col1">${t.pnH0}</th><th id="pn-th1">${brLabel(t.pnH1)}</th><th id="pn-th2">${brLabel(t.pnH2)}</th><th id="pn-th3">${brLabel(t.pnH3)}</th></tr>`;
+      ? `<tr><th class="sticky-col1">${t.pnH0}</th><th>${t.pnH0s}</th>${engTh}<th id="pn-th1">${brLabel(t.pnH1)}</th><th id="pn-th2">${brLabel(t.pnH2)}</th><th id="pn-th3">${brLabel(t.pnH3)}</th></tr>`
+      : `<tr><th class="sticky-col1">${t.pnH0}</th>${engTh}<th id="pn-th1">${brLabel(t.pnH1)}</th><th id="pn-th2">${brLabel(t.pnH2)}</th><th id="pn-th3">${brLabel(t.pnH3)}</th></tr>`;
   }
 
   // 청크 렌더링
@@ -5746,9 +5752,16 @@ function syncSplitTableColumnWidths(hdrColId, bodyColId, tbodyId, mode){
             return { caps:[...LEAD_KO, 84, 84], noFill:true, rigid:allRigidFrom(2,7) };
           }
           if(tbodyId==='pnTbody'){
-            // KO: 품명|규격|대표|호환|최종 (5) / RU: 품명|대표|호환|최종 (4)
-            if(n===5) return { caps:[...LEAD_KO], noFill:true, rigid:[2,3,4] };
-            return { caps:[...LEAD_RU], noFill:true, rigid:[1,2,3] };
+            // KO: 품명|규격|[영문품명]|대표|호환|최종 / RU: 품명|[영문품명]|대표|호환|최종
+            const isKoP=(lang==='ko');
+            const eng=canViewEngName();
+            if(isKoP){
+              const caps=eng?[280,260,220,110,150,110]:[280,260,110,150,110];
+              const s=eng?3:2; return { caps, noFill:true, rigid:[s,s+1,s+2] };
+            } else {
+              const caps=eng?[280,220,110,150,110]:[280,110,150,110];
+              const s=eng?2:1; return { caps, noFill:true, rigid:[s,s+1,s+2] };
+            }
           }
           if(tbodyId==='inventoryTbody'){
             // 앞: 품명|규격|대표품번|품번 (RU 는 규격 제외)
