@@ -2686,6 +2686,7 @@ async function loadPNOverrides(){
 }
 async function handlePNUpload(event){
   const t=T[lang];
+  if(!guardWrite('pn')){ event.target.value=''; return; }
   const file=event.target.files[0];
   if(!file) return;
   const reader=new FileReader();
@@ -3095,6 +3096,7 @@ async function submitOrder(){
 
 async function handleOrderUpload(event){
   const t=T[lang];
+  if(!guardWrite('order')){ event.target.value=''; return; }
   const file=event.target.files[0];
   if(!file) return;
   const reader=new FileReader();
@@ -7071,6 +7073,7 @@ async function onCompanyPriceEdit(rep, field, value){
 // ── 회사 가격정보 엑셀 업로드 (다운로드 양식 그대로) ──
 async function handleCompanyPriceUpload(event){
   const role=userRole(currentUser);
+  if(!guardWrite('price')){ event.target.value=''; return; }
   const file=event.target.files[0];
   if(!file) return;
   const reader=new FileReader();
@@ -7325,6 +7328,7 @@ async function resetPriceCalcData(){
 // 원가 시세표와 같은 방식: 호환품번(변경)을 찾아 바로 오른쪽 칸의 수량을
 // 출고(18y~)에 기재한다. 계산식의 다른 값은 건드리지 않는다.
 function handleShipQtyUpload(event){
+  if(!guardWrite('price')){ event.target.value=''; return; }
   const file=event.target.files[0];
   if(!file) return;
   const reader=new FileReader();
@@ -7498,6 +7502,7 @@ function findCalcParam(arr, ...words){
 }
 // ── 계산식 엑셀 업로드 ──
 async function handlePriceCalcUpload(event){
+  if(!guardWrite('price')){ event.target.value=''; return; }
   const file=event.target.files[0];
   if(!file) return;
   const reader=new FileReader();
