@@ -3793,11 +3793,13 @@ function renderAdminOrders(){
   const emptyEl=document.getElementById('adminOrderEmpty');
 
   const specTh=isKo?`<th id="i18n-adminh-spec" rowspan="2" style="padding:9px 12px">${t.thSpec}</th>`:'';
+  const showEng=canViewEngName();
+  const engTh=showEng?`<th rowspan="2" style="padding:9px 12px">${lang==='ru'?'Англ. название':'영문품명'}</th>`:'';
   thead.innerHTML=`<tr style="border-bottom:1px solid var(--border);color:var(--muted);text-align:left">
       <th id="i18n-adminh-company" rowspan="2" style="padding:9px 12px">${t.adminHCompany}</th>
       <th id="i18n-adminh-user" rowspan="2" style="padding:9px 12px">${t.adminHUser}</th>
       <th id="i18n-adminh-name" rowspan="2" style="padding:9px 12px">${t.adminHName}</th>
-      ${specTh}
+      ${specTh}${engTh}
       <th id="i18n-adminh-rep" rowspan="2" style="padding:9px 12px">${t.adminHRep}</th>
       <th colspan="2" style="text-align:center;border-bottom:1px solid var(--border);border-left:2px solid var(--border);font-size:13px;font-weight:700;color:var(--text);padding:6px">${t.grpOrderStatus}</th>
       <th colspan="4" style="text-align:center;border-bottom:1px solid var(--border);border-left:2px solid var(--border);font-size:13px;font-weight:700;color:var(--text);padding:6px">${t.grpDecision}</th>
@@ -3831,11 +3833,12 @@ function renderAdminOrders(){
     return;
   }
   emptyEl.style.display='none';
-  const fixedColCount = isKo?5:4;
+  const fixedColCount = (isKo?5:4)+(showEng?1:0);
 
   tbody.innerHTML=groups.map(g=>{
     const name=lang==='ko'?g.name_ko:(g.name_ru||g.name_ko);
     const specTd=isKo?`<td class="wrap-ok" style="padding:9px 12px;color:var(--muted)">${escapeHtml(g.spec)}</td>`:'';
+    const engTd=showEng?`<td class="wrap-ok" style="padding:9px 12px;color:var(--accent2);font-weight:600">${escapeHtml(engNameText(g.rep))}</td>`:'';
     const ratePct=(g.supplyRate*100).toFixed(1)+'%';
     const repEsc=g.rep.replace(/'/g,"\\'");
     const companyEsc=g.company.replace(/'/g,"\\'");
@@ -3845,8 +3848,8 @@ function renderAdminOrders(){
     let html=`<tr style="border-bottom:1px solid var(--border);font-weight:700;background:var(--surface2)">
       <td style="padding:9px 12px">${escapeHtml(g.company)}</td>
       <td style="padding:9px 12px">${escapeHtml(g.user_id)}</td>
-      <td class="wrap-ok" style="padding:9px 12px">${escapeHtml(name)}${engNameHtml(g.rep)}</td>
-      ${specTd}
+      <td class="wrap-ok" style="padding:9px 12px">${escapeHtml(name)}</td>
+      ${specTd}${engTd}
       <td style="padding:9px 12px"><span class="code">${escapeHtml(g.rep)}</span></td>
       <td style="padding:9px 12px;border-left:2px solid var(--border)"></td>
       <td style="padding:9px 16px 9px 12px;text-align:right">${g.totalOrderQty}</td>
@@ -3912,7 +3915,7 @@ function renderAdminOrders(){
     return `<div class="order-card">
       <div style="display:flex;justify-content:space-between;align-items:start">
         <div>
-          <div class="pc-name">${escapeHtml(name)}${engNameHtml(g.rep)} ${g.changeHistory?`<span style="color:#3b82f6;font-size:11px;font-weight:700;text-decoration:underline;cursor:pointer" onclick="openAdminChangeHistoryModal('${String(g.company).replace(/'/g,"\\'")}','${String(g.rep).replace(/'/g,"\\'")}')">[${t.changeHistoryLabel}]</span>`:''}</div>
+          <div class="pc-name">${escapeHtml(name)}${canViewEngName()&&engNameText(g.rep)?` <span style="color:var(--accent2);font-weight:600">(${escapeHtml(engNameText(g.rep))})</span>`:''} ${g.changeHistory?`<span style="color:#3b82f6;font-size:11px;font-weight:700;text-decoration:underline;cursor:pointer" onclick="openAdminChangeHistoryModal('${String(g.company).replace(/'/g,"\\'")}','${String(g.rep).replace(/'/g,"\\'")}')">[${t.changeHistoryLabel}]</span>`:''}</div>
           ${isKo?`<div class="pc-spec">${escapeHtml(g.spec)}</div>`:''}
           <div class="code" style="margin-top:4px">${escapeHtml(g.rep)}</div>
         </div>
@@ -4790,9 +4793,11 @@ function renderAdminMyOrders(){
   const emptyEl=document.getElementById('adminMyOrdersEmpty');
 
   const specTh=isKo?`<th rowspan="2" style="padding:9px 12px">${t.thSpec}</th>`:'';
+  const showEng=canViewEngName();
+  const engTh=showEng?`<th rowspan="2" style="padding:9px 12px">${lang==='ru'?'Англ. название':'영문품명'}</th>`:'';
   thead.innerHTML=`<tr style="border-bottom:1px solid var(--border);color:var(--muted);text-align:left">
       <th rowspan="2" style="padding:9px 12px">${t.adminHName}</th>
-      ${specTh}
+      ${specTh}${engTh}
       <th rowspan="2" style="padding:9px 12px">${t.adminHRep}</th>
       <th rowspan="2" style="text-align:right;padding:9px 16px 9px 12px;border-left:2px solid var(--border)">${t.colStock}</th>
       <th colspan="2" style="text-align:center;border-bottom:1px solid var(--border);border-left:2px solid var(--border);font-size:13px;font-weight:700;color:var(--text);padding:6px">${t.grpOrderStatus}</th>
@@ -4824,19 +4829,20 @@ function renderAdminMyOrders(){
     return;
   }
   emptyEl.style.display='none';
-  const fixedColCount = isKo?4:3;
+  const fixedColCount = (isKo?4:3)+(showEng?1:0);
 
   tbody.innerHTML=groups.map(g=>{
     const name=lang==='ko'?g.name_ko:(g.name_ru||g.name_ko);
     const specTd=isKo?`<td class="wrap-ok" style="padding:9px 12px;color:var(--muted)">${escapeHtml(g.spec)}</td>`:'';
+    const engTd=showEng?`<td class="wrap-ok" style="padding:9px 12px;color:var(--accent2);font-weight:600">${escapeHtml(engNameText(g.rep))}</td>`:'';
     const ratePct=(g.supplyRate*100).toFixed(1)+'%';
     const stockText=g.stockDisplay===null?'-':g.stockDisplay;
     const repEsc=g.rep.replace(/'/g,"\\'");
     const decisionCell = buyerDecisionHtml(g, repEsc);
 
     let html=`<tr style="border-bottom:1px solid var(--border);font-weight:700;background:var(--surface2)">
-      <td class="wrap-ok" style="padding:9px 12px">${escapeHtml(name)}${engNameHtml(g.rep)}</td>
-      ${specTd}
+      <td class="wrap-ok" style="padding:9px 12px">${escapeHtml(name)}</td>
+      ${specTd}${engTd}
       <td style="padding:9px 12px"><span class="code">${escapeHtml(g.rep)}</span></td>
       <td style="padding:9px 16px 9px 12px;text-align:right;border-left:2px solid var(--border);color:var(--muted)">${stockText}</td>
       <td style="padding:9px 12px;border-left:2px solid var(--border)"></td>
@@ -4904,7 +4910,7 @@ function renderAdminMyOrders(){
       </div>`;
     })();
     return `<div class="order-card">
-      <div class="pc-name">${escapeHtml(name)}${engNameHtml(g.rep)} ${g.changeHistory?`<span style="color:#3b82f6;font-size:11px;font-weight:700;text-decoration:underline;cursor:pointer" onclick="openChangeHistoryModal('${String(g.rep).replace(/'/g,"\\'")}')">[${t.changeHistoryLabel}]</span>`:''}</div>
+      <div class="pc-name">${escapeHtml(name)}${canViewEngName()&&engNameText(g.rep)?` <span style="color:var(--accent2);font-weight:600">(${escapeHtml(engNameText(g.rep))})</span>`:''} ${g.changeHistory?`<span style="color:#3b82f6;font-size:11px;font-weight:700;text-decoration:underline;cursor:pointer" onclick="openChangeHistoryModal('${String(g.rep).replace(/'/g,"\\'")}')">[${t.changeHistoryLabel}]</span>`:''}</div>
       ${isKo?`<div class="pc-spec">${escapeHtml(g.spec)}</div>`:''}
       <div class="code" style="margin-top:4px">${escapeHtml(g.rep)}</div>
       <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:12px">
@@ -5811,11 +5817,13 @@ function syncSplitTableColumnWidths(hdrColId, bodyColId, tbodyId, mode){
             return { caps:[...lead, ...qty], noFill:true, rigid:allRigidFrom((isKoI?2:1)+(engI?1:0), n) };
           }
           if(tbodyId==='shipmentsTbody'){
-            // KO: 품명|규격|대표품번|품번|거래처|날짜|수량|작업 (8) / RU: 규격 제외 (7)
-            // 출고·수정/삭제 열은 러시아어(Отгружено, Изменить/Удалить)가 길어 더 넓게.
-            // 수정/삭제: 두 버튼 묶음 ~145 + 셀 패딩 → 180 확보.
-            if(n===8) return { caps:[280,260,110,110,120,84,90,180], noFill:true, rigid:allRigidFrom(2,8) };
-            return { caps:[280,110,110,120,84,90,180], noFill:true, rigid:allRigidFrom(1,7) };
+            // 품명|[규격]|[영문품명]|대표품번|품번|거래처|날짜|수량|작업
+            const isKoSh=(typeof lang!=='undefined' && lang==='ko');
+            const engSh=canViewEngName();
+            const lead=isKoSh?(engSh?[280,260,220,110]:[280,260,110]):(engSh?[280,220,110]:[280,110]);
+            const caps=[...lead, 110, 120, 84, 90, 180];   // 품번|거래처|날짜|수량|작업
+            const s=(isKoSh?2:1)+(engSh?1:0);
+            return { caps, noFill:true, rigid:allRigidFrom(s, n) };
           }
           if(tbodyId==='orderTbody'){
             // 도면번호 | 품명 | (규격:KO만) | 대표품번 | 모델열×M | [가격] [주문접수] [보유재고] [주문]
@@ -5977,9 +5985,11 @@ function renderShipmentsList(){
   if(lastUpdatedEl) lastUpdatedEl.textContent = latest ? t.invLastUpdated(formatNewsDate(new Date(latest).getTime())) : '';
 
   const editDelLabel=t.signupEdit+'/'+t.signupDelete;   // 수정/삭제
+  const showEng=canViewEngName();
+  const engLabel=lang==='ru'?'Англ. название':'영문품명';
   const cols = isKo
-    ? [t.adminHName, t.thSpec, t.invHMaster, t.shipThRep, t.shipThClient, t.shipThDate, t.shipThQty, editDelLabel]
-    : [t.adminHName, t.invHMaster, t.shipThRep, t.shipThClient, t.shipThDate, t.shipThQty, editDelLabel];
+    ? [t.adminHName, t.thSpec, ...(showEng?[engLabel]:[]), t.invHMaster, t.shipThRep, t.shipThClient, t.shipThDate, t.shipThQty, editDelLabel]
+    : [t.adminHName, ...(showEng?[engLabel]:[]), t.invHMaster, t.shipThRep, t.shipThClient, t.shipThDate, t.shipThQty, editDelLabel];
   const colgroupHtml=cols.map(()=>`<col>`).join('');
   ['ship-hdr-col','ship-body-col'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=colgroupHtml;});
   // 헤더 글자는 모두 각 셀 중앙 정렬 (본문 셀 정렬은 그대로 둔다)
@@ -6000,8 +6010,8 @@ function renderShipmentsList(){
     const nameText=pnInfo ? (isKo?pnInfo.name_ko:(pnInfo.name_ru||pnInfo.name_ko)) : '';
     const specTd=isKo?`<td class="wrap-ok" style="padding:9px 12px;color:var(--muted)">${escapeHtml(pnInfo?pnInfo.spec:'')}</td>`:'';
     return `<tr>
-    <td class="wrap-ok" style="padding:9px 12px;font-weight:500">${escapeHtml(nameText)}${engNameHtml(masterRep)}</td>
-    ${specTd}
+    <td class="wrap-ok" style="padding:9px 12px;font-weight:500">${escapeHtml(nameText)}</td>
+    ${specTd}${showEng?`<td class="wrap-ok" style="padding:9px 12px;color:var(--accent2);font-weight:600">${escapeHtml(engNameText(masterRep))}</td>`:''}
     <td style="padding:9px 12px">${masterRep?`<span class="code">${escapeHtml(masterRep)}</span>`:''}</td>
     <td style="padding:9px 12px"><span class="code">${escapeHtml(r.rep)}</span></td>
     <td style="padding:9px 12px">${escapeHtml(displayClientName(r.client_name))}</td>
@@ -6020,7 +6030,8 @@ function renderShipmentsList(){
     const specHtml=isKo && pnInfo && pnInfo.spec ? `<div class="pc-spec">${escapeHtml(pnInfo.spec)}</div>` : '';
     const masterHtml=masterRep?`<div style="font-size:11px;color:var(--muted);margin-top:2px">${t.invHMaster}: <span class="code">${escapeHtml(masterRep)}</span></div>`:'';
     return `<div class="order-card">
-    <div class="pc-name">${escapeHtml(nameText)}${engNameHtml(masterRep)}</div>
+    <div class="pc-name">${escapeHtml(nameText)}</div>
+    ${showEng&&masterRep&&engNameText(masterRep)?`<div style="font-size:11px;color:var(--accent2);font-weight:600;margin-top:2px">${escapeHtml(engNameText(masterRep))}</div>`:''}
     ${specHtml}
     <div class="code" style="margin-top:4px">${escapeHtml(r.rep)}</div>
     ${masterHtml}
