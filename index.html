@@ -5538,6 +5538,31 @@ function parseReportDate(text){
   const year=m[3];
   return `${year}-${month}-${day}`;
 }
+// 엑셀 날짜 일련번호 → 'YYYY-MM-DD'. 25569 = 1970-01-01 의 일련번호.
+// UTC 기준으로만 계산해 실행 시간대(한국 UTC+9 등)의 영향을 받지 않게 한다.
+function excelSerialToISO(n){
+  const num=Number(n);
+  if(!isFinite(num) || num<1) return null;
+  const d=new Date(Math.round((num-25569)*86400000));
+  return isNaN(d.getTime()) ? null : d.toISOString().slice(0,10);
+}
+// 로컬(한국) 기준 오늘. toISOString() 은 UTC 라 오전에는 하루 전 날짜가 나온다.
+function todayLocalISO(){
+  const d=new Date(), p=n=>String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`;
+}
+// 시트의 한 칸이 '날짜 서식' 셀이면 'YYYY-MM-DD' 로 돌려준다.
+// 서식(.z)에 y/m/d 가 있는 숫자 셀만 날짜로 보므로, 수량 같은 일반 숫자는 걸리지 않는다.
+function sheetCellDateISO(sheet, r, c){
+  const cell=sheet[XLSX.utils.encode_cell({r:r, c:c})];
+  if(!cell) return null;
+  if(cell.t==='d' && cell.v instanceof Date){
+    const p=n=>String(n).padStart(2,'0');
+    return `${cell.v.getFullYear()}-${p(cell.v.getMonth()+1)}-${p(cell.v.getDate())}`;
+  }
+  if(cell.t==='n' && cell.z && /[ymd]/i.test(String(cell.z))) return excelSerialToISO(cell.v);
+  return null;
+}
 const RU_MONTHS_REV=['','января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
 function formatShipDate(isoDate){
   if(!isoDate) return '';
@@ -5564,18 +5589,31 @@ async function handleShipmentsUpload(event){
   reader.onload=async function(e){
     try{
       const data=new Uint8Array(e.target.result);
-      const wb=XLSX.read(data,{type:'array'});
+      const wb=XLSX.read(data,{type:'array', cellNF:true});   // cellNF: 날짜 서식(.z) 을 읽어 날짜 칸을 가려내려고
       const sheet=wb.Sheets[wb.SheetNames[0]];
       const aoa=XLSX.utils.sheet_to_json(sheet,{header:1, defval:''});
 
-      // 보고서 제목 줄에서 날짜 추출 (예: "...за 7 июля 2026 г.")
+      // 출고일자 찾기 ① 보고서 제목 줄 (예: "...за 7 июля 2026 г.")
       let reportDate=null;
       for(let r=0;r<Math.min(6, aoa.length);r++){
         const v=(aoa[r]||[]).join(' ');
         const found=parseReportDate(v);
         if(found){ reportDate=found; break; }
       }
-      if(!reportDate) reportDate=new Date().toISOString().slice(0,10);
+      // ② 제목 줄이 없으면 상단의 '날짜 서식' 셀에서 찾는다 (엑셀 날짜로 적힌 본사 출고 양식).
+      //    표가 A1 이 아닌 곳에서 시작할 수 있어(예: I4~) 시트의 실제 범위(!ref)를 기준으로 훑는다.
+      if(!reportDate && sheet['!ref']){
+        const rng=XLSX.utils.decode_range(sheet['!ref']);
+        const maxR=Math.min(rng.e.r, rng.s.r+11);   // 표 시작부터 12행까지가 머리말 영역
+        for(let r=rng.s.r;r<=maxR && !reportDate;r++){
+          for(let c=rng.s.c;c<=rng.e.c;c++){
+            const iso=sheetCellDateISO(sheet, r, c);
+            if(iso){ reportDate=iso; break; }
+          }
+        }
+      }
+      // ③ 그래도 없으면 오늘(로컬 기준). UTC 로 잡으면 한국 오전엔 하루 전이 된다.
+      if(!reportDate) reportDate=todayLocalISO();
 
       // 헤더 문구("Артикул","Количество")를 찾아 열 위치를 확인 (품번 파일과 동일한 방식)
       let colArtikul=-1, colQty=-1;
