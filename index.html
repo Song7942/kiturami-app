@@ -452,19 +452,19 @@ input[type="text"]::placeholder{color:var(--muted)}
         <div id="suCompanyList" class="supplier-suggest" style="display:none"></div>
       </div>
       <input type="text" id="suContactName" placeholder="담당자명" oninput="this.value=this.value.toUpperCase()">
-      <div style="position:relative">
+      <div style="position:relative;display:none">
         <input type="text" id="suCountry" placeholder="국가" autocomplete="off" oninput="onCountryInput()" onfocus="onCountryInput()" onblur="setTimeout(()=>{const l=document.getElementById('suCountryList');if(l)l.style.display='none';},150)">
         <div id="suCountryList" class="supplier-suggest" style="display:none"></div>
       </div>
-      <div style="position:relative">
+      <div style="position:relative;display:none">
         <input type="text" id="suRegion" placeholder="지역(시/도)" autocomplete="off" oninput="onRegionInput()" onfocus="onRegionInput()" onblur="setTimeout(()=>{const l=document.getElementById('suRegionList');if(l)l.style.display='none';},150)">
         <div id="suRegionList" class="supplier-suggest" style="display:none"></div>
       </div>
-      <div style="display:flex;gap:6px;margin-bottom:10px">
+      <div style="gap:6px;margin-bottom:10px;display:none">
         <span id="suPhonePrefix" style="flex-shrink:0;min-width:52px;display:flex;align-items:center;justify-content:center;border:1px solid #ccc;border-radius:7px;color:#94a3b8;font-size:14px">+--</span>
         <input type="tel" id="suPhone" placeholder="휴대폰 번호 (숫자만)" style="flex:1;margin-bottom:0" oninput="this.value=this.value.replace(/[^0-9\- ]/g,'')" onblur="normalizePhoneOnBlur('suPhone')">
       </div>
-      <input type="email" id="suEmail" placeholder="이메일주소">
+      <input type="email" id="suEmail" placeholder="이메일주소" style="display:none">
       <div id="suSupplierWrap" style="position:relative">
         <input type="text" id="suSupplier" placeholder="구매처(거래처) 회사명" autocomplete="off" oninput="this.value=this.value.toUpperCase();onSupplierInput()" onfocus="onSupplierFocus()" onblur="setTimeout(()=>{const l=document.getElementById('suSupplierList');if(l)l.style.display='none';},150)">
         <div id="suSupplierList" class="supplier-suggest" style="display:none"></div>
@@ -996,8 +996,8 @@ input[type="text"]::placeholder{color:var(--muted)}
             <th id="i18n-signup-th-id">아이디</th>
             <th id="i18n-signup-th-supplier">구매처</th>
             <th id="i18n-signup-th-contact">담당자명</th>
-            <th id="i18n-signup-th-phone">휴대폰</th>
-            <th id="i18n-signup-th-email">이메일</th>
+            <th id="i18n-signup-th-phone" style="display:none">휴대폰</th>
+            <th id="i18n-signup-th-email" style="display:none">이메일</th>
             <th class="center" id="i18n-signup-th-status">상태</th>
             <th class="center" id="i18n-signup-th-actions">수정/삭제</th>
           </tr></thead>
@@ -1189,24 +1189,24 @@ input[type="text"]::placeholder{color:var(--muted)}
         <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" id="i18n-editmember-contact">담당자명</label>
         <input type="text" id="emContactName" oninput="this.value=this.value.toUpperCase()" style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)">
       </div>
-      <div style="margin-bottom:12px;position:relative">
+      <div style="margin-bottom:12px;position:relative;display:none">
         <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" id="i18n-editmember-country">국가</label>
         <input type="text" id="emCountry" autocomplete="off" oninput="onEmCountryInput()" onfocus="onEmCountryInput()" onblur="setTimeout(()=>{const l=document.getElementById('emCountryList');if(l)l.style.display='none';},150)" style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)">
         <div id="emCountryList" class="supplier-suggest" style="display:none"></div>
       </div>
-      <div style="margin-bottom:12px;position:relative">
+      <div style="margin-bottom:12px;position:relative;display:none">
         <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" id="i18n-editmember-region">지역(시/도)</label>
         <input type="text" id="emRegion" autocomplete="off" oninput="onEmRegionInput()" onfocus="onEmRegionInput()" onblur="setTimeout(()=>{const l=document.getElementById('emRegionList');if(l)l.style.display='none';},150)" style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)">
         <div id="emRegionList" class="supplier-suggest" style="display:none"></div>
       </div>
-      <div style="margin-bottom:12px">
+      <div style="margin-bottom:12px;display:none">
         <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" id="i18n-editmember-phone">휴대폰</label>
         <div style="display:flex;gap:6px">
           <span id="emPhonePrefix" style="flex-shrink:0;min-width:52px;display:flex;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:14px">+--</span>
           <input type="tel" id="emPhone" oninput="this.value=this.value.replace(/[^0-9\- ]/g,'')" onblur="normalizePhoneOnBlur('emPhone')" style="flex:1;box-sizing:border-box;padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)">
         </div>
       </div>
-      <div style="margin-bottom:12px">
+      <div style="margin-bottom:12px;display:none">
         <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" id="i18n-editmember-email">이메일</label>
         <input type="email" id="emEmail" style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)">
       </div>
@@ -1264,24 +1264,24 @@ input[type="text"]::placeholder{color:var(--muted)}
         <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" id="i18n-myinfo-contact">담당자명</label>
         <input type="text" id="miContactName" oninput="this.value=this.value.toUpperCase()" style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)">
       </div>
-      <div style="margin-bottom:12px;position:relative">
+      <div style="margin-bottom:12px;position:relative;display:none">
         <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" id="i18n-myinfo-country">국가</label>
         <input type="text" id="miCountry" autocomplete="off" oninput="onMiCountryInput()" onfocus="onMiCountryInput()" onblur="setTimeout(()=>{const l=document.getElementById('miCountryList');if(l)l.style.display='none';},150)" style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)">
         <div id="miCountryList" class="supplier-suggest" style="display:none"></div>
       </div>
-      <div style="margin-bottom:12px;position:relative">
+      <div style="margin-bottom:12px;position:relative;display:none">
         <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" id="i18n-myinfo-region">지역(시/도)</label>
         <input type="text" id="miRegion" autocomplete="off" oninput="onMiRegionInput()" onfocus="onMiRegionInput()" onblur="setTimeout(()=>{const l=document.getElementById('miRegionList');if(l)l.style.display='none';},150)" style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)">
         <div id="miRegionList" class="supplier-suggest" style="display:none"></div>
       </div>
-      <div style="margin-bottom:12px">
+      <div style="margin-bottom:12px;display:none">
         <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" id="i18n-myinfo-phone">휴대폰</label>
         <div style="display:flex;gap:6px">
           <span id="miPhonePrefix" style="flex-shrink:0;min-width:52px;display:flex;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:14px">+--</span>
           <input type="tel" id="miPhone" oninput="this.value=this.value.replace(/[^0-9\- ]/g,'')" onblur="normalizePhoneOnBlur('miPhone')" style="flex:1;box-sizing:border-box;padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)">
         </div>
       </div>
-      <div style="margin-bottom:16px">
+      <div style="margin-bottom:16px;display:none">
         <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" id="i18n-myinfo-email">이메일</label>
         <input type="email" id="miEmail" style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)">
       </div>
@@ -4168,8 +4168,8 @@ function renderPendingSignups(){
     <td style="padding:9px 12px">${escapeHtml(u.id)}</td>
     <td style="padding:9px 12px">${escapeHtml(u.supplier_company||'-')}</td>
     <td style="padding:9px 12px">${escapeHtml(u.contact_name||'')}</td>
-    <td style="padding:9px 12px">${escapeHtml(u.phone||'')}</td>
-    <td style="padding:9px 12px">${escapeHtml(u.email||'')}</td>
+    <td style="padding:9px 12px;display:none">${escapeHtml(u.phone||'')}</td>
+    <td style="padding:9px 12px;display:none">${escapeHtml(u.email||'')}</td>
     <td style="padding:9px 12px;text-align:center">${statusLabel(u.status)}</td>
     <td style="padding:9px 12px;text-align:center;white-space:nowrap">
       <span style="display:inline-flex;gap:4px;justify-content:center;flex-wrap:wrap">${approveBtn}${rejectBtn}${permBtnHtml(idEsc)}<button class="news-btn-secondary" onclick="openEditMemberModal('${idEsc}')">${t.signupEdit}</button><button class="news-btn-secondary" onclick="deleteMember('${idEsc}')">${t.signupDelete}</button></span>
@@ -4190,8 +4190,8 @@ function renderPendingSignups(){
       </div>
       <div style="margin-top:6px;font-size:12px;color:var(--muted);display:flex;flex-direction:column;gap:2px">
         <div>${t.signupThContact}: <span style="color:var(--text)">${escapeHtml(u.contact_name||'-')}</span></div>
-        <div>${t.signupThPhone}: <span style="color:var(--text)">${escapeHtml(u.phone||'-')}</span></div>
-        <div>${t.signupThEmail}: <span style="color:var(--text)">${escapeHtml(u.email||'-')}</span></div>
+        <div style="display:none">${t.signupThPhone}: <span style="color:var(--text)">${escapeHtml(u.phone||'-')}</span></div>
+        <div style="display:none">${t.signupThEmail}: <span style="color:var(--text)">${escapeHtml(u.email||'-')}</span></div>
         <div>ID: <span class="code">${escapeHtml(u.id)}</span></div>
         <div>${t.signupThSupplier}: <span style="color:var(--text)">${escapeHtml(u.supplier_company||'-')}</span></div>
         <div style="display:flex;align-items:center;gap:6px">${t.signupThGrade}: ${gradeSelectHtml(u)}</div>
@@ -4435,14 +4435,8 @@ async function saveEditMember(){
     const missing=[];
     if(!company) missing.push(t.editMemberCompany);
     if(!contactName) missing.push(t.editMemberContact);
-    if(!country) missing.push(t.editMemberCountry);
-    if(!region) missing.push(t.editMemberRegion);
-    if(!digits) missing.push(t.editMemberPhone);
-    if(!email) missing.push(t.editMemberEmail);
+    // [임시] 국가/지역/휴대폰/이메일 입력란 제거 — 검증에서 제외
     if(missing.length){ errEl.textContent=(lang==='ru'?'Заполните: ':'다음 항목을 입력해주세요: ')+missing.join(', '); return; }
-    if(!callingCode){ errEl.textContent=t.myInfoErrCountry||'목록에서 국가를 선택해주세요.'; return; }
-    if(digits.length < 4 || digits.length > (15-String(callingCode).length)){ errEl.textContent=t.myInfoErrPhone||'전화번호 형식이 올바르지 않습니다.'; return; }
-    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ errEl.textContent=t.myInfoErrEmail; return; }
   }
 
   // 번호가 비면 '+82 ' 같은 껍데기 대신 빈 값을 저장한다.
@@ -5819,9 +5813,9 @@ function syncSplitTableColumnWidths(hdrColId, bodyColId, tbodyId, mode){
             if(m==='company') return { caps:[...lead, 84, 76, 76, 76, 76], noFill:true, rigid:rigidP };
             // RUSSIA/KAZAK: 앞 + 원가(KRW · 자기통화) | 공급가 | GP
             if(m==='ru'||m==='kz') return { caps:[...lead, 78, 70, 84, 56], noFill:true, rigid:rigidP };
-            // 계산식(MASTER·KITURAMI): 앞 + 출고 | 원가(KRW·RUB·USD) | 러시아 3 | 카자흐 3
+            // 계산식(MASTER·KITURAMI): 앞 + 출고 | 원가(KRW·RUB·USD) | 러시아 3  ([임시] 카자흐 3 제거)
             // GP 는 56px. 음수 GP('-1234.5%' 55px)가 40px 에서 잘렸음.
-            return { caps:[...lead, 40, 74, 62, 62, 74, 60, 56, 74, 60, 56], noFill:true, rigid:rigidP };
+            return { caps:[...lead, 40, 74, 62, 62, 74, 60, 56], noFill:true, rigid:rigidP };
           }
           if(tbodyId==='priceSupplyTbody'){
             // 앞: 품명|[규격]|[영문품명]|대표|호환|최종 + 공급가 RUB|USD
@@ -6236,7 +6230,7 @@ function renderInventoryList(){
   const cols = [
     t.adminHName, ...(isKo?[t.thSpec]:[]), ...(showEng?[lang==='ru'?'Англ. название':'영문품명']:[]), t.invHMaster, t.invHRep,
     t.invHBase,
-    ...(showDeskCols?[t.invHAllocRu, t.invHAllocKz]:[]),
+    ...(showDeskCols?[t.invHAllocRu]:[]),
     t.invHPostAlloc, ...(showSupplierStock?[t.invHSupplierStock]:[])
   ];
   const colgroupHtml = cols.map(()=>`<col>`).join('');
@@ -6274,10 +6268,9 @@ function renderInventoryList(){
     const allocKz = deskRow.KAZAK || 0;
     const deskTds = showDeskCols
       ? `<td style="padding:9px 16px 9px 12px;text-align:right;color:var(--muted)">${g.master?allocRu:''}</td>`
-      + `<td style="padding:9px 16px 9px 12px;text-align:right;color:var(--muted)">${g.master?allocKz:''}</td>`
-      : '';
+      : '';   /* [임시] KAZAK 배분 열 제거 */
     const deskTdsEmpty = showDeskCols
-      ? `<td style="padding:9px 12px"></td><td style="padding:9px 12px"></td>`
+      ? `<td style="padding:9px 12px"></td>`
       : '';
     const pnInfo = g.master ? getPNInfo(g.master) : null;
     const nameText = pnInfo ? (isKo ? pnInfo.name_ko : (pnInfo.name_ru||pnInfo.name_ko)) : '';
@@ -6337,8 +6330,7 @@ function renderInventoryList(){
       ${variantsHtml}
       <div style="display:flex;justify-content:space-between;margin-top:10px;padding-top:8px;border-top:1px solid var(--border);font-size:12px;flex-wrap:wrap;gap:6px">
         <span style="color:var(--muted)">${t.invHBase}: <b style="color:var(--text)">${total}</b></span>
-        ${showDeskCols?`<span style="color:var(--muted)">${t.invHAllocRu}: <b style="color:var(--text)">${allocRu}</b></span>
-        <span style="color:var(--muted)">${t.invHAllocKz}: <b style="color:var(--text)">${allocKz}</b></span>`:''}
+        ${showDeskCols?`<span style="color:var(--muted)">${t.invHAllocRu}: <b style="color:var(--text)">${allocRu}</b></span>`:''}
         <span style="color:var(--muted)">${t.invHPostAlloc}: <b style="color:var(--text)">${postAllocText}</b></span>
         ${showSupplierStock?`<span style="color:var(--muted)">${t.invHSupplierStock}: <b style="color:var(--text)">${supplierStockText}</b></span>`:''}
       </div>
@@ -6803,14 +6795,12 @@ function renderPriceCalc(){
     <th rowspan="2" style="${thS}">${brLabel(t.pnH1)}</th><th rowspan="2" style="${thS}">${brLabel(t.pnH2)}</th>
     <th rowspan="2" style="${thS}">${brLabel(t.pnH3)}</th><th rowspan="2" style="${thS}">${t.priceThShip}</th>
     <th colspan="3" style="${thS};border-left:1px solid var(--border)">${t.priceThCost}</th>
-    <th colspan="3" style="${thS};border-left:1px solid var(--border)">${t.priceThRu}</th>
-    <th colspan="3" style="${thS};border-left:1px solid var(--border)">${t.priceThKz}</th></tr>
+    <th colspan="3" style="${thS};border-left:1px solid var(--border)">${t.priceThRu}</th></tr>
     <tr style="border-bottom:1px solid var(--border);color:var(--muted);font-size:11px">
     <th style="${thS};border-left:1px solid var(--border)">KRW</th><th style="${thS}">RUB</th><th style="${thS}">USD</th>
-    <th style="${thS};border-left:1px solid var(--border)">${t.priceThSupply}<br>KRW</th><th style="${thS}">${t.priceThSupply}<br>RUB</th><th style="${thS}">${t.priceThGp}</th>
-    <th style="${thS};border-left:1px solid var(--border)">${t.priceThSupply}<br>KRW</th><th style="${thS}">${t.priceThSupply}<br>USD</th><th style="${thS}">${t.priceThGp}</th></tr>`;
+    <th style="${thS};border-left:1px solid var(--border)">${t.priceThSupply}<br>KRW</th><th style="${thS}">${t.priceThSupply}<br>RUB</th><th style="${thS}">${t.priceThGp}</th></tr>`;
   // 원가는 KRW(입력) · RUB · USD 3열
-  const cols=`<col>${isKo?'<col>':''}${engColHtml()}<col><col><col><col style="width:40px"><col style="width:68px"><col style="width:62px"><col style="width:62px"><col style="width:72px"><col style="width:66px"><col style="width:48px"><col style="width:72px"><col style="width:62px"><col style="width:48px">`;
+  const cols=`<col>${isKo?'<col>':''}${engColHtml()}<col><col><col><col style="width:40px"><col style="width:68px"><col style="width:62px"><col style="width:62px"><col style="width:72px"><col style="width:66px"><col style="width:48px">`;
   document.getElementById('pricecalc-hdr-col').innerHTML=cols;
   document.getElementById('pricecalc-body-col').innerHTML=cols;
   const tbody=document.getElementById('priceCalcTbody');
@@ -6833,10 +6823,7 @@ function renderPriceCalc(){
       <td class="center" style="padding:3px 2px;border-left:1px solid var(--border)"><input type="number" step="any" style="${inputStyle}" value="${r.ru_supply_krw!=null&&r.ru_supply_krw!==''?Number(r.ru_supply_krw):''}" placeholder="${c.ruSupply!=null?fmtN(c.ruSupply):''}" onchange="onPriceCellEdit(${r.row_no},'ru_supply_krw',this.value)"></td>
       <td style="text-align:right;padding:3px 4px">${fmtN(c.ruRub)}</td>
       <td class="center" style="padding:3px 2px;color:var(--muted)">${fmtGp(c.ruGpVal)}</td>
-      <td class="center" style="padding:3px 2px;border-left:1px solid var(--border)"><input type="number" step="any" style="${inputStyle}" value="${r.kz_supply_krw!=null&&r.kz_supply_krw!==''?Number(r.kz_supply_krw):''}" placeholder="${c.kzSupply!=null?fmtN(c.kzSupply):''}" onchange="onPriceCellEdit(${r.row_no},'kz_supply_krw',this.value)"></td>
-      <td style="text-align:right;padding:3px 4px">${fmtN(c.kzUsd)}</td>
-      <td class="center" style="padding:3px 2px;color:var(--muted)">${fmtGp(c.kzGpVal)}</td>
-    </tr>`;
+    </tr>`;   /* [임시] 카자흐스탄 공급가KRW/USD/GP 열 제거 */
   }).join('');
   // 모바일 카드 (조회용 — 편집은 데스크톱 표에서)
   setPriceCards(rows.map(r=>{
@@ -6844,8 +6831,7 @@ function renderPriceCalc(){
     return priceCardHtml(priceNameFor(r), isKo?r.spec:'',
       [{label:t.pnH1,val:r.rep},{label:t.pnH2,val:r.compat},{label:t.pnH3,val:r.final},{label:t.priceThShip.replace('<br>',' '),val:fmtN(r.ship_qty)}],
       [{label:t.priceThCost+' KRW',val:fmtN(c.ruCost)},{label:t.priceThCost+' RUB',val:fmtN(c.costRub)},{label:t.priceThCost+' USD',val:fmtN(c.costUsd)},
-       {label:t.priceThRu+' '+t.priceThSupply+' KRW',val:fmtN(c.ruSupply)},{label:t.priceThRu+' '+t.priceThSupply+' RUB',val:fmtN(c.ruRub)},{label:t.priceThRu+' '+t.priceThGp,val:fmtGp(c.ruGpVal)},
-       {label:t.priceThKz+' '+t.priceThSupply+' KRW',val:fmtN(c.kzSupply)},{label:t.priceThKz+' '+t.priceThSupply+' USD',val:fmtN(c.kzUsd)},{label:t.priceThKz+' '+t.priceThGp,val:fmtGp(c.kzGpVal)}], r.rep
+       {label:t.priceThRu+' '+t.priceThSupply+' KRW',val:fmtN(c.ruSupply)},{label:t.priceThRu+' '+t.priceThSupply+' RUB',val:fmtN(c.ruRub)},{label:t.priceThRu+' '+t.priceThGp,val:fmtGp(c.ruGpVal)}], r.rep
     );
   }).join(''));
   scheduleSplitTableResync('pricecalc-hdr-col','pricecalc-body-col','priceCalcTbody','fixed');
@@ -7036,9 +7022,9 @@ function applyPriceTabChrome(){
   const cgpBar=document.getElementById('companyGpBar');
   if(cgpBar){ cgpBar.style.display = (m==='company') ? 'flex' : 'none'; if(m==='company') fillCompanyGpInputs(); }
   show('prmRubWrap',  isMaster || m==='ru');
-  show('prmUsdWrap',  isMaster || m==='kz');
+  show('prmUsdWrap',  false);   /* [임시] 카자흐스탄(USD 기준환율) 숨김 */
   show('prmRuGpWrap', isMaster || m==='ru');
-  show('prmKzGpWrap', isMaster || m==='kz');
+  show('prmKzGpWrap', false);   /* [임시] 카자흐스탄 기준 GP 숨김 */
   show('prmSaveBtn', isMaster);               // 저장은 MASTER 만 (지역은 조회 전용)
   show('prmRefreshBtn', isMaster);            // 환율 갱신은 MASTER 만
   show('priceRateInfo', isMaster);
@@ -8203,13 +8189,8 @@ async function doSignup(){
 
   const isTopSupplier = company.toUpperCase()==='KITURAMI';
 
-  if(!company || !contactName || !country || !region || !phoneRaw || !email || (!isTopSupplier && !supplierCompany) || !id || !pw || !pw2){ authSetErr('authSignupErr', t.errFill); return; }
-  if(!callingCode){ authSetErr('authSignupErr', t.errCountryRequired||'목록에서 국가를 선택해주세요.'); return; }
-  let phoneDigits = phoneRaw.replace(/[^0-9]/g,'');
-  if(phoneDigits.length>1 && phoneDigits[0]==='0') phoneDigits=phoneDigits.slice(1); // 트렁크 접두번호(0) 제거 안전장치
-  if(phoneDigits.length < 4 || phoneDigits.length > (15-String(callingCode).length)){ authSetErr('authSignupErr', t.errPhoneInvalid||'전화번호 형식이 올바르지 않습니다.'); return; }
-  const phone = `+${callingCode} ${phoneDigits}`; // ITU-T E.164 형식(국가번호 + 가입자번호)으로 저장
-  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ authSetErr('authSignupErr', t.errEmailInvalid||'이메일 주소 형식이 올바르지 않습니다.'); return; }
+  if(!company || !contactName || (!isTopSupplier && !supplierCompany) || !id || !pw || !pw2){ authSetErr('authSignupErr', t.errFill); return; }
+  const phone = '';   // [임시] 국가/지역/휴대폰/이메일 입력란 제거 — 빈 값으로 저장
   if(pw.length < 4){ authSetErr('authSignupErr', t.errPwShort); return; }
   if(pw !== pw2){ authSetErr('authSignupErr', t.errPwMismatch); return; }
 
@@ -8337,15 +8318,13 @@ async function saveMyInfo(){
 
   const { callingCode, digits, phone } = readE164FromModal('mi');
 
-  if(!contactName || !country || !region || !digits || !email || (!isTopSupplier && !supplierCompany)){ errEl.textContent=t.myInfoErrFill; return; }
-  if(!callingCode){ errEl.textContent=t.myInfoErrCountry||'목록에서 국가를 선택해주세요.'; return; }
-  if(digits.length < 4 || digits.length > (15-String(callingCode).length)){ errEl.textContent=t.myInfoErrPhone||'전화번호 형식이 올바르지 않습니다.'; return; }
-  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ errEl.textContent=t.myInfoErrEmail; return; }
+  // [임시] 국가/지역/휴대폰/이메일 입력란 제거 — 담당자명(과 구매처)만 검증
+  if(!contactName || (!isTopSupplier && !supplierCompany)){ errEl.textContent=t.myInfoErrFill; return; }
 
   const supplierChanged = !isTopSupplier && supplierCompany.toUpperCase()!==originalSupplier.toUpperCase();
   if(supplierChanged && !confirm(t.myInfoSupplierChangeConfirm(supplierCompany))) return;
 
-  const payload = { contact_name: contactName, country, region, phone, email };
+  const payload = { contact_name: contactName, country, region, phone: (digits?phone:''), email };
   if(!isTopSupplier) payload.supplier_company = supplierCompany;
   if(supplierChanged) payload.status = 'pending'; // 구매처가 바뀌면, 새 구매처의 승인을 다시 받아야 합니다.
   if(newPw || newPw2){
