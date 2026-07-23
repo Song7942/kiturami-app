@@ -6165,13 +6165,16 @@ async function loadInventory(){
       supplierInventoryData={};
       (supData||[]).forEach(row=>{ supplierInventoryData[row.rep]={ qty:row.qty, updated_at:row.updated_at }; });
     }
-    // 구매처가 이미 배분해 나간 수량. 구매처 재고는 총 재고가 아니라
-    // 배분후 남은 재고를 보여줘야 실제로 받을 수 있는 양이 된다.
-    // (기초재고와 함께 읽어야 둘이 어긋나지 않는다)
-    const { data: alcData, error: alcErr } = await sb.from('kt_order_allocations').select('rep,allocated').ilike('target_company', supplierCompany);
+    // 구매처가 이미 내보낸 수량. 구매처 재고는 총 재고가 아니라 그만큼 뺀 값을
+    // 보여줘야 실제로 받을 수 있는 양이 된다. (기초재고와 함께 읽어야 둘이 어긋나지 않는다)
+    // 배분 누계만 빼면, 배분보다 많이 출고된 분이 빠지지 않으므로 공급자 화면과 같은
+    // 기준(배분·출고 중 큰 값)을 쓴다.
     supplierSuppliedTotals={};
-    if(alcErr){ console.error(alcErr); }
-    else (alcData||[]).forEach(a=>{ if(a.rep) supplierSuppliedTotals[a.rep]=(supplierSuppliedTotals[a.rep]||0)+(a.allocated||0); });
+    const supOut=await loadOutflowByKey(supplierCompany);
+    Object.keys(supOut).forEach(k=>{
+      const rep=k.slice(k.indexOf('||')+2);
+      supplierSuppliedTotals[rep]=(supplierSuppliedTotals[rep]||0)+supOut[k];
+    });
   } else {
     supplierInventoryData={};
     supplierSuppliedTotals={};
@@ -6194,36 +6197,43 @@ function findMasterRep(articul){
 }
 let globalSuppliedTotals={}; // rep -> 지금까지 관리자가 배분한 누적 수량 (전체 주문 기준)
 let deskSuppliedTotals={};   // rep -> { RUSSIA:n, KAZAK:n } (KITURAMI 창고를 데스크별로 나눈 값)
-async function loadGlobalSuppliedTotals(){
-  await loadOrderDeskMap();   // 데스크별로 나누려면 업체별 담당자명이 필요하다
-  const invCo=inventoryCompanyFor(currentUser);
-  const { data, error } = await sb.from('kt_order_allocations').select('*').ilike('target_company', invCo);
-  if(error){ console.error(error); globalSuppliedTotals={}; deskSuppliedTotals={}; return; }
-  // 실제 출고분도 함께 본다. 배분(예약)보다 더 나간 수량이 있으면 그만큼 재고가 더 줄어야 한다.
-  // (예: 즉시공급 100 배분 후 수량 조정으로 190 을 출고 → 재고는 190 이 빠져야 한다)
-  const { data: shipData } = await sb.from('kt_shipments').select('rep,qty,client_name').ilike('company', invCo);
-
+// 어떤 공급사(supplierCompany)의 창고에서 실제로 빠져나간 수량을 '업체||대표품번' 단위로 집계한다.
+// 배분(예약)과 출고 중 '큰 값'을 쓴다 — 더하면 배분한 것을 그대로 출고한 정상 흐름이 이중 차감된다.
+// (예: 즉시공급 100 배분 후 수량 조정으로 190 출고 → 190 이 빠져야 한다)
+async function loadOutflowByKey(supplierCompany){
+  const [alc, shp] = await Promise.all([
+    sb.from('kt_order_allocations').select('company,rep,allocated').ilike('target_company', supplierCompany),
+    sb.from('kt_shipments').select('rep,qty,client_name').ilike('company', supplierCompany)
+  ]);
   const up=v=>String(v||'').trim().toUpperCase();
-  const allocByKey={}, shipByKey={};   // '업체||대표품번' 기준
-  (data||[]).forEach(a=>{ const k=up(a.company)+'||'+a.rep; allocByKey[k]=(allocByKey[k]||0)+(a.allocated||0); });
-  // 출고의 거래처명은 표기가 달라질 수 있어(‘KITURAMI RUS’ ↔ ‘KITURAMIRUS’) 업체명으로 맞춰준다.
-  const knownCos=new Set(Object.keys(allocByKey).map(k=>k.slice(0,k.indexOf('||'))));
-  if(_orderDeskByCompany) Object.keys(_orderDeskByCompany).forEach(c=>knownCos.add(c));
-  const coList=[...knownCos];
-  (shipData||[]).forEach(s=>{
+  const alloc={}, ship={};
+  if(alc.error) console.error(alc.error);
+  else (alc.data||[]).forEach(a=>{ if(!a.rep) return; const k=up(a.company)+'||'+a.rep; alloc[k]=(alloc[k]||0)+(a.allocated||0); });
+  // 출고의 거래처명은 표기가 다를 수 있어(‘KITURAMI RUS’ ↔ ‘KITURAMIRUS’) 아는 업체명에 맞춘다.
+  const cos=new Set(Object.keys(alloc).map(k=>k.slice(0,k.indexOf('||'))));
+  if(_orderDeskByCompany) Object.keys(_orderDeskByCompany).forEach(c=>cos.add(c));
+  const coList=[...cos];
+  if(shp.error) console.error(shp.error);
+  else (shp.data||[]).forEach(s=>{
     const rep=findMasterRep(s.rep)||s.rep;
     const co=coList.find(c=>isSameClient(s.client_name, c));
     if(!co) return;
     const k=co+'||'+rep;
-    shipByKey[k]=(shipByKey[k]||0)+(s.qty||0);
+    ship[k]=(ship[k]||0)+(s.qty||0);
   });
-
+  const outByKey={};
+  new Set([...Object.keys(alloc), ...Object.keys(ship)]).forEach(k=>{
+    const v=Math.max(alloc[k]||0, ship[k]||0);
+    if(v) outByKey[k]=v;
+  });
+  return outByKey;
+}
+async function loadGlobalSuppliedTotals(){
+  await loadOrderDeskMap();   // 데스크별로 나누려면 업체별 담당자명이 필요하다
+  const outByKey=await loadOutflowByKey(inventoryCompanyFor(currentUser));
   const totals={}, byDesk={};
-  new Set([...Object.keys(allocByKey), ...Object.keys(shipByKey)]).forEach(k=>{
-    const i=k.indexOf('||'), co=k.slice(0,i), rep=k.slice(i+2);
-    // 배분과 출고 중 '큰 값'만 뺀다. 더하면 배분한 것을 출고한 정상 흐름이 이중으로 차감된다.
-    const out=Math.max(allocByKey[k]||0, shipByKey[k]||0);
-    if(!out) return;
+  Object.keys(outByKey).forEach(k=>{
+    const i=k.indexOf('||'), co=k.slice(0,i), rep=k.slice(i+2), out=outByKey[k];
     totals[rep]=(totals[rep]||0)+out;
     // 배분 데이터에는 누가 배분했는지가 없다(target_company 는 회사명이라 RUSSIA·KAZAK 모두 KITURAMI).
     // 배분받은 업체의 담당자명이 곧 담당 데스크이므로 그것으로 나눈다 — 주문접수현황을 나누는 규칙과 동일.
