@@ -1714,6 +1714,11 @@ function setLang(l){
   setTxtIfExists('i18n-myinfo-email', t.myInfoEmail);
   setTxtIfExists('i18n-myinfo-pwhint', t.myInfoPwHint);
   setTxtIfExists('i18n-myinfo-save', t.myInfoSave);
+  // 새 비밀번호 입력칸 placeholder·안내문(내 정보·회원수정 모달은 앱 언어를 따른다)
+  const _setPh=(id,ru,ko)=>{const el=document.getElementById(id);if(el)el.placeholder=(lang==='ru'?ru:ko);};
+  _setPh('miNewPw','Новый пароль','새 비밀번호');
+  _setPh('miNewPw2','Подтвердите новый пароль','새 비밀번호 확인');
+  _setPh('emNewPw','Новый пароль','새 비밀번호');
   const zoomHintEl=document.getElementById('i18n-dmzoomhint'); if(zoomHintEl) zoomHintEl.textContent=t.dmZoomHint;
   if(diagTypes && diagTypes.length){
     buildDiagram(diagTypes); // 언어 변경 시 라벨/툴팁 텍스트도 새 언어로 다시 생성
