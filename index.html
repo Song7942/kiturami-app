@@ -453,7 +453,7 @@ input[type="text"]::placeholder{color:var(--muted)}
         <input type="text" id="suCompany" placeholder="회사명" autocomplete="off" oninput="this.value=this.value.toUpperCase();onSuCompanyInput()" onfocus="onCompanyFocus()" onblur="setTimeout(()=>{const l=document.getElementById('suCompanyList');if(l)l.style.display='none';},150)">
         <div id="suCompanyList" class="supplier-suggest" style="display:none"></div>
       </div>
-      <input type="text" id="suContactName" placeholder="담당자명" oninput="this.value=this.value.toUpperCase()">
+      <input type="text" id="suContactName" placeholder="담당자명" oninput="this.value=this.value.toUpperCase()" style="display:none">
       <div style="position:relative;display:none">
         <input type="text" id="suCountry" placeholder="국가" autocomplete="off" oninput="onCountryInput()" onfocus="onCountryInput()" onblur="setTimeout(()=>{const l=document.getElementById('suCountryList');if(l)l.style.display='none';},150)">
         <div id="suCountryList" class="supplier-suggest" style="display:none"></div>
@@ -467,7 +467,7 @@ input[type="text"]::placeholder{color:var(--muted)}
         <input type="tel" id="suPhone" placeholder="휴대폰 번호 (숫자만)" style="flex:1;margin-bottom:0" oninput="this.value=this.value.replace(/[^0-9\- ]/g,'')" onblur="normalizePhoneOnBlur('suPhone')">
       </div>
       <input type="email" id="suEmail" placeholder="이메일주소" style="display:none">
-      <div id="suSupplierWrap" style="position:relative">
+      <div id="suSupplierWrap" style="position:relative;display:none">
         <input type="text" id="suSupplier" placeholder="구매처(거래처) 회사명" autocomplete="off" oninput="this.value=this.value.toUpperCase();onSupplierInput()" onfocus="onSupplierFocus()" onblur="setTimeout(()=>{const l=document.getElementById('suSupplierList');if(l)l.style.display='none';},150)">
         <div id="suSupplierList" class="supplier-suggest" style="display:none"></div>
       </div>
@@ -997,7 +997,7 @@ input[type="text"]::placeholder{color:var(--muted)}
             <th id="i18n-signup-th-company">회사명</th>
             <th id="i18n-signup-th-id">아이디</th>
             <th id="i18n-signup-th-supplier">구매처</th>
-            <th id="i18n-signup-th-contact">담당자명</th>
+            <th id="i18n-signup-th-contact">구매처담당자</th>
             <th id="i18n-signup-th-phone" style="display:none">휴대폰</th>
             <th id="i18n-signup-th-email" style="display:none">이메일</th>
             <th class="center" id="i18n-signup-th-status">상태</th>
@@ -1188,7 +1188,7 @@ input[type="text"]::placeholder{color:var(--muted)}
         <div id="emSupplierList" class="supplier-suggest" style="display:none"></div>
       </div>
       <div style="margin-bottom:12px">
-        <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" id="i18n-editmember-contact">담당자명</label>
+        <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" id="i18n-editmember-contact">구매처담당자</label>
         <input type="text" id="emContactName" oninput="this.value=this.value.toUpperCase()" style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)">
       </div>
       <div style="margin-bottom:12px;position:relative;display:none">
@@ -1435,7 +1435,7 @@ const T={
        adminBtn:'관리자',adminTitle:'회원 및 주문관리',adminXls:'엑셀 다운로드',adminSend:'전송',adminSendNone:'전송할 변경이 없습니다.',adminSendConfirm:n=>`${n}건의 즉시공급 수량을 상대방에게 전송할까요?`,adminSendDone:'전송되었습니다.',adminSendFail:'전송에 실패했습니다.',adminEmpty:'등록된 주문이 없습니다.',adminCount:n=>`총 ${n}건`,
        adminTabOrders:'주문 접수',adminTabMyOrders:'주문',adminTabRequests:'취소·변경 요청',adminTabSignups:'회원관리 및 가입승인',adminGroupOrders:'주문관리',
        signupEmpty:'등록된 회원이 없습니다.',signupApprove:'승인',signupReject:'거부',signupDelete:'삭제',signupEdit:'수정',
-       editMemberTitle:'회원 정보 수정',editMemberId:'아이디',editMemberCompany:'회사명',editMemberContact:'담당자명',editMemberPhone:'휴대폰',editMemberEmail:'이메일',
+       editMemberTitle:'회원 정보 수정',editMemberId:'아이디',editMemberCompany:'회사명',editMemberContact:'구매처담당자',editMemberPhone:'휴대폰',editMemberEmail:'이메일',
        editMemberPwHint:'비밀번호를 재설정하려면 입력하세요 (선택사항)',editMemberSave:'저장',
        resetAllConfirmWord:'초기화',resetAllConfirmPrompt:w=>`정말로 전체 회원을 초기화하시겠습니까?\n이 작업은 되돌릴 수 없습니다. 계속하려면 아래에 "${w}"를 정확히 입력하세요.`,
        resetAllCancelled:'취소되었습니다.',resetAllDone:'전체 회원이 초기화되었습니다.',
@@ -1452,7 +1452,7 @@ const T={
        resetOnlyShipTitle:'출고 초기화',resetOnlyShipDesc:'출고내역 데이터만 삭제합니다. 주문과 재고는 유지됩니다.',resetOnlyShipBtn:'출고 초기화',
        resetOnlyShipPrompt:w=>`모든 회원의 출고내역을 지우시겠습니까?\n주문과 재고는 유지됩니다. 이 작업은 되돌릴 수 없습니다. 계속하려면 아래에 "${w}"를 정확히 입력하세요.`,resetOnlyShipDone:'출고내역이 초기화되었습니다.',
        signupApproveConfirm:id=>`${id} 계정의 가입을 승인하시겠습니까?`,signupRejectConfirm:id=>`${id} 계정의 가입을 거부하시겠습니까?`,signupDeleteConfirm:id=>`${id} 계정을 삭제하시겠습니까? 삭제하면 되돌릴 수 없습니다.`,
-       signupThGrade:'등급',signupThCompany:'회사명',signupThId:'아이디',signupThContact:'담당자명',signupThPhone:'휴대폰',signupThEmail:'이메일',signupThSupplier:'구매처',signupThStatus:'상태',
+       signupThGrade:'등급',signupThCompany:'회사명',signupThId:'아이디',signupThContact:'구매처담당자',signupThPhone:'휴대폰',signupThEmail:'이메일',signupThSupplier:'구매처',signupThStatus:'상태',
        resetAllMembersBtn:'전체 회원 초기화',resetAllOrdersBtn:'주문·재고·출고 초기화',
        signupStatusPending:'승인대기',signupStatusApproved:'승인됨',signupStatusRejected:'거부됨',
        reqEmpty:'대기중인 요청이 없습니다.',reqTypeCancel:'취소 신청',reqTypeChange:n=>`수량변경 신청 → ${n}`,
@@ -1528,7 +1528,7 @@ const T={
        adminBtn:'Админ',adminTitle:'Управление участниками и заказами',adminXls:'Скачать Excel',adminSend:'Отправить',adminSendNone:'Нет изменений для отправки.',adminSendConfirm:n=>`Отправить количество (${n} шт.) получателю?`,adminSendDone:'Отправлено.',adminSendFail:'Ошибка отправки.',adminEmpty:'Заказов пока нет.',adminCount:n=>`Всего: ${n}`,
        adminTabOrders:'Принятые заказы',adminTabMyOrders:'Заказы',adminTabRequests:'Запросы отмены/изменения',adminTabSignups:'Управление участниками и одобрение',adminGroupOrders:'Управление заказами',
        signupEmpty:'Нет зарегистрированных участников.',signupApprove:'Одобрить',signupReject:'Отклонить',signupDelete:'Удалить',signupEdit:'Изменить',
-       editMemberTitle:'Изменить участника',editMemberId:'Логин',editMemberCompany:'Компания',editMemberContact:'Контактное лицо',editMemberPhone:'Мобильный',editMemberEmail:'Email',
+       editMemberTitle:'Изменить участника',editMemberId:'Логин',editMemberCompany:'Компания',editMemberContact:'Контактное лицо поставщика',editMemberPhone:'Мобильный',editMemberEmail:'Email',
        editMemberPwHint:'Введите, чтобы сбросить пароль (необязательно)',editMemberSave:'Сохранить',
        resetAllConfirmWord:'СБРОС',resetAllConfirmPrompt:w=>`Вы уверены, что хотите сбросить всех участников?\nЭто необратимо. Введите "${w}", чтобы продолжить.`,
        resetAllCancelled:'Отменено.',resetAllDone:'Все участники сброшены.',
@@ -1545,7 +1545,7 @@ const T={
        resetOnlyShipTitle:'Сброс отгрузок',resetOnlyShipDesc:'Удаляет только данные отгрузок. Заказы и склад сохраняются.',resetOnlyShipBtn:'Сбросить отгрузки',
        resetOnlyShipPrompt:w=>`Удалить данные отгрузок всех участников?\nЗаказы и склад сохранятся. Это необратимо. Введите "${w}", чтобы продолжить.`,resetOnlyShipDone:'Данные отгрузок сброшены.',
        signupApproveConfirm:id=>`Одобрить регистрацию аккаунта ${id}?`,signupRejectConfirm:id=>`Отклонить регистрацию аккаунта ${id}?`,signupDeleteConfirm:id=>`Удалить аккаунт ${id}? Это необратимо.`,
-       signupThGrade:'Уровень',signupThCompany:'Компания',signupThId:'Логин',signupThContact:'Контактное лицо',signupThPhone:'Мобильный',signupThEmail:'Email',signupThSupplier:'Поставщик',signupThStatus:'Статус',
+       signupThGrade:'Уровень',signupThCompany:'Компания',signupThId:'Логин',signupThContact:'Контактное лицо поставщика',signupThPhone:'Мобильный',signupThEmail:'Email',signupThSupplier:'Поставщик',signupThStatus:'Статус',
        resetAllMembersBtn:'Сбросить всех участников',resetAllOrdersBtn:'Сбросить заказы/склад/отгрузки',
        signupStatusPending:'Ожидает',signupStatusApproved:'Одобрено',signupStatusRejected:'Отклонено',
        reqEmpty:'Нет ожидающих запросов.',reqTypeCancel:'Запрос отмены',reqTypeChange:n=>`Запрос изменения → ${n}`,
@@ -8124,12 +8124,9 @@ function onSuCompanyInput(){
   const company=document.getElementById('suCompany').value.trim().toUpperCase();
   const wrap=document.getElementById('suSupplierWrap');
   if(wrap){
-    if(company==='KITURAMI'){
-      wrap.style.display='none';
-      document.getElementById('suSupplier').value='';
-    } else {
-      wrap.style.display='block';
-    }
+    // [임시] 회원가입은 회사명·아이디·비밀번호만 받는다. 구매처는 MASTER 가 회원관리에서 지정.
+    wrap.style.display='none';
+    document.getElementById('suSupplier').value='';
   }
   renderCompanySuggestList('suCompanyList','selectCompanyName');
 }
@@ -8196,7 +8193,8 @@ async function doSignup(){
 
   const isTopSupplier = company.toUpperCase()==='KITURAMI';
 
-  if(!company || !contactName || (!isTopSupplier && !supplierCompany) || !id || !pw || !pw2){ authSetErr('authSignupErr', t.errFill); return; }
+  // [임시] 회원가입은 회사명·아이디·비밀번호만 필수. 구매처·담당자는 MASTER 가 회원관리에서 지정한다.
+  if(!company || !id || !pw || !pw2){ authSetErr('authSignupErr', t.errFill); return; }
   const phone = '';   // [임시] 국가/지역/휴대폰/이메일 입력란 제거 — 빈 값으로 저장
   if(pw.length < 4){ authSetErr('authSignupErr', t.errPwShort); return; }
   if(pw !== pw2){ authSetErr('authSignupErr', t.errPwMismatch); return; }
@@ -8208,7 +8206,7 @@ async function doSignup(){
   const password_hash = await sha256Hex(pw);
   const insertPayload = isTopSupplier
     ? { id, company, password_hash, contact_name: contactName, country, region, phone, email, supplier_company: null, status: 'approved' }
-    : { id, company, password_hash, contact_name: contactName, country, region, phone, email, supplier_company: supplierCompany, status: 'pending' };
+    : { id, company, password_hash, contact_name: contactName, country, region, phone, email, supplier_company: (supplierCompany||null), status: 'pending' };
   const { error: insErr } = await sb.from('kt_users').insert(insertPayload);
   if(insErr){ authSetErr('authSignupErr', insErr.message); return; }
 
@@ -8216,7 +8214,7 @@ async function doSignup(){
   // 이 계정은 자사 회원관리·가격정보 탭을 쓰는 관리용 계정이며, 이미 있으면 건너뛴다.
   await ensureCompanyAccount(company, supplierCompany, contactName, country, region, phone, email);
 
-  authSetOk('authSignupOk', isTopSupplier ? t.okSignup : (t.okSignupPending ? t.okSignupPending(supplierCompany) : t.okSignup));
+  authSetOk('authSignupOk', (isTopSupplier || !supplierCompany) ? t.okSignup : (t.okSignupPending ? t.okSignupPending(supplierCompany) : t.okSignup));
   document.getElementById('suCompany').value='';
   document.getElementById('suContactName').value='';
   document.getElementById('suCountry').value='';
