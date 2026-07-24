@@ -6928,10 +6928,10 @@ function renderPriceCalc(){
       <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(r.compat||'')}</span></td>
       <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(r.final||'')}</span></td>
       <td class="center" style="padding:3px 2px;color:var(--muted)">${fmtN(r.ship_qty)}</td>
-      <td class="center" style="padding:3px 2px;border-left:1px solid var(--border)"><input type="number" step="any" style="${inputStyle}" value="${c.ruCost!=null?c.ruCost:''}" onchange="onPriceCellEdit(${r.row_no},'ru_cost',this.value)"></td>
+      <td class="center" style="padding:3px 2px;border-left:1px solid var(--border)"><input type="text" inputmode="decimal" style="${inputStyle}" value="${c.ruCost!=null?fmtN(c.ruCost):''}" onchange="onPriceCellEdit(${r.row_no},'ru_cost',this.value)"></td>
       <td style="text-align:right;padding:3px 4px;color:var(--muted)">${fmtN(c.costRub)}</td>
       <td style="text-align:right;padding:3px 4px;color:var(--muted)">${fmtN(c.costUsd)}</td>
-      <td class="center" style="padding:3px 2px;border-left:1px solid var(--border)"><input type="number" step="any" style="${inputStyle}" value="${r.ru_supply_krw!=null&&r.ru_supply_krw!==''?Number(r.ru_supply_krw):''}" placeholder="${c.ruSupply!=null?fmtN(c.ruSupply):''}" onchange="onPriceCellEdit(${r.row_no},'ru_supply_krw',this.value)"></td>
+      <td class="center" style="padding:3px 2px;border-left:1px solid var(--border)"><input type="text" inputmode="decimal" style="${inputStyle}" value="${r.ru_supply_krw!=null&&r.ru_supply_krw!==''?fmtN(Number(r.ru_supply_krw)):''}" placeholder="${c.ruSupply!=null?fmtN(c.ruSupply):''}" onchange="onPriceCellEdit(${r.row_no},'ru_supply_krw',this.value)"></td>
       <td style="text-align:right;padding:3px 4px">${fmtN(c.ruRub)}</td>
       <td class="center" style="padding:3px 2px;color:var(--muted)">${fmtGp(c.ruGpVal)}</td>
     </tr>`;   /* [임시] 카자흐스탄 공급가KRW/USD/GP 열 제거 */
@@ -7245,7 +7245,7 @@ function renderPriceCompany(){
       <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(m.rep)}</span></td>
       <td style="padding:3px 4px">${m.compats.map(c=>`<span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(c)}</span>`).join('<br>')}</td>
       <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(m.final||'')}</span></td>
-      <td class="center" style="padding:3px 2px;border-left:1px solid var(--border)"><input type="number" step="any" style="${inputStyle}" value="${m.buyRaw!=null&&m.buyRaw!==''?Number(m.buyRaw):''}" placeholder="${m.autoBuy!=null?fmtN(m.autoBuy):''}" onchange="onCompanyPriceEdit('${repEsc}','buy_price',this.value)"></td>
+      <td class="center" style="padding:3px 2px;border-left:1px solid var(--border)"><input type="text" inputmode="decimal" style="${inputStyle}" value="${m.buyRaw!=null&&m.buyRaw!==''?fmtN(Number(m.buyRaw)):''}" placeholder="${m.autoBuy!=null?fmtN(m.autoBuy):''}" onchange="onCompanyPriceEdit('${repEsc}','buy_price',this.value)"></td>
       <td style="border-left:1px solid var(--border);text-align:right;padding:3px 6px;font-weight:600">${fmtN(m.supplyA)}</td>
       ${supplyTd(m.supplyB)}${supplyTd(m.supplyC)}${supplyTd(m.supplyD)}
     </tr>`;
@@ -7260,8 +7260,10 @@ async function onCompanyPriceEdit(rep, field, value){
   if(!guardWrite('price')){ renderPriceActive(); return; }
   const role=userRole(currentUser);
   if(!role.isCompanyAdmin) return;
-  const num=value===''?null:Number(value);
-  if(value!=='' && isNaN(num)){ alert('숫자를 입력해 주세요.'); renderPriceCompany(); return; }
+  // 천단위 콤마를 넣어 보여주므로(입력칸이 text), 저장 전에 콤마를 걷어낸다.
+  const raw=String(value==null?'':value).replace(/,/g,'').trim();
+  const num=raw===''?null:Number(raw);
+  if(raw!=='' && isNaN(num)){ alert('숫자를 입력해 주세요.'); renderPriceCompany(); return; }
   const cur=companyPriceData[rep]||{ buy_price:null, supply_price:null };
   cur[field]=num;
   companyPriceData[rep]=cur;
@@ -7361,8 +7363,10 @@ async function onPriceCellEdit(rowNo, field, value){
   if(!guardWrite('price')){ renderPriceActive(); return; }
   const r=priceCalcData.find(x=>x.row_no===rowNo);
   if(!r) return;
-  let num=value===''?null:Number(value);
-  if(value!=='' && isNaN(num)){ alert('숫자를 입력해 주세요.'); renderPriceCalc(); return; }
+  // 천단위 콤마를 넣어 보여주므로(입력칸이 text), 저장 전에 콤마를 걷어낸다.
+  const raw=String(value==null?'':value).replace(/,/g,'').trim();
+  let num=raw===''?null:Number(raw);
+  if(raw!=='' && isNaN(num)){ alert('숫자를 입력해 주세요.'); renderPriceCalc(); return; }
   // 원가는 원 단위 — 소수로 입력해도 올림해서 저장한다.
   // (공급가 자동계산도 올림한 원가를 기준으로 하도록 여기서 먼저 처리)
   if(field==='ru_cost' && num!=null) num=Math.ceil(num);
