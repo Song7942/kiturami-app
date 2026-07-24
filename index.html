@@ -1648,7 +1648,12 @@ function switchTab(tab){
   if(tab==='inventory'){ refreshCurrentUser().then(()=>Promise.all([loadInventory(), loadGlobalSuppliedTotals()])).then(renderInventoryList); }
   if(tab==='shipments'){ refreshCurrentUser().then(()=>loadShipments()).then(renderShipmentsList); }
   // 환율 자동갱신은 kt_price_settings 를 쓰므로 MASTER 에서만 수행한다.
-  if(tab==='price'){ Promise.all([loadPriceSettings(), loadPriceCalc(), loadPrices(), loadCompanyPrices()]).then(async()=>{ if(priceMode()==='master') await autoUpdateRatesIfNewMonth(); fillParamInputs(); applyPriceTabChrome(); renderPriceActive(); }); }
+  if(tab==='price'){
+    // 크롬(계산식/공급가 서브탭·파라미터 바 등)은 역할만으로 정해지므로 즉시 정리한다.
+    // 데이터 로드를 기다렸다 하면 그 사이 MASTER용 계산식 화면이 잠깐 비쳐 보인다.
+    applyPriceTabChrome();
+    Promise.all([loadPriceSettings(), loadPriceCalc(), loadPrices(), loadCompanyPrices()]).then(async()=>{ if(priceMode()==='master') await autoUpdateRatesIfNewMonth(); fillParamInputs(); applyPriceTabChrome(); renderPriceActive(); });
+  }
   if(tab==='adminOrders'){ loadAdminOrdersTab(); }
   if(tab==='memberManagement'){ loadMemberManagementTab(); }
 }
