@@ -4285,6 +4285,8 @@ async function resetAllOrderData(){
   if(typed===null) return;
   if(typed.trim()!==t.resetAllConfirmWord){ alert(t.resetAllCancelled); return; }
   // 회원 계정은 그대로 두고, 주문·재고·출고내역 관련 데이터만 전부 지웁니다.
+  // 변경/취소 신청도 함께 지웁니다 — 남겨두면 주문이 없는데도 '새 접수' 알림이 계속 뜹니다.
+  await sb.from('kt_group_change_requests').delete().not('id','is',null);
   await sb.from('kt_order_requests').delete().not('id','is',null);
   await sb.from('kt_order_allocations').delete().not('rep','is',null);
   await sb.from('kt_orders').delete().not('id','is',null);
@@ -4337,6 +4339,8 @@ async function resetAllMembers(){
   if(typed===null) return;
   if(typed.trim()!==t.resetAllConfirmWord){ alert(t.resetAllCancelled); return; }
   // 회원을 전부 초기화하면, 그 회원들이 넣었던 주문/취소변경요청도 유령 데이터로 남지 않도록 함께 지웁니다.
+  await sb.from('kt_group_change_requests').delete().not('id','is',null);
+  await sb.from('kt_order_allocations').delete().not('rep','is',null);
   await sb.from('kt_order_requests').delete().not('id','is',null);
   await sb.from('kt_orders').delete().not('id','is',null);
   // KITURAMI 소속(구매처가 없는 계정: 본사·RUSSIA·KAZAK 등)까지 전부 삭제한다.
@@ -5018,8 +5022,10 @@ async function loadOrderFeedStamps(){
       (data||[]).forEach(o=>bump('recv', _ts(o.created_at)));
     }),
     safe(async()=>{
-      const { data } = await sb.from('kt_group_change_requests').select('created_at').ilike('target_company', co);
-      (data||[]).forEach(r=>bump('recv', _ts(r.created_at)));
+      // 아직 처리하지 않은(pending) 신청만 '새 접수'로 본다. 이미 동의/거절한 신청까지 세면
+      // 처리를 끝냈는데도 점이 계속 켜져 있고, 주문이 지워진 뒤 신청만 남으면 유령 알림이 된다.
+      const { data } = await sb.from('kt_group_change_requests').select('created_at,status').ilike('target_company', co);
+      (data||[]).forEach(r=>{ if(!r.status || String(r.status)==='pending') bump('recv', _ts(r.created_at)); });
     }),
     ...(sup?[
       safe(async()=>{
