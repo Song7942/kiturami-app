@@ -4296,8 +4296,14 @@ async function resetAllOrderData(){
   await loadInventory();
   await loadShipments();
   await loadOrderAllocations();
+  // 변경/취소 신청도 비웠으니 메모리 상태와 알림 점까지 즉시 새로 맞춘다.
+  // (안 하면 폴링 주기가 돌아올 때까지 지워진 신청이 화면에 남아 보인다)
+  await loadGroupChangeRequests();
+  await loadMyGroupChangeRequests();
   await loadAdminOrders();
   renderAdminOrders();
+  await loadOrderFeedStamps();
+  updateOrderUnreadDots();
   alert(t.resetOrdersDone);
 }
 async function resetOrdersOnly(){
