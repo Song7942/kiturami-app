@@ -4048,6 +4048,8 @@ async function liveTick(){
     if(active('pane-memberManagement')){
       if(!_focusedEditableIn('pane-memberManagement')){ await loadPendingSignups(); renderPendingSignups(); }
     }
+    // 출고 미완료 세모: 주문관리 화면에서는 위 렌더에서 이미 갱신되므로, 다른 탭에 있을 때만 따로 읽는다.
+    if(!active('pane-adminOrders')) await refreshOrderIncompleteMarks();
   }catch(e){ /* 폴링은 부가기능이라 조용히 무시 */ }
 }
 function startLive(){ if(_liveTimer) return; _liveTimer=setInterval(()=>{ liveTick(); }, 8000); }
@@ -5104,13 +5106,14 @@ function updateOrderUnreadDots(){
 function orderGroupsIncomplete(groups){
   return (groups||[]).some(g=>(g.totalOrderQty||0)>0 && (g.totalSuppliedQty||0)<(g.totalOrderQty||0));
 }
-// 주문관리 탭을 열기 전에도 세모가 보이도록, 판정에 필요한 데이터만 미리 읽는다.
+// 주문관리 탭을 열기 전에도 세모가 보이도록, 판정에 필요한 데이터만 읽는다.
+// 미완료 판정은 '주문수량 vs 출고누계' 만 쓰므로 배분(allocation)은 읽지 않는다.
 async function refreshOrderIncompleteMarks(){
   if(!currentUser) return;
   try{
-    await Promise.all([loadShipments(), loadOrderAllocations(), loadGroupChangeRequests()]);
+    await Promise.all([loadShipments(), loadGroupChangeRequests()]);
     await loadAdminOrders();
-    await Promise.all([loadShipmentsToMe(), loadMyCompanyOrders(), loadMyGroupChangeRequests(), loadMyOrderAllocations()]);
+    await Promise.all([loadShipmentsToMe(), loadMyCompanyOrders(), loadMyGroupChangeRequests()]);
     updateOrderIncompleteMarks();
   }catch(e){ /* 표시용 부가기능이라 조용히 넘어간다 */ }
 }
@@ -5747,6 +5750,7 @@ async function handleShipmentsUpload(event){
       if(error){ console.error(error); alert(t.shipUploadFail+'\n\n['+(error.message||error.code)+']'); event.target.value=''; return; }
       await loadShipments();
       renderShipmentsList();
+      updateOrderIncompleteMarks();   // 출고가 늘었으니 미완료 세모를 바로 다시 판단
       alert(t.shipUploadOk(rows.length));
     }catch(err){
       console.error(err);
@@ -5825,6 +5829,7 @@ async function saveEditShipment(){
   if(error){ errEl.textContent=(error.message||error.code); return; }
   await loadShipments();
   renderShipmentsList();
+  updateOrderIncompleteMarks();   // 출고 수량이 바뀌었으니 미완료 세모를 바로 다시 판단
   closeEditShipmentModal();
   alert(t.myInfoSaved);
 }
@@ -5836,6 +5841,7 @@ async function deleteShipment(id){
   if(error){ alert(t.reqFail+'\n\n['+(error.message||error.code)+']'); return; }
   await loadShipments();
   renderShipmentsList();
+  updateOrderIncompleteMarks();   // 출고가 삭제됐으니 미완료 세모를 바로 다시 판단
 }
 // 헤더 표와 본문 표가 따로 있는 화면(재고관리/출고내역 등)은, 두 표가 각자 %로 너비를 계산하다 보니
 // 화면 배율(확대/축소)에 따라 반올림 오차가 생겨서 열이 미세하게 어긋날 수 있습니다.
