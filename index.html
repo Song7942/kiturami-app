@@ -3979,7 +3979,7 @@ async function loadAdminOrdersTab(){
   pendingAllocations={};   // 탭을 새로 열면 전송 대기 중이던 편집은 버린다(서버값 기준으로 다시 시작)
   document.getElementById('adminOrderTbody').innerHTML='';
   document.getElementById('adminOrderEmpty').style.display='none';
-  switchAdminView('orders', false);   // 열자마자 읽음처리하지 않는다 (서브탭 점 유지)
+  switchAdminView('orders', false);   // 여기서 읽음처리하면 스탬프를 읽기 전이라 소용없다(아래에서 처리)
   await refreshCurrentUser();
   await loadOrderFeedStamps();         // 열 때 알림 스탬프를 새로 읽어 서브탭 점을 최신화
   updateOrderUnreadDots();
@@ -3994,6 +3994,11 @@ async function loadAdminOrdersTab(){
   await loadMyCompanyOrders();
   await loadMyGroupChangeRequests();
   renderAdminMyOrders();
+  // 지금 화면에 띄운 서브탭(주문접수)은 읽은 것으로 처리한다.
+  // 안 그러면 내용을 보고 처리까지 끝냈는데도 붉은 점이 계속 남는다
+  // (RUSSIA 처럼 '주문' 서브탭을 쓰지 않는 계정은 점을 지울 방법이 아예 없었다).
+  // 다른 서브탭('주문')의 점은 그대로 두어 새 소식이 있음을 계속 알린다.
+  markOrderViewSeen('orders');
 }
 // 주문관리 데이터만 다시 읽어 렌더(서브탭·전송대기·스크롤 유지). 라이브 갱신용.
 async function refreshAdminOrdersData(){
@@ -5893,7 +5898,7 @@ function syncSplitTableColumnWidths(hdrColId, bodyColId, tbodyId, mode){
             if(m==='ru'||m==='kz') return { caps:[...lead, 78, 70, 84, 56], noFill:true, rigid:rigidP };
             // 계산식(MASTER·KITURAMI): 앞 + 출고 | 원가(KRW·RUB·USD) | 러시아 3  ([임시] 카자흐 3 제거)
             // GP 는 56px. 음수 GP('-1234.5%' 55px)가 40px 에서 잘렸음.
-            return { caps:[...lead, 40, 74, 62, 62, 74, 60, 56], noFill:true, rigid:rigidP };
+            return { caps:[...lead, 66, 74, 62, 62, 74, 60, 56], noFill:true, rigid:rigidP };
           }
           if(tbodyId==='priceSupplyTbody'){
             // 앞: 품명|[규격]|[영문품명]|대표|호환|최종 + 공급가 RUB|USD
@@ -6911,7 +6916,7 @@ function renderPriceCalc(){
     <th style="${thS};border-left:1px solid var(--border)">KRW</th><th style="${thS}">RUB</th><th style="${thS}">USD</th>
     <th style="${thS};border-left:1px solid var(--border)">${t.priceThSupply}<br>KRW</th><th style="${thS}">${t.priceThSupply}<br>RUB</th><th style="${thS}">${t.priceThGp}</th></tr>`;
   // 원가는 KRW(입력) · RUB · USD 3열
-  const cols=`<col>${isKo?'<col>':''}${engColHtml()}<col><col><col><col style="width:40px"><col style="width:68px"><col style="width:62px"><col style="width:62px"><col style="width:72px"><col style="width:66px"><col style="width:48px">`;
+  const cols=`<col>${isKo?'<col>':''}${engColHtml()}<col><col><col><col style="width:66px"><col style="width:68px"><col style="width:62px"><col style="width:62px"><col style="width:72px"><col style="width:66px"><col style="width:48px">`;
   document.getElementById('pricecalc-hdr-col').innerHTML=cols;
   document.getElementById('pricecalc-body-col').innerHTML=cols;
   const tbody=document.getElementById('priceCalcTbody');
