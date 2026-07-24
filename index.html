@@ -546,7 +546,7 @@ input[type="text"]::placeholder{color:var(--muted)}
 </header>
 <div class="tabs">
   <button class="tab-btn active" onclick="switchTab('order')" id="tab-order">📦 주문</button>
-  <button class="tab-btn" style="display:none;position:relative" onclick="switchTab('adminOrders')" id="tab-adminOrders"><span id="i18n-tab-adminorders">🗂️ 주문관리</span><span id="adminOrdersUnreadDot" style="display:none;position:absolute;top:4px;right:2px;width:8px;height:8px;border-radius:50%;background:#ef4444;box-shadow:0 0 0 2px var(--bg)"></span></button>
+  <button class="tab-btn" style="display:none;position:relative" onclick="switchTab('adminOrders')" id="tab-adminOrders"><span id="i18n-tab-adminorders">🗂️ 주문관리</span><span id="adminOrdersIncompleteTri" title="출고 미완료" style="display:none;margin-left:4px;vertical-align:middle;color:#f59e0b;font-size:11px;line-height:1">▲</span><span id="adminOrdersUnreadDot" style="display:none;position:absolute;top:4px;right:2px;width:8px;height:8px;border-radius:50%;background:#ef4444;box-shadow:0 0 0 2px var(--bg)"></span></button>
   <button class="tab-btn"        onclick="switchTab('pn')"    id="tab-pn">🔄 품번 조회</button>
   <button class="tab-btn" style="display:none" onclick="switchTab('inventory')" id="tab-inventory">📊 재고관리</button>
   <button class="tab-btn" style="display:none" onclick="switchTab('shipments')" id="tab-shipments"><span id="i18n-tab-shipments">🚚 출고관리</span></button>
@@ -914,10 +914,12 @@ input[type="text"]::placeholder{color:var(--muted)}
     <div style="display:flex;gap:6px;margin-bottom:10px;border-bottom:1px solid var(--border)">
       <button class="news-tab active" id="adminTabOrders" onclick="switchAdminView('orders')" style="flex:1;text-align:center;position:relative">
         <span id="i18n-admintab-orders">주문 접수</span>
+        <span id="recvIncompleteTri" title="출고 미완료" style="display:none;margin-left:4px;vertical-align:middle;color:#f59e0b;font-size:11px;line-height:1">▲</span>
         <span id="recvUnreadDot" style="display:none;margin-left:5px;vertical-align:middle;width:8px;height:8px;border-radius:50%;background:#ef4444"></span>
       </button>
       <button class="news-tab" id="adminTabMyOrders" onclick="switchAdminView('myorders')" style="flex:1;text-align:center;position:relative">
         <span id="i18n-admintab-myorders">주문</span>
+        <span id="myOrdersIncompleteTri" title="출고 미완료" style="display:none;margin-left:4px;vertical-align:middle;color:#f59e0b;font-size:11px;line-height:1">▲</span>
         <span id="myOrdersUnreadDot" style="display:none;margin-left:5px;vertical-align:middle;width:8px;height:8px;border-radius:50%;background:#ef4444"></span>
       </button>
     </div>
@@ -3973,6 +3975,7 @@ function renderAdminOrders(){
     </div>`;
   }).join('');
   updateAdminSendBtn();
+  updateOrderIncompleteMarks();   // 출고 미완료 세모 표시 갱신
 }
 async function loadAdminOrdersTab(){
   if(!currentUser) return;
@@ -5014,6 +5017,7 @@ function renderAdminMyOrders(){
       ${actionCell}
     </div>`;
   }).join('');
+  updateOrderIncompleteMarks();   // 출고 미완료 세모 표시 갱신
 }
 // ── 주문 알림 점 ──
 // News 와 같은 방식: 마지막으로 본 시각을 localStorage 에 두고, 그보다 새 활동이 있으면 점을 띄운다.
@@ -5094,6 +5098,30 @@ function updateOrderUnreadDots(){
   show('recvUnreadDot', newRecv);
   show('myOrdersUnreadDot', newMine);
   show('adminOrdersUnreadDot', newRecv||newMine);   // 주문관리: 둘 중 하나라도 있으면
+}
+// 출고가 100% 되지 않은 건이 하나라도 있으면 세모(▲)로 표시한다.
+// 붉은 점(새 소식)과 달리 '읽음'과 무관하게, 미완료가 남아 있는 동안 계속 켜져 있다.
+function orderGroupsIncomplete(groups){
+  return (groups||[]).some(g=>(g.totalOrderQty||0)>0 && (g.totalSuppliedQty||0)<(g.totalOrderQty||0));
+}
+// 주문관리 탭을 열기 전에도 세모가 보이도록, 판정에 필요한 데이터만 미리 읽는다.
+async function refreshOrderIncompleteMarks(){
+  if(!currentUser) return;
+  try{
+    await Promise.all([loadShipments(), loadOrderAllocations(), loadGroupChangeRequests()]);
+    await loadAdminOrders();
+    await Promise.all([loadShipmentsToMe(), loadMyCompanyOrders(), loadMyGroupChangeRequests(), loadMyOrderAllocations()]);
+    updateOrderIncompleteMarks();
+  }catch(e){ /* 표시용 부가기능이라 조용히 넘어간다 */ }
+}
+function updateOrderIncompleteMarks(){
+  const show=(id,on)=>{ const el=document.getElementById(id); if(el) el.style.display=on?'inline-block':'none'; };
+  let recvInc=false, mineInc=false;
+  try{ recvInc=orderGroupsIncomplete(buildAdminOrderGroups()); }catch(e){}
+  try{ mineInc=orderGroupsIncomplete(buildMyOrderGroups()); }catch(e){}
+  show('recvIncompleteTri', recvInc);
+  show('myOrdersIncompleteTri', mineInc);
+  show('adminOrdersIncompleteTri', recvInc||mineInc);   // 주문관리: 둘 중 하나라도 미완료면
 }
 function markOrderViewSeen(view){
   if(view==='orders' && orderFeedLatest.recv) localStorage.setItem(_orderSeenKey('recv'), String(orderFeedLatest.recv));
@@ -8581,6 +8609,7 @@ function enterApp(user){
   if(tabReset) tabReset.style.display = (user.is_admin && !user.supplier_company && !role.isKituramiHQ) ? 'block' : 'none';
   loadOrderFeedStamps().then(updateOrderUnreadDots);   // 주문 알림 점 (탭을 열기 전에도 보이게)
   refreshSignupDot();                                  // 회원관리 알림 점 (대기 가입 신청)
+  refreshOrderIncompleteMarks();                       // 출고 미완료 세모 (탭을 열기 전에도 보이게)
   loadAllMemberPerms().then(()=>{ applyPermTabVisibility(); return loadEngNames(); }).then(rerenderActiveTab);   // 권한→탭노출→영문명 로드→재렌더
   startLive();                                         // 폴링(8초)으로 실시간처럼 갱신
   startRealtime();                                     // Realtime 구독(활성화 시 즉시 반영)
