@@ -7285,32 +7285,53 @@ async function handleCompanyPriceUpload(event){
       const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
       const aoa=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1, defval:''});
       const norm=s=>String(s==null?'':s).trim().toLowerCase().replace(/\s+/g,'');
-      // 머리글에서 대표품번·구매가·공급가A~D 위치를 찾는다. '공급가'(등급 없음)는 A 로 본다.
+      // ── 머리글 찾기 ──
+      // 'a b c d' 만 적힌 자유 양식도 받는다('공급가A'·'판매가A' 등 접두어도 허용).
+      // 품번 열은 머리글이 없을 수 있어, 없으면 아래에서 내용을 보고 찾는다.
+      const gradeOf=v=>{ const m=String(v||'').match(/^(?:공급가|판매가|단가)?([abcd])$/i); return m?m[1].toLowerCase():null; };
       let hdr=-1, cRep=-1, cBuy=-1, cSup={a:-1,b:-1,c:-1,d:-1};
-      for(let r=0;r<Math.min(10, aoa.length);r++){
+      for(let r=0;r<Math.min(15, aoa.length);r++){
         const row=(aoa[r]||[]).map(norm);
-        const i1=row.findIndex(v=>v==='대표품번'||v==='대표품번(미변경)');
-        if(i1<0) continue;
+        const s={ a:-1,b:-1,c:-1,d:-1 }; let n=0;
+        row.forEach((v,c)=>{ const g=gradeOf(v); if(g && s[g]<0){ s[g]=c; n++; } });
+        const i1=row.findIndex(v=>v==='대표품번'||v==='대표품번(미변경)'||v==='품번'||v==='최종품번'||v==='호환품번'||v==='articul'||v==='артикул');
         const iBuy=row.findIndex(v=>v==='구매가');
-        const find=(g)=>row.findIndex(v=>v==='공급가'+g);
-        const s={ a:find('a'), b:find('b'), c:find('c'), d:find('d') };
-        if(s.a<0) s.a=row.findIndex(v=>v==='공급가');   // 등급 표기 없는 옛 양식
-        if(iBuy>=0 || s.a>=0 || s.b>=0 || s.c>=0 || s.d>=0){ hdr=r; cRep=i1; cBuy=iBuy; cSup=s; break; }
+        if(s.a<0){ const p=row.findIndex(v=>v==='공급가'||v==='판매가'); if(p>=0){ s.a=p; n++; } }
+        if(n>0 || (i1>=0 && iBuy>=0)){ hdr=r; cSup=s; cRep=i1; cBuy=iBuy; break; }
       }
-      if(hdr<0){ alert('양식을 찾을 수 없습니다. 엑셀 다운로드로 받은 양식(대표품번·구매가·공급가A~D)을 사용해주세요.'); return; }
+      if(hdr<0){ alert('양식을 찾을 수 없습니다. 품번과 a·b·c·d(또는 공급가A~D) 열이 있는 표를 올려주세요.'); return; }
+      const toNum=v=>{ const s=String(v==null?'':v).replace(/,/g,'').trim(); if(s==='') return null; const n=Number(s); return isNaN(n)?null:n; };
+      // 품번 열에 머리글이 없으면, 품번으로 인식되는 값이 가장 많은 열을 품번 열로 본다.
+      if(cRep<0){
+        const used=new Set([cBuy, ...Object.values(cSup)].filter(c=>c>=0));
+        const cnt={};
+        for(let r=hdr+1;r<aoa.length;r++){
+          (aoa[r]||[]).forEach((v,c)=>{
+            if(used.has(c)) return;
+            const s=String(v==null?'':v).trim();
+            if(s && findMasterRep(s)) cnt[c]=(cnt[c]||0)+1;
+          });
+        }
+        let best=0; Object.keys(cnt).forEach(c=>{ if(cnt[c]>best){ best=cnt[c]; cRep=+c; } });
+      }
+      if(cRep<0){ alert('품번 열을 찾지 못했습니다. 품번이 적힌 열이 있는지 확인해주세요.'); return; }
       const rows=[];
       const now=new Date().toISOString();
-      let itemCount=0;
-      const toNum=v=>{ const s=String(v==null?'':v).replace(/,/g,'').trim(); if(s==='') return null; const n=Number(s); return isNaN(n)?null:n; };
+      let itemCount=0, unknown=0;
       for(let r=hdr+1;r<aoa.length;r++){
         const row=aoa[r]||[];
-        const rep=String(row[cRep]==null?'':row[cRep]).trim();
-        if(!rep) continue;
+        const repRaw=String(row[cRep]==null?'':row[cRep]).trim();
+        if(!repRaw) continue;
+        // 호환품번·최종품번으로 적어도 대표품번으로 바꿔 저장한다.
+        const rep=findMasterRep(repRaw)||repRaw;
+        if(!findMasterRep(repRaw)) unknown++;
         itemCount++;
+        // 엑셀에 없는 열은 기존 값을 유지한다(빈 값으로 덮어쓰지 않게).
+        const prev=companyPriceData[rep]||{};
         // A 는 기존 행의 supply_price 에, B~D 는 접미사 행에 저장한다(컬럼을 늘릴 수 없어서).
         rows.push({ company:role.company, rep,
-                    buy_price: cBuy>=0?toNum(row[cBuy]):null,
-                    supply_price: cSup.a>=0?toNum(row[cSup.a]):null,
+                    buy_price: cBuy>=0?toNum(row[cBuy]):(prev.buy_price!=null?prev.buy_price:null),
+                    supply_price: cSup.a>=0?toNum(row[cSup.a]):(prev.supply_price!=null?prev.supply_price:null),
                     updated_at:now });
         ['b','c','d'].forEach(g=>{
           if(cSup[g]<0) return;   // 그 등급 열이 없으면 건드리지 않는다
@@ -7325,7 +7346,8 @@ async function handleCompanyPriceUpload(event){
       }
       await loadCompanyPrices();
       renderPriceCompany();
-      alert(`가격 ${itemCount}건이 업데이트되었습니다.`);
+      alert(`가격 ${itemCount}건이 업데이트되었습니다.`
+            + (unknown?`\n(품번조회에 없는 품번 ${unknown}건은 적힌 그대로 저장했습니다)`:''));
     }catch(err){
       console.error(err);
       alert('엑셀 업로드에 실패했습니다.');
