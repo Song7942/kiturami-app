@@ -3720,6 +3720,15 @@ function buyerDecisionHtml(g, repEsc){
   return '';
 }
 function decisionLabelText(g){ const t=T[lang]; return g.confirmed?t.decisionConfirmed:(g.agreed?t.decisionAgreed:''); }
+// 신청보다 나중에 들어온 주문이 있으면 그 신청은 '지난 주문' 건이므로 무시한다.
+// 초기화로 주문만 지워지고 신청이 남았을 때, 새 주문 수량이 옛 조정값으로 덮이는 것을 막는다.
+// (예: 옛 조정 90 이 남은 채 새로 200 을 주문하면 주문현황이 90 으로 보이던 문제)
+function _freshChangeReq(changeReq, lastOrderTs){
+  if(!changeReq) return null;
+  const reqTs=Date.parse(changeReq.created_at||'');
+  if(!isFinite(reqTs) || !isFinite(lastOrderTs) || !lastOrderTs) return changeReq;   // 판단 불가면 종전대로
+  return reqTs < lastOrderTs ? null : changeReq;
+}
 // 변경/취소 신청이 승인되면 '신청 시점의 출고 누계 + 신청수량' 으로 주문수량을 고정한다.
 // 현재 출고 누계로 계산하면 신청 이후에 나간 출고가 주문수량에 다시 더해져 수량이 불어난다.
 // (예: 200 주문 → 100 출고 → 미출고분을 90 으로 조정 → 90 출고하면 190+90=280 이 되던 문제)
@@ -3748,9 +3757,10 @@ function buildAdminOrderGroups(){
   adminOrderRows.forEach(r=>{
     const key=r.company+'||'+r.rep;
     if(!groups[key]){
-      groups[key]={ company:r.company, user_id:r.user_id, rep:r.rep, name_ko:r.name_ko, name_ru:r.name_ru, spec:r.spec, orderLines:[] };
+      groups[key]={ company:r.company, user_id:r.user_id, rep:r.rep, name_ko:r.name_ko, name_ru:r.name_ru, spec:r.spec, orderLines:[], lastOrderTs:0 };
     }
     groups[key].orderLines.push({ date: toDateOnly(r.createdAt), qty: r.qty||0 });
+    const ts=Date.parse(r.createdAt||''); if(isFinite(ts) && ts>groups[key].lastOrderTs) groups[key].lastOrderTs=ts;
   });
 
   Object.values(groups).forEach(g=>{
@@ -3765,7 +3775,9 @@ function buildAdminOrderGroups(){
     g.totalSuppliedQty=g.supplyLines.reduce((s,l)=>s+l.qty,0);
 
     // 취소/변경 신청이 동의되면, 그 신청 수량이 최종 주문 수량이 됩니다(미출고분에 한해서만 조정 가능했으므로 출고분은 그대로 유지).
-    const changeReq=groupChangeRequests[g.company+'||'+g.rep]||null;
+    // 단, 신청보다 나중에 들어온 주문이 있으면 그 신청은 지난 주문 건이므로 적용하지 않는다.
+    // (초기화 등으로 신청만 남아 있을 때 새 주문 수량이 옛 조정값으로 덮이는 것을 막는다)
+    const changeReq=_freshChangeReq(groupChangeRequests[g.company+'||'+g.rep]||null, g.lastOrderTs);
     g.changeRequest=changeReq;
     if(changeReq && changeReq.status==='agreed'){
       g.totalOrderQty = orderQtyAfterChange(changeReq, myShipments);
@@ -4763,8 +4775,9 @@ function buildMyOrderGroups(){
   const groups={};
   myCompanyOrderRows.forEach(r=>{
     const key=r.rep;
-    if(!groups[key]){ groups[key]={ rep:r.rep, name_ko:r.name_ko, name_ru:r.name_ru, spec:r.spec, orderLines:[] }; }
+    if(!groups[key]){ groups[key]={ rep:r.rep, name_ko:r.name_ko, name_ru:r.name_ru, spec:r.spec, orderLines:[], lastOrderTs:0 }; }
     groups[key].orderLines.push({ date: toDateOnly(r.createdAt), qty: r.qty||0 });
+    const ts=Date.parse(r.createdAt||''); if(isFinite(ts) && ts>groups[key].lastOrderTs) groups[key].lastOrderTs=ts;
   });
   Object.values(groups).forEach(g=>{
     g.orderLines.sort((a,b)=> a.date<b.date?-1:(a.date>b.date?1:0));
@@ -4776,7 +4789,8 @@ function buildMyOrderGroups(){
       .sort((a,b)=> (a.date||'')<(b.date||'')?-1:((a.date||'')>(b.date||'')?1:0));
     g.totalSuppliedQty=g.supplyLines.reduce((s,l)=>s+l.qty,0);
 
-    const changeReq=myGroupChangeRequests[g.rep]||null;
+    // 신청보다 나중에 들어온 주문이 있으면 그 신청은 지난 주문 건이라 적용하지 않는다.
+    const changeReq=_freshChangeReq(myGroupChangeRequests[g.rep]||null, g.lastOrderTs);
     g.changeRequest=changeReq;
     if(changeReq && changeReq.status==='agreed'){
       g.totalOrderQty = orderQtyAfterChange(changeReq, myShipments);
