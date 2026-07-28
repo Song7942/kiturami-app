@@ -2756,7 +2756,7 @@ function pnCellHist(rep, field){
   const has=p && Array.isArray(p.history) && p.history.some(h=>h && h.f===field);
   if(!has) return { cls:'', badge:'' };
   return { cls:' pn-changed',
-    badge:` <span class="pn-hist-badge" onclick="event.stopPropagation();openPNHistoryModal('${String(rep).replace(/'/g,"\\'")}','${field}')" title="변경이력 보기">🕘</span>` };
+    badge:` <span class="pn-hist-badge" onclick="event.stopPropagation();openPNHistoryModal('${String(rep).replace(/'/g,"\\'")}','${field}')" title="${lang==='ru'?'История изменений':'변경이력 보기'}">🕘</span>` };
 }
 // 변경이력 1건 기록: 메모리 history 에 추가하고 kt_pn_overrides.history(jsonb) 에 저장.
 // history 컬럼이 없어도 다른 편집은 안 깨진다(별도 upsert).
@@ -2775,22 +2775,28 @@ async function recordPNHistory(rep, field, oldVal, newVal){
 }
 // 변경이력 팝업: 변경일시 · 변경 전 · 변경 후 (최신순).
 function openPNHistoryModal(rep, field){
+  const ru=lang==='ru';
   const p=getPNInfo(rep);
   const entries=((p&&Array.isArray(p.history))?p.history:[]).filter(h=>h&&h.f===field).slice().reverse();
-  const labels={name_ko:'품명',spec:'규격',name_ru:'러시아어 품명',name_en:'영문품명',rep:'대표품번',compat:'호환품번',final:'최종품번'};
+  const labels=ru
+    ? {name_ko:'Наименование',spec:'Спецификация',name_ru:'Рус. название',name_en:'Англ. название',rep:'Осн. артикул',compat:'Артикул замены',final:'Актуальный артикул'}
+    : {name_ko:'품명',spec:'규격',name_ru:'러시아어 품명',name_en:'영문품명',rep:'대표품번',compat:'호환품번',final:'최종품번'};
+  const T2=ru
+    ? {title:'История изменений',before:'До:',after:'После:',empty:'(пусто)',none:'Нет истории изменений.'}
+    : {title:'변경이력',before:'변경 전:',after:'변경 후:',empty:'(빈값)',none:'변경이력이 없습니다.'};
   const fname=labels[field]||field;
   const fmt=iso=>{ try{ const d=new Date(iso), z=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())} ${z(d.getHours())}:${z(d.getMinutes())}`; }catch(e){ return iso; } };
   const rowsHtml=entries.length ? entries.map(h=>`
     <div style="border-bottom:1px solid var(--border);padding:8px 0">
       <div style="font-size:11px;color:var(--muted)">${escapeHtml(fmt(h.t))}${h.u?(' · '+escapeHtml(h.u)):''}</div>
-      <div style="font-size:12px;margin-top:3px"><span style="color:var(--muted)">변경 전:</span> <span style="text-decoration:line-through;color:#ef4444">${escapeHtml(h.o||'(빈값)')}</span></div>
-      <div style="font-size:12px"><span style="color:var(--muted)">변경 후:</span> <span style="color:#22c55e;font-weight:600">${escapeHtml(h.n||'(빈값)')}</span></div>
-    </div>`).join('') : '<div style="color:var(--muted);font-size:12px;padding:8px 0">변경이력이 없습니다.</div>';
+      <div style="font-size:12px;margin-top:3px"><span style="color:var(--muted)">${T2.before}</span> <span style="text-decoration:line-through;color:#ef4444">${escapeHtml(h.o||T2.empty)}</span></div>
+      <div style="font-size:12px"><span style="color:var(--muted)">${T2.after}</span> <span style="color:#22c55e;font-weight:600">${escapeHtml(h.n||T2.empty)}</span></div>
+    </div>`).join('') : `<div style="color:var(--muted);font-size:12px;padding:8px 0">${T2.none}</div>`;
   const ov=document.createElement('div');
   ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:99999;padding:16px';
   ov.innerHTML=`<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;max-width:440px;width:100%;max-height:80vh;overflow:auto;box-shadow:0 12px 40px rgba(0,0,0,.35)">
     <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid var(--border)">
-      <b style="color:var(--text)">변경이력 — ${escapeHtml(fname)} <span class="code" style="font-size:11px">${escapeHtml(rep)}</span></b>
+      <b style="color:var(--text)">${T2.title} — ${escapeHtml(fname)} <span class="code" style="font-size:11px">${escapeHtml(rep)}</span></b>
       <button class="_hc" style="background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer">✕</button>
     </div>
     <div style="padding:12px 18px">${rowsHtml}</div>
