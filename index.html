@@ -2558,13 +2558,26 @@ function renderPNChunk(startFrom=0){
   const chunk=_pnFiltered.slice(startFrom, startFrom+_pnChunk);
   const showEng=canViewEngName();
   const engTd=r=>showEng?`<td style="font-size:11px;color:var(--accent2);font-weight:600">${escapeHtml(engNameText(r.rep))}</td>`:'';
+  const isMaster=userRole(currentUser).isMaster;   // MASTER 만 셀 인라인 수정
+  // 편집용 셀(contenteditable). MASTER 가 고치면 품번조회(단일 기준)에 저장되고 모든 화면에 반영된다.
+  const ed=(rep,field,raw)=>`<span contenteditable="true" class="pn-edit" data-pnrep="${escapeHtml(rep)}" data-pnfield="${field}" data-pnorig="${escapeHtml(raw||'')}" onblur="onPNCellBlur(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}" style="display:inline-block;min-width:20px;outline:none;border-bottom:1px dashed var(--accent2);cursor:text;padding:0 2px">${escapeHtml(raw||'')}</span>`;
   const rows=chunk.map(r=>{
-    const name=isKo?hlPN(r.name_ko,kw):hlPN(r.name_ru||r.name_ko,kw);
-    const spec=isKo?`<td style="font-size:11px;color:var(--muted)">${hlPN(r.spec,kw)}</td>`:'';
-    const nameRu=isKo?`<td style="font-size:11px;color:var(--muted)">${hlPN(r.name_ru,kw)}</td>`:'';
+    const en=engNameText(r.rep);
+    const nameCell = isMaster
+      ? `<td class="sticky-col1" style="font-weight:500;font-size:11px">${ed(r.rep, isKo?'name_ko':'name_ru', isKo?r.name_ko:r.name_ru)}</td>`
+      : `<td class="sticky-col1" style="font-weight:500;font-size:11px">${isKo?hlPN(r.name_ko,kw):hlPN(r.name_ru||r.name_ko,kw)}</td>`;
+    const specCell = !isKo ? '' : (isMaster
+      ? `<td style="font-size:11px;color:var(--muted)">${ed(r.rep,'spec',r.spec)}</td>`
+      : `<td style="font-size:11px;color:var(--muted)">${hlPN(r.spec,kw)}</td>`);
+    const nameRuCell = !isKo ? '' : (isMaster
+      ? `<td style="font-size:11px;color:var(--muted)">${ed(r.rep,'name_ru',r.name_ru)}</td>`
+      : `<td style="font-size:11px;color:var(--muted)">${hlPN(r.name_ru,kw)}</td>`);
+    const engCell = !showEng ? '' : (isMaster
+      ? `<td style="font-size:11px;color:var(--accent2);font-weight:600">${ed(r.rep,'name_en',en)}</td>`
+      : `<td style="font-size:11px;color:var(--accent2);font-weight:600">${escapeHtml(en)}</td>`);
     return `<tr>
-      <td class="sticky-col1" style="font-weight:500;font-size:11px">${name}</td>
-      ${spec}${nameRu}${engTd(r)}
+      ${nameCell}
+      ${specCell}${nameRuCell}${engCell}
       <td><span class="pn-badge pn-rep">${hlPN(r.rep,kw)}</span></td>
       <td>${(r.compats||[]).map(c=>`<span class="pn-badge pn-cur">${hlPN(c,kw)}</span>`).join(' ')}</td>
       <td>${r.final?`<span class="pn-badge pn-fin">${hlPN(r.final,kw)}</span>`:''}</td>
@@ -2687,6 +2700,42 @@ function applyPNOverrideRow(o){
     PN_DATA.push({ rep:o.rep, compats:Array.isArray(o.compats)?o.compats.slice():[], final:o.final||o.rep,
                    name_ko:o.name_ko||'', name_ru:o.name_ru||'', spec:o.spec||'' });
   }
+}
+// ── 품번조회 셀 인라인 수정 (MASTER 전용) ──
+// 품번조회를 이름의 단일 기준으로 삼는다. 여기서 고치면 모든 화면이 getPNInfo/engNameText 로 가져간다.
+// field: name_ko | name_ru | spec  → kt_pn_overrides,  name_en → kt_names_en
+async function savePNCell(rep, field, value){
+  if(!userRole(currentUser).isMaster) return { ok:false };
+  rep=String(rep||'').trim(); if(!rep) return { ok:false };
+  const val=String(value==null?'':value).trim();
+  if(field==='name_en'){
+    const { error } = await sb.from('kt_names_en').upsert({ rep, name_en: val },{onConflict:'rep'});
+    if(error){ alert('저장 실패\n['+(error.message||error.code)+']'); return { ok:false }; }
+    const k=rep.toUpperCase();
+    if(val) engNameByRep[k]=val; else delete engNameByRep[k];
+    return { ok:true };
+  }
+  if(!['name_ko','name_ru','spec'].includes(field)) return { ok:false };
+  const cur=getPNInfo(rep)||{ rep, name_ko:'', name_ru:'', spec:'', final:rep, compats:[] };
+  // 메모리 반영(빈 값도 반영 — 지우기 허용). 그다음 캐시 무효화.
+  let p=PN_DATA.find(x=>x.rep===rep);
+  if(!p){ p={ rep, name_ko:cur.name_ko||'', name_ru:cur.name_ru||'', spec:cur.spec||'', final:cur.final||rep, compats:(cur.compats||[]).slice() }; PN_DATA.push(p); }
+  p[field]=val;
+  _pnLookupMap=null; _pnByRepMap=null; _nameRuByRep=null;
+  const row={ rep, name_ko:p.name_ko||'', name_ru:p.name_ru||'', spec:p.spec||'', final:p.final||rep, compats:p.compats||[] };
+  const { error } = await sb.from('kt_pn_overrides').upsert(row,{onConflict:'rep'});
+  if(error){ alert('저장 실패\n['+(error.message||error.code)+']'); return { ok:false }; }
+  return { ok:true };
+}
+// contenteditable 셀에서 포커스가 빠질 때 저장. 값이 안 바뀌었으면 아무 것도 안 한다.
+async function onPNCellBlur(el){
+  const rep=el.getAttribute('data-pnrep'), field=el.getAttribute('data-pnfield');
+  const val=el.textContent.replace(/\s+/g,' ').trim();
+  if(val===(el.getAttribute('data-pnorig')||'')) return;
+  const r=await savePNCell(rep, field, val);
+  if(r.ok){ el.setAttribute('data-pnorig', val); el.textContent=val;
+    // 다른 탭이 열려 있더라도 다음 렌더에서 반영된다. 현재 화면 값은 이미 바뀌어 있다.
+  } else { el.textContent=el.getAttribute('data-pnorig')||''; }
 }
 async function loadPNOverrides(){
   const { data, error } = await sb.from('kt_pn_overrides').select('*');
