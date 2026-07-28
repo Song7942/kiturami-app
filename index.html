@@ -731,6 +731,10 @@ input[type="text"]::placeholder{color:var(--muted)}
           <span id="i18n-pndl">엑셀 다운로드</span>
         </button>
       </div>
+      <!-- 가로 스크롤바 (검색창과 헤더 사이). 열이 많아 가로로 넘칠 때만 보인다. -->
+      <div class="tbl-scrollbar" id="pnTblScrollbar" style="display:none">
+        <div class="tbl-scrollbar-thumb" id="pnTblScrollbarThumb"></div>
+      </div>
       <!-- 테이블 헤더 고정 -->
       <div class="pn-hdr-wrap" id="pnHdrWrap">
         <table>
@@ -2127,6 +2131,7 @@ function setupHTableScroll(scrollId,headerId,trackId,thumbId){
 }
 let updatePartsTableScrollbar=function(){};
 let updateOrderTableScrollbar=function(){};
+let updatePNTableScrollbar=function(){};
 
 function initDiagScrollbar(){
   const ds=document.getElementById('diagScroll');
@@ -6209,6 +6214,7 @@ function syncSplitTableColumnWidths(hdrColId, bodyColId, tbodyId, mode){
           // 두고 scrollLeft 동기화가 헤더를 함께 민다.
           if(wrap){ wrap.style.width=ftotal+'px'; wrap.style.maxWidth=''; }
           if(hdrWrap){ hdrWrap.style.width=''; hdrWrap.style.maxWidth=''; }
+          if(typeof updatePNTableScrollbar==='function') updatePNTableScrollbar();   // 위쪽 가로 스크롤바 갱신
           return;
         }
         const widths=bodyW.map((w,i)=>{
@@ -8269,7 +8275,8 @@ function setupSimpleHeaderScrollSync(scrollId, headerId){
 }
 setupSimpleHeaderScrollSync('scrollBodyInventory','invHdrWrap');
 setupSimpleHeaderScrollSync('scrollBodyShipments','shipHdrWrap');
-setupSimpleHeaderScrollSync('scrollBodyPN','pnHdrWrap');
+// 품번조회는 열이 많아 가로 스크롤이 필요하므로, 검색창과 헤더 사이의 커스텀 스크롤바로 제어(헤더 동기화 포함).
+updatePNTableScrollbar=setupHTableScroll('scrollBodyPN','pnHdrWrap','pnTblScrollbar','pnTblScrollbarThumb');
 setupSimpleHeaderScrollSync('scrollBodyPrice','priceCalcHdrWrap');
 setupSimpleHeaderScrollSync('scrollBodyPrice','priceSupplyHdrWrap');
 updatePartsTableScrollbar();updateOrderTableScrollbar();
