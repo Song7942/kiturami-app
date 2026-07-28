@@ -2578,17 +2578,28 @@ function renderPNChunk(startFrom=0){
     const engCell = !showEng ? '' : (isMaster
       ? `<td style="font-size:11px;color:var(--accent2);font-weight:600">${ed(r.rep,'name_en',en)}</td>`
       : `<td style="font-size:11px;color:var(--accent2);font-weight:600">${escapeHtml(en)}</td>`);
-    const modelCell = `<td style="text-align:center;line-height:1.5">${appliedModelsHtml(r.rep)}</td>`;   // 적용모델(임시) — 표시 전용
+    // 적용모델(임시): MASTER 는 편집(저장값 applied_models, 없으면 주문데이터 유추 텍스트). 그 외엔 태그 표시.
+    const modelCell = isMaster
+      ? `<td style="text-align:left;line-height:1.5">${ed(r.rep,'applied_models', (r.applied_models!=null&&r.applied_models!=='')?r.applied_models:appliedModelsText(r.rep))}</td>`
+      : `<td style="text-align:center;line-height:1.5">${(r.applied_models!=null&&r.applied_models!=='')?escapeHtml(r.applied_models):appliedModelsHtml(r.rep)}</td>`;
     const noteCell = isMaster
       ? `<td style="font-size:11px;color:var(--muted);text-align:left">${ed(r.rep,'note',r.note)}</td>`
       : `<td style="font-size:11px;color:var(--muted);text-align:left">${escapeHtml(r.note||'')}</td>`;
     const delBtn = isMaster ? ` <button title="삭제" onclick="event.stopPropagation();deletePNItem('${String(r.rep).replace(/'/g,"\\'")}')" style="border:none;background:none;color:#ef4444;cursor:pointer;font-size:12px;padding:0 2px;vertical-align:middle">✕</button>` : '';
+    // 대표품번·호환품번·최종품번: MASTER 는 직접 편집(호환품번은 콤마/공백으로 여러 개).
+    const repCell = isMaster
+      ? `<td style="white-space:nowrap">${ed(r.rep,'rep',r.rep)}${delBtn}</td>`
+      : `<td style="white-space:nowrap"><span class="pn-badge pn-rep">${hlPN(r.rep,kw)}</span></td>`;
+    const compatCell = isMaster
+      ? `<td style="font-size:11px">${ed(r.rep,'compat',(r.compats||[]).map(pnUpperLead).join(', '))}</td>`
+      : `<td>${(r.compats||[]).map(c=>`<span class="pn-badge pn-cur">${hlPN(pnUpperLead(c),kw)}</span>`).join(' ')}</td>`;
+    const finalCell = isMaster
+      ? `<td style="font-size:11px">${ed(r.rep,'final',pnUpperLead(r.final||''))}</td>`
+      : `<td>${r.final?`<span class="pn-badge pn-fin">${hlPN(pnUpperLead(r.final),kw)}</span>`:''}</td>`;
     return `<tr>
       ${nameCell}
       ${specCell}${nameRuCell}${engCell}${modelCell}
-      <td style="white-space:nowrap"><span class="pn-badge pn-rep">${hlPN(r.rep,kw)}</span>${delBtn}</td>
-      <td>${(r.compats||[]).map(c=>`<span class="pn-badge pn-cur">${hlPN(pnUpperLead(c),kw)}</span>`).join(' ')}</td>
-      <td>${r.final?`<span class="pn-badge pn-fin">${hlPN(pnUpperLead(r.final),kw)}</span>`:''}</td>
+      ${repCell}${compatCell}${finalCell}
       ${noteCell}
     </tr>`;
   }).join('');
@@ -2710,9 +2721,11 @@ function applyPNOverrideRow(o){
     if(o.final!=null && o.final!=='') cur.final=o.final;
     if(Array.isArray(o.compats) && o.compats.length) cur.compats=o.compats.slice();
     if(o.note!=null) cur.note=o.note;
+    if(o.applied_models!=null) cur.applied_models=o.applied_models;
   }else{
-    PN_DATA.push({ rep:o.rep, compats:Array.isArray(o.compats)?o.compats.slice():[], final:o.final||o.rep,
-                   name_ko:o.name_ko||'', name_ru:o.name_ru||'', spec:o.spec||'', note:o.note||'' });
+    // 새로 추가된 품목: 최종품번은 대표품번을 자동으로 따라가지 않는다(빈 값 허용).
+    PN_DATA.push({ rep:o.rep, compats:Array.isArray(o.compats)?o.compats.slice():[], final:o.final||'',
+                   name_ko:o.name_ko||'', name_ru:o.name_ru||'', spec:o.spec||'', note:o.note||'', applied_models:o.applied_models||'' });
   }
 }
 // ── 품번조회 셀 인라인 수정 (MASTER 전용) ──
@@ -2722,6 +2735,7 @@ async function savePNCell(rep, field, value){
   if(!userRole(currentUser).isMaster) return { ok:false };
   rep=String(rep||'').trim(); if(!rep) return { ok:false };
   const val=String(value==null?'':value).trim();
+  if(field==='rep') return await _renamePNRep(rep, val);   // 대표품번 변경 = 행 이름표 교체
   if(field==='name_en'){
     const { error } = await sb.from('kt_names_en').upsert({ rep, name_en: val },{onConflict:'rep'});
     if(error){ alert('저장 실패\n['+(error.message||error.code)+']'); return { ok:false }; }
@@ -2729,31 +2743,52 @@ async function savePNCell(rep, field, value){
     if(val) engNameByRep[k]=val; else delete engNameByRep[k];
     return { ok:true };
   }
-  if(field==='note'){
-    // 참고내용은 별도 컬럼(note). 이름 편집과 upsert 를 분리해, note 컬럼이 없어도 이름 편집은 안 깨진다.
-    let p=PN_DATA.find(x=>x.rep===rep); if(p) p.note=val;
+  // 별도 컬럼(note·applied_models): 이름 편집과 upsert 를 분리해, 컬럼이 없어도 이름 편집은 안 깨진다.
+  if(field==='note' || field==='applied_models'){
+    let p=PN_DATA.find(x=>x.rep===rep); if(p) p[field]=val;
     _pnByRepMap=null;
-    const { error } = await sb.from('kt_pn_overrides').upsert({ rep, note: val },{onConflict:'rep'});
+    const { error } = await sb.from('kt_pn_overrides').upsert({ rep, [field]: val },{onConflict:'rep'});
     if(error){
-      const noCol=/note|column|schema/i.test(error.message||'');
+      const noCol=/note|applied_models|column|schema/i.test(error.message||'');
       alert(noCol
-        ? '참고내용을 저장하려면 Supabase 에서 아래 SQL 을 한 번 실행하세요(다른 표는 건드리지 마세요):\n\nalter table kt_pn_overrides add column if not exists note text;'
+        ? '참고내용/적용모델을 저장하려면 Supabase 에서 아래 SQL 을 한 번 실행하세요(다른 표는 건드리지 마세요):\n\nalter table kt_pn_overrides add column if not exists note text;\nalter table kt_pn_overrides add column if not exists applied_models text;'
         : ('저장 실패\n['+(error.message||error.code)+']'));
       return { ok:false };
     }
     return { ok:true };
   }
-  if(!['name_ko','name_ru','spec'].includes(field)) return { ok:false };
-  const cur=getPNInfo(rep)||{ rep, name_ko:'', name_ru:'', spec:'', final:rep, compats:[] };
-  // 메모리 반영(빈 값도 반영 — 지우기 허용). 그다음 캐시 무효화.
+  if(!['name_ko','name_ru','spec','final','compat'].includes(field)) return { ok:false };
+  // 메모리 반영(빈 값도 반영 — 지우기 허용). final 은 대표품번을 따라가지 않는다.
   let p=PN_DATA.find(x=>x.rep===rep);
-  if(!p){ p={ rep, name_ko:cur.name_ko||'', name_ru:cur.name_ru||'', spec:cur.spec||'', final:cur.final||rep, compats:(cur.compats||[]).slice() }; PN_DATA.push(p); }
-  p[field]=val;
+  if(!p){ const cur=getPNInfo(rep)||{}; p={ rep, name_ko:cur.name_ko||'', name_ru:cur.name_ru||'', spec:cur.spec||'', final:cur.final||'', compats:(cur.compats||[]).slice() }; PN_DATA.push(p); }
+  let rerender=false;
+  if(field==='compat'){ p.compats = val ? val.split(/[\s,]+/).map(s=>pnUpperLead(s.trim())).filter(Boolean) : []; rerender=true; }
+  else if(field==='final'){ p.final = pnUpperLead(val); }
+  else { p[field]=val; }
   _pnLookupMap=null; _pnByRepMap=null; _nameRuByRep=null;
-  const row={ rep, name_ko:p.name_ko||'', name_ru:p.name_ru||'', spec:p.spec||'', final:p.final||rep, compats:p.compats||[] };
+  const row={ rep, name_ko:p.name_ko||'', name_ru:p.name_ru||'', spec:p.spec||'', final:p.final||'', compats:p.compats||[] };
   const { error } = await sb.from('kt_pn_overrides').upsert(row,{onConflict:'rep'});
   if(error){ alert('저장 실패\n['+(error.message||error.code)+']'); return { ok:false }; }
-  return { ok:true };
+  return { ok:true, rerender };
+}
+// 대표품번 변경: 옛 rep 은 톰스톤으로 지우고 새 rep 으로 오버라이드를 다시 만든다.
+async function _renamePNRep(oldRep, newRaw){
+  const newRep=pnUpperLead(String(newRaw||'').trim());
+  if(!newRep){ return { ok:false }; }
+  if(newRep===oldRep) return { ok:true };
+  if(PN_DATA.some(p=>p.rep===newRep)){ alert('이미 있는 품번입니다: '+newRep); return { ok:false }; }
+  const p=PN_DATA.find(x=>x.rep===oldRep) || {};
+  const d={ name_ko:p.name_ko||'', name_ru:p.name_ru||'', spec:p.spec||'', final:p.final||'', compats:(p.compats||[]).slice(), note:p.note||'', applied_models:p.applied_models||'' };
+  const i=PN_DATA.findIndex(x=>x.rep===oldRep); if(i>=0) PN_DATA.splice(i,1);
+  PN_DATA.unshift({ rep:newRep, ...d });
+  _pnLookupMap=null; _pnByRepMap=null; _nameRuByRep=null;
+  const e1=await sb.from('kt_pn_overrides').upsert({ rep:oldRep, name_ko:'', name_ru:'', spec:'', final:PN_TOMBSTONE, compats:[] },{onConflict:'rep'});
+  const e2=await sb.from('kt_pn_overrides').upsert({ rep:newRep, name_ko:d.name_ko, name_ru:d.name_ru, spec:d.spec, final:d.final, compats:d.compats },{onConflict:'rep'});
+  if(e1.error||e2.error){ alert('대표품번 변경 저장 실패\n['+((e1.error||e2.error).message)+']'); return { ok:false }; }
+  const enOld=engNameByRep[oldRep.toUpperCase()];
+  if(enOld){ try{ await sb.from('kt_names_en').upsert({ rep:newRep, name_en:enOld },{onConflict:'rep'}); engNameByRep[newRep.toUpperCase()]=enOld; delete engNameByRep[oldRep.toUpperCase()]; }catch(e){} }
+  if(d.note||d.applied_models){ try{ await sb.from('kt_pn_overrides').upsert({ rep:newRep, note:d.note, applied_models:d.applied_models },{onConflict:'rep'}); }catch(e){} }
+  return { ok:true, rerender:true };
 }
 // 편집용 contenteditable span (품번조회·주문·부품조회 공용). MASTER 만 이걸로 렌더한다.
 // onclick 전파를 막아, 셀을 눌러 편집해도 행 클릭(하이라이트) 이 발동하지 않게 한다.
@@ -2767,8 +2802,9 @@ async function onPNCellBlur(el){
   const val=el.textContent.replace(/\s+/g,' ').trim();
   if(val===(el.getAttribute('data-pnorig')||'')) return;
   const r=await savePNCell(rep, field, val);
-  if(r.ok){ el.setAttribute('data-pnorig', val); el.textContent=val;
-    // 다른 탭이 열려 있더라도 다음 렌더에서 반영된다. 현재 화면 값은 이미 바뀌어 있다.
+  if(r && r.ok){
+    if(r.rerender){ renderPN(); }   // 대표품번·호환품번 변경은 표시(뱃지·행 식별)가 달라져 다시 그린다
+    else { el.setAttribute('data-pnorig', val); el.textContent=val; }
   } else { el.textContent=el.getAttribute('data-pnorig')||''; }
 }
 async function loadPNOverrides(){
@@ -2779,7 +2815,7 @@ async function loadPNOverrides(){
     if(row.final===PN_TOMBSTONE){ const i=PN_DATA.findIndex(p=>p.rep===row.rep); if(i>=0) PN_DATA.splice(i,1); return; }
     let compats=row.compats;
     if(typeof compats==='string'){ try{ compats=JSON.parse(compats); }catch(e){ compats=[]; } }
-    applyPNOverrideRow({ rep:row.rep, name_ko:row.name_ko, name_ru:row.name_ru, spec:row.spec, final:row.final, compats:compats||[], note:row.note });
+    applyPNOverrideRow({ rep:row.rep, name_ko:row.name_ko, name_ru:row.name_ru, spec:row.spec, final:row.final, compats:compats||[], note:row.note, applied_models:row.applied_models });
   });
   _pnLookupMap=null; _pnByRepMap=null; _nameRuByRep=null;
 }
@@ -6473,6 +6509,12 @@ function appliedModelsHtml(rep){
   const tags=MODEL_DEFS.filter(m=>models[m.key]).map(m=>`<span style="display:inline-block;font-size:9px;line-height:1.4;color:${m.color};background:${m.color}1e;border:1px solid ${m.color}55;border-radius:4px;padding:0 3px;margin:1px">${escapeHtml(m.group+' '+m.label)}</span>`);
   return tags.join('');
 }
+// 적용모델을 편집칸에 넣을 기본 텍스트(주문 데이터에서 유추). 저장값(applied_models)이 있으면 그것을 쓴다.
+function appliedModelsText(rep){
+  const models=_partsModels(rep);
+  if(!models || typeof MODEL_DEFS==='undefined') return '';
+  return MODEL_DEFS.filter(m=>models[m.key]).map(m=>m.group+' '+m.label).join(', ');
+}
 // ── 품목 추가/삭제 (MASTER 전용) ──
 async function addPNItem(){
   if(!userRole(currentUser).isMaster){ alert('MASTER 만 추가할 수 있습니다.'); return; }
@@ -6481,7 +6523,8 @@ async function addPNItem(){
   rep=String(rep).trim().toUpperCase();
   if(!rep) return;
   if(PN_DATA.some(p=>p.rep===rep)){ alert('이미 있는 품번입니다: '+rep); return; }
-  const row={ rep, name_ko:'', name_ru:'', spec:'', final:rep, compats:[] };
+  // 최종품번(final)은 대표품번을 자동으로 따라가지 않는다 — 빈 값으로 두고 직접 입력.
+  const row={ rep, name_ko:'', name_ru:'', spec:'', final:'', compats:[] };
   PN_DATA.unshift({ ...row });        // 목록 맨 위에 추가(바로 보이게)
   _pnLookupMap=null; _pnByRepMap=null; _nameRuByRep=null;
   const { error } = await sb.from('kt_pn_overrides').upsert(row,{onConflict:'rep'});
