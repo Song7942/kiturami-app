@@ -2514,7 +2514,7 @@ function renderTable(){
   const od=renderHeader();
   document.getElementById('tbody').innerHTML=rows.map(d=>{
     const engTd=canViewEngName()?`<td style="text-align:center;color:var(--accent2);font-weight:600;font-size:11px">${escapeHtml(engNameText(d.rep))}</td>`:'';
-    const nc=lang==='ko'?`<td style="font-weight:500;text-align:center">${hl(d.name_ko,kw)}</td><td style="color:var(--muted);font-size:10px;text-align:center">${hl(d.spec,kw)}</td>${engTd}`:`<td style="font-weight:500;text-align:center">${hl(d.name_ru,kw)}</td>${engTd}`;
+    const nc=lang==='ko'?`<td style="font-weight:500;text-align:center">${hl(pnNameKo(d.rep,d.name_ko),kw)}</td><td style="color:var(--muted);font-size:10px;text-align:center">${hl(pnSpec(d.rep,d.spec),kw)}</td>${engTd}`:`<td style="font-weight:500;text-align:center">${hl(pnNameRu(d.rep,d.name_ru),kw)}</td>${engTd}`;
     return `<tr data-diag="${d.diag}" onclick="onRowClickHighlight('${d.diag}','${d.rep.replace(/'/g,"\\'")}',false)"><td class="center" style="color:var(--muted);font-size:11px">${hl(d.diag,kw)}</td>${nc}<td style="text-align:center"><span class="code">${hl(d.rep,kw)}</span></td>${od.map(m=>{const sel=selectedKeys!==null&&selectedKeys.has(m.key);return `<td class="center"${sel?` style="background:${m.color}18"`:''}>${dot(d.models[m.key])}</td>`;}).join('')}</tr>`;
   }).join('');
   const cl=document.getElementById('cardList');cl.querySelectorAll('.part-card').forEach(e=>e.remove());
@@ -2524,7 +2524,7 @@ function renderTable(){
     const el=document.createElement('div');el.className='part-card';el.dataset.diag=d.diag;
     el.addEventListener('click',()=>onRowClickHighlight(String(d.diag), d.rep, false));
     const engLine=canViewEngName()&&engNameText(d.rep)?`<div style="font-size:11px;color:var(--accent2);font-weight:600">${escapeHtml(engNameText(d.rep))}</div>`:'';
-    const nh=lang==='ko'?`<span class="pc-name">${hl(d.name_ko,kw)}</span>${engLine}</div><div class="pc-spec">${hl(d.spec,kw)}`:`<span class="pc-name">${hl(d.name_ru,kw)}</span>${engLine}`;
+    const nh=lang==='ko'?`<span class="pc-name">${hl(pnNameKo(d.rep,d.name_ko),kw)}</span>${engLine}</div><div class="pc-spec">${hl(pnSpec(d.rep,d.spec),kw)}`:`<span class="pc-name">${hl(pnNameRu(d.rep,d.name_ru),kw)}</span>${engLine}`;
     el.innerHTML=`<div class="pc-top"><span class="pc-diag" data-diag="${escapeHtml(String(d.diag))}" data-rep="${escapeHtml(d.rep)}">${T[lang].thDiag} ${hl(d.diag,kw)}</span>${nh}</div><div class="pc-code"><span class="code">${hl(d.rep,kw)}</span></div><div class="model-tags">${applied.map(m=>`<span class="mt" style="color:${m.color};background:${m.color}22;border-color:${m.color}44">${m.group} ${m.label}</span>`).join('')}</div>`;
     frag.appendChild(el);
   });
@@ -3047,7 +3047,7 @@ function renderOrderTable(){
     const qty=orderQty[key]||'';
     const priceText=orderPriceText(d.rep);
     const engTdO=canViewEngName()?`<td style="text-align:center;color:var(--accent2);font-weight:600;font-size:11px">${escapeHtml(engNameText(d.rep))}</td>`:'';
-    const nc=isKo?`<td style="font-weight:500;text-align:center">${d.name_ko}</td><td style="color:var(--muted);font-size:10px;text-align:center">${d.spec}</td>${engTdO}`:`<td style="font-weight:500;text-align:center">${d.name_ru}</td>${engTdO}`;
+    const nc=isKo?`<td style="font-weight:500;text-align:center">${escapeHtml(pnNameKo(d.rep,d.name_ko))}</td><td style="color:var(--muted);font-size:10px;text-align:center">${escapeHtml(pnSpec(d.rep,d.spec))}</td>${engTdO}`:`<td style="font-weight:500;text-align:center">${escapeHtml(pnNameRu(d.rep,d.name_ru))}</td>${engTdO}`;
     const modelCells=columns.map(col=>{const hlStyle=col.selected?` style="background:${col.color}18"`:'';return `<td class="center"${hlStyle}>${dot(isColumnApplied(d,col))}</td>`;}).join('');
     const vis=orderColVis();
     let tail='';
@@ -3071,8 +3071,8 @@ function renderOrderTable(){
       if(shortfall>0) orderQty[key]=shortfall;
     }
     const qty=orderQty[key]||'';
-    const nm=isKo?d.name_ko:d.name_ru;
-    const specHtml=isKo?`<div class="pc-spec">${d.spec}</div>`:'';
+    const nm=isKo?escapeHtml(pnNameKo(d.rep,d.name_ko)):escapeHtml(pnNameRu(d.rep,d.name_ru));
+    const specHtml=isKo?`<div class="pc-spec">${escapeHtml(pnSpec(d.rep,d.spec))}</div>`:'';
     let tagHtml='';
     if(columns.length && columns[0].isGroup){
       const appliedGroups=columns.filter(col=>isColumnApplied(d,col));
@@ -3922,8 +3922,8 @@ function renderAdminOrders(){
   const fixedColCount = (isKo?5:4)+(showEng?1:0);
 
   tbody.innerHTML=groups.map(g=>{
-    const name=lang==='ko'?g.name_ko:(g.name_ru||g.name_ko);
-    const specTd=isKo?`<td class="wrap-ok" style="padding:9px 12px;color:var(--muted)">${escapeHtml(g.spec)}</td>`:'';
+    const name=lang==='ko'?pnNameKo(g.rep,g.name_ko):pnNameRu(g.rep,g.name_ru||g.name_ko);
+    const specTd=isKo?`<td class="wrap-ok" style="padding:9px 12px;color:var(--muted)">${escapeHtml(pnSpec(g.rep,g.spec))}</td>`:'';
     const engTd=showEng?`<td class="wrap-ok" style="padding:9px 12px;color:var(--accent2);font-weight:600">${escapeHtml(engNameText(g.rep))}</td>`:'';
     const ratePct=(g.supplyRate*100).toFixed(1)+'%';
     const repEsc=g.rep.replace(/'/g,"\\'");
@@ -3985,7 +3985,7 @@ function renderAdminOrders(){
   // 모바일 카드
   const cardList=document.getElementById('adminOrderCardList');
   if(cardList) cardList.innerHTML=groups.map(g=>{
-    const name=lang==='ko'?g.name_ko:(g.name_ru||g.name_ko);
+    const name=lang==='ko'?pnNameKo(g.rep,g.name_ko):pnNameRu(g.rep,g.name_ru||g.name_ko);
     const ratePct=(g.supplyRate*100).toFixed(1)+'%';
     const repEsc=g.rep.replace(/'/g,"\\'");
     const companyEsc=g.company.replace(/'/g,"\\'");
@@ -4002,7 +4002,7 @@ function renderAdminOrders(){
       <div style="display:flex;justify-content:space-between;align-items:start">
         <div>
           <div class="pc-name">${escapeHtml(name)}${canViewEngName()&&engNameText(g.rep)?` <span style="color:var(--accent2);font-weight:600">(${escapeHtml(engNameText(g.rep))})</span>`:''} ${g.changeHistory?`<span style="color:#3b82f6;font-size:11px;font-weight:700;text-decoration:underline;cursor:pointer" onclick="openAdminChangeHistoryModal('${String(g.company).replace(/'/g,"\\'")}','${String(g.rep).replace(/'/g,"\\'")}')">[${t.changeHistoryLabel}]</span>`:''}</div>
-          ${isKo?`<div class="pc-spec">${escapeHtml(g.spec)}</div>`:''}
+          ${isKo?`<div class="pc-spec">${escapeHtml(pnSpec(g.rep,g.spec))}</div>`:''}
           <div class="code" style="margin-top:4px">${escapeHtml(g.rep)}</div>
         </div>
         <div style="text-align:right;font-size:11px;color:var(--muted)">${escapeHtml(g.company)}<br>${escapeHtml(g.user_id)}</div>
@@ -5007,8 +5007,8 @@ function renderAdminMyOrders(){
   const fixedColCount = (isKo?4:3)+(showEng?1:0);
 
   tbody.innerHTML=groups.map(g=>{
-    const name=lang==='ko'?g.name_ko:(g.name_ru||g.name_ko);
-    const specTd=isKo?`<td class="wrap-ok" style="padding:9px 12px;color:var(--muted)">${escapeHtml(g.spec)}</td>`:'';
+    const name=lang==='ko'?pnNameKo(g.rep,g.name_ko):pnNameRu(g.rep,g.name_ru||g.name_ko);
+    const specTd=isKo?`<td class="wrap-ok" style="padding:9px 12px;color:var(--muted)">${escapeHtml(pnSpec(g.rep,g.spec))}</td>`:'';
     const engTd=showEng?`<td class="wrap-ok" style="padding:9px 12px;color:var(--accent2);font-weight:600">${escapeHtml(engNameText(g.rep))}</td>`:'';
     const ratePct=(g.supplyRate*100).toFixed(1)+'%';
     const stockText=g.stockDisplay===null?'-':g.stockDisplay;
@@ -5066,7 +5066,7 @@ function renderAdminMyOrders(){
   // 모바일 카드
   const cardList=document.getElementById('adminMyOrderCardList');
   if(cardList) cardList.innerHTML=groups.map(g=>{
-    const name=lang==='ko'?g.name_ko:(g.name_ru||g.name_ko);
+    const name=lang==='ko'?pnNameKo(g.rep,g.name_ko):pnNameRu(g.rep,g.name_ru||g.name_ko);
     const ratePct=(g.supplyRate*100).toFixed(1)+'%';
     const repEsc=g.rep.replace(/'/g,"\\'");
     const stockText=g.stockDisplay===null?'-':g.stockDisplay;
@@ -5086,7 +5086,7 @@ function renderAdminMyOrders(){
     })();
     return `<div class="order-card">
       <div class="pc-name">${escapeHtml(name)}${canViewEngName()&&engNameText(g.rep)?` <span style="color:var(--accent2);font-weight:600">(${escapeHtml(engNameText(g.rep))})</span>`:''} ${g.changeHistory?`<span style="color:#3b82f6;font-size:11px;font-weight:700;text-decoration:underline;cursor:pointer" onclick="openChangeHistoryModal('${String(g.rep).replace(/'/g,"\\'")}')">[${t.changeHistoryLabel}]</span>`:''}</div>
-      ${isKo?`<div class="pc-spec">${escapeHtml(g.spec)}</div>`:''}
+      ${isKo?`<div class="pc-spec">${escapeHtml(pnSpec(g.rep,g.spec))}</div>`:''}
       <div class="code" style="margin-top:4px">${escapeHtml(g.rep)}</div>
       <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:12px">
         <div style="display:flex;justify-content:space-between;font-weight:700"><span>${t.grpOrderStatus}</span><span>${g.totalOrderQty}</span></div>
@@ -5253,7 +5253,7 @@ function downloadAdminMyOrders(){
   ];
   const rows=[];
   groups.forEach(g=>{
-    const name=lang==='ko'?g.name_ko:(g.name_ru||g.name_ko);
+    const name=lang==='ko'?pnNameKo(g.rep,g.name_ko):pnNameRu(g.rep,g.name_ru||g.name_ko);
     rows.push([
       name, ...(isKo?[g.spec]:[]), g.rep, (g.stockDisplay===null?'':g.stockDisplay),
       '', g.totalOrderQty,
@@ -5293,7 +5293,7 @@ function downloadAdminOrders(){
   ];
   const rows=[];
   groups.forEach(g=>{
-    const name=lang==='ko'?g.name_ko:(g.name_ru||g.name_ko);
+    const name=lang==='ko'?pnNameKo(g.rep,g.name_ko):pnNameRu(g.rep,g.name_ru||g.name_ko);
     rows.push([
       g.company, g.user_id, name, ...(isKo?[g.spec]:[]), g.rep,
       '', g.totalOrderQty,
@@ -6409,6 +6409,15 @@ function getPNInfo(rep){
   if(!rep) return null;
   return buildPNByRepMap().get(rep) || null;
 }
+// 이름의 단일 기준 = 품번조회(PN_DATA). 각 화면은 이 헬퍼로 이름/규격을 가져온다.
+// 품번조회에 값이 있으면 그 값을, 없으면 화면이 원래 갖고 있던 값(fb)을 쓴다.
+// rep 은 대표품번이 아닐 수도 있어(호환/최종품번) findMasterRep 로 대표품번을 찾아 조회한다.
+function _pnResolved(rep){ if(!rep) return null; return getPNInfo(rep) || getPNInfo(findMasterRep(rep)) || null; }
+function pnNameKo(rep, fb){ const i=_pnResolved(rep); return (i&&i.name_ko)||fb||''; }
+function pnNameRu(rep, fb){ const i=_pnResolved(rep); return (i&&i.name_ru)||fb||''; }
+function pnSpec(rep, fb){ const i=_pnResolved(rep); return (i&&i.spec!=null&&i.spec!=='')?i.spec:(fb||''); }
+// 화면 언어에 맞는 품명(품번조회 기준)
+function pnName(rep, fbKo, fbRu){ return lang==='ru' ? pnNameRu(rep, fbRu||fbKo) : pnNameKo(rep, fbKo); }
 let receivedOrderTotals={}; // 고객사(구매처)들로부터 접수받은 주문수량 합계 (rep 기준)
 async function loadReceivedOrderTotals(){
   const { data, error } = await sb.from('kt_orders').select('items').ilike('target_company', currentUser?currentUser.company:'');
@@ -6830,14 +6839,10 @@ function calcPriceRow(r){
 }
 // 가격 데이터(kt_price_calc)에는 러시아어 품명이 없으므로 PN_DATA에서 대표품번으로 찾는다.
 // 품번조회 탭과 같은 규칙(없으면 한국어 품명)으로 표시한다.
-let _nameRuByRep=null;
+let _nameRuByRep=null;   // (구) 캐시 — 이제 pnName* 헬퍼를 쓰므로 미사용이나 savePNCell 무효화 대상이라 유지
+// 가격정보 품명은 품번조회(단일 기준)에서 가져온다. 없으면 가격데이터 자체 값으로 폴백.
 function priceNameFor(row){
-  if(lang!=='ru') return row.name_ko||'';
-  if(!_nameRuByRep){
-    _nameRuByRep={};
-    if(typeof PN_DATA!=='undefined') PN_DATA.forEach(p=>{ if(p.rep && p.name_ru) _nameRuByRep[p.rep]=p.name_ru; });
-  }
-  return row.name_ru || _nameRuByRep[row.rep] || row.name_ko || '';
+  return lang==='ru' ? pnNameRu(row.rep, row.name_ru || row.name_ko) : pnNameKo(row.rep, row.name_ko);
 }
 // 대표품번별 최고 공급가 (동일 대표품번에 원가/공급가가 다르면 가장 높은 공급가 채택)
 function buildSupplyByRep(){
@@ -7056,7 +7061,7 @@ function renderPriceCalc(){
     const c=calcPriceRow(r);
     return `<tr style="border-bottom:1px solid var(--border);font-size:11px" class="price-row">
       <td style="padding:3px 4px;word-break:break-all">${escapeHtml(priceNameFor(r))}</td>
-      ${isKo?`<td style="padding:3px 4px;color:var(--muted);font-size:10px;word-break:break-all">${escapeHtml(r.spec||'')}</td>`:''}${engTdHtml(r.rep,'style="padding:3px 4px;color:var(--accent2);font-weight:600;word-break:break-all"')}
+      ${isKo?`<td style="padding:3px 4px;color:var(--muted);font-size:10px;word-break:break-all">${escapeHtml(pnSpec(r.rep,r.spec))}</td>`:''}${engTdHtml(r.rep,'style="padding:3px 4px;color:var(--accent2);font-weight:600;word-break:break-all"')}
       <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(r.rep||'')}</span></td>
       <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(r.compat||'')}</span></td>
       <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(r.final||'')}</span></td>
@@ -7072,7 +7077,7 @@ function renderPriceCalc(){
   // 모바일 카드 (조회용 — 편집은 데스크톱 표에서)
   setPriceCards(rows.map(r=>{
     const c=calcPriceRow(r);
-    return priceCardHtml(priceNameFor(r), isKo?r.spec:'',
+    return priceCardHtml(priceNameFor(r), isKo?pnSpec(r.rep,r.spec):'',
       [{label:t.pnH1,val:r.rep},{label:t.pnH2,val:r.compat},{label:t.pnH3,val:r.final},{label:t.priceThShip.replace('<br>',' '),val:fmtN(r.ship_qty)}],
       [{label:t.priceThCost+' KRW',val:fmtN(c.ruCost)},{label:t.priceThCost+' RUB',val:fmtN(c.costRub)},{label:t.priceThCost+' USD',val:fmtN(c.costUsd)},
        {label:t.priceThRu+' '+t.priceThSupply+' KRW',val:fmtN(c.ruSupply)},{label:t.priceThRu+' '+t.priceThSupply+' RUB',val:fmtN(c.ruRub)},{label:t.priceThRu+' '+t.priceThGp,val:fmtGp(c.ruGpVal)}], r.rep
@@ -7106,14 +7111,14 @@ function renderPriceSupply(){
   emptyEl.style.display='none';
   tbody.innerHTML=list.map(m=>`<tr style="border-bottom:1px solid var(--border);font-size:11px" class="price-row">
       <td style="padding:3px 4px;word-break:break-all">${escapeHtml(priceNameFor(m))}</td>
-      ${isKo?`<td style="padding:3px 4px;color:var(--muted);font-size:10px;word-break:break-all">${escapeHtml(m.spec||'')}</td>`:''}${engTdHtml(m.rep,'style="padding:3px 4px;color:var(--accent2);font-weight:600;word-break:break-all"')}
+      ${isKo?`<td style="padding:3px 4px;color:var(--muted);font-size:10px;word-break:break-all">${escapeHtml(pnSpec(m.rep,m.spec))}</td>`:''}${engTdHtml(m.rep,'style="padding:3px 4px;color:var(--accent2);font-weight:600;word-break:break-all"')}
       <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(m.rep)}</span></td>
       <td style="padding:3px 4px">${m.compats.map(c=>`<span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(c)}</span>`).join('<br>')}</td>
       <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(m.final||'')}</span></td>
       <td style="text-align:right;padding:3px 6px;font-weight:600">${fmtN(m.rub)}</td>
       <td style="text-align:right;padding:3px 6px;font-weight:600">${fmtN(m.usd)}</td>
     </tr>`).join('');
-  setPriceCards(list.map(m=>priceCardHtml(priceNameFor(m), isKo?m.spec:'',
+  setPriceCards(list.map(m=>priceCardHtml(priceNameFor(m), isKo?pnSpec(m.rep,m.spec):'',
     [{label:t.pnH1,val:m.rep},{label:t.pnH2,val:(m.compats||[]).join(', ')},{label:t.pnH3,val:m.final}],
     [{label:t.priceThSupply+' (RUB)',val:fmtN(m.rub)},{label:t.priceThSupply+' (USD)',val:fmtN(m.usd)}]
   , m.rep)).join(''));
@@ -7309,7 +7314,7 @@ function renderPriceRegion(region){
   emptyEl.style.display='none';
   tbody.innerHTML=list.map(m=>`<tr style="border-bottom:1px solid var(--border);font-size:11px" class="price-row">
       <td style="padding:3px 4px;word-break:break-all">${escapeHtml(priceNameFor(m))}</td>
-      ${isKo?`<td style="padding:3px 4px;color:var(--muted);font-size:10px;word-break:break-all">${escapeHtml(m.spec||'')}</td>`:''}${engTdHtml(m.rep,'style="padding:3px 4px;color:var(--accent2);font-weight:600;word-break:break-all"')}
+      ${isKo?`<td style="padding:3px 4px;color:var(--muted);font-size:10px;word-break:break-all">${escapeHtml(pnSpec(m.rep,m.spec))}</td>`:''}${engTdHtml(m.rep,'style="padding:3px 4px;color:var(--accent2);font-weight:600;word-break:break-all"')}
       <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(m.rep)}</span></td>
       <td style="padding:3px 4px">${m.compats.map(c=>`<span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(c)}</span>`).join('<br>')}</td>
       <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(m.final||'')}</span></td>
@@ -7318,7 +7323,7 @@ function renderPriceRegion(region){
       <td style="text-align:right;padding:3px 6px;font-weight:600;border-left:1px solid var(--border)">${fmtN(isKz?m.usd:m.rub)}</td>
       <td class="center" style="padding:3px 2px;color:var(--muted)">${fmtGp(isKz?m.kzGp:m.ruGp)}</td>
     </tr>`).join('');
-  setPriceCards(list.map(m=>priceCardHtml(priceNameFor(m), isKo?m.spec:'',
+  setPriceCards(list.map(m=>priceCardHtml(priceNameFor(m), isKo?pnSpec(m.rep,m.spec):'',
     [{label:t.pnH1,val:m.rep},{label:t.pnH2,val:(m.compats||[]).join(', ')},{label:t.pnH3,val:m.final}],
     [{label:t.priceThCost+' KRW',val:fmtN(m.cost)},{label:t.priceThCost+' '+cur,val:fmtN(isKz?m.costUsd:m.costRub)},{label:t.priceThSupply+' '+cur,val:fmtN(isKz?m.usd:m.rub)},{label:t.priceThGp,val:fmtGp(isKz?m.kzGp:m.ruGp)}]
   , m.rep)).join(''));
@@ -7374,7 +7379,7 @@ function renderPriceCompany(){
     const repEsc=String(m.rep).replace(/'/g,"\\'");
     return `<tr style="border-bottom:1px solid var(--border);font-size:11px" class="price-row">
       <td style="padding:3px 4px;word-break:break-all">${escapeHtml(priceNameFor(m))}</td>
-      ${isKo?`<td style="padding:3px 4px;color:var(--muted);font-size:10px;word-break:break-all">${escapeHtml(m.spec||'')}</td>`:''}${engTdHtml(m.rep,'style="padding:3px 4px;color:var(--accent2);font-weight:600;word-break:break-all"')}
+      ${isKo?`<td style="padding:3px 4px;color:var(--muted);font-size:10px;word-break:break-all">${escapeHtml(pnSpec(m.rep,m.spec))}</td>`:''}${engTdHtml(m.rep,'style="padding:3px 4px;color:var(--accent2);font-weight:600;word-break:break-all"')}
       <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(m.rep)}</span></td>
       <td style="padding:3px 4px">${m.compats.map(c=>`<span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(c)}</span>`).join('<br>')}</td>
       <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(m.final||'')}</span></td>
@@ -7383,7 +7388,7 @@ function renderPriceCompany(){
       ${supplyTd(m.supplyB)}${supplyTd(m.supplyC)}${supplyTd(m.supplyD)}
     </tr>`;
   }).join('');
-  setPriceCards(list.map(m=>priceCardHtml(priceNameFor(m), isKo?m.spec:'',
+  setPriceCards(list.map(m=>priceCardHtml(priceNameFor(m), isKo?pnSpec(m.rep,m.spec):'',
     [{label:t.pnH1,val:m.rep},{label:t.pnH2,val:(m.compats||[]).join(', ')},{label:t.pnH3,val:m.final}],
     [{label:t.priceThBuy,val:fmtN(m.buy)},{label:t.priceThSupplyA,val:fmtN(m.supplyA)},{label:t.priceThSupplyB,val:fmtN(m.supplyB)},{label:t.priceThSupplyC,val:fmtN(m.supplyC)},{label:t.priceThSupplyD,val:fmtN(m.supplyD)}]
   , m.rep)).join(''));
