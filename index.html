@@ -2582,8 +2582,8 @@ function renderPNChunk(startFrom=0){
     const modelCell = isMaster
       ? `<td style="text-align:left;font-size:11px">${ed(r.rep,'applied_models', r.applied_models||'')}</td>`
       : `<td style="text-align:left;font-size:11px">${escapeHtml(r.applied_models||'')}</td>`;
-    // 적용모델: 부품조회(주문 데이터)의 모델·용량별 적용표를 그리드로 표시(읽기 전용).
-    const model2Cell = `<td style="text-align:left">${appliedModelsGridHtml(r.rep)}</td>`;
+    // 적용모델: 부품조회처럼 개별 모델 열로 O/- 표시(읽기 전용).
+    const modelDotCells = pnModelDotCells(r.rep);
     const noteCell = isMaster
       ? `<td style="font-size:11px;color:var(--muted);text-align:left">${ed(r.rep,'note',r.note)}</td>`
       : `<td style="font-size:11px;color:var(--muted);text-align:left">${escapeHtml(r.note||'')}</td>`;
@@ -2600,8 +2600,9 @@ function renderPNChunk(startFrom=0){
       : `<td>${r.final?`<span class="pn-badge pn-fin">${hlPN(pnUpperLead(r.final),kw)}</span>`:''}</td>`;
     return `<tr>
       ${nameCell}
-      ${specCell}${nameRuCell}${engCell}${modelCell}${model2Cell}
+      ${specCell}${nameRuCell}${engCell}
       ${repCell}${compatCell}${finalCell}
+      ${modelCell}${modelDotCells}
       ${noteCell}
     </tr>`;
   }).join('');
@@ -2653,19 +2654,25 @@ function renderPN(){
   const showEng=canViewEngName();
   const engCol=showEng?'<col>':'';
   // 열: 품명·[규격]·[러시아품명]·[영문품명]·적용모델(임시)·대표·호환·최종·참고내용
-  const cols = isKo ? ('<col><col><col>'+engCol+'<col><col><col><col><col><col>') : ('<col>'+engCol+'<col><col><col><col><col><col>');
+  // 열: 품명·[규격]·[러품]·[영문]·대표·호환·최종·적용모델(임시)·<모델 15열>·참고
+  const modelCols='<col>'.repeat(MODEL_DEFS.length);
+  const cols = isKo ? ('<col><col><col>'+engCol+'<col><col><col><col>'+modelCols+'<col>') : ('<col>'+engCol+'<col><col><col><col>'+modelCols+'<col>');
   ['pn-hdr-col','pn-body-col'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=cols;});
 
   const thead=document.getElementById('pn-thead');
   if(thead){
     const brLabel=(x)=>String(x||'').replace(' (','<br>(');
-    const engTh=showEng?`<th>${lang==='ru'?'Англ. название':'영문품명'}</th>`:'';
-    const modelTh=`<th>${lang==='ru'?'Модели (врем.)':'적용모델<br>(임시)'}</th>`;
-    const model2Th=`<th>${lang==='ru'?'Модели':'적용모델'}</th>`;
-    const noteTh=`<th>${lang==='ru'?'Примечание':'참고내용'}</th>`;
-    thead.innerHTML=isKo
-      ? `<tr><th class="sticky-col1">${t.pnH0}</th><th>${t.pnH0s}</th><th>러시아어 품명</th>${engTh}${modelTh}${model2Th}<th id="pn-th1">${brLabel(t.pnH1)}</th><th id="pn-th2">${brLabel(t.pnH2)}</th><th id="pn-th3">${brLabel(t.pnH3)}</th>${noteTh}</tr>`
-      : `<tr><th class="sticky-col1">${t.pnH0}</th>${engTh}${modelTh}${model2Th}<th id="pn-th1">${brLabel(t.pnH1)}</th><th id="pn-th2">${brLabel(t.pnH2)}</th><th id="pn-th3">${brLabel(t.pnH3)}</th>${noteTh}</tr>`;
+    const rs=' rowspan="2"';
+    const engTh=showEng?`<th${rs}>${lang==='ru'?'Англ. название':'영문품명'}</th>`:'';
+    const modelTh=`<th${rs}>${lang==='ru'?'Модели (врем.)':'적용모델<br>(임시)'}</th>`;
+    const noteTh=`<th${rs}>${lang==='ru'?'Примечание':'참고내용'}</th>`;
+    const front = isKo
+      ? `<th class="sticky-col1"${rs}>${t.pnH0}</th><th${rs}>${t.pnH0s}</th><th${rs}>러시아어 품명</th>${engTh}`
+      : `<th class="sticky-col1"${rs}>${t.pnH0}</th>${engTh}`;
+    thead.innerHTML=`<tr>${front}`
+      +`<th id="pn-th1"${rs}>${brLabel(t.pnH1)}</th><th id="pn-th2"${rs}>${brLabel(t.pnH2)}</th><th id="pn-th3"${rs}>${brLabel(t.pnH3)}</th>`
+      +`${modelTh}${pnModelGroupHeaderRow1()}${noteTh}</tr>`
+      +`<tr>${pnModelCapHeaderRow2()}</tr>`;
   }
   // MASTER 만 '품목 추가' 버튼 노출
   const addBtn=document.getElementById('pnAddBtn'); if(addBtn) addBtn.style.display=userRole(currentUser).isMaster?'':'none';
@@ -6115,16 +6122,19 @@ function syncSplitTableColumnWidths(hdrColId, bodyColId, tbodyId, mode){
             return { caps:[...lead, 84, 84], noFill:true, rigid:allRigidFrom(s, n) };
           }
           if(tbodyId==='pnTbody'){
-            // KO: 품명|규격|러시아품명|[영문품명]|적용모델(임시)|적용모델|대표|호환|최종|참고내용
-            // RU: 품명|[영문품명]|적용모델(임시)|적용모델|대표|호환|최종|참고내용
+            // KO: 품명|규격|러품|[영문]|대표|호환|최종|적용모델(임시)|<모델 15열>|참고
+            // RU: 품명|[영문]|대표|호환|최종|적용모델(임시)|<모델 15열>|참고
             const isKoP=(lang==='ko');
             const eng=canViewEngName();
+            const modelCaps=(typeof MODEL_DEFS!=='undefined'?MODEL_DEFS:[]).map(()=>34);   // 모델 열 좁게
             if(isKoP){
-              const caps=eng?[280,260,260,220,160,260,110,150,110,240]:[280,260,260,160,260,110,150,110,240];
-              const s=eng?6:5; return { caps, noFill:true, rigid:[s,s+1,s+2] };   // 대표·호환·최종만 고정
+              const front=eng?[280,260,260,220]:[280,260,260];
+              const s=eng?4:3;   // 대표품번 인덱스(대표·호환·최종만 고정)
+              return { caps:[...front, 110,150,110, 150, ...modelCaps, 220], noFill:true, rigid:[s,s+1,s+2] };
             } else {
-              const caps=eng?[280,220,160,260,110,150,110,240]:[280,160,260,110,150,110,240];
-              const s=eng?4:3; return { caps, noFill:true, rigid:[s,s+1,s+2] };
+              const front=eng?[280,220]:[280];
+              const s=eng?2:1;
+              return { caps:[...front, 110,150,110, 150, ...modelCaps, 220], noFill:true, rigid:[s,s+1,s+2] };
             }
           }
           if(tbodyId==='inventoryTbody'){
@@ -6517,6 +6527,25 @@ function appliedModelsText(rep){
   const models=_partsModels(rep);
   if(!models || typeof MODEL_DEFS==='undefined') return '';
   return MODEL_DEFS.filter(m=>models[m.key]).map(m=>m.group+' '+m.label).join(', ');
+}
+// '적용모델' 을 부품조회처럼 개별 열로: 2행 헤더(그룹 colspan + 용량) + 본문 점(O/-).
+function _modelGroupsOrdered(){
+  const gs=[], byG={};
+  MODEL_DEFS.forEach(m=>{ if(!byG[m.group]){byG[m.group]=[];gs.push(m.group);} byG[m.group].push(m); });
+  return gs.map(g=>({ group:g, caps:byG[g] }));
+}
+function pnModelGroupHeaderRow1(){
+  return _modelGroupsOrdered().map(o=>{ const color=o.caps[0].color||'#888';
+    return `<th colspan="${o.caps.length}" style="text-align:center;font-size:10px;font-weight:700;color:${color};border-left:1px solid var(--border)">${escapeHtml(o.group)}</th>`; }).join('');
+}
+function pnModelCapHeaderRow2(){
+  return MODEL_DEFS.map((m,i)=>{ const newG = i===0 || MODEL_DEFS[i-1].group!==m.group;
+    return `<th style="text-align:center;font-size:9px;color:var(--muted)${newG?';border-left:1px solid var(--border)':''}">${escapeHtml(m.label)}</th>`; }).join('');
+}
+function pnModelDotCells(rep){
+  const models=_partsModels(rep)||{};
+  return MODEL_DEFS.map((m,i)=>{ const newG = i===0 || MODEL_DEFS[i-1].group!==m.group;
+    return `<td class="center"${newG?' style="border-left:1px solid var(--border)"':''}>${dot(!!models[m.key])}</td>`; }).join('');
 }
 // '적용모델' 열: 부품조회처럼 모델그룹 헤더 + 용량별 칸 + O 표시 그리드(적용되는 용량만).
 function appliedModelsGridHtml(rep){
