@@ -2578,8 +2578,8 @@ function renderPNChunk(startFrom=0){
       ${nameCell}
       ${specCell}${nameRuCell}${engCell}
       <td><span class="pn-badge pn-rep">${hlPN(r.rep,kw)}</span></td>
-      <td>${(r.compats||[]).map(c=>`<span class="pn-badge pn-cur">${hlPN(c,kw)}</span>`).join(' ')}</td>
-      <td>${r.final?`<span class="pn-badge pn-fin">${hlPN(r.final,kw)}</span>`:''}</td>
+      <td>${(r.compats||[]).map(c=>`<span class="pn-badge pn-cur">${hlPN(pnUpperLead(c),kw)}</span>`).join(' ')}</td>
+      <td>${r.final?`<span class="pn-badge pn-fin">${hlPN(pnUpperLead(r.final),kw)}</span>`:''}</td>
     </tr>`;
   }).join('');
   if(startFrom===0) tbody.innerHTML=rows;
@@ -2591,8 +2591,8 @@ function renderPNChunk(startFrom=0){
     const name=isKo?hlPN(r.name_ko,kw):hlPN(r.name_ru||r.name_ko,kw);
     const nameRuHtml=(isKo&&r.name_ru)?`<div style="color:var(--muted);font-size:11px;margin-top:2px">${hlPN(r.name_ru,kw)}</div>`:'';
     const specHtml=isKo?`<div style="color:var(--muted);font-size:11px;margin-top:2px">${hlPN(r.spec,kw)}</div>`:'';
-    const compatsHtml=(r.compats||[]).map(c=>`<span class="pn-badge pn-cur">${hlPN(c,kw)}</span>`).join(' ')||'<span style="font-size:11px;color:var(--muted)">-</span>';
-    const finalHtml=r.final?`<span class="pn-badge pn-fin">${hlPN(r.final,kw)}</span>`:'<span style="font-size:11px;color:var(--muted)">-</span>';
+    const compatsHtml=(r.compats||[]).map(c=>`<span class="pn-badge pn-cur">${hlPN(pnUpperLead(c),kw)}</span>`).join(' ')||'<span style="font-size:11px;color:var(--muted)">-</span>';
+    const finalHtml=r.final?`<span class="pn-badge pn-fin">${hlPN(pnUpperLead(r.final),kw)}</span>`:'<span style="font-size:11px;color:var(--muted)">-</span>';
     return `<div class="part-card" style="border-bottom:1px solid var(--border);padding:10px 0">
       <div class="pc-name" style="font-weight:600">${name}</div>
       ${nameRuHtml}
@@ -6426,6 +6426,8 @@ function pnNameRu(rep, fb){ const i=_pnResolved(rep); return (i&&i.name_ru)||fb|
 function pnSpec(rep, fb){ const i=_pnResolved(rep); return (i&&i.spec!=null&&i.spec!=='')?i.spec:(fb||''); }
 // 화면 언어에 맞는 품명(품번조회 기준)
 function pnName(rep, fbKo, fbRu){ return lang==='ru' ? pnNameRu(rep, fbRu||fbKo) : pnNameKo(rep, fbKo); }
+// 품번 표시용: 맨 앞 영문(연속 알파벳)을 대문자로. 뒤 숫자·기호는 그대로.
+function pnUpperLead(x){ return String(x==null?'':x).replace(/^[A-Za-z]+/, m=>m.toUpperCase()); }
 let receivedOrderTotals={}; // 고객사(구매처)들로부터 접수받은 주문수량 합계 (rep 기준)
 async function loadReceivedOrderTotals(){
   const { data, error } = await sb.from('kt_orders').select('items').ilike('target_company', currentUser?currentUser.company:'');
@@ -7071,8 +7073,8 @@ function renderPriceCalc(){
       <td style="padding:3px 4px;word-break:break-all">${escapeHtml(priceNameFor(r))}</td>
       ${isKo?`<td style="padding:3px 4px;color:var(--muted);font-size:10px;word-break:break-all">${escapeHtml(pnSpec(r.rep,r.spec))}</td>`:''}${engTdHtml(r.rep,'style="padding:3px 4px;color:var(--accent2);font-weight:600;word-break:break-all"')}
       <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(r.rep||'')}</span></td>
-      <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(r.compat||'')}</span></td>
-      <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(r.final||'')}</span></td>
+      <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(pnUpperLead(r.compat))}</span></td>
+      <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(pnUpperLead(r.final))}</span></td>
       <td class="center" style="padding:3px 2px;color:var(--muted)">${fmtN(r.ship_qty)}</td>
       <td class="center" style="padding:3px 2px;border-left:1px solid var(--border)"><input type="text" inputmode="decimal" style="${inputStyle}" value="${c.ruCost!=null?fmtN(c.ruCost):''}" onchange="onPriceCellEdit(${r.row_no},'ru_cost',this.value)"></td>
       <td style="text-align:right;padding:3px 4px;color:var(--muted)">${fmtN(c.costRub)}</td>
@@ -7086,7 +7088,7 @@ function renderPriceCalc(){
   setPriceCards(rows.map(r=>{
     const c=calcPriceRow(r);
     return priceCardHtml(priceNameFor(r), isKo?pnSpec(r.rep,r.spec):'',
-      [{label:t.pnH1,val:r.rep},{label:t.pnH2,val:r.compat},{label:t.pnH3,val:r.final},{label:t.priceThShip.replace('<br>',' '),val:fmtN(r.ship_qty)}],
+      [{label:t.pnH1,val:r.rep},{label:t.pnH2,val:pnUpperLead(r.compat)},{label:t.pnH3,val:pnUpperLead(r.final)},{label:t.priceThShip.replace('<br>',' '),val:fmtN(r.ship_qty)}],
       [{label:t.priceThCost+' KRW',val:fmtN(c.ruCost)},{label:t.priceThCost+' RUB',val:fmtN(c.costRub)},{label:t.priceThCost+' USD',val:fmtN(c.costUsd)},
        {label:t.priceThRu+' '+t.priceThSupply+' KRW',val:fmtN(c.ruSupply)},{label:t.priceThRu+' '+t.priceThSupply+' RUB',val:fmtN(c.ruRub)},{label:t.priceThRu+' '+t.priceThGp,val:fmtGp(c.ruGpVal)}], r.rep
     );
@@ -7121,13 +7123,13 @@ function renderPriceSupply(){
       <td style="padding:3px 4px;word-break:break-all">${escapeHtml(priceNameFor(m))}</td>
       ${isKo?`<td style="padding:3px 4px;color:var(--muted);font-size:10px;word-break:break-all">${escapeHtml(pnSpec(m.rep,m.spec))}</td>`:''}${engTdHtml(m.rep,'style="padding:3px 4px;color:var(--accent2);font-weight:600;word-break:break-all"')}
       <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(m.rep)}</span></td>
-      <td style="padding:3px 4px">${m.compats.map(c=>`<span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(c)}</span>`).join('<br>')}</td>
-      <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(m.final||'')}</span></td>
+      <td style="padding:3px 4px">${m.compats.map(c=>`<span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(pnUpperLead(c))}</span>`).join('<br>')}</td>
+      <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(pnUpperLead(m.final))}</span></td>
       <td style="text-align:right;padding:3px 6px;font-weight:600">${fmtN(m.rub)}</td>
       <td style="text-align:right;padding:3px 6px;font-weight:600">${fmtN(m.usd)}</td>
     </tr>`).join('');
   setPriceCards(list.map(m=>priceCardHtml(priceNameFor(m), isKo?pnSpec(m.rep,m.spec):'',
-    [{label:t.pnH1,val:m.rep},{label:t.pnH2,val:(m.compats||[]).join(', ')},{label:t.pnH3,val:m.final}],
+    [{label:t.pnH1,val:m.rep},{label:t.pnH2,val:(m.compats||[]).map(pnUpperLead).join(', ')},{label:t.pnH3,val:pnUpperLead(m.final)}],
     [{label:t.priceThSupply+' (RUB)',val:fmtN(m.rub)},{label:t.priceThSupply+' (USD)',val:fmtN(m.usd)}]
   , m.rep)).join(''));
   scheduleSplitTableResync('pricesupply-hdr-col','pricesupply-body-col','priceSupplyTbody','fixed');
@@ -7324,15 +7326,15 @@ function renderPriceRegion(region){
       <td style="padding:3px 4px;word-break:break-all">${escapeHtml(priceNameFor(m))}</td>
       ${isKo?`<td style="padding:3px 4px;color:var(--muted);font-size:10px;word-break:break-all">${escapeHtml(pnSpec(m.rep,m.spec))}</td>`:''}${engTdHtml(m.rep,'style="padding:3px 4px;color:var(--accent2);font-weight:600;word-break:break-all"')}
       <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(m.rep)}</span></td>
-      <td style="padding:3px 4px">${m.compats.map(c=>`<span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(c)}</span>`).join('<br>')}</td>
-      <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(m.final||'')}</span></td>
+      <td style="padding:3px 4px">${m.compats.map(c=>`<span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(pnUpperLead(c))}</span>`).join('<br>')}</td>
+      <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(pnUpperLead(m.final))}</span></td>
       <td style="text-align:right;padding:3px 6px;border-left:1px solid var(--border)">${fmtN(m.cost)}</td>
       <td style="text-align:right;padding:3px 6px;color:var(--muted)">${fmtN(isKz?m.costUsd:m.costRub)}</td>
       <td style="text-align:right;padding:3px 6px;font-weight:600;border-left:1px solid var(--border)">${fmtN(isKz?m.usd:m.rub)}</td>
       <td class="center" style="padding:3px 2px;color:var(--muted)">${fmtGp(isKz?m.kzGp:m.ruGp)}</td>
     </tr>`).join('');
   setPriceCards(list.map(m=>priceCardHtml(priceNameFor(m), isKo?pnSpec(m.rep,m.spec):'',
-    [{label:t.pnH1,val:m.rep},{label:t.pnH2,val:(m.compats||[]).join(', ')},{label:t.pnH3,val:m.final}],
+    [{label:t.pnH1,val:m.rep},{label:t.pnH2,val:(m.compats||[]).map(pnUpperLead).join(', ')},{label:t.pnH3,val:pnUpperLead(m.final)}],
     [{label:t.priceThCost+' KRW',val:fmtN(m.cost)},{label:t.priceThCost+' '+cur,val:fmtN(isKz?m.costUsd:m.costRub)},{label:t.priceThSupply+' '+cur,val:fmtN(isKz?m.usd:m.rub)},{label:t.priceThGp,val:fmtGp(isKz?m.kzGp:m.ruGp)}]
   , m.rep)).join(''));
   scheduleSplitTableResync('pricecalc-hdr-col','pricecalc-body-col','priceCalcTbody','fixed');
@@ -7389,15 +7391,15 @@ function renderPriceCompany(){
       <td style="padding:3px 4px;word-break:break-all">${escapeHtml(priceNameFor(m))}</td>
       ${isKo?`<td style="padding:3px 4px;color:var(--muted);font-size:10px;word-break:break-all">${escapeHtml(pnSpec(m.rep,m.spec))}</td>`:''}${engTdHtml(m.rep,'style="padding:3px 4px;color:var(--accent2);font-weight:600;word-break:break-all"')}
       <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(m.rep)}</span></td>
-      <td style="padding:3px 4px">${m.compats.map(c=>`<span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(c)}</span>`).join('<br>')}</td>
-      <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(m.final||'')}</span></td>
+      <td style="padding:3px 4px">${m.compats.map(c=>`<span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(pnUpperLead(c))}</span>`).join('<br>')}</td>
+      <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(pnUpperLead(m.final))}</span></td>
       <td class="center" style="padding:3px 2px;border-left:1px solid var(--border)"><input type="text" inputmode="decimal" style="${inputStyle}" value="${m.buyRaw!=null&&m.buyRaw!==''?fmtN(Number(m.buyRaw)):''}" placeholder="${m.autoBuy!=null?fmtN(m.autoBuy):''}" onchange="onCompanyPriceEdit('${repEsc}','buy_price',this.value)"></td>
       <td style="border-left:1px solid var(--border);text-align:right;padding:3px 6px;font-weight:600">${fmtN(m.supplyA)}</td>
       ${supplyTd(m.supplyB)}${supplyTd(m.supplyC)}${supplyTd(m.supplyD)}
     </tr>`;
   }).join('');
   setPriceCards(list.map(m=>priceCardHtml(priceNameFor(m), isKo?pnSpec(m.rep,m.spec):'',
-    [{label:t.pnH1,val:m.rep},{label:t.pnH2,val:(m.compats||[]).join(', ')},{label:t.pnH3,val:m.final}],
+    [{label:t.pnH1,val:m.rep},{label:t.pnH2,val:(m.compats||[]).map(pnUpperLead).join(', ')},{label:t.pnH3,val:pnUpperLead(m.final)}],
     [{label:t.priceThBuy,val:fmtN(m.buy)},{label:t.priceThSupplyA,val:fmtN(m.supplyA)},{label:t.priceThSupplyB,val:fmtN(m.supplyB)},{label:t.priceThSupplyC,val:fmtN(m.supplyC)},{label:t.priceThSupplyD,val:fmtN(m.supplyD)}]
   , m.rep)).join(''));
   scheduleSplitTableResync('pricecalc-hdr-col','pricecalc-body-col','priceCalcTbody','fixed');
