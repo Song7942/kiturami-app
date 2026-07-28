@@ -2559,8 +2559,7 @@ function renderPNChunk(startFrom=0){
   const showEng=canViewEngName();
   const engTd=r=>showEng?`<td style="font-size:11px;color:var(--accent2);font-weight:600">${escapeHtml(engNameText(r.rep))}</td>`:'';
   const isMaster=userRole(currentUser).isMaster;   // MASTER 만 셀 인라인 수정
-  // 편집용 셀(contenteditable). MASTER 가 고치면 품번조회(단일 기준)에 저장되고 모든 화면에 반영된다.
-  const ed=(rep,field,raw)=>`<span contenteditable="true" class="pn-edit" data-pnrep="${escapeHtml(rep)}" data-pnfield="${field}" data-pnorig="${escapeHtml(raw||'')}" onblur="onPNCellBlur(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}" style="display:inline-block;min-width:20px;outline:none;border-bottom:1px dashed var(--accent2);cursor:text;padding:0 2px">${escapeHtml(raw||'')}</span>`;
+  const ed=pnEditSpan;   // 품번조회·주문·부품조회 공용 편집 span
   const rows=chunk.map(r=>{
     const en=engNameText(r.rep);
     const nameCell = isMaster
@@ -2726,6 +2725,12 @@ async function savePNCell(rep, field, value){
   const { error } = await sb.from('kt_pn_overrides').upsert(row,{onConflict:'rep'});
   if(error){ alert('저장 실패\n['+(error.message||error.code)+']'); return { ok:false }; }
   return { ok:true };
+}
+// 편집용 contenteditable span (품번조회·주문·부품조회 공용). MASTER 만 이걸로 렌더한다.
+// onclick 전파를 막아, 셀을 눌러 편집해도 행 클릭(하이라이트) 이 발동하지 않게 한다.
+function pnEditSpan(rep, field, raw){
+  const v=escapeHtml(raw||'');
+  return `<span contenteditable="true" class="pn-edit" data-pnrep="${escapeHtml(rep)}" data-pnfield="${field}" data-pnorig="${v}" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()" onblur="onPNCellBlur(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}" style="display:inline-block;min-width:20px;outline:none;border-bottom:1px dashed var(--accent2);cursor:text;padding:0 2px">${v}</span>`;
 }
 // contenteditable 셀에서 포커스가 빠질 때 저장. 값이 안 바뀌었으면 아무 것도 안 한다.
 async function onPNCellBlur(el){
@@ -3046,8 +3051,11 @@ function renderOrderTable(){
     }
     const qty=orderQty[key]||'';
     const priceText=orderPriceText(d.rep);
-    const engTdO=canViewEngName()?`<td style="text-align:center;color:var(--accent2);font-weight:600;font-size:11px">${escapeHtml(engNameText(d.rep))}</td>`:'';
-    const nc=isKo?`<td style="font-weight:500;text-align:center">${escapeHtml(pnNameKo(d.rep,d.name_ko))}</td><td style="color:var(--muted);font-size:10px;text-align:center">${escapeHtml(pnSpec(d.rep,d.spec))}</td>${engTdO}`:`<td style="font-weight:500;text-align:center">${escapeHtml(pnNameRu(d.rep,d.name_ru))}</td>${engTdO}`;
+    // MASTER(부품조회)는 셀을 직접 고칠 수 있다 — 고치면 품번조회에 저장돼 전 화면에 반영.
+    const mEdit=userRole(currentUser).isMaster;
+    const cellV=(field,val)=> mEdit ? pnEditSpan(d.rep, field, val) : escapeHtml(val);
+    const engTdO=canViewEngName()?`<td style="text-align:center;color:var(--accent2);font-weight:600;font-size:11px">${cellV('name_en', engNameText(d.rep))}</td>`:'';
+    const nc=isKo?`<td style="font-weight:500;text-align:center">${cellV('name_ko', pnNameKo(d.rep,d.name_ko))}</td><td style="color:var(--muted);font-size:10px;text-align:center">${cellV('spec', pnSpec(d.rep,d.spec))}</td>${engTdO}`:`<td style="font-weight:500;text-align:center">${cellV('name_ru', pnNameRu(d.rep,d.name_ru))}</td>${engTdO}`;
     const modelCells=columns.map(col=>{const hlStyle=col.selected?` style="background:${col.color}18"`:'';return `<td class="center"${hlStyle}>${dot(isColumnApplied(d,col))}</td>`;}).join('');
     const vis=orderColVis();
     let tail='';
