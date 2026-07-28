@@ -2587,10 +2587,11 @@ function renderPNChunk(startFrom=0){
     const noteCell = isMaster
       ? `<td style="font-size:11px;color:var(--muted);text-align:left">${ed(r.rep,'note',r.note)}</td>`
       : `<td style="font-size:11px;color:var(--muted);text-align:left">${escapeHtml(r.note||'')}</td>`;
-    const delBtn = isMaster ? ` <button title="삭제" onclick="event.stopPropagation();deletePNItem('${String(r.rep).replace(/'/g,"\\'")}')" style="border:none;background:none;color:#ef4444;cursor:pointer;font-size:12px;padding:0 2px;vertical-align:middle">✕</button>` : '';
+    // 맨 앞 '삭제' 열(MASTER): 그 행(품목) 전체를 삭제.
+    const delColCell = isMaster ? `<td class="center"><button title="이 행 삭제" onclick="event.stopPropagation();deletePNItem('${String(r.rep).replace(/'/g,"\\'")}')" style="border:none;background:none;color:#ef4444;cursor:pointer;font-size:14px;padding:2px 4px">✕</button></td>` : '';
     // 대표품번·호환품번·최종품번: MASTER 는 직접 편집(호환품번은 콤마/공백으로 여러 개).
     const repCell = isMaster
-      ? `<td style="white-space:nowrap">${ed(r.rep,'rep',r.rep)}${delBtn}</td>`
+      ? `<td style="white-space:nowrap">${ed(r.rep,'rep',r.rep)}</td>`
       : `<td style="white-space:nowrap"><span class="pn-badge pn-rep">${hlPN(r.rep,kw)}</span></td>`;
     const compatCell = isMaster
       ? `<td style="font-size:11px">${ed(r.rep,'compat',(r.compats||[]).map(pnUpperLead).join(', '))}</td>`
@@ -2599,7 +2600,7 @@ function renderPNChunk(startFrom=0){
       ? `<td style="font-size:11px">${ed(r.rep,'final',pnUpperLead(r.final||''))}</td>`
       : `<td>${r.final?`<span class="pn-badge pn-fin">${hlPN(pnUpperLead(r.final),kw)}</span>`:''}</td>`;
     return `<tr>
-      ${nameCell}
+      ${delColCell}${nameCell}
       ${specCell}${nameRuCell}${engCell}
       ${repCell}${compatCell}${finalCell}
       ${modelCell}${modelDotCells}
@@ -2654,22 +2655,25 @@ function renderPN(){
   const showEng=canViewEngName();
   const engCol=showEng?'<col>':'';
   // 열: 품명·[규격]·[러시아품명]·[영문품명]·적용모델(임시)·대표·호환·최종·참고내용
-  // 열: 품명·[규격]·[러품]·[영문]·대표·호환·최종·적용모델(임시)·<모델 15열>·참고
+  // 열: [삭제]·품명·[규격]·[러품]·[영문]·대표·호환·최종·적용모델(임시)·<모델 15열>·참고
+  const isMasterPN=userRole(currentUser).isMaster;
+  const delCol=isMasterPN?'<col>':'';
   const modelCols='<col>'.repeat(MODEL_DEFS.length);
-  const cols = isKo ? ('<col><col><col>'+engCol+'<col><col><col><col>'+modelCols+'<col>') : ('<col>'+engCol+'<col><col><col><col>'+modelCols+'<col>');
+  const cols = delCol + (isKo ? ('<col><col><col>'+engCol+'<col><col><col><col>'+modelCols+'<col>') : ('<col>'+engCol+'<col><col><col><col>'+modelCols+'<col>'));
   ['pn-hdr-col','pn-body-col'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=cols;});
 
   const thead=document.getElementById('pn-thead');
   if(thead){
     const brLabel=(x)=>String(x||'').replace(' (','<br>(');
     const rs=' rowspan="2"';
+    const delTh=isMasterPN?`<th${rs} style="font-size:11px">${lang==='ru'?'Удал.':'삭제'}</th>`:'';
     const engTh=showEng?`<th${rs}>${lang==='ru'?'Англ. название':'영문품명'}</th>`:'';
     const modelTh=`<th${rs}>${lang==='ru'?'Модели (врем.)':'적용모델<br>(임시)'}</th>`;
     const noteTh=`<th${rs}>${lang==='ru'?'Примечание':'참고내용'}</th>`;
     const front = isKo
       ? `<th class="sticky-col1"${rs}>${t.pnH0}</th><th${rs}>${t.pnH0s}</th><th${rs}>러시아어 품명</th>${engTh}`
       : `<th class="sticky-col1"${rs}>${t.pnH0}</th>${engTh}`;
-    thead.innerHTML=`<tr>${front}`
+    thead.innerHTML=`<tr>${delTh}${front}`
       +`<th id="pn-th1"${rs}>${brLabel(t.pnH1)}</th><th id="pn-th2"${rs}>${brLabel(t.pnH2)}</th><th id="pn-th3"${rs}>${brLabel(t.pnH3)}</th>`
       +`${modelTh}${pnModelGroupHeaderRow1()}${noteTh}</tr>`
       +`<tr>${pnModelCapHeaderRow2()}</tr>`;
@@ -6126,15 +6130,18 @@ function syncSplitTableColumnWidths(hdrColId, bodyColId, tbodyId, mode){
             // RU: 품명|[영문]|대표|호환|최종|적용모델(임시)|<모델 15열>|참고
             const isKoP=(lang==='ko');
             const eng=canViewEngName();
+            const master=(typeof currentUser!=='undefined')&&userRole(currentUser).isMaster;
+            const del=master?[40]:[];   // 맨 앞 삭제 열(MASTER)
+            const d=del.length;         // 삭제 열이 있으면 뒤 인덱스가 1 밀린다
             const modelCaps=(typeof MODEL_DEFS!=='undefined'?MODEL_DEFS:[]).map(()=>34);   // 모델 열 좁게
             if(isKoP){
               const front=eng?[280,260,260,220]:[280,260,260];
-              const s=eng?4:3;   // 대표품번 인덱스(대표·호환·최종만 고정)
-              return { caps:[...front, 110,150,110, 150, ...modelCaps, 220], noFill:true, rigid:[s,s+1,s+2] };
+              const s=(eng?4:3)+d;   // 대표품번 인덱스(대표·호환·최종만 고정)
+              return { caps:[...del, ...front, 110,150,110, 150, ...modelCaps, 220], noFill:true, rigid:[s,s+1,s+2] };
             } else {
               const front=eng?[280,220]:[280];
-              const s=eng?2:1;
-              return { caps:[...front, 110,150,110, 150, ...modelCaps, 220], noFill:true, rigid:[s,s+1,s+2] };
+              const s=(eng?2:1)+d;
+              return { caps:[...del, ...front, 110,150,110, 150, ...modelCaps, 220], noFill:true, rigid:[s,s+1,s+2] };
             }
           }
           if(tbodyId==='inventoryTbody'){
