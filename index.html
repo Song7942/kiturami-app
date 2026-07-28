@@ -2603,8 +2603,7 @@ function renderPNChunk(startFrom=0){
       ${delColCell}${nameCell}
       ${specCell}${nameRuCell}${engCell}
       ${repCell}${compatCell}${finalCell}
-      ${modelCell}${modelDotCells}
-      ${noteCell}
+      ${noteCell}${modelCell}${modelDotCells}
     </tr>`;
   }).join('');
   if(startFrom===0) tbody.innerHTML=rows;
@@ -2659,7 +2658,7 @@ function renderPN(){
   const isMasterPN=userRole(currentUser).isMaster;
   const delCol=isMasterPN?'<col>':'';
   const modelCols='<col>'.repeat(MODEL_DEFS.length);
-  const cols = delCol + (isKo ? ('<col><col><col>'+engCol+'<col><col><col><col>'+modelCols+'<col>') : ('<col>'+engCol+'<col><col><col><col>'+modelCols+'<col>'));
+  const cols = delCol + (isKo ? ('<col><col><col>'+engCol+'<col><col><col>'+'<col><col>'+modelCols) : ('<col>'+engCol+'<col><col><col>'+'<col><col>'+modelCols));
   ['pn-hdr-col','pn-body-col'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=cols;});
 
   const thead=document.getElementById('pn-thead');
@@ -2675,7 +2674,7 @@ function renderPN(){
       : `<th class="sticky-col1"${rs}>${t.pnH0}</th>${engTh}`;
     thead.innerHTML=`<tr>${delTh}${front}`
       +`<th id="pn-th1"${rs}>${brLabel(t.pnH1)}</th><th id="pn-th2"${rs}>${brLabel(t.pnH2)}</th><th id="pn-th3"${rs}>${brLabel(t.pnH3)}</th>`
-      +`${modelTh}${pnModelGroupHeaderRow1()}${noteTh}</tr>`
+      +`${noteTh}${modelTh}${pnModelGroupHeaderRow1()}</tr>`
       +`<tr>${pnModelCapHeaderRow2()}</tr>`;
   }
   // MASTER 만 '품목 추가' 버튼 노출
@@ -6133,15 +6132,16 @@ function syncSplitTableColumnWidths(hdrColId, bodyColId, tbodyId, mode){
             const master=(typeof currentUser!=='undefined')&&userRole(currentUser).isMaster;
             const del=master?[40]:[];   // 맨 앞 삭제 열(MASTER)
             const d=del.length;         // 삭제 열이 있으면 뒤 인덱스가 1 밀린다
-            const modelCaps=(typeof MODEL_DEFS!=='undefined'?MODEL_DEFS:[]).map(()=>34);   // 모델 열 좁게
+            const modelCaps=(typeof MODEL_DEFS!=='undefined'?MODEL_DEFS:[]).map(()=>36);   // 모델 열 좁게
+            // 열이 많아 화면 폭을 넘으면 축소하지 않고 그대로 넘쳐서 가로 스크롤(overflow)한다.
             if(isKoP){
               const front=eng?[280,260,260,220]:[280,260,260];
               const s=(eng?4:3)+d;   // 대표품번 인덱스(대표·호환·최종만 고정)
-              return { caps:[...del, ...front, 110,150,110, 150, ...modelCaps, 220], noFill:true, rigid:[s,s+1,s+2] };
+              return { caps:[...del, ...front, 110,150,110, 200, 150, ...modelCaps], overflow:true, rigid:[s,s+1,s+2] };
             } else {
               const front=eng?[280,220]:[280];
               const s=(eng?2:1)+d;
-              return { caps:[...del, ...front, 110,150,110, 150, ...modelCaps, 220], noFill:true, rigid:[s,s+1,s+2] };
+              return { caps:[...del, ...front, 110,150,110, 200, 150, ...modelCaps], overflow:true, rigid:[s,s+1,s+2] };
             }
           }
           if(tbodyId==='inventoryTbody'){
@@ -6193,6 +6193,24 @@ function syncSplitTableColumnWidths(hdrColId, bodyColId, tbodyId, mode){
         }
         const FIT_CFG=getFitConfig(tbodyId, bodyW.length);
         const caps=FIT_CFG.caps;
+        const wrap=bodyTable.parentElement;
+        const hdrWrap=hdrTable.parentElement;
+        // ── 오버플로우 모드: 열이 많은 표(품번조회)는 화면 폭에 억지로 맞추지 않고
+        //    캡 폭 그대로 써서 화면을 넘치게 둔다 → scrollBodyPN 이 가로 스크롤, 헤더는 scrollLeft 동기화.
+        if(FIT_CFG.overflow){
+          const fixedW=bodyW.map((w,i)=> caps[i]!=null ? caps[i] : Math.max(w, hdrW[i]||0));
+          const ftotal=fixedW.reduce((a,b)=>a+b,0);
+          if(!(ftotal>0)) return;
+          fixedW.forEach((w,i)=>{ bodyCols[i].style.width=w+'px'; hdrCols[i].style.width=w+'px'; });
+          bodyTable.style.tableLayout='fixed'; hdrTable.style.tableLayout='fixed';
+          bodyTable.style.width=ftotal+'px'; hdrTable.style.width=ftotal+'px';
+          bodyTable.style.minWidth=ftotal+'px'; hdrTable.style.minWidth=ftotal+'px';
+          // 본문 래퍼는 표 폭(넘침) — scrollBodyPN 이 스크롤. 헤더 래퍼는 화면 폭 유지(overflow:hidden)로
+          // 두고 scrollLeft 동기화가 헤더를 함께 민다.
+          if(wrap){ wrap.style.width=ftotal+'px'; wrap.style.maxWidth=''; }
+          if(hdrWrap){ hdrWrap.style.width=''; hdrWrap.style.maxWidth=''; }
+          return;
+        }
         const widths=bodyW.map((w,i)=>{
           let v=Math.max(w, hdrW[i]||0);
           const cap=caps[i];
@@ -6202,8 +6220,6 @@ function syncSplitTableColumnWidths(hdrColId, bodyColId, tbodyId, mode){
         const total=widths.reduce((a,b)=>a+b,0);
         if(!(total>0)) return;
         // 화면 폭에 맞춤: 표가 화면보다 넓으면 비율 축소, 좁으면 남는 폭을 지정 열에 더해 정확히 채움
-        const wrap=bodyTable.parentElement;
-        const hdrWrap=hdrTable.parentElement;
         const availBody=wrap?wrap.clientWidth:0;
         const availHdr=hdrWrap?hdrWrap.clientWidth:0;
         const avail=(availBody>0&&availHdr>0)?Math.min(availBody,availHdr):(availBody||availHdr);
