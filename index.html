@@ -2599,6 +2599,37 @@ async function loadExportCtrl(){
     _exportLoaded=true;
   }catch(e){ _exportLoaded=false; }
 }
+// N/W·G/W·CBM·단종: 호환품번(개별 품번) 단위 저장(kt_pn_specs). 품번마다 값이 다를 수 있어 rep 가 아닌 품번 키.
+let _pnSpec=new Map();   // normPN -> {nw,gw,cbm,dan}
+function pnSpecOf(pn){ return _pnSpec.get(normPN(pn)) || null; }
+async function loadPnSpecs(){
+  _pnSpec=new Map();
+  try{
+    const page=1000;
+    for(let from=0;;from+=page){
+      const { data, error }=await sb.from('kt_pn_specs').select('pn,nw,gw,cbm,dan').range(from, from+page-1);
+      if(error) return;
+      (data||[]).forEach(r=>{ const p=normPN(r.pn); if(p) _pnSpec.set(p,{nw:r.nw||'',gw:r.gw||'',cbm:r.cbm||'',dan:r.dan||''}); });
+      if(!data || data.length<page) break;
+    }
+  }catch(e){}
+}
+// 그룹(비분할) 모드 집계: nw/gw/cbm 은 첫 비어있지 않은 값, dan 은 O>△ 우선.
+function pnSpecAgg(r, f){
+  const cs=r.compats||[];
+  if(f==='dan'){ let o=false,t=false; cs.forEach(c=>{ const s=pnSpecOf(c); if(s){ if(s.dan==='O')o=true; else if(s.dan==='△')t=true; } }); return o?'O':(t?'△':''); }
+  for(const c of cs){ const s=pnSpecOf(c); if(s && s[f]!=null && String(s[f]).trim()!=='') return String(s[f]); }
+  return '';
+}
+function pnSpecVal(r, f){   // f: nw|gw|cbm|dan
+  if(r._split){ const s=pnSpecOf(r._compat); return s?(s[f]!=null?String(s[f]):''):''; }
+  return pnSpecAgg(r, f);
+}
+// 분할 보기에서 호환품번(품번) 단위 편집 span
+function cspecEdit(compat, f, val){
+  const v=escapeHtml(val||''), raw=escapeHtml(compat||'');
+  return `<span contenteditable="true" class="pn-edit" data-pncompat="${raw}" data-pnfield="cspec:${f}" data-pnorig="${v}" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()" onblur="onPNCellBlur(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}" style="display:inline-block;min-width:20px;outline:none;border-bottom:1px dashed var(--accent2);cursor:text;padding:0 2px">${v}</span>`;
+}
 function pnSplitKey(){ return 'kt_pnSplit:'+(_pnUid()||'anon'); }
 function pnSplitPref(){ try{ const v=localStorage.getItem(pnSplitKey()); return v===null ? true : v==='1'; }catch(e){ return true; } }   // 기본: 항상 분리
 function togglePNSplit(){ _pnSplit=!_pnSplit; try{ localStorage.setItem(pnSplitKey(), _pnSplit?'1':'0'); }catch(e){} renderPN(); }
@@ -2692,10 +2723,10 @@ function pnColText(key, r){
     case 'rep': return r.rep||'';
     case 'compat': return r._split ? pnUpperLead(r._compat||'') : (r.compats||[]).map(pnUpperLead).join(', ');
     case 'final': return pnUpperLead(r.final||'');
-    case 'nw': return r.nw!=null?String(r.nw):'';
-    case 'gw': return r.gw!=null?String(r.gw):'';
-    case 'cbm': return r.cbm!=null?String(r.cbm):'';
-    case 'note': return r.note||'';
+    case 'nw': return pnSpecVal(r,'nw');
+    case 'gw': return pnSpecVal(r,'gw');
+    case 'cbm': return pnSpecVal(r,'cbm');
+    case 'note': return pnSpecVal(r,'dan');
     case 'applied_models': return r.applied_models||'';
     case 'export_ctrl': return r._split ? (isExportRestricted(r._compat)?'O':'') : ((r.compats||[]).some(isExportRestricted)?'O':'');
   }
@@ -2744,10 +2775,12 @@ function pnCellHtml(col, r, ctx){
       return _pnTd(col, inner, h.cls.trim(), 'font-size:11px'); }
     case 'final': { const h=H('final'); const inner=(isMaster?ed(r.rep,'final',pnUpperLead(r.final||'')):(r.final?`<span class="pn-badge pn-fin">${hlPN(pnUpperLead(r.final),kw)}</span>`:''))+h.badge;
       return _pnTd(col, inner, h.cls.trim(), 'font-size:11px'); }
-    case 'nw': case 'gw': case 'cbm': { const val=r[col.key]!=null?String(r[col.key]):''; const inner=isMaster?ed(r.rep,col.key,val):escapeHtml(val);
+    case 'nw': case 'gw': case 'cbm': { const val=pnSpecVal(r,col.key);
+      const inner=(isMaster && r._split)?cspecEdit(r._compat,col.key,val):escapeHtml(val);
       return _pnTd(col, inner, '', 'text-align:right;padding:0 6px;font-size:11px;color:var(--muted)'); }
-    case 'note': { const inner=isMaster?ed(r.rep,'note',r.note):escapeHtml(r.note||'');
-      return _pnTd(col, inner, '', 'font-size:11px;color:var(--muted);text-align:left'); }
+    case 'note': { const val=pnSpecVal(r,'dan');
+      const inner=(isMaster && r._split)?cspecEdit(r._compat,'dan',val):escapeHtml(val);
+      return _pnTd(col, inner, '', 'font-size:11px;color:var(--muted);text-align:center'); }
     case 'applied_models': { const inner=isMaster?ed(r.rep,'applied_models',r.applied_models||''):escapeHtml(r.applied_models||'');
       return _pnTd(col, inner, '', 'text-align:left;font-size:11px'); }
   }
@@ -3177,6 +3210,19 @@ async function onPNCellBlur(el){
   const rep=el.getAttribute('data-pnrep'), field=el.getAttribute('data-pnfield');
   const val=el.textContent.replace(/\s+/g,' ').trim();
   if(val===(el.getAttribute('data-pnorig')||'')) return;
+  // 호환품번 단위 값(N/W·G/W·CBM·단종) 편집 → kt_pn_specs(품번 키)에 저장.
+  if(field && field.indexOf('cspec:')===0){
+    const f=field.slice(6);   // nw|gw|cbm|dan
+    const key=normPN(el.getAttribute('data-pncompat')||'');
+    if(!key){ el.textContent=el.getAttribute('data-pnorig')||''; return; }
+    const cur=Object.assign({nw:'',gw:'',cbm:'',dan:''}, _pnSpec.get(key)||{});
+    cur[f]=val;
+    const { error }=await sb.from('kt_pn_specs').upsert({ pn:key, [f]:val },{ onConflict:'pn' });
+    if(error){ alert((lang==='ru'?'Ошибка. Нужна таблица kt_pn_specs.':'저장 실패 — kt_pn_specs 테이블이 필요합니다.')+'\n['+(error.message||error.code)+']'); el.textContent=el.getAttribute('data-pnorig')||''; return; }
+    _pnSpec.set(key, cur);
+    el.setAttribute('data-pnorig', val); el.textContent=val;
+    return;
+  }
   // 분할 보기: 호환품번 한 개(그 행의 품번)만 수정 → 대표품번의 compat 배열에서 해당 값을 교체/삭제.
   if(field==='compat_one'){
     const rawOld=el.getAttribute('data-pnrawold')||'';
@@ -9343,7 +9389,7 @@ function enterApp(user){
   loadAllMemberPerms().then(()=>{ applyPermTabVisibility(); return loadEngNames(); }).then(rerenderActiveTab);   // 권한→탭노출→영문명 로드→재렌더
   startLive();                                         // 폴링(8초)으로 실시간처럼 갱신
   startRealtime();                                     // Realtime 구독(활성화 시 즉시 반영)
-  Promise.all([loadMyOrderTotals(), loadInventory(), loadGlobalSuppliedTotals(), loadReceivedOrderTotals(), loadPrices(), loadPNOverrides(), loadExportCtrl(), loadCompanyPrices(),
+  Promise.all([loadMyOrderTotals(), loadInventory(), loadGlobalSuppliedTotals(), loadReceivedOrderTotals(), loadPrices(), loadPNOverrides(), loadExportCtrl(), loadPnSpecs(), loadCompanyPrices(),
                (role.region==='kz'?Promise.all([loadPriceSettings(),loadPriceCalc()]):Promise.resolve())]).then(()=>{
     if(document.getElementById('pane-order').classList.contains('active')) renderOrderTable();
     if(document.getElementById('pane-pn').classList.contains('active')) renderPN();
