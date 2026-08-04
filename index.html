@@ -744,6 +744,10 @@ input[type="text"]::placeholder{color:var(--muted)}
           <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           <span id="i18n-pndl">엑셀 다운로드</span>
         </button>
+        <button class="dl-btn" id="pnSplitBtn" onclick="togglePNSplit()" title="호환품번을 한 행씩 분리해 품번별 수출제한을 보고 필터링">
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+          <span>호환품번 단위</span>
+        </button>
         <button class="dl-btn" id="pnResetBtn" onclick="pnResetColOrder()" title="열 순서·필터를 기본값으로">
           <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
           <span>열/필터 초기화</span>
@@ -2572,6 +2576,28 @@ function debouncedRenderPN(){
 // ── 품번조회: 열 순서(사용자별·브라우저 저장) + 헤더 필터 ──
 let _pnFilters={};          // {colKey: '포함문자'}
 let _pnDragKey=null;
+// 수출제한: 호환품번(개별 품번) 기준. 제한 품번 집합을 kt_export_ctrl 에서 로드.
+let _exportPN=new Set();
+let _pnSplit=false;         // '호환품번 단위' 분할 보기 토글
+function normPN(x){ return String(x==null?'':x).toUpperCase().replace(/\s+/g,''); }
+function isExportRestricted(pn){ return _exportPN.has(normPN(pn)); }
+async function loadExportCtrl(){
+  _exportPN=new Set();
+  try{ const { data, error }=await sb.from('kt_export_ctrl').select('pn');
+    if(!error && data) data.forEach(r=>{ const p=normPN(r.pn); if(p) _exportPN.add(p); }); }catch(e){}
+}
+function pnSplitKey(){ return 'kt_pnSplit:'+(_pnUid()||'anon'); }
+function pnSplitPref(){ try{ return localStorage.getItem(pnSplitKey())==='1'; }catch(e){ return false; } }
+function togglePNSplit(){ _pnSplit=!_pnSplit; try{ localStorage.setItem(pnSplitKey(), _pnSplit?'1':'0'); }catch(e){} renderPN(); }
+// 분할 보기에선 편집/삭제를 끄고 읽기전용(한 품목이 여러 행으로 반복되므로 혼동 방지).
+function pnEditable(){ return userRole(currentUser).isMaster && !_pnSplit; }
+function pnDelVisible(){ return userRole(currentUser).isMaster && !_pnSplit; }
+// 분할: 각 품목을 호환품번 1개씩의 행으로 확장(공유열은 반복). _compat 에 해당 호환품번.
+function pnExpandRows(list){
+  const out=[];
+  list.forEach(r=>{ const cs=(r.compats && r.compats.length)?r.compats:['']; cs.forEach(c=> out.push(Object.assign({}, r, {_split:true, _compat:c}))); });
+  return out;
+}
 // 열 순서: 사용자 id별 DB 저장(kt_user_prefs) — 어느 기기에서 로그인해도 따라온다.
 // 렌더는 동기라, DB 값은 로그인 시 캐시에 담아 두고 캐시를 읽는다(테이블 없으면 기본 순서).
 let _pnColOrderCache=null, _pnColOrderLoadedFor=null, _pnColOrderLoading=false;
@@ -2604,12 +2630,12 @@ async function setPNColOrder(arr){
 // 기본(정본) 열 정의. '삭제' 열은 항상 맨 앞(재배치 대상 아님).
 function pnBaseCols(isKo, showEng){
   const t=T[lang], ru=(lang==='ru'); const c=[];
-  c.push({key:'export_ctrl', cap:64, label:ru?'Эксп.<br>контроль':'수출<br>제한'});
   c.push({key:'name', cap:280, label:t.pnH0});
   if(isKo){ c.push({key:'spec', cap:260, label:t.pnH0s}); c.push({key:'name_ru', cap:260, label:'러시아어 품명'}); }
   if(showEng) c.push({key:'name_en', cap:220, label:ru?'Англ. название':'영문품명'});
   c.push({key:'rep', cap:110, label:String(t.pnH1||'').replace(' (','<br>('), rigid:true});
   c.push({key:'compat', cap:150, label:String(t.pnH2||'').replace(' (','<br>('), rigid:true});
+  c.push({key:'export_ctrl', cap:70, label:ru?'Эксп.<br>контроль':'수출<br>제한'});
   c.push({key:'final', cap:110, label:String(t.pnH3||'').replace(' (','<br>('), rigid:true});
   c.push({key:'nw', cap:78, label:ru?'N/W ср.(kg)':'N/W<br>평균(kg)'});
   c.push({key:'gw', cap:78, label:ru?'G/W ср.(kg)':'G/W<br>평균(kg)'});
@@ -2632,6 +2658,11 @@ function pnColMetaOrdered(isKo, showEng, isMaster){
     base.forEach((c,bi)=>{ if(!seen.has(c.key)){ out.splice(Math.min(bi,out.length),0,c); seen.add(c.key); } });
     ordered=out;
   }
+  // 분할 보기: 수출제한을 호환품번 바로 뒤로 강제 배치
+  if(_pnSplit){
+    const ei=ordered.findIndex(c=>c.key==='export_ctrl');
+    if(ei>=0){ const ec=ordered.splice(ei,1)[0]; const ci=ordered.findIndex(c=>c.key==='compat'); if(ci>=0) ordered.splice(ci+1,0,ec); else ordered.unshift(ec); }
+  }
   ordered.forEach((c,i)=>{ c.groupStart = !!c.group && (i===0 || ordered[i-1].group!==c.group); c.freezeLeft=null; });
   let left = isMaster?40:0;   // '삭제' 열 폭
   for(let k=0;k<Math.min(2,ordered.length);k++){ ordered[k].freezeLeft=left; left+=ordered[k].cap; }
@@ -2645,14 +2676,14 @@ function pnColText(key, r){
     case 'name_ru': return r.name_ru||'';
     case 'name_en': return engNameText(r.rep)||'';
     case 'rep': return r.rep||'';
-    case 'compat': return (r.compats||[]).map(pnUpperLead).join(', ');
+    case 'compat': return r._split ? pnUpperLead(r._compat||'') : (r.compats||[]).map(pnUpperLead).join(', ');
     case 'final': return pnUpperLead(r.final||'');
     case 'nw': return r.nw!=null?String(r.nw):'';
     case 'gw': return r.gw!=null?String(r.gw):'';
     case 'cbm': return r.cbm!=null?String(r.cbm):'';
     case 'note': return r.note||'';
     case 'applied_models': return r.applied_models||'';
-    case 'export_ctrl': return r.export_ctrl==='O'?'O':'';
+    case 'export_ctrl': return r._split ? (isExportRestricted(r._compat)?'O':'') : ((r.compats||[]).some(isExportRestricted)?'O':'');
   }
   if(key&&key.indexOf('m:')===0){ const mk=key.slice(2); const md=(_partsModels(r.rep)||{}); return md[mk]?'O':''; }
   return '';
@@ -2672,7 +2703,7 @@ function pnCellHtml(col, r, ctx){
   const H=(f)=>pnCellHist(r.rep, f);
   if(col.group){ const md=_partsModels(r.rep)||{}; const bl=col.groupStart?'border-left:1px solid var(--border);':'';
     return _pnTd(col, dot(!!md[col.modelKey]), 'center', bl+'text-align:center'); }
-  if(col.key==='export_ctrl'){ const on=r.export_ctrl==='O';
+  if(col.key==='export_ctrl'){ const on = r._split ? isExportRestricted(r._compat) : (r.compats||[]).some(isExportRestricted);
     return _pnTd(col, on?'<span style="color:#ef4444;font-weight:700;font-size:12px">O</span>':'', 'center', 'text-align:center'); }
   switch(col.key){
     case 'name': { const h=H(isKo?'name_ko':'name_ru');
@@ -2686,7 +2717,10 @@ function pnCellHtml(col, r, ctx){
       return _pnTd(col, inner, h.cls.trim(), 'font-size:11px;color:var(--accent2);font-weight:600'); }
     case 'rep': { const h=H('rep'); const inner=(isMaster?ed(r.rep,'rep',r.rep):`<span class="pn-badge pn-rep">${hlPN(r.rep,kw)}</span>`)+h.badge;
       return _pnTd(col, inner, h.cls.trim(), 'white-space:nowrap'); }
-    case 'compat': { const h=H('compat'); const inner=(isMaster?ed(r.rep,'compat',(r.compats||[]).map(pnUpperLead).join(', ')):(r.compats||[]).map(c=>`<span class="pn-badge pn-cur">${hlPN(pnUpperLead(c),kw)}</span>`).join(' '))+h.badge;
+    case 'compat': { const h=H('compat');
+      const inner = r._split
+        ? `<span class="pn-badge pn-cur">${hlPN(pnUpperLead(r._compat||''),kw)}</span>`
+        : (isMaster?ed(r.rep,'compat',(r.compats||[]).map(pnUpperLead).join(', ')):(r.compats||[]).map(c=>`<span class="pn-badge pn-cur">${hlPN(pnUpperLead(c),kw)}</span>`).join(' '))+h.badge;
       return _pnTd(col, inner, h.cls.trim(), 'font-size:11px'); }
     case 'final': { const h=H('final'); const inner=(isMaster?ed(r.rep,'final',pnUpperLead(r.final||'')):(r.final?`<span class="pn-badge pn-fin">${hlPN(pnUpperLead(r.final),kw)}</span>`:''))+h.badge;
       return _pnTd(col, inner, h.cls.trim(), 'font-size:11px'); }
@@ -2704,7 +2738,8 @@ let _pnSort={key:null, dir:'asc'};
 // 열의 고유값 목록(엑셀 체크박스용). 빈값은 '' 로 유지(라벨만 '(비어 있음)').
 function pnDistinctValues(key){
   const set=new Set();
-  PN_DATA.forEach(r=> set.add(String(pnColText(key,r))));
+  const rows = _pnSplit ? pnExpandRows(PN_DATA) : PN_DATA;
+  rows.forEach(r=> set.add(String(pnColText(key,r))));
   const num=['nw','gw','cbm'].includes(key);
   return [...set].sort((a,b)=> num ? ((parseFloat(a)||0)-(parseFloat(b)||0)) : a.localeCompare(b,'ko'));
 }
@@ -2809,13 +2844,14 @@ function renderPNChunk(startFrom=0){
   const chunk=_pnFiltered.slice(startFrom, startFrom+_pnChunk);
   const showEng=canViewEngName();
   const engTd=r=>showEng?`<td style="font-size:11px;color:var(--accent2);font-weight:600">${escapeHtml(engNameText(r.rep))}</td>`:'';
-  const isMaster=userRole(currentUser).isMaster;   // MASTER 만 셀 인라인 수정
+  const isMaster=pnEditable();      // 분할 보기에선 읽기전용
+  const showDel=pnDelVisible();
   // 사용자별 열 순서를 반영한 열 목록(데이터-드리븐). 헤더/본문/폭이 모두 이 순서를 따른다.
-  const meta=pnColMetaOrdered(isKo, showEng, isMaster);
+  const meta=pnColMetaOrdered(isKo, showEng, showDel);
   const ctx={isMaster, isKo, kw, hlPN};
   const rows=chunk.map(r=>{
     // 맨 앞 '삭제' 열(MASTER): 그 행(품목) 전체를 삭제. (항상 좌측 고정)
-    const delColCell = isMaster ? `<td class="center" style="position:sticky;left:0;z-index:3;background:var(--bg)"><button title="이 행 삭제" onclick="event.stopPropagation();deletePNItem('${String(r.rep).replace(/'/g,"\\'")}')" style="border:none;background:none;color:#ef4444;cursor:pointer;font-size:14px;padding:2px 4px">✕</button></td>` : '';
+    const delColCell = showDel ? `<td class="center" style="position:sticky;left:0;z-index:3;background:var(--bg)"><button title="이 행 삭제" onclick="event.stopPropagation();deletePNItem('${String(r.rep).replace(/'/g,"\\'")}')" style="border:none;background:none;color:#ef4444;cursor:pointer;font-size:14px;padding:2px 4px">✕</button></td>` : '';
     return `<tr>${delColCell}${meta.map(c=>pnCellHtml(c, r, ctx)).join('')}</tr>`;
   }).join('');
   if(startFrom===0) tbody.innerHTML=rows;
@@ -2858,9 +2894,11 @@ function renderPN(){
   const stratBtn=document.getElementById('stratUploadBtn'); if(stratBtn){ stratBtn.style.display=userRole(currentUser).isMaster?'':'none'; const sp=stratBtn.querySelector('span'); if(sp) sp.textContent=lang==='ru'?'Стратег. товары':'전략물자 업로드'; }
   const isKo=lang==='ko';
   const showEng=canViewEngName();
-  const isMasterPN=userRole(currentUser).isMaster;
+  _pnSplit=pnSplitPref();               // 호환품번 단위 분할 보기 토글 상태
+  const isMasterPN=pnDelVisible();      // 분할 보기에선 삭제열 숨김
   let rows=PN_DATA;
   if(kw)rows=rows.filter(r=>searchRow(r.rep, kw, [r.name_ko,r.name_ru,r.spec,r.final,...(r.compats||[])]));
+  if(_pnSplit) rows=pnExpandRows(rows);  // 각 호환품번을 한 행씩 분리(검색 후 확장)
   // 헤더 열 필터(엑셀식: 선택된 값 집합만 표시, 여러 열은 AND)
   const fkeys=Object.keys(_pnFilters);
   if(fkeys.length){
@@ -2911,6 +2949,7 @@ function renderPN(){
   // MASTER 만 '품목 추가' 버튼 노출
   const addBtn=document.getElementById('pnAddBtn'); if(addBtn) addBtn.style.display=isMasterPN?'':'none';
   const resetBtn=document.getElementById('pnResetBtn'); if(resetBtn){ const sp=resetBtn.querySelector('span'); if(sp) sp.textContent=lang==='ru'?'Столбцы сброс':'열/필터 초기화'; }
+  const splitBtn=document.getElementById('pnSplitBtn'); if(splitBtn){ const sp=splitBtn.querySelector('span'); if(sp) sp.textContent=lang==='ru'?'По артикулам':'호환품번 단위'; splitBtn.style.background=_pnSplit?'#ef4444':''; splitBtn.style.borderColor=_pnSplit?'#ef4444':''; splitBtn.style.color=_pnSplit?'#fff':''; }
 
   // 청크 렌더링
   _pnFiltered=rows;
@@ -5077,9 +5116,9 @@ function handleEngNameUpload(event){
   };
   reader.readAsArrayBuffer(file);
 }
-// ── 전략물자 업로드(수출제한 열) ──
-// '전략물자 통합관리대장' 양식: 품번 열 + '갱신 결과' 열. 갱신결과가 정확히 '비해당'이면 빈칸,
-// 그 외(비해당(만료)·빈칸 포함)는 O. kt_pn_overrides.export_ctrl 에 저장.
+// ── 전략물자 업로드(수출제한: 호환품번 개별 품번 기준) ──
+// '전략물자 통합관리대장' 양식: 품번 열 + '갱신 결과' 열. 갱신결과가 정확히 '비해당'이면 수출제한 아님,
+// 그 외(비해당(만료)·빈칸 포함)는 제한. 제한 품번을 kt_export_ctrl(pn) 에 통째로 갱신.
 function handleStrategicUpload(event){
   if(!userRole(currentUser).isMaster){ event.target.value=''; return; }
   const file=event.target.files[0]; if(!file){ event.target.value=''; return; }
@@ -5099,29 +5138,32 @@ function handleStrategicUpload(event){
         if(pc>=0&&rc>=0){ hdr=r; pnCol=pc; resCol=rc; break; }
       }
       if(hdr<0){ alert(ru?'Столбцы «품번/갱신 결과» не найдены.':'양식에서 품번/갱신결과 열을 찾지 못했습니다.'); event.target.value=''; return; }
-      const map={};   // rep -> 'O' | '' (한 품번이 여러 행이면 하나라도 O 면 O)
+      // 제한 품번 집합(정규화). 갱신결과가 정확히 '비해당'인 품번만 제외.
+      const restr=new Set(); let seen=0;
       for(let r=hdr+1;r<arr.length;r++){
         const row=arr[r]||[];
-        const pn=String(row[pnCol]==null?'':row[pnCol]).trim(); if(!pn) continue;
-        const rep=findMasterRep(pn); if(!rep) continue;
+        const raw=String(row[pnCol]==null?'':row[pnCol]).trim(); if(!raw) continue; seen++;
+        const pn=normPN(raw);
         const res=String(row[resCol]==null?'':row[resCol]).replace(/\s+/g,' ').trim();
-        const val=(res==='비해당')?'':'O';   // 정확히 '비해당'만 빈칸
-        if(map[rep]!=='O') map[rep]=val;
+        if(res==='비해당') restr.delete(pn);              // 비해당 → 제한 아님
+        else restr.add(pn);                               // 그 외 → 제한(같은 품번이 여러 행이면 제한 우선 아님, 마지막 비해당이면 제외)
       }
-      const reps=Object.keys(map);
-      if(!reps.length){ alert(ru?'Совпадающих артикулов нет.':'매칭되는 품번이 없습니다.'); event.target.value=''; return; }
-      let oN=0; reps.forEach(rep=>{ if(map[rep]==='O') oN++; });
-      const payload=reps.map(rep=>({ rep, export_ctrl: map[rep]==='O'?'O':null }));
-      for(let i=0;i<payload.length;i+=400){
-        const { error }=await sb.from('kt_pn_overrides').upsert(payload.slice(i,i+400),{onConflict:'rep'});
-        if(error){ alert((ru?'Ошибка загрузки. Нужен столбец export_ctrl.':'업로드 실패 — export_ctrl 컬럼이 필요합니다.')
-          +'\nSQL: alter table kt_pn_overrides add column if not exists export_ctrl text;\n['+(error.message||error.code)+']'); event.target.value=''; return; }
+      if(!seen){ alert(ru?'Данных нет.':'데이터를 찾지 못했습니다.'); event.target.value=''; return; }
+      const list=[...restr];
+      // 테이블 전체 갱신: 싹 비우고 제한 품번만 다시 넣는다.
+      { const { error }=await sb.from('kt_export_ctrl').delete().neq('pn','');
+        if(error){ alert((ru?'Ошибка. Нужна таблица kt_export_ctrl.':'업로드 실패 — kt_export_ctrl 테이블이 필요합니다.')
+          +'\nSQL: create table if not exists kt_export_ctrl (pn text primary key);\n['+(error.message||error.code)+']'); event.target.value=''; return; } }
+      for(let i=0;i<list.length;i+=500){
+        const { error }=await sb.from('kt_export_ctrl').upsert(list.slice(i,i+500).map(pn=>({pn})),{onConflict:'pn'});
+        if(error){ alert((ru?'Ошибка загрузки.':'업로드 실패.')+'\n['+(error.message||error.code)+']'); event.target.value=''; return; }
       }
-      reps.forEach(rep=>{ const p=PN_DATA.find(x=>x.rep===rep); if(p) p.export_ctrl=(map[rep]==='O')?'O':''; });
-      _pnByRepMap=null;
-      rerenderActiveTab();
-      alert(ru?('Экспортконтроль: O '+oN+' / пусто '+(reps.length-oN)+' (всего '+reps.length+')')
-              :('수출제한 반영: O '+oN+'건 / 빈칸 '+(reps.length-oN)+'건 (총 '+reps.length+'건)'));
+      await loadExportCtrl();
+      _pnByRepMap=null; rerenderActiveTab();
+      // 호환품번 관점 반영 건수
+      let cO=0,cT=0; PN_DATA.forEach(r=>(r.compats||[]).forEach(c=>{ cT++; if(isExportRestricted(c)) cO++; }));
+      alert(ru?('Экспортконтроль обновлён: артикулов-ограничений '+list.length+'. Совпало '+cO+' из '+cT+' замен.')
+              :('수출제한 갱신: 제한 품번 '+list.length+'개. 호환품번 '+cT+'개 중 '+cO+'개 표시.'));
     }catch(err){ console.error(err); alert(ru?'Ошибка загрузки.':'업로드에 실패했습니다.'); }
     event.target.value='';
   };
@@ -6483,8 +6525,8 @@ function syncSplitTableColumnWidths(hdrColId, bodyColId, tbodyId, mode){
             // 열 순서(사용자별 재배치)를 단일 소스에서 가져와 폭을 정한다.
             const isKoP=(lang==='ko');
             const eng=canViewEngName();
-            const master=(typeof currentUser!=='undefined')&&userRole(currentUser).isMaster;
-            const del=master?[40]:[];   // 맨 앞 삭제 열(MASTER)
+            const master=(typeof pnDelVisible==='function')?pnDelVisible():((typeof currentUser!=='undefined')&&userRole(currentUser).isMaster);
+            const del=master?[40]:[];   // 맨 앞 삭제 열(MASTER, 분할 보기 제외)
             const meta=pnColMetaOrdered(isKoP, eng, master);
             const rigid=[]; meta.forEach((c,i)=>{ if(c.rigid) rigid.push(del.length+i); });
             // 열이 많아 화면 폭을 넘으면 축소하지 않고 그대로 넘쳐서 가로 스크롤(overflow)한다.
@@ -9266,7 +9308,7 @@ function enterApp(user){
   loadAllMemberPerms().then(()=>{ applyPermTabVisibility(); return loadEngNames(); }).then(rerenderActiveTab);   // 권한→탭노출→영문명 로드→재렌더
   startLive();                                         // 폴링(8초)으로 실시간처럼 갱신
   startRealtime();                                     // Realtime 구독(활성화 시 즉시 반영)
-  Promise.all([loadMyOrderTotals(), loadInventory(), loadGlobalSuppliedTotals(), loadReceivedOrderTotals(), loadPrices(), loadPNOverrides(), loadCompanyPrices(),
+  Promise.all([loadMyOrderTotals(), loadInventory(), loadGlobalSuppliedTotals(), loadReceivedOrderTotals(), loadPrices(), loadPNOverrides(), loadExportCtrl(), loadCompanyPrices(),
                (role.region==='kz'?Promise.all([loadPriceSettings(),loadPriceCalc()]):Promise.resolve())]).then(()=>{
     if(document.getElementById('pane-order').classList.contains('active')) renderOrderTable();
     if(document.getElementById('pane-pn').classList.contains('active')) renderPN();
