@@ -290,6 +290,9 @@ input[type="text"]::placeholder{color:var(--muted)}
 .pn-hdr-wrap .pn-sticky2{z-index:3;background:var(--surface2)}
 /* 변경된 셀 강조 + 변경이력 배지 */
 .pn-changed{background:#fbbf2422}
+/* 폭 좁은 열(품명·규격·러품·영문품명): 글자가 넘치면 셀 안에서 다음 줄로 */
+.pn-body-wrap td.pn-wrap{word-break:break-all;white-space:normal;line-height:1.3}
+.pn-body-wrap td.pn-wrap .pn-edit{display:inline-block;max-width:100%;white-space:normal;word-break:break-all}
 .pn-dcol{cursor:grab;user-select:none}
 .pn-dcol:active{cursor:grabbing}
 .pn-hist-badge{display:inline-block;margin-left:3px;color:#f59e0b;cursor:pointer;font-size:10px;vertical-align:middle;user-select:none}
@@ -2641,9 +2644,9 @@ async function setPNColOrder(arr){
 // 기본(정본) 열 정의. '삭제' 열은 항상 맨 앞(재배치 대상 아님).
 function pnBaseCols(isKo, showEng){
   const t=T[lang], ru=(lang==='ru'); const c=[];
-  c.push({key:'name', cap:280, label:t.pnH0});
-  if(isKo){ c.push({key:'spec', cap:260, label:t.pnH0s}); c.push({key:'name_ru', cap:260, label:'러시아어 품명'}); }
-  if(showEng) c.push({key:'name_en', cap:220, label:ru?'Англ. название':'영문품명'});
+  c.push({key:'name', cap:150, label:t.pnH0});
+  if(isKo){ c.push({key:'spec', cap:130, label:t.pnH0s}); c.push({key:'name_ru', cap:160, label:'러시아어 품명'}); }
+  if(showEng) c.push({key:'name_en', cap:130, label:ru?'Англ. название':'영문품명'});
   c.push({key:'rep', cap:110, label:String(t.pnH1||'').replace(' (','<br>('), rigid:true});
   c.push({key:'compat', cap:150, label:String(t.pnH2||'').replace(' (','<br>('), rigid:true});
   c.push({key:'export_ctrl', cap:70, label:ru?'Эксп.<br>контроль':'수출<br>제한'});
@@ -2651,7 +2654,7 @@ function pnBaseCols(isKo, showEng){
   c.push({key:'nw', cap:78, label:ru?'N/W ср.(kg)':'N/W<br>평균(kg)'});
   c.push({key:'gw', cap:78, label:ru?'G/W ср.(kg)':'G/W<br>평균(kg)'});
   c.push({key:'cbm', cap:84, label:ru?'CBM ср.(m³)':'CBM<br>평균(m³)'});
-  c.push({key:'note', cap:200, label:ru?'Снято с пр-ва':'단종'});
+  c.push({key:'note', cap:56, label:ru?'Снято':'단종'});
   c.push({key:'applied_models', cap:150, label:ru?'Модели (врем.)':'적용모델<br>(임시)'});
   (typeof MODEL_DEFS!=='undefined'?MODEL_DEFS:[]).forEach(m=> c.push({key:'m:'+m.key, cap:36, group:m.group, color:m.color, capLabel:m.label, modelKey:m.key}));
   return c;
@@ -2719,13 +2722,13 @@ function pnCellHtml(col, r, ctx){
   switch(col.key){
     case 'name': { const h=H(isKo?'name_ko':'name_ru');
       const inner=(isMaster?ed(r.rep,isKo?'name_ko':'name_ru',isKo?r.name_ko:r.name_ru):(isKo?hlPN(r.name_ko,kw):hlPN(r.name_ru||r.name_ko,kw)))+h.badge;
-      return _pnTd(col, inner, h.cls.trim(), 'font-weight:500;font-size:11px'); }
+      return _pnTd(col, inner, (h.cls+' pn-wrap').trim(), 'font-weight:500;font-size:11px'); }
     case 'spec': { const h=H('spec'); const inner=(isMaster?ed(r.rep,'spec',r.spec):hlPN(r.spec,kw))+h.badge;
-      return _pnTd(col, inner, h.cls.trim(), 'font-size:11px;color:var(--muted)'); }
+      return _pnTd(col, inner, (h.cls+' pn-wrap').trim(), 'font-size:11px;color:var(--muted)'); }
     case 'name_ru': { const h=H('name_ru'); const inner=(isMaster?ed(r.rep,'name_ru',r.name_ru):hlPN(r.name_ru,kw))+h.badge;
-      return _pnTd(col, inner, h.cls.trim(), 'font-size:11px;color:var(--muted)'); }
+      return _pnTd(col, inner, (h.cls+' pn-wrap').trim(), 'font-size:11px;color:var(--muted)'); }
     case 'name_en': { const en=engNameText(r.rep); const h=H('name_en'); const inner=(isMaster?ed(r.rep,'name_en',en):escapeHtml(en))+h.badge;
-      return _pnTd(col, inner, h.cls.trim(), 'font-size:11px;color:var(--accent2);font-weight:600'); }
+      return _pnTd(col, inner, (h.cls+' pn-wrap').trim(), 'font-size:11px;color:var(--accent2);font-weight:600'); }
     case 'rep': { const h=H('rep'); const inner=(isMaster?ed(r.rep,'rep',r.rep):`<span class="pn-badge pn-rep">${hlPN(r.rep,kw)}</span>`)+h.badge;
       return _pnTd(col, inner, h.cls.trim(), 'white-space:nowrap'); }
     case 'compat': { const h=H('compat');
