@@ -2605,10 +2605,14 @@ function renderPNChunk(startFrom=0){
     const compatCell = `<td class="${cH.cls}" style="font-size:11px">${isMaster?ed(r.rep,'compat',(r.compats||[]).map(pnUpperLead).join(', ')):(r.compats||[]).map(c=>`<span class="pn-badge pn-cur">${hlPN(pnUpperLead(c),kw)}</span>`).join(' ')}${cH.badge}</td>`;
     const fH=H('final');
     const finalCell = `<td class="${fH.cls}" style="font-size:11px">${isMaster?ed(r.rep,'final',pnUpperLead(r.final||'')):(r.final?`<span class="pn-badge pn-fin">${hlPN(pnUpperLead(r.final),kw)}</span>`:'')}${fH.badge}</td>`;
+    // N/W·G/W·CBM 평균 (표시 전용, 파일에서 반영)
+    const numTd=(v)=>`<td style="text-align:right;padding:0 6px;font-size:11px;color:var(--muted)">${escapeHtml(r[v]!=null?String(r[v]):'')}</td>`;
+    const nwCell=numTd('nw'), gwCell=numTd('gw'), cbmCell=numTd('cbm');
     return `<tr>
       ${delColCell}${nameCell}
       ${specCell}${nameRuCell}${engCell}
       ${repCell}${compatCell}${finalCell}
+      ${nwCell}${gwCell}${cbmCell}
       ${noteCell}${modelCell}${modelDotCells}
     </tr>`;
   }).join('');
@@ -2664,7 +2668,7 @@ function renderPN(){
   const isMasterPN=userRole(currentUser).isMaster;
   const delCol=isMasterPN?'<col>':'';
   const modelCols='<col>'.repeat(MODEL_DEFS.length);
-  const cols = delCol + (isKo ? ('<col><col><col>'+engCol+'<col><col><col>'+'<col><col>'+modelCols) : ('<col>'+engCol+'<col><col><col>'+'<col><col>'+modelCols));
+  const cols = delCol + (isKo ? ('<col><col><col>'+engCol+'<col><col><col>'+'<col><col><col>'+'<col><col>'+modelCols) : ('<col>'+engCol+'<col><col><col>'+'<col><col><col>'+'<col><col>'+modelCols));
   ['pn-hdr-col','pn-body-col'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=cols;});
 
   const thead=document.getElementById('pn-thead');
@@ -2678,9 +2682,12 @@ function renderPN(){
     const front = isKo
       ? `<th class="sticky-col1"${rs}>${t.pnH0}</th><th class="pn-sticky2"${rs}>${t.pnH0s}</th><th${rs}>러시아어 품명</th>${engTh}`
       : `<th class="sticky-col1"${rs}>${t.pnH0}</th>${engTh}`;
+    const nwTh=`<th${rs}>${lang==='ru'?'N/W ср.(kg)':'N/W<br>평균(kg)'}</th>`;
+    const gwTh=`<th${rs}>${lang==='ru'?'G/W ср.(kg)':'G/W<br>평균(kg)'}</th>`;
+    const cbmTh=`<th${rs}>${lang==='ru'?'CBM ср.(m³)':'CBM<br>평균(m³)'}</th>`;
     thead.innerHTML=`<tr>${delTh}${front}`
       +`<th id="pn-th1"${rs}>${brLabel(t.pnH1)}</th><th id="pn-th2"${rs}>${brLabel(t.pnH2)}</th><th id="pn-th3"${rs}>${brLabel(t.pnH3)}</th>`
-      +`${noteTh}${modelTh}${pnModelGroupHeaderRow1()}</tr>`
+      +`${nwTh}${gwTh}${cbmTh}${noteTh}${modelTh}${pnModelGroupHeaderRow1()}</tr>`
       +`<tr>${pnModelCapHeaderRow2()}</tr>`;
   }
   // MASTER 만 '품목 추가' 버튼 노출
@@ -2741,11 +2748,15 @@ function applyPNOverrideRow(o){
     if(Array.isArray(o.compats) && o.compats.length) cur.compats=o.compats.slice();
     if(o.note!=null) cur.note=o.note;
     if(o.applied_models!=null) cur.applied_models=o.applied_models;
+    if(o.nw!=null) cur.nw=o.nw;
+    if(o.gw!=null) cur.gw=o.gw;
+    if(o.cbm!=null) cur.cbm=o.cbm;
     if(Array.isArray(o.history)) cur.history=o.history.slice();
   }else{
     // 새로 추가된 품목: 최종품번은 대표품번을 자동으로 따라가지 않는다(빈 값 허용).
     PN_DATA.push({ rep:o.rep, compats:Array.isArray(o.compats)?o.compats.slice():[], final:o.final||'',
                    name_ko:o.name_ko||'', name_ru:o.name_ru||'', spec:o.spec||'', note:o.note||'', applied_models:o.applied_models||'',
+                   nw:o.nw||'', gw:o.gw||'', cbm:o.cbm||'',
                    history:Array.isArray(o.history)?o.history.slice():[] });
   }
 }
@@ -2902,7 +2913,7 @@ async function loadPNOverrides(){
     if(typeof compats==='string'){ try{ compats=JSON.parse(compats); }catch(e){ compats=[]; } }
     let history=row.history;
     if(typeof history==='string'){ try{ history=JSON.parse(history); }catch(e){ history=[]; } }
-    applyPNOverrideRow({ rep:row.rep, name_ko:row.name_ko, name_ru:row.name_ru, spec:row.spec, final:row.final, compats:compats||[], note:row.note, applied_models:row.applied_models, history:Array.isArray(history)?history:[] });
+    applyPNOverrideRow({ rep:row.rep, name_ko:row.name_ko, name_ru:row.name_ru, spec:row.spec, final:row.final, compats:compats||[], note:row.note, applied_models:row.applied_models, nw:row.nw, gw:row.gw, cbm:row.cbm, history:Array.isArray(history)?history:[] });
   });
   _pnLookupMap=null; _pnByRepMap=null; _nameRuByRep=null;
 }
@@ -6211,11 +6222,11 @@ function syncSplitTableColumnWidths(hdrColId, bodyColId, tbodyId, mode){
             if(isKoP){
               const front=eng?[280,260,260,220]:[280,260,260];
               const s=(eng?4:3)+d;   // 대표품번 인덱스(대표·호환·최종만 고정)
-              return { caps:[...del, ...front, 110,150,110, 200, 150, ...modelCaps], overflow:true, rigid:[s,s+1,s+2] };
+              return { caps:[...del, ...front, 110,150,110, 78,78,84, 200, 150, ...modelCaps], overflow:true, rigid:[s,s+1,s+2] };
             } else {
               const front=eng?[280,220]:[280];
               const s=(eng?2:1)+d;
-              return { caps:[...del, ...front, 110,150,110, 200, 150, ...modelCaps], overflow:true, rigid:[s,s+1,s+2] };
+              return { caps:[...del, ...front, 110,150,110, 78,78,84, 200, 150, ...modelCaps], overflow:true, rigid:[s,s+1,s+2] };
             }
           }
           if(tbodyId==='inventoryTbody'){
