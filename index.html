@@ -290,6 +290,8 @@ input[type="text"]::placeholder{color:var(--muted)}
 .pn-hdr-wrap .pn-sticky2{z-index:3;background:var(--surface2)}
 /* 변경된 셀 강조 + 변경이력 배지 */
 .pn-changed{background:#fbbf2422}
+.pn-dcol{cursor:grab;user-select:none}
+.pn-dcol:active{cursor:grabbing}
 .pn-hist-badge{display:inline-block;margin-left:3px;color:#f59e0b;cursor:pointer;font-size:10px;vertical-align:middle;user-select:none}
 .pn-hist-badge:hover{color:#d97706}
   .pn-hdr-wrap{background:var(--surface);border:1px solid var(--border);border-radius:10px 10px 0 0;border-bottom:none;overflow:hidden}
@@ -736,6 +738,10 @@ input[type="text"]::placeholder{color:var(--muted)}
         <button class="dl-btn" onclick="downloadPN()">
           <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           <span id="i18n-pndl">엑셀 다운로드</span>
+        </button>
+        <button class="dl-btn" id="pnResetBtn" onclick="pnResetColOrder()" title="열 순서·필터를 기본값으로">
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+          <span>열/필터 초기화</span>
         </button>
       </div>
       <!-- 가로 스크롤바 (검색창과 헤더 사이). 열이 많아 가로로 넘칠 때만 보인다. -->
@@ -2558,6 +2564,147 @@ function debouncedRenderPN(){
   _pnTimer=setTimeout(()=>renderPN(),180);
 }
 
+// ── 품번조회: 열 순서(사용자별·브라우저 저장) + 헤더 필터 ──
+let _pnFilters={};          // {colKey: '포함문자'}
+let _pnDragKey=null;
+function pnColOrderKey(){ const u=(typeof currentUser!=='undefined'&&currentUser)?(currentUser.id||'anon'):'anon'; return 'kt_pnColOrder:'+u; }
+function getPNColOrder(){ try{ return JSON.parse(localStorage.getItem(pnColOrderKey())||'null'); }catch(e){ return null; } }
+function setPNColOrder(arr){ try{ localStorage.setItem(pnColOrderKey(), JSON.stringify(arr)); }catch(e){} }
+// 기본(정본) 열 정의. '삭제' 열은 항상 맨 앞(재배치 대상 아님).
+function pnBaseCols(isKo, showEng){
+  const t=T[lang], ru=(lang==='ru'); const c=[];
+  c.push({key:'name', cap:280, label:t.pnH0});
+  if(isKo){ c.push({key:'spec', cap:260, label:t.pnH0s}); c.push({key:'name_ru', cap:260, label:'러시아어 품명'}); }
+  if(showEng) c.push({key:'name_en', cap:220, label:ru?'Англ. название':'영문품명'});
+  c.push({key:'rep', cap:110, label:String(t.pnH1||'').replace(' (','<br>('), rigid:true});
+  c.push({key:'compat', cap:150, label:String(t.pnH2||'').replace(' (','<br>('), rigid:true});
+  c.push({key:'final', cap:110, label:String(t.pnH3||'').replace(' (','<br>('), rigid:true});
+  c.push({key:'nw', cap:78, label:ru?'N/W ср.(kg)':'N/W<br>평균(kg)'});
+  c.push({key:'gw', cap:78, label:ru?'G/W ср.(kg)':'G/W<br>평균(kg)'});
+  c.push({key:'cbm', cap:84, label:ru?'CBM ср.(m³)':'CBM<br>평균(m³)'});
+  c.push({key:'note', cap:200, label:ru?'Снято с пр-ва':'단종'});
+  c.push({key:'applied_models', cap:150, label:ru?'Модели (врем.)':'적용모델<br>(임시)'});
+  (typeof MODEL_DEFS!=='undefined'?MODEL_DEFS:[]).forEach(m=> c.push({key:'m:'+m.key, cap:36, group:m.group, color:m.color, capLabel:m.label, modelKey:m.key}));
+  return c;
+}
+// 저장된 순서를 적용한 열 목록(+ 그룹경계·고정열 계산).
+function pnColMetaOrdered(isKo, showEng, isMaster){
+  const base=pnBaseCols(isKo, showEng);
+  const saved=getPNColOrder();
+  let ordered=base;
+  if(saved && saved.length){
+    const byKey={}; base.forEach(c=>byKey[c.key]=c);
+    const seen=new Set(), out=[];
+    saved.forEach(k=>{ const c=byKey[k]; if(c && !seen.has(k)){ out.push(c); seen.add(k); } });
+    base.forEach(c=>{ if(!seen.has(c.key)){ out.push(c); seen.add(c.key); } });
+    ordered=out;
+  }
+  ordered.forEach((c,i)=>{ c.groupStart = !!c.group && (i===0 || ordered[i-1].group!==c.group); c.freezeLeft=null; });
+  let left = isMaster?40:0;   // '삭제' 열 폭
+  for(let k=0;k<Math.min(2,ordered.length);k++){ ordered[k].freezeLeft=left; left+=ordered[k].cap; }
+  return ordered;
+}
+// 필터/검색용 셀 텍스트
+function pnColText(key, r){
+  switch(key){
+    case 'name': return lang==='ko'?(r.name_ko||''):(r.name_ru||r.name_ko||'');
+    case 'spec': return r.spec||'';
+    case 'name_ru': return r.name_ru||'';
+    case 'name_en': return engNameText(r.rep)||'';
+    case 'rep': return r.rep||'';
+    case 'compat': return (r.compats||[]).map(pnUpperLead).join(', ');
+    case 'final': return pnUpperLead(r.final||'');
+    case 'nw': return r.nw!=null?String(r.nw):'';
+    case 'gw': return r.gw!=null?String(r.gw):'';
+    case 'cbm': return r.cbm!=null?String(r.cbm):'';
+    case 'note': return r.note||'';
+    case 'applied_models': return r.applied_models||'';
+  }
+  if(key&&key.indexOf('m:')===0){ const mk=key.slice(2); const md=(_partsModels(r.rep)||{}); return md[mk]?'O':''; }
+  return '';
+}
+function pnColLabelShort(key){
+  const t=T[lang];
+  const M={name:t.pnH0, spec:t.pnH0s, name_ru:(lang==='ru'?'Рус.название':'러시아어 품명'), name_en:(lang==='ru'?'Англ.название':'영문품명'), rep:t.pnH1, compat:t.pnH2, final:t.pnH3, nw:'N/W', gw:'G/W', cbm:'CBM', note:(lang==='ru'?'Снято с пр-ва':'단종'), applied_models:(lang==='ru'?'Модели':'적용모델(임시)')};
+  return String(M[key]||key).replace(/<br>/g,' ');
+}
+// 셀 생성기(공용). col 은 pnColMetaOrdered 항목.
+function _pnTd(col, inner, cls, style){
+  const fz = col.freezeLeft!=null ? `position:sticky;left:${col.freezeLeft}px;z-index:3;background:var(--bg);` : '';
+  return `<td class="pn-c${cls?(' '+cls):''}"${(fz||style)?` style="${fz}${style||''}"`:''}>${inner}</td>`;
+}
+function pnCellHtml(col, r, ctx){
+  const isMaster=ctx.isMaster, isKo=ctx.isKo, kw=ctx.kw, hlPN=ctx.hlPN, ed=pnEditSpan;
+  const H=(f)=>pnCellHist(r.rep, f);
+  if(col.group){ const md=_partsModels(r.rep)||{}; const bl=col.groupStart?'border-left:1px solid var(--border);':'';
+    return _pnTd(col, dot(!!md[col.modelKey]), 'center', bl+'text-align:center'); }
+  switch(col.key){
+    case 'name': { const h=H(isKo?'name_ko':'name_ru');
+      const inner=(isMaster?ed(r.rep,isKo?'name_ko':'name_ru',isKo?r.name_ko:r.name_ru):(isKo?hlPN(r.name_ko,kw):hlPN(r.name_ru||r.name_ko,kw)))+h.badge;
+      return _pnTd(col, inner, h.cls.trim(), 'font-weight:500;font-size:11px'); }
+    case 'spec': { const h=H('spec'); const inner=(isMaster?ed(r.rep,'spec',r.spec):hlPN(r.spec,kw))+h.badge;
+      return _pnTd(col, inner, h.cls.trim(), 'font-size:11px;color:var(--muted)'); }
+    case 'name_ru': { const h=H('name_ru'); const inner=(isMaster?ed(r.rep,'name_ru',r.name_ru):hlPN(r.name_ru,kw))+h.badge;
+      return _pnTd(col, inner, h.cls.trim(), 'font-size:11px;color:var(--muted)'); }
+    case 'name_en': { const en=engNameText(r.rep); const h=H('name_en'); const inner=(isMaster?ed(r.rep,'name_en',en):escapeHtml(en))+h.badge;
+      return _pnTd(col, inner, h.cls.trim(), 'font-size:11px;color:var(--accent2);font-weight:600'); }
+    case 'rep': { const h=H('rep'); const inner=(isMaster?ed(r.rep,'rep',r.rep):`<span class="pn-badge pn-rep">${hlPN(r.rep,kw)}</span>`)+h.badge;
+      return _pnTd(col, inner, h.cls.trim(), 'white-space:nowrap'); }
+    case 'compat': { const h=H('compat'); const inner=(isMaster?ed(r.rep,'compat',(r.compats||[]).map(pnUpperLead).join(', ')):(r.compats||[]).map(c=>`<span class="pn-badge pn-cur">${hlPN(pnUpperLead(c),kw)}</span>`).join(' '))+h.badge;
+      return _pnTd(col, inner, h.cls.trim(), 'font-size:11px'); }
+    case 'final': { const h=H('final'); const inner=(isMaster?ed(r.rep,'final',pnUpperLead(r.final||'')):(r.final?`<span class="pn-badge pn-fin">${hlPN(pnUpperLead(r.final),kw)}</span>`:''))+h.badge;
+      return _pnTd(col, inner, h.cls.trim(), 'font-size:11px'); }
+    case 'nw': case 'gw': case 'cbm': { const val=r[col.key]!=null?String(r[col.key]):''; const inner=isMaster?ed(r.rep,col.key,val):escapeHtml(val);
+      return _pnTd(col, inner, '', 'text-align:right;padding:0 6px;font-size:11px;color:var(--muted)'); }
+    case 'note': { const inner=isMaster?ed(r.rep,'note',r.note):escapeHtml(r.note||'');
+      return _pnTd(col, inner, '', 'font-size:11px;color:var(--muted);text-align:left'); }
+    case 'applied_models': { const inner=isMaster?ed(r.rep,'applied_models',r.applied_models||''):escapeHtml(r.applied_models||'');
+      return _pnTd(col, inner, '', 'text-align:left;font-size:11px'); }
+  }
+  return _pnTd(col, '', '', '');
+}
+// 헤더 필터 아이콘
+function pnFilterIcon(key){
+  const active=_pnFilters[key]!=null && _pnFilters[key]!=='';
+  return `<span onclick="event.stopPropagation();event.preventDefault();openPNFilter('${key}',this)" onmousedown="event.stopPropagation()" draggable="false" title="${lang==='ru'?'Фильтр':'필터'}" style="cursor:pointer;margin-left:3px;font-size:10px;color:${active?'#f59e0b':'var(--muted)'}">▾</span>`;
+}
+function openPNFilter(key, anchor){
+  closePNFilter();
+  const rect=anchor.getBoundingClientRect();
+  const cur=_pnFilters[key]||'';
+  const box=document.createElement('div'); box.id='pnFilterPop';
+  box.style.cssText=`position:fixed;top:${rect.bottom+4}px;left:${Math.max(6,Math.min(rect.left, window.innerWidth-216))}px;z-index:9999;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px;box-shadow:0 6px 20px #0007;width:200px`;
+  box.innerHTML=`<div style="font-size:11px;color:var(--muted);margin-bottom:4px">${escapeHtml(pnColLabelShort(key))} · ${lang==='ru'?'фильтр':'필터'}</div>`
+    +`<input id="pnFilterInput" type="text" value="${escapeHtml(cur)}" placeholder="${lang==='ru'?'содержит…':'포함 문자…'}" style="width:100%;box-sizing:border-box;padding:4px 6px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:12px">`
+    +`<div style="display:flex;gap:6px;margin-top:6px">`
+    +`<button onclick="applyPNFilter('${key}')" style="flex:1;padding:4px;border:none;border-radius:6px;background:var(--accent2);color:#fff;cursor:pointer;font-size:11px">${lang==='ru'?'Применить':'적용'}</button>`
+    +`<button onclick="clearPNFilter('${key}')" style="flex:1;padding:4px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);cursor:pointer;font-size:11px">${lang==='ru'?'Сброс':'지우기'}</button></div>`;
+  document.body.appendChild(box);
+  const inp=document.getElementById('pnFilterInput'); if(inp){ inp.focus(); inp.select();
+    inp.onkeydown=(e)=>{ if(e.key==='Enter') applyPNFilter(key); else if(e.key==='Escape') closePNFilter(); }; }
+  setTimeout(()=>document.addEventListener('mousedown', _pnFilterOutside), 0);
+}
+function _pnFilterOutside(e){ const b=document.getElementById('pnFilterPop'); if(b && !b.contains(e.target)) closePNFilter(); }
+function closePNFilter(){ const b=document.getElementById('pnFilterPop'); if(b) b.remove(); document.removeEventListener('mousedown', _pnFilterOutside); }
+function applyPNFilter(key){ const inp=document.getElementById('pnFilterInput'); const v=inp?inp.value.trim():''; if(v) _pnFilters[key]=v; else delete _pnFilters[key]; closePNFilter(); renderPN(); }
+function clearPNFilter(key){ delete _pnFilters[key]; closePNFilter(); renderPN(); }
+// 열 드래그 재배치
+function pnColDragStart(e){ _pnDragKey=e.currentTarget.getAttribute('data-colkey'); if(e.dataTransfer){ e.dataTransfer.effectAllowed='move'; try{e.dataTransfer.setData('text/plain',_pnDragKey);}catch(_){} } e.currentTarget.style.opacity='0.4'; }
+function pnColDragOver(e){ e.preventDefault(); if(e.dataTransfer) e.dataTransfer.dropEffect='move'; e.currentTarget.style.outline='2px solid var(--accent2)'; e.currentTarget.style.outlineOffset='-2px'; }
+function pnColDragLeave(e){ e.currentTarget.style.outline=''; }
+function pnColDrop(e){ e.preventDefault(); const tgt=e.currentTarget.getAttribute('data-colkey'); e.currentTarget.style.outline=''; if(_pnDragKey && tgt && _pnDragKey!==tgt) pnReorderCols(_pnDragKey, tgt); }
+function pnColDragEnd(e){ if(e&&e.currentTarget) e.currentTarget.style.opacity=''; document.querySelectorAll('#pn-thead .pn-dcol').forEach(x=>{x.style.outline='';x.style.opacity='';}); _pnDragKey=null; }
+function pnReorderCols(dragKey, targetKey){
+  const isKo=lang==='ko', eng=canViewEngName(), master=(typeof currentUser!=='undefined')&&userRole(currentUser).isMaster;
+  const order=pnColMetaOrdered(isKo,eng,master).map(c=>c.key);
+  const from=order.indexOf(dragKey); if(from<0) return;
+  order.splice(from,1);
+  let to=order.indexOf(targetKey); if(to<0) to=order.length;
+  order.splice(to,0,dragKey);
+  setPNColOrder(order); renderPN();
+}
+function pnResetColOrder(){ try{ localStorage.removeItem(pnColOrderKey()); }catch(e){} _pnFilters={}; renderPN(); }
+
 // ── 품번조회 페이지 렌더 (청크 방식) ──
 let _pnFiltered=[], _pnChunk=100;
 function renderPNChunk(startFrom=0){
@@ -2575,48 +2722,13 @@ function renderPNChunk(startFrom=0){
   const showEng=canViewEngName();
   const engTd=r=>showEng?`<td style="font-size:11px;color:var(--accent2);font-weight:600">${escapeHtml(engNameText(r.rep))}</td>`:'';
   const isMaster=userRole(currentUser).isMaster;   // MASTER 만 셀 인라인 수정
-  const ed=pnEditSpan;   // 품번조회·주문·부품조회 공용 편집 span
+  // 사용자별 열 순서를 반영한 열 목록(데이터-드리븐). 헤더/본문/폭이 모두 이 순서를 따른다.
+  const meta=pnColMetaOrdered(isKo, showEng, isMaster);
+  const ctx={isMaster, isKo, kw, hlPN};
   const rows=chunk.map(r=>{
-    const en=engNameText(r.rep);
-    const H=(field)=>pnCellHist(r.rep, field);   // 변경 강조 클래스 + 이력 배지
-    const nH=H(isKo?'name_ko':'name_ru');
-    const nameCell = `<td class="sticky-col1${nH.cls}" style="font-weight:500;font-size:11px">${isMaster?ed(r.rep,isKo?'name_ko':'name_ru',isKo?r.name_ko:r.name_ru):(isKo?hlPN(r.name_ko,kw):hlPN(r.name_ru||r.name_ko,kw))}${nH.badge}</td>`;
-    const sH=H('spec');
-    const specCell = !isKo ? '' : `<td class="pn-sticky2${sH.cls}" style="font-size:11px;color:var(--muted)">${isMaster?ed(r.rep,'spec',r.spec):hlPN(r.spec,kw)}${sH.badge}</td>`;
-    const ruH=H('name_ru');
-    const nameRuCell = !isKo ? '' : `<td class="${ruH.cls}" style="font-size:11px;color:var(--muted)">${isMaster?ed(r.rep,'name_ru',r.name_ru):hlPN(r.name_ru,kw)}${ruH.badge}</td>`;
-    const enH=H('name_en');
-    const engCell = !showEng ? '' : `<td class="${enH.cls}" style="font-size:11px;color:var(--accent2);font-weight:600">${isMaster?ed(r.rep,'name_en',en):escapeHtml(en)}${enH.badge}</td>`;
-    // 적용모델(임시): 빈칸으로 시작하는 자유 편집 칸(자동 유추 없음).
-    const modelCell = isMaster
-      ? `<td style="text-align:left;font-size:11px">${ed(r.rep,'applied_models', r.applied_models||'')}</td>`
-      : `<td style="text-align:left;font-size:11px">${escapeHtml(r.applied_models||'')}</td>`;
-    // 적용모델: 부품조회처럼 개별 모델 열로 O/- 표시(읽기 전용).
-    const modelDotCells = pnModelDotCells(r.rep);
-    const noteCell = isMaster
-      ? `<td style="font-size:11px;color:var(--muted);text-align:left">${ed(r.rep,'note',r.note)}</td>`
-      : `<td style="font-size:11px;color:var(--muted);text-align:left">${escapeHtml(r.note||'')}</td>`;
-    // 맨 앞 '삭제' 열(MASTER): 그 행(품목) 전체를 삭제.
-    const delColCell = isMaster ? `<td class="center"><button title="이 행 삭제" onclick="event.stopPropagation();deletePNItem('${String(r.rep).replace(/'/g,"\\'")}')" style="border:none;background:none;color:#ef4444;cursor:pointer;font-size:14px;padding:2px 4px">✕</button></td>` : '';
-    // 대표품번·호환품번·최종품번: MASTER 는 직접 편집(호환품번은 콤마/공백으로 여러 개).
-    const repH=H('rep');
-    const repCell = `<td class="${repH.cls}" style="white-space:nowrap">${isMaster?ed(r.rep,'rep',r.rep):`<span class="pn-badge pn-rep">${hlPN(r.rep,kw)}</span>`}${repH.badge}</td>`;
-    const cH=H('compat');
-    const compatCell = `<td class="${cH.cls}" style="font-size:11px">${isMaster?ed(r.rep,'compat',(r.compats||[]).map(pnUpperLead).join(', ')):(r.compats||[]).map(c=>`<span class="pn-badge pn-cur">${hlPN(pnUpperLead(c),kw)}</span>`).join(' ')}${cH.badge}</td>`;
-    const fH=H('final');
-    const finalCell = `<td class="${fH.cls}" style="font-size:11px">${isMaster?ed(r.rep,'final',pnUpperLead(r.final||'')):(r.final?`<span class="pn-badge pn-fin">${hlPN(pnUpperLead(r.final),kw)}</span>`:'')}${fH.badge}</td>`;
-    // N/W·G/W·CBM 평균 (MASTER 편집 가능). 파일에서 반영된 값도 여기서 수정된다.
-    const numTd=(v)=> isMaster
-      ? `<td style="text-align:right;padding:0 6px;font-size:11px;color:var(--muted)">${ed(r.rep, v, r[v]!=null?String(r[v]):'')}</td>`
-      : `<td style="text-align:right;padding:0 6px;font-size:11px;color:var(--muted)">${escapeHtml(r[v]!=null?String(r[v]):'')}</td>`;
-    const nwCell=numTd('nw'), gwCell=numTd('gw'), cbmCell=numTd('cbm');
-    return `<tr>
-      ${delColCell}${nameCell}
-      ${specCell}${nameRuCell}${engCell}
-      ${repCell}${compatCell}${finalCell}
-      ${nwCell}${gwCell}${cbmCell}
-      ${noteCell}${modelCell}${modelDotCells}
-    </tr>`;
+    // 맨 앞 '삭제' 열(MASTER): 그 행(품목) 전체를 삭제. (항상 좌측 고정)
+    const delColCell = isMaster ? `<td class="center" style="position:sticky;left:0;z-index:3;background:var(--bg)"><button title="이 행 삭제" onclick="event.stopPropagation();deletePNItem('${String(r.rep).replace(/'/g,"\\'")}')" style="border:none;background:none;color:#ef4444;cursor:pointer;font-size:14px;padding:2px 4px">✕</button></td>` : '';
+    return `<tr>${delColCell}${meta.map(c=>pnCellHtml(c, r, ctx)).join('')}</tr>`;
   }).join('');
   if(startFrom===0) tbody.innerHTML=rows;
   else tbody.insertAdjacentHTML('beforeend', rows);
@@ -2655,45 +2767,48 @@ let _pnNextStart=-1;
 function renderPN(){
   const kw=document.getElementById('pnInput').value.trim().toLowerCase();const t=T[lang];
   const engBtn=document.getElementById('engNameUploadBtn'); if(engBtn) engBtn.style.display=userRole(currentUser).isMaster?'':'none';
-  let rows=PN_DATA;
-  if(kw)rows=rows.filter(r=>searchRow(r.rep, kw, [r.name_ko,r.name_ru,r.spec,r.final,...(r.compats||[])]));
-  document.getElementById('pnBadge').innerHTML=`<b>${rows.length}</b>`;
-  const noR=document.getElementById('pnNoResult');noR.textContent=t.pnNoResult;noR.style.display=rows.length?'none':'block';
-  // hlPN은 renderPNChunk에서 처리
-
-  // colgroup & 헤더 업데이트
   const isKo=lang==='ko';
   const showEng=canViewEngName();
-  const engCol=showEng?'<col>':'';
-  // 열: 품명·[규격]·[러시아품명]·[영문품명]·적용모델(임시)·대표·호환·최종·참고내용
-  // 열: [삭제]·품명·[규격]·[러품]·[영문]·대표·호환·최종·적용모델(임시)·<모델 15열>·참고
   const isMasterPN=userRole(currentUser).isMaster;
-  const delCol=isMasterPN?'<col>':'';
-  const modelCols='<col>'.repeat(MODEL_DEFS.length);
-  const cols = delCol + (isKo ? ('<col><col><col>'+engCol+'<col><col><col>'+'<col><col><col>'+'<col><col>'+modelCols) : ('<col>'+engCol+'<col><col><col>'+'<col><col><col>'+'<col><col>'+modelCols));
-  ['pn-hdr-col','pn-body-col'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=cols;});
+  let rows=PN_DATA;
+  if(kw)rows=rows.filter(r=>searchRow(r.rep, kw, [r.name_ko,r.name_ru,r.spec,r.final,...(r.compats||[])]));
+  // 헤더 열 필터(각 열의 '포함 문자'로 AND 필터)
+  const fkeys=Object.keys(_pnFilters);
+  if(fkeys.length) rows=rows.filter(r=>fkeys.every(k=>String(pnColText(k,r)).toLowerCase().includes(String(_pnFilters[k]).toLowerCase())));
+  document.getElementById('pnBadge').innerHTML=`<b>${rows.length}</b>`;
+  const noR=document.getElementById('pnNoResult');noR.textContent=t.pnNoResult;noR.style.display=rows.length?'none':'block';
+
+  // colgroup & 헤더 (사용자별 열 순서 반영: 데이터-드리븐)
+  const meta=pnColMetaOrdered(isKo, showEng, isMasterPN);
+  const colsHtml=(isMasterPN?'<col>':'')+meta.map(()=>'<col>').join('');
+  ['pn-hdr-col','pn-body-col'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=colsHtml;});
 
   const thead=document.getElementById('pn-thead');
   if(thead){
-    const brLabel=(x)=>String(x||'').replace(' (','<br>(');
-    const rs=' rowspan="2"';
-    const delTh=isMasterPN?`<th${rs} style="font-size:11px">${lang==='ru'?'Удал.':'삭제'}</th>`:'';
-    const engTh=showEng?`<th${rs}>${lang==='ru'?'Англ. название':'영문품명'}</th>`:'';
-    const modelTh=`<th${rs}>${lang==='ru'?'Модели (врем.)':'적용모델<br>(임시)'}</th>`;
-    const noteTh=`<th${rs}>${lang==='ru'?'Снято с пр-ва':'단종'}</th>`;
-    const front = isKo
-      ? `<th class="sticky-col1"${rs}>${t.pnH0}</th><th class="pn-sticky2"${rs}>${t.pnH0s}</th><th${rs}>러시아어 품명</th>${engTh}`
-      : `<th class="sticky-col1"${rs}>${t.pnH0}</th>${engTh}`;
-    const nwTh=`<th${rs}>${lang==='ru'?'N/W ср.(kg)':'N/W<br>평균(kg)'}</th>`;
-    const gwTh=`<th${rs}>${lang==='ru'?'G/W ср.(kg)':'G/W<br>평균(kg)'}</th>`;
-    const cbmTh=`<th${rs}>${lang==='ru'?'CBM ср.(m³)':'CBM<br>평균(m³)'}</th>`;
-    thead.innerHTML=`<tr>${delTh}${front}`
-      +`<th id="pn-th1"${rs}>${brLabel(t.pnH1)}</th><th id="pn-th2"${rs}>${brLabel(t.pnH2)}</th><th id="pn-th3"${rs}>${brLabel(t.pnH3)}</th>`
-      +`${nwTh}${gwTh}${cbmTh}${noteTh}${modelTh}${pnModelGroupHeaderRow1()}</tr>`
-      +`<tr>${pnModelCapHeaderRow2()}</tr>`;
+    let row1='', row2='';
+    if(isMasterPN) row1+=`<th rowspan="2" style="position:sticky;left:0;z-index:7;background:var(--surface2);font-size:11px">${lang==='ru'?'Удал.':'삭제'}</th>`;
+    let i=0;
+    while(i<meta.length){
+      const c=meta[i];
+      const frz=c.freezeLeft!=null?`position:sticky;left:${c.freezeLeft}px;z-index:7;background:var(--surface2);`:'';
+      const dnd=`draggable="true" data-colkey="${c.key}" ondragstart="pnColDragStart(event)" ondragover="pnColDragOver(event)" ondragleave="pnColDragLeave(event)" ondrop="pnColDrop(event)" ondragend="pnColDragEnd(event)"`;
+      if(!c.group){
+        row1+=`<th rowspan="2" ${dnd} class="pn-dcol" style="${frz}cursor:grab">${c.label}${pnFilterIcon(c.key)}</th>`;
+        i++;
+      } else {
+        let j=i; while(j<meta.length && meta[j].group===c.group) j++;
+        const run=meta.slice(i,j);
+        row1+=`<th colspan="${run.length}" style="text-align:center;font-size:10px;font-weight:700;color:${c.color||'#888'};border-left:1px solid var(--border)">${escapeHtml(c.group)}</th>`;
+        run.forEach(m=>{ const mfrz=m.freezeLeft!=null?`position:sticky;left:${m.freezeLeft}px;z-index:7;background:var(--surface2);`:'';
+          row2+=`<th draggable="true" data-colkey="${m.key}" ondragstart="pnColDragStart(event)" ondragover="pnColDragOver(event)" ondragleave="pnColDragLeave(event)" ondrop="pnColDrop(event)" ondragend="pnColDragEnd(event)" class="pn-dcol" style="${mfrz}text-align:center;font-size:9px;color:var(--muted)${m.groupStart?';border-left:1px solid var(--border)':''};cursor:grab">${escapeHtml(m.capLabel)}</th>`; });
+        i=j;
+      }
+    }
+    thead.innerHTML=`<tr>${row1}</tr><tr>${row2}</tr>`;
   }
   // MASTER 만 '품목 추가' 버튼 노출
-  const addBtn=document.getElementById('pnAddBtn'); if(addBtn) addBtn.style.display=userRole(currentUser).isMaster?'':'none';
+  const addBtn=document.getElementById('pnAddBtn'); if(addBtn) addBtn.style.display=isMasterPN?'':'none';
+  const resetBtn=document.getElementById('pnResetBtn'); if(resetBtn){ const sp=resetBtn.querySelector('span'); if(sp) sp.textContent=lang==='ru'?'Столбцы сброс':'열/필터 초기화'; }
 
   // 청크 렌더링
   _pnFiltered=rows;
@@ -6212,24 +6327,15 @@ function syncSplitTableColumnWidths(hdrColId, bodyColId, tbodyId, mode){
             return { caps:[...lead, 84, 84], noFill:true, rigid:allRigidFrom(s, n) };
           }
           if(tbodyId==='pnTbody'){
-            // KO: 품명|규격|러품|[영문]|대표|호환|최종|적용모델(임시)|<모델 15열>|참고
-            // RU: 품명|[영문]|대표|호환|최종|적용모델(임시)|<모델 15열>|참고
+            // 열 순서(사용자별 재배치)를 단일 소스에서 가져와 폭을 정한다.
             const isKoP=(lang==='ko');
             const eng=canViewEngName();
             const master=(typeof currentUser!=='undefined')&&userRole(currentUser).isMaster;
             const del=master?[40]:[];   // 맨 앞 삭제 열(MASTER)
-            const d=del.length;         // 삭제 열이 있으면 뒤 인덱스가 1 밀린다
-            const modelCaps=(typeof MODEL_DEFS!=='undefined'?MODEL_DEFS:[]).map(()=>36);   // 모델 열 좁게
+            const meta=pnColMetaOrdered(isKoP, eng, master);
+            const rigid=[]; meta.forEach((c,i)=>{ if(c.rigid) rigid.push(del.length+i); });
             // 열이 많아 화면 폭을 넘으면 축소하지 않고 그대로 넘쳐서 가로 스크롤(overflow)한다.
-            if(isKoP){
-              const front=eng?[280,260,260,220]:[280,260,260];
-              const s=(eng?4:3)+d;   // 대표품번 인덱스(대표·호환·최종만 고정)
-              return { caps:[...del, ...front, 110,150,110, 78,78,84, 200, 150, ...modelCaps], overflow:true, rigid:[s,s+1,s+2] };
-            } else {
-              const front=eng?[280,220]:[280];
-              const s=(eng?2:1)+d;
-              return { caps:[...del, ...front, 110,150,110, 78,78,84, 200, 150, ...modelCaps], overflow:true, rigid:[s,s+1,s+2] };
-            }
+            return { caps:[...del, ...meta.map(c=>c.cap)], overflow:true, rigid };
           }
           if(tbodyId==='inventoryTbody'){
             // 앞: 품명|규격|대표품번|품번 (RU 는 규격 제외)
