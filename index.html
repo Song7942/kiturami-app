@@ -2689,31 +2689,83 @@ function pnCellHtml(col, r, ctx){
   }
   return _pnTd(col, '', '', '');
 }
-// 헤더 필터 아이콘
+// 정렬 상태(엑셀식): 한 열 기준 오름/내림
+let _pnSort={key:null, dir:'asc'};
+// 열의 고유값 목록(엑셀 체크박스용). 빈값은 '' 로 유지(라벨만 '(비어 있음)').
+function pnDistinctValues(key){
+  const set=new Set();
+  PN_DATA.forEach(r=> set.add(String(pnColText(key,r))));
+  const num=['nw','gw','cbm'].includes(key);
+  return [...set].sort((a,b)=> num ? ((parseFloat(a)||0)-(parseFloat(b)||0)) : a.localeCompare(b,'ko'));
+}
+// 헤더 필터/정렬 버튼(클릭 영역을 크게)
 function pnFilterIcon(key){
-  const active=_pnFilters[key]!=null && _pnFilters[key]!=='';
-  return `<span onclick="event.stopPropagation();event.preventDefault();openPNFilter('${key}',this)" onmousedown="event.stopPropagation()" draggable="false" title="${lang==='ru'?'Фильтр':'필터'}" style="cursor:pointer;margin-left:3px;font-size:10px;color:${active?'#f59e0b':'var(--muted)'}">▾</span>`;
+  const fActive=_pnFilters[key]!=null;
+  const sorted=_pnSort.key===key;
+  const on=fActive||sorted;
+  const glyph = sorted ? (_pnSort.dir==='desc'?'▼':'▲') : '▾';
+  return `<span onclick="event.stopPropagation();event.preventDefault();openPNFilter('${key}',this)" onmousedown="event.stopPropagation()" draggable="false" title="${lang==='ru'?'Фильтр и сортировка':'필터·정렬'}" style="display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:18px;margin-left:5px;padding:0 4px;border-radius:4px;border:1px solid ${on?'var(--accent2)':'var(--border)'};background:${on?'var(--accent2)':'var(--bg)'};color:${on?'#fff':'var(--muted)'};font-size:11px;line-height:1;cursor:pointer;vertical-align:middle">${glyph}</span>`;
 }
 function openPNFilter(key, anchor){
   closePNFilter();
   const rect=anchor.getBoundingClientRect();
-  const cur=_pnFilters[key]||'';
+  const ru=lang==='ru';
+  const vals=pnDistinctValues(key);
+  const cur=_pnFilters[key]?new Set(_pnFilters[key]):null;   // null = 전체 표시
+  const blank=ru?'(пусто)':'(비어 있음)';
   const box=document.createElement('div'); box.id='pnFilterPop';
-  box.style.cssText=`position:fixed;top:${rect.bottom+4}px;left:${Math.max(6,Math.min(rect.left, window.innerWidth-216))}px;z-index:9999;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px;box-shadow:0 6px 20px #0007;width:200px`;
-  box.innerHTML=`<div style="font-size:11px;color:var(--muted);margin-bottom:4px">${escapeHtml(pnColLabelShort(key))} · ${lang==='ru'?'фильтр':'필터'}</div>`
-    +`<input id="pnFilterInput" type="text" value="${escapeHtml(cur)}" placeholder="${lang==='ru'?'содержит…':'포함 문자…'}" style="width:100%;box-sizing:border-box;padding:4px 6px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:12px">`
-    +`<div style="display:flex;gap:6px;margin-top:6px">`
-    +`<button onclick="applyPNFilter('${key}')" style="flex:1;padding:4px;border:none;border-radius:6px;background:var(--accent2);color:#fff;cursor:pointer;font-size:11px">${lang==='ru'?'Применить':'적용'}</button>`
-    +`<button onclick="clearPNFilter('${key}')" style="flex:1;padding:4px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);cursor:pointer;font-size:11px">${lang==='ru'?'Сброс':'지우기'}</button></div>`;
+  const W=258;
+  box.style.cssText=`position:fixed;top:${rect.bottom+4}px;left:${Math.max(6,Math.min(rect.left, window.innerWidth-W-6))}px;z-index:9999;background:var(--surface2);border:1px solid var(--border);border-radius:10px;box-shadow:0 10px 30px #0009;width:${W}px;font-size:12px;color:var(--text);overflow:hidden`;
+  const itemsHtml=vals.map(v=>{
+    const checked=(!cur||cur.has(v))?'checked':'';
+    const label=v===''?blank:escapeHtml(v);
+    return `<label class="pnf-item" data-v="${escapeHtml(v)}" style="display:flex;align-items:center;gap:6px;padding:4px 8px;cursor:pointer;line-height:1.3"><input type="checkbox" class="pnf-chk" ${checked} style="cursor:pointer;flex:none"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${label}</span></label>`;
+  }).join('');
+  const sortBtn=(dir,txt)=>`<button class="pnf-sort" data-dir="${dir}" style="width:100%;text-align:left;padding:6px 8px;border:none;background:${_pnSort.key===key&&_pnSort.dir===dir?'var(--accent2)':'none'};color:${_pnSort.key===key&&_pnSort.dir===dir?'#fff':'var(--text)'};cursor:pointer;border-radius:6px;font-size:12px;display:flex;align-items:center;gap:6px">${txt}</button>`;
+  box.innerHTML=
+     `<div style="padding:8px 8px 6px;border-bottom:1px solid var(--border)">`
+    +`<div style="font-size:11px;color:var(--muted);margin:0 2px 5px">${escapeHtml(pnColLabelShort(key))}</div>`
+    +sortBtn('asc','▲ '+(ru?'Сортировка А→Я':'오름차순 정렬'))
+    +sortBtn('desc','▼ '+(ru?'Сортировка Я→А':'내림차순 정렬'))
+    +`</div>`
+    +`<div style="padding:8px">`
+    +`<input id="pnfSearch" type="text" placeholder="${ru?'Поиск значений…':'값 검색…'}" style="width:100%;box-sizing:border-box;padding:5px 8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:12px">`
+    +`<label style="display:flex;align-items:center;gap:6px;padding:5px 4px 4px;cursor:pointer;font-weight:600;border-bottom:1px solid var(--border);margin-top:4px"><input type="checkbox" id="pnfAll" checked style="cursor:pointer;flex:none"><span>${ru?'(Выбрать все)':'(모두 선택)'}</span></label>`
+    +`<div id="pnfList" style="max-height:230px;overflow:auto;margin-top:2px">${itemsHtml}</div>`
+    +`</div>`
+    +`<div style="display:flex;gap:6px;padding:8px;border-top:1px solid var(--border)">`
+    +`<button id="pnfApply" style="flex:1;padding:6px;border:none;border-radius:7px;background:var(--accent2);color:#fff;cursor:pointer;font-size:12px;font-weight:600">${ru?'ОК':'적용'}</button>`
+    +`<button id="pnfClear" style="flex:1;padding:6px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);cursor:pointer;font-size:12px">${ru?'Сброс':'해제'}</button>`
+    +`<button id="pnfCancel" style="flex:none;padding:6px 10px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);cursor:pointer;font-size:12px">${ru?'✕':'취소'}</button>`
+    +`</div>`;
   document.body.appendChild(box);
-  const inp=document.getElementById('pnFilterInput'); if(inp){ inp.focus(); inp.select();
-    inp.onkeydown=(e)=>{ if(e.key==='Enter') applyPNFilter(key); else if(e.key==='Escape') closePNFilter(); }; }
+  const listEl=box.querySelector('#pnfList');
+  const allChk=box.querySelector('#pnfAll');
+  const search=box.querySelector('#pnfSearch');
+  const items=()=>[...listEl.querySelectorAll('.pnf-item')];
+  const visItems=()=>items().filter(it=>it.style.display!=='none');
+  function syncAll(){ const vis=visItems(); const chk=vis.filter(it=>it.querySelector('.pnf-chk').checked); allChk.checked=vis.length>0&&chk.length===vis.length; allChk.indeterminate=chk.length>0&&chk.length<vis.length; }
+  // 정렬(즉시 적용)
+  box.querySelectorAll('.pnf-sort').forEach(b=> b.onclick=()=>{ _pnSort={key, dir:b.getAttribute('data-dir')}; closePNFilter(); renderPN(); });
+  // 값 검색 → 목록 필터
+  search.oninput=()=>{ const q=search.value.trim().toLowerCase(); items().forEach(it=>{ const v=(it.getAttribute('data-v')||'').toLowerCase(); it.style.display=(!q||v.includes(q))?'':'none'; }); syncAll(); };
+  allChk.onchange=()=>{ visItems().forEach(it=> it.querySelector('.pnf-chk').checked=allChk.checked); };
+  listEl.addEventListener('change', syncAll);
+  syncAll(); search.focus();
+  box.querySelector('#pnfApply').onclick=()=>{
+    const checked=items().filter(it=>it.querySelector('.pnf-chk').checked).map(it=>it.getAttribute('data-v'));
+    if(checked.length===vals.length) delete _pnFilters[key];   // 전부 선택 = 필터 없음
+    else _pnFilters[key]=checked;
+    closePNFilter(); renderPN();
+  };
+  box.querySelector('#pnfClear').onclick=()=>{ delete _pnFilters[key]; if(_pnSort.key===key) _pnSort={key:null,dir:'asc'}; closePNFilter(); renderPN(); };
+  box.querySelector('#pnfCancel').onclick=()=> closePNFilter();
+  document.addEventListener('keydown', _pnFilterEsc);
   setTimeout(()=>document.addEventListener('mousedown', _pnFilterOutside), 0);
 }
+function _pnFilterEsc(e){ if(e.key==='Escape') closePNFilter(); }
 function _pnFilterOutside(e){ const b=document.getElementById('pnFilterPop'); if(b && !b.contains(e.target)) closePNFilter(); }
-function closePNFilter(){ const b=document.getElementById('pnFilterPop'); if(b) b.remove(); document.removeEventListener('mousedown', _pnFilterOutside); }
-function applyPNFilter(key){ const inp=document.getElementById('pnFilterInput'); const v=inp?inp.value.trim():''; if(v) _pnFilters[key]=v; else delete _pnFilters[key]; closePNFilter(); renderPN(); }
-function clearPNFilter(key){ delete _pnFilters[key]; closePNFilter(); renderPN(); }
+function closePNFilter(){ const b=document.getElementById('pnFilterPop'); if(b) b.remove(); document.removeEventListener('mousedown', _pnFilterOutside); document.removeEventListener('keydown', _pnFilterEsc); }
 // 열 드래그 재배치
 function pnColDragStart(e){ _pnDragKey=e.currentTarget.getAttribute('data-colkey'); if(e.dataTransfer){ e.dataTransfer.effectAllowed='move'; try{e.dataTransfer.setData('text/plain',_pnDragKey);}catch(_){} } e.currentTarget.style.opacity='0.4'; }
 function pnColDragOver(e){ e.preventDefault(); if(e.dataTransfer) e.dataTransfer.dropEffect='move'; e.currentTarget.style.outline='2px solid var(--accent2)'; e.currentTarget.style.outlineOffset='-2px'; }
@@ -2729,7 +2781,7 @@ function pnReorderCols(dragKey, targetKey){
   order.splice(to,0,dragKey);
   setPNColOrder(order); renderPN();
 }
-async function pnResetColOrder(){ const uid=_pnUid(); _pnColOrderCache=null; _pnColOrderLoadedFor=uid; _pnFilters={}; if(uid){ try{ await sb.from('kt_user_prefs').delete().eq('user_id',uid); }catch(e){} } renderPN(); }
+async function pnResetColOrder(){ const uid=_pnUid(); _pnColOrderCache=null; _pnColOrderLoadedFor=uid; _pnFilters={}; _pnSort={key:null,dir:'asc'}; if(uid){ try{ await sb.from('kt_user_prefs').delete().eq('user_id',uid); }catch(e){} } renderPN(); }
 
 // ── 품번조회 페이지 렌더 (청크 방식) ──
 let _pnFiltered=[], _pnChunk=100;
@@ -2798,9 +2850,22 @@ function renderPN(){
   const isMasterPN=userRole(currentUser).isMaster;
   let rows=PN_DATA;
   if(kw)rows=rows.filter(r=>searchRow(r.rep, kw, [r.name_ko,r.name_ru,r.spec,r.final,...(r.compats||[])]));
-  // 헤더 열 필터(각 열의 '포함 문자'로 AND 필터)
+  // 헤더 열 필터(엑셀식: 선택된 값 집합만 표시, 여러 열은 AND)
   const fkeys=Object.keys(_pnFilters);
-  if(fkeys.length) rows=rows.filter(r=>fkeys.every(k=>String(pnColText(k,r)).toLowerCase().includes(String(_pnFilters[k]).toLowerCase())));
+  if(fkeys.length){
+    const sets=fkeys.map(k=>({k, set:new Set((_pnFilters[k]||[]).map(String))}));
+    rows=rows.filter(r=> sets.every(a=> a.set.has(String(pnColText(a.k,r)))));
+  }
+  // 정렬(엑셀식: 한 열 기준 오름/내림, 빈값은 항상 뒤로)
+  if(_pnSort.key){
+    const k=_pnSort.key, dir=_pnSort.dir==='desc'?-1:1, num=['nw','gw','cbm'].includes(k);
+    rows=rows.slice().sort((a,b)=>{
+      const va=String(pnColText(k,a)), vb=String(pnColText(k,b));
+      const ea=va==='', eb=vb==='';
+      if(ea&&eb) return 0; if(ea) return 1; if(eb) return -1;
+      return (num ? ((parseFloat(va)||0)-(parseFloat(vb)||0)) : va.localeCompare(vb,'ko'))*dir;
+    });
+  }
   document.getElementById('pnBadge').innerHTML=`<b>${rows.length}</b>`;
   const noR=document.getElementById('pnNoResult');noR.textContent=t.pnNoResult;noR.style.display=rows.length?'none':'block';
 
