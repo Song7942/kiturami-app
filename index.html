@@ -3071,9 +3071,10 @@ function applyPNOverrideRow(o){
 }
 // 변경 셀 강조/이력 배지. field 에 변경이력이 있으면 강조 클래스와 배지를 돌려준다.
 // 각 계정은 자기가 보는 열에서만 렌더되므로, 보이는 항목의 이력만 노출된다.
+const PN_HIST_SINCE='2026-08-04T23:26:00.000Z';   // 이 시각 이후의 변경만 이력으로 표시(이전 이력은 숨김, 데이터는 보존)
 function pnCellHist(rep, field){
   const p=getPNInfo(rep);
-  const has=p && Array.isArray(p.history) && p.history.some(h=>h && h.f===field);
+  const has=p && Array.isArray(p.history) && p.history.some(h=>h && h.f===field && h.t && h.t>=PN_HIST_SINCE);
   if(!has) return { cls:'', badge:'' };
   return { cls:' pn-changed',
     badge:` <span class="pn-hist-badge" onclick="event.stopPropagation();openPNHistoryModal('${String(rep).replace(/'/g,"\\'")}','${field}')" title="${lang==='ru'?'История изменений':'변경이력 보기'}">🕘</span>` };
@@ -3097,7 +3098,7 @@ async function recordPNHistory(rep, field, oldVal, newVal){
 function openPNHistoryModal(rep, field){
   const ru=lang==='ru';
   const p=getPNInfo(rep);
-  const entries=((p&&Array.isArray(p.history))?p.history:[]).filter(h=>h&&h.f===field).slice().reverse();
+  const entries=((p&&Array.isArray(p.history))?p.history:[]).filter(h=>h&&h.f===field && h.t && h.t>=PN_HIST_SINCE).slice().reverse();
   const labels=ru
     ? {name_ko:'Наименование',spec:'Спецификация',name_ru:'Рус. название',name_en:'Англ. название',rep:'Осн. артикул',compat:'Артикул замены',final:'Актуальный артикул'}
     : {name_ko:'품명',spec:'규격',name_ru:'러시아어 품명',name_en:'영문품명',rep:'대표품번',compat:'호환품번',final:'최종품번'};
@@ -5216,7 +5217,7 @@ function encodePerms(p){ let n=0; PERM_CATS.forEach((c,i)=>_PA.forEach((a,j)=>{ 
 function decodePerms(n){ n=Number(n)||0; const p={add:!!(n&(1<<PERM_ADD_BIT)), engName:!!(n&(1<<PERM_ENGNAME_BIT)), adminRecv:!!(n&(1<<PERM_ADMINRECV_BIT)), adminMine:!!(n&(1<<PERM_ADMINMINE_BIT))}; PERM_CATS.forEach((c,i)=>{ p[c.key]={}; _PA.forEach((a,j)=>{ p[c.key][a]=!!(n&(1<<(i*3+j))); }); }); return p; }
 // ── 영문명 (kt_names_en: rep, name_en). MASTER 가 권한 준 회원만 본다 ──
 let engNameByRep={};   // 대표품번(대문자) -> 영문명
-function canViewEngName(){ if(userRole(currentUser).isMaster) return true; const p=_myPermObj(); return !!(p&&p.engName); }
+function canViewEngName(){ const r=userRole(currentUser); if(r.isMaster) return true; if(r.company==='KITURAMI') return true; /* KITURAMI 본사·데스크(GLOBAL·RUSSIA 등)는 영문명 노출 */ const p=_myPermObj(); return !!(p&&p.engName); }
 async function loadEngNames(){
   engNameByRep={};
   if(!canViewEngName()) return;   // 권한 없으면 데이터 자체를 받지 않는다(브라우저에도 안 남게)
@@ -7173,6 +7174,7 @@ async function addPNItem(){
   _pnLookupMap=null; _pnByRepMap=null; _nameRuByRep=null;
   const { error } = await sb.from('kt_pn_overrides').upsert(row,{onConflict:'rep'});
   if(error){ alert('저장 실패\n['+(error.message||error.code)+']'); return; }
+  await recordPNHistory(rep, 'rep', '', rep);   // 품목 추가를 변경이력에 기록(대표품번 셀에 배지 표시)
   const inp=document.getElementById('pnInput'); if(inp) inp.value='';   // 검색어 지워 새 품목이 보이게
   renderPN();
 }
