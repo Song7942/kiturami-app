@@ -2583,8 +2583,15 @@ function normPN(x){ return String(x==null?'':x).toUpperCase().replace(/\s+/g,'')
 function isExportRestricted(pn){ return _exportPN.has(normPN(pn)); }
 async function loadExportCtrl(){
   _exportPN=new Set();
-  try{ const { data, error }=await sb.from('kt_export_ctrl').select('pn');
-    if(!error && data) data.forEach(r=>{ const p=normPN(r.pn); if(p) _exportPN.add(p); }); }catch(e){}
+  try{
+    const page=1000;
+    for(let from=0;;from+=page){
+      const { data, error }=await sb.from('kt_export_ctrl').select('pn').range(from, from+page-1);
+      if(error || !data || !data.length) break;
+      data.forEach(r=>{ const p=normPN(r.pn); if(p) _exportPN.add(p); });
+      if(data.length<page) break;   // 마지막 페이지
+    }
+  }catch(e){}
 }
 function pnSplitKey(){ return 'kt_pnSplit:'+(_pnUid()||'anon'); }
 function pnSplitPref(){ try{ return localStorage.getItem(pnSplitKey())==='1'; }catch(e){ return false; } }
