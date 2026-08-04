@@ -724,21 +724,11 @@ input[type="text"]::placeholder{color:var(--muted)}
           <input type="text" id="pnInput" placeholder="대표품번, 호환품번, 최종품번으로 검색…" oninput="debouncedRenderPN()">
         </div>
         <div class="count-badge" id="pnBadge"></div>
-        <button class="dl-btn" id="stratUploadBtn" onclick="document.getElementById('stratFileInput').click()" style="display:none;background:#ef4444;border-color:#ef4444;color:#fff">
-          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-          <span id="i18n-stratupload">전략물자 업로드</span>
-        </button>
-        <input type="file" id="stratFileInput" accept=".xlsx,.xls" style="display:none" onchange="handleStrategicUpload(event)">
-        <button class="dl-btn" id="engNameUploadBtn" onclick="document.getElementById('engNameFileInput').click()" style="display:none;background:#f59e0b;border-color:#f59e0b;color:#fff">
-          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 20h16"/><path d="M12 4v12"/><polyline points="7 9 12 4 17 9"/></svg>
-          <span id="i18n-engnameupload">영문명 업로드</span>
-        </button>
-        <input type="file" id="engNameFileInput" accept=".xlsx,.xls" style="display:none" onchange="handleEngNameUpload(event)">
         <button class="dl-btn" id="pnAddBtn" onclick="addPNItem()" style="display:none;background:#22c55e;border-color:#22c55e;color:#fff">
           <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           <span id="i18n-pnadd">품목 추가</span>
         </button>
-        <button class="dl-btn" id="pnUploadBtn" onclick="document.getElementById('pnFileInput').click()" title="품번조회 양식 / N/W·G/W·CBM 파일 / 부품 적용모델(품명·규격·러품·적용모델·단종) 자동 인식" style="background:var(--accent2);border-color:var(--accent2);color:#fff">
+        <button class="dl-btn" id="pnUploadBtn" onclick="document.getElementById('pnFileInput').click()" title="헤더 자동 인식: 품번조회 양식 / 품목코드정보 / N/W·G/W·CBM / 부품 적용모델 / 부품리스트(영문명·단종 등) / 전략물자(수출제한)" style="background:var(--accent2);border-color:var(--accent2);color:#fff">
           <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
           <span id="i18n-pnupload">엑셀 업로드</span>
         </button>
@@ -2962,8 +2952,7 @@ let _pnNextStart=-1;
 
 function renderPN(){
   const kw=document.getElementById('pnInput').value.trim().toLowerCase();const t=T[lang];
-  const engBtn=document.getElementById('engNameUploadBtn'); if(engBtn) engBtn.style.display=userRole(currentUser).isMaster?'':'none';
-  const stratBtn=document.getElementById('stratUploadBtn'); if(stratBtn){ stratBtn.style.display=userRole(currentUser).isMaster?'':'none'; const sp=stratBtn.querySelector('span'); if(sp) sp.textContent=lang==='ru'?'Стратег. товары':'전략물자 업로드'; }
+  // 엑셀 업로드는 항상 노출(전략물자·영문명·품목/중량/단종 파일을 헤더로 자동 인식). 권한은 guardWrite('pn')가 처리.
   const isKo=lang==='ko';
   const showEng=canViewEngName();
   _pnSplit=pnSplitPref();               // 호환품번 단위 분할 보기 토글 상태
@@ -3267,86 +3256,107 @@ async function loadPNOverrides(){
   });
   _pnLookupMap=null; _pnByRepMap=null; _nameRuByRep=null;
 }
-// 엑셀 업로드가 특수 양식(N/W·G/W·CBM 파일, 부품 적용모델 파일)이면 자동 인식해 처리.
-// 처리하면 알림 문자열을 반환, 표준 품번 양식이면 null(→ 기존 로직으로).
+// 엑셀 업로드 헤더를 웹 열에 매핑(라벨로 자동 인식). 품번키 + 값열.
+function pnMapCols(headerRow){
+  const C={};
+  (headerRow||[]).forEach((v,c)=>{ const s=String(v==null?'':v).replace(/\s+/g,''); if(!s) return;
+    if(C.pn==null){ if(s.includes('검색용')&&!s.includes('단종')) C.pn=c; else if(s==='품목코드') C.pn=c; else if(s==='품번') C.pn=c; }
+    if(C.nameErp==null && s==='ERP_품명') C.nameErp=c;
+    if(C.nameGen==null && (s==='품명'||s==='품목명'||s==='품명(한글)')) C.nameGen=c;
+    if(C.specErp==null && s==='ERP_규격') C.specErp=c;
+    if(C.specGen==null && (s==='규격'||s.startsWith('규격(적용부품'))) C.specGen=c;
+    if(C.ru==null && (s.includes('품명(러문)')||s.includes('러시아어명칭')||s.includes('러시아어품명'))) C.ru=c;
+    if(C.en==null && (s==='영문명'||s.includes('제품명(영문)'))) C.en=c;
+    if(C.dan==null && s.includes('단종')) C.dan=c;
+    if(C.nw==null && s.includes('N/W')&&s.includes('평균')) C.nw=c;
+    if(C.gw==null && s.includes('G/W')&&s.includes('평균')) C.gw=c;
+    if(C.cbm==null && s.includes('CBM')&&s.includes('평균')) C.cbm=c;
+    if(C.appl==null && s==='적용모델세부') C.appl=c;
+  });
+  C.name = C.nameErp!=null?C.nameErp:C.nameGen;   // ERP_품명 우선
+  C.spec = C.specErp!=null?C.specErp:C.specGen;
+  return C;
+}
+function pnFindHeaderRow(aoa){
+  for(let r=0;r<Math.min(16,aoa.length);r++){ const C=pnMapCols(aoa[r]);
+    if(C.pn!=null && (C.name!=null||C.spec!=null||C.nw!=null||C.gw!=null||C.cbm!=null||C.dan!=null||C.ru!=null||C.en!=null||C.appl!=null)) return {row:r, C}; }
+  return null;
+}
+// 엑셀 업로드: 헤더를 보고 알아서 반영. 처리하면 알림 문자열 반환, 표준 품번 양식이면 null.
 async function handleSpecialPNUpload(wb){
   const ru=lang==='ru';
-  const findHdr=(a,test,max)=>{ for(let r=0;r<Math.min(max||14,a.length);r++){ const c=test(a[r]||[]); if(c) return {row:r, col:c}; } return null; };
+  const V=(row,ci)=>ci!=null?String(row[ci]==null?'':row[ci]).trim():'';
 
-  // ── 1) N/W·G/W·CBM 파일 (전체_품목: 품번 + N/W 평균) ──
-  {
-    const sheet=wb.Sheets['전체_품목']||wb.Sheets[wb.SheetNames[0]];
-    const a=XLSX.utils.sheet_to_json(sheet,{header:1,defval:''});
-    const h=findHdr(a,row=>{ let pn=-1,nw=-1,gw=-1,cbm=-1; row.forEach((v,c)=>{ const s=String(v).replace(/\s+/g,''); if(s==='품번')pn=c; if(s.includes('N/W')&&s.includes('평균'))nw=c; if(s.includes('G/W')&&s.includes('평균'))gw=c; if(s.includes('CBM')&&s.includes('평균'))cbm=c; }); return (pn>=0&&nw>=0)?{pn,nw,gw,cbm}:null; });
-    if(h){
-      const C=h.col; const rec={};
-      for(let r=h.row+1;r<a.length;r++){ const p=normPN(a[r][C.pn]); if(!p)continue; const o=rec[p]||(rec[p]={});
-        const nw=String(a[r][C.nw]||'').trim(), gw=C.gw>=0?String(a[r][C.gw]||'').trim():'', cbm=C.cbm>=0?String(a[r][C.cbm]||'').trim():'';
-        if(nw)o.nw=nw; if(gw)o.gw=gw; if(cbm)o.cbm=cbm; }
-      const pns=Object.keys(rec); if(!pns.length) return ru?'Данных нет.':'데이터가 없습니다.';
-      const payload=pns.map(pn=>{ const cur=_pnSpec.get(pn)||{}; const o=rec[pn]; return { pn, nw:o.nw!=null?o.nw:(cur.nw||null), gw:o.gw!=null?o.gw:(cur.gw||null), cbm:o.cbm!=null?o.cbm:(cur.cbm||null) }; });
-      for(let i=0;i<payload.length;i+=400){ const {error}=await sb.from('kt_pn_specs').upsert(payload.slice(i,i+400),{onConflict:'pn'}); if(error) return (ru?'Ошибка. Нужна таблица kt_pn_specs.':'실패 — kt_pn_specs 테이블 필요.')+'\n['+(error.message||error.code)+']'; }
-      await loadPnSpecs(); _pnByRepMap=null; renderPN();
-      return ru?('N/W·G/W·CBM обновлено: '+pns.length+' артикулов.'):('N/W·G/W·CBM 반영: '+pns.length+'개 품번(호환품번 단위).');
+  // ── A) 전략물자 대장 (품번 + 갱신 결과) → 수출제한(비해당=면제) ──
+  for(const sn of wb.SheetNames){
+    const a=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:''});
+    let pnCol=-1,resCol=-1,hdr=-1;
+    for(let r=0;r<Math.min(a.length,15);r++){ const row=a[r]||[]; let pc=-1,rc=-1;
+      row.forEach((v,c)=>{ const s=String(v==null?'':v).replace(/\s+/g,''); if(s==='품번'&&pc<0)pc=c; if(s.indexOf('갱신')>=0&&s.indexOf('결과')>=0&&rc<0)rc=c; });
+      if(pc>=0&&rc>=0){ hdr=r; pnCol=pc; resCol=rc; break; } }
+    if(hdr>=0){
+      const exempt=new Set();
+      for(let r=hdr+1;r<a.length;r++){ const raw=String(a[r][pnCol]==null?'':a[r][pnCol]).trim(); if(!raw)continue; const pn=normPN(raw);
+        const res=String(a[r][resCol]==null?'':a[r][resCol]).replace(/\s+/g,' ').trim(); if(res==='비해당')exempt.add(pn); else exempt.delete(pn); }
+      const list=[...exempt];
+      { const {error}=await sb.from('kt_export_ctrl').delete().neq('pn',''); if(error) return (ru?'Ошибка. Нужна таблица kt_export_ctrl.':'실패 — kt_export_ctrl 테이블 필요.')+'\nSQL: create table if not exists kt_export_ctrl (pn text primary key);\n['+(error.message||error.code)+']'; }
+      for(let i=0;i<list.length;i+=500){ const {error}=await sb.from('kt_export_ctrl').upsert(list.slice(i,i+500).map(pn=>({pn})),{onConflict:'pn'}); if(error) return (ru?'Ошибка загрузки.':'업로드 실패.')+'\n['+(error.message||error.code)+']'; }
+      await loadExportCtrl(); _pnByRepMap=null; renderPN();
+      let cO=0,cT=0; PN_DATA.forEach(r=>(r.compats||[]).forEach(c=>{ if(!normPN(c))return; cT++; if(isExportRestricted(c))cO++; }));
+      return ru?('Экспортконтроль: изъятий '+list.length+', ограничено '+cO+'/'+cT+'.'):('수출제한 갱신: 면제(비해당) '+list.length+'개, 호환품번 O '+cO+'/'+cT+'개.');
     }
   }
 
-  // ── 2) 부품 적용모델 파일 ([품번]검색용 + ERP_품명/적용모델세부/단종) ──
-  {
-    const a=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:''});
-    const h=findHdr(a,row=>{ const c={}; row.forEach((v,ci)=>{ const s=String(v).replace(/\s+/g,'');
-      if(s.includes('검색용')&&!s.includes('단종')&&c.search==null)c.search=ci;
-      if(s==='ERP_품명')c.name=ci; if(s==='ERP_규격')c.spec=ci; if(s.includes('품명(러문)'))c.ru=ci; if(s==='적용모델세부')c.appl=ci;
-      if(s.includes('단종'))c.dan=ci; });
-      return (c.search!=null && (c.name!=null||c.appl!=null||c.dan!=null))?c:null; });
-    if(h){
-      const C=h.col;
-      const compatToRep={}; PN_DATA.forEach(r=>(r.compats||[]).forEach(cc=>compatToRep[normPN(cc)]=r.rep));
-      const agg={}, danRec={};
-      for(let r=h.row+1;r<a.length;r++){ const row=a[r]||[]; const raw=String(row[C.search]||'').trim(); if(!raw)continue; const pn=normPN(raw);
-        if(C.dan!=null){ let d=String(row[C.dan]||'').trim(); if(d==='0')d=''; if(d==='O')danRec[pn]='O'; else if(d==='△'){ if(danRec[pn]!=='O')danRec[pn]='△'; } else if(danRec[pn]==null)danRec[pn]=''; }
-        const rep=compatToRep[pn]; if(!rep) continue;
-        const o=agg[rep]||(agg[rep]={name:'',spec:'',ru:'',appls:[]});
-        if(C.name!=null){ const v=String(row[C.name]||'').trim(); if(!o.name&&v)o.name=v; }
-        if(C.spec!=null){ const v=String(row[C.spec]||'').trim(); if(!o.spec&&v)o.spec=v; }
-        if(C.ru!=null){ const v=String(row[C.ru]||'').trim(); if(!o.ru&&v)o.ru=v; }
-        if(C.appl!=null){ const v=String(row[C.appl]||'').trim(); if(v&&o.appls.indexOf(v)<0)o.appls.push(v); }
+  // ── B) 범용 매핑: 헤더에 있는 열만 반영 (품명·규격·러품·영문명·단종·N/W·G/W·CBM·적용모델) ──
+  for(const sn of wb.SheetNames){
+    const aoa=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:''});
+    const hdr=pnFindHeaderRow(aoa); if(!hdr) continue;
+    const C=hdr.C;
+    const compatToRep={}; PN_DATA.forEach(r=>(r.compats||[]).forEach(c=>compatToRep[normPN(c)]=r.rep));
+    const specMap={}, repAgg={}, seen={};
+    for(let r=hdr.row+1;r<aoa.length;r++){ const row=aoa[r]||[]; const raw=String(row[C.pn]==null?'':row[C.pn]).trim(); if(!raw)continue; const pn=normPN(raw);
+      const o=specMap[pn]||(specMap[pn]={});
+      if(C.name!=null){ const v=V(row,C.name); if(v){o.name=v; seen.name=1;} }
+      if(C.spec!=null){ const v=V(row,C.spec); if(v){o.spec=v; seen.spec=1;} }
+      if(C.nw!=null){ const v=V(row,C.nw); if(v){o.nw=v; seen.nw=1;} }
+      if(C.gw!=null){ const v=V(row,C.gw); if(v){o.gw=v; seen.gw=1;} }
+      if(C.cbm!=null){ const v=V(row,C.cbm); if(v){o.cbm=v; seen.cbm=1;} }
+      if(C.dan!=null){ const v=V(row,C.dan); if(v==='O'){o.dan='O'; seen.dan=1;} else if(v==='△'){ if(o.dan!=='O')o.dan='△'; seen.dan=1; } else if(o.dan==null)o.dan=''; }
+      const rep=compatToRep[pn]; if(rep){ const a=repAgg[rep]||(repAgg[rep]={name:'',spec:'',ru:'',en:'',appls:[]});
+        if(C.name!=null&&!a.name){ const v=V(row,C.name); if(v)a.name=v; }
+        if(C.spec!=null&&!a.spec){ const v=V(row,C.spec); if(v)a.spec=v; }
+        if(C.ru!=null&&!a.ru){ const v=V(row,C.ru); if(v){a.ru=v; seen.ru=1;} }
+        if(C.en!=null&&!a.en){ const v=V(row,C.en); if(v){a.en=v; seen.en=1;} }
+        if(C.appl!=null){ const v=V(row,C.appl); if(v&&a.appls.indexOf(v)<0){a.appls.push(v); seen.appl=1;} }
       }
-      const reps=Object.keys(agg);
-      if(reps.length){ const rp=reps.map(rep=>{ const p=PN_DATA.find(x=>x.rep===rep)||{}; const x=agg[rep]; return { rep, name_ko:x.name||p.name_ko||'', spec:x.spec||p.spec||'', name_ru:x.ru||p.name_ru||'', applied_models:(x.appls.join(', '))||p.applied_models||'' }; });
-        for(let i=0;i<rp.length;i+=400){ const {error}=await sb.from('kt_pn_overrides').upsert(rp.slice(i,i+400),{onConflict:'rep'}); if(error) return (ru?'Ошибка загрузки.':'업로드 실패.')+'\n['+(error.message||error.code)+']'; }
-        rp.forEach(x=>{ const p=PN_DATA.find(z=>z.rep===x.rep); if(p){ p.name_ko=x.name_ko;p.spec=x.spec;p.name_ru=x.name_ru;p.applied_models=x.applied_models; } }); }
-      const danPns=Object.keys(danRec);
-      if(danPns.length && C.dan!=null){ const dp=danPns.map(pn=>({pn, dan:danRec[pn]||null}));
-        for(let i=0;i<dp.length;i+=400){ const {error}=await sb.from('kt_pn_specs').upsert(dp.slice(i,i+400),{onConflict:'pn'}); if(error) return (ru?'Ошибка. Нужна таблица kt_pn_specs.':'실패 — kt_pn_specs 테이블 필요.')+'\n['+(error.message||error.code)+']'; }
-        await loadPnSpecs(); }
-      _pnLookupMap=null; _pnByRepMap=null; renderPN();
-      return ru?('Обновлено: '+reps.length+' поз. (品名/규격/рус./модели) + 단종 '+danPns.length+' арт.')
-              :('반영: 품명·규격·러품·적용모델 '+reps.length+'개 품목 + 단종 '+danPns.length+'개 품번(호환품번 단위).');
     }
+    // kt_pn_specs (값이 실제로 있는 호환품번 열만)
+    const scols=['name','spec','nw','gw','cbm','dan'].filter(k=>C[k]!=null && seen[k]);
+    const specPns=Object.keys(specMap);
+    if(scols.length && specPns.length){ const payload=specPns.map(pn=>{ const o={pn}; scols.forEach(k=>{ const val=specMap[pn][k]; o[k]=(val!=null&&val!=='')?val:null; }); return o; });
+      for(let i=0;i<payload.length;i+=400){ const {error}=await sb.from('kt_pn_specs').upsert(payload.slice(i,i+400),{onConflict:'pn'}); if(error) return (ru?'Ошибка kt_pn_specs.':'실패 — kt_pn_specs 컬럼 필요(name/spec/nw/gw/cbm/dan).')+'\nSQL: alter table kt_pn_specs add column if not exists name text; alter table kt_pn_specs add column if not exists spec text;\n['+(error.message||error.code)+']'; } }
+    // kt_pn_overrides 대표값 (다른 화면 공통)
+    const reps=Object.keys(repAgg);
+    const ocols=[]; if(seen.name)ocols.push('name_ko'); if(seen.spec)ocols.push('spec'); if(seen.ru)ocols.push('name_ru'); if(seen.appl)ocols.push('applied_models');
+    if(ocols.length && reps.length){ const payload=reps.map(rep=>{ const p=PN_DATA.find(x=>x.rep===rep)||{}; const a=repAgg[rep]; const o={rep};
+        if(ocols.includes('name_ko'))o.name_ko=a.name||p.name_ko||'';
+        if(ocols.includes('spec'))o.spec=a.spec||p.spec||'';
+        if(ocols.includes('name_ru'))o.name_ru=a.ru||p.name_ru||'';
+        if(ocols.includes('applied_models'))o.applied_models=(a.appls.join(', '))||p.applied_models||'';
+        return o; });
+      for(let i=0;i<payload.length;i+=400){ const {error}=await sb.from('kt_pn_overrides').upsert(payload.slice(i,i+400),{onConflict:'rep'}); if(error) return (ru?'Ошибка загрузки.':'업로드 실패.')+'\n['+(error.message||error.code)+']'; }
+      payload.forEach(o=>{ const p=PN_DATA.find(z=>z.rep===o.rep); if(p){ if('name_ko'in o)p.name_ko=o.name_ko; if('spec'in o)p.spec=o.spec; if('name_ru'in o)p.name_ru=o.name_ru; if('applied_models'in o)p.applied_models=o.applied_models; } }); }
+    // kt_names_en 영문명 (대표품번)
+    let enN=0;
+    if(seen.en){ const ep=reps.filter(rep=>repAgg[rep].en).map(rep=>({rep, name_en:repAgg[rep].en})); enN=ep.length;
+      for(let i=0;i<ep.length;i+=400){ const {error}=await sb.from('kt_names_en').upsert(ep.slice(i,i+400),{onConflict:'rep'}); if(error) return (ru?'Ошибка kt_names_en.':'업로드 실패(영문명).')+'\n['+(error.message||error.code)+']'; }
+      if(typeof loadEngNames==='function') await loadEngNames(); }
+    if(!scols.length && !ocols.length && !seen.en) return ru?'Совпадающих данных нет.':'반영할 내용을 찾지 못했습니다.';
+    await loadPnSpecs(); _pnLookupMap=null; _pnByRepMap=null; renderPN();
+    const parts=[]; if(seen.name||seen.spec)parts.push('품명·규격'); if(seen.nw||seen.gw||seen.cbm)parts.push('N/W·G/W·CBM'); if(seen.dan)parts.push('단종'); if(seen.ru)parts.push('러품'); if(seen.en)parts.push('영문명('+enN+')'); if(seen.appl)parts.push('적용모델');
+    return (ru?'Обновлено: ':'반영: ')+parts.join(', ')+' — 호환품번 '+specPns.length+'개 / 대표품번 '+reps.length+'개.';
   }
-  // ── 3) 품목코드정보 파일 (품목코드 + 품목명 + 규격) → 품명·규격을 호환품번 단위로 ──
-  {
-    const a=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:''});
-    const h=findHdr(a,row=>{ let code=-1,name=-1,spec=-1; row.forEach((v,c)=>{ const s=String(v).replace(/\s+/g,''); if(s==='품목코드')code=c; if(s==='품목명'||s==='품명')name=c; if(s==='규격')spec=c; }); return (code>=0 && (name>=0||spec>=0))?{code,name,spec}:null; });
-    if(h){
-      const C=h.col, fileMap={};
-      for(let r=h.row+1;r<a.length;r++){ const p=normPN(a[r][C.code]); if(!p||fileMap[p])continue; fileMap[p]={ name:C.name>=0?String(a[r][C.name]||'').trim():'', spec:C.spec>=0?String(a[r][C.spec]||'').trim():'' }; }
-      const specMap={}, repAgg={};   // 품번별로 dedupe(한 품번이 여러 대표품번에 겹칠 수 있음)
-      PN_DATA.forEach(r=>{ let fn='',fs=''; (r.compats||[]).forEach(c=>{ const p=normPN(c), f=fileMap[p]; if(f){ if(!specMap[p]) specMap[p]={pn:p, name:f.name||null, spec:f.spec||null}; if(!fn&&f.name)fn=f.name; if(!fs&&f.spec)fs=f.spec; } }); if(fn||fs) repAgg[r.rep]={name:fn,spec:fs}; });
-      const specRows=Object.values(specMap);
-      if(!specRows.length) return ru?'Совпадающих артикулов нет.':'매칭되는 호환품번이 없습니다.';
-      for(let i=0;i<specRows.length;i+=400){ const {error}=await sb.from('kt_pn_specs').upsert(specRows.slice(i,i+400),{onConflict:'pn'}); if(error) return (ru?'Ошибка. Нужны столбцы name/spec в kt_pn_specs.':'실패 — kt_pn_specs 에 name/spec 컬럼 필요.')+'\nSQL: alter table kt_pn_specs add column if not exists name text; alter table kt_pn_specs add column if not exists spec text;\n['+(error.message||error.code)+']'; }
-      const reps=Object.keys(repAgg);
-      const rp=reps.map(rep=>{ const p=PN_DATA.find(x=>x.rep===rep)||{}; const x=repAgg[rep]; return { rep, name_ko:x.name||p.name_ko||'', spec:x.spec||p.spec||'' }; });
-      for(let i=0;i<rp.length;i+=400){ const {error}=await sb.from('kt_pn_overrides').upsert(rp.slice(i,i+400),{onConflict:'rep'}); if(error) return (ru?'Ошибка загрузки.':'업로드 실패.')+'\n['+(error.message||error.code)+']'; }
-      rp.forEach(x=>{ const p=PN_DATA.find(z=>z.rep===x.rep); if(p){ p.name_ko=x.name_ko; p.spec=x.spec; } });
-      await loadPnSpecs(); _pnLookupMap=null; _pnByRepMap=null; renderPN();
-      return ru?('品名/규격 обновлено: замен '+specRows.length+', позиций '+reps.length+'.')
-              :('품명·규격 반영: 호환품번 '+specRows.length+'개(품번 단위) + 대표품번 '+reps.length+'개.');
-    }
-  }
-  return null;   // 표준 품번 양식
+  return null;   // 표준 품번 양식 → 기존 로직
 }
 async function handlePNUpload(event){
   const t=T[lang];
