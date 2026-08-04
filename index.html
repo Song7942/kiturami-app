@@ -3332,8 +3332,9 @@ async function handleSpecialPNUpload(wb){
     if(h){
       const C=h.col, fileMap={};
       for(let r=h.row+1;r<a.length;r++){ const p=normPN(a[r][C.code]); if(!p||fileMap[p])continue; fileMap[p]={ name:C.name>=0?String(a[r][C.name]||'').trim():'', spec:C.spec>=0?String(a[r][C.spec]||'').trim():'' }; }
-      const specRows=[], repAgg={};
-      PN_DATA.forEach(r=>{ let fn='',fs=''; (r.compats||[]).forEach(c=>{ const f=fileMap[normPN(c)]; if(f){ specRows.push({pn:normPN(c), name:f.name||null, spec:f.spec||null}); if(!fn&&f.name)fn=f.name; if(!fs&&f.spec)fs=f.spec; } }); if(fn||fs) repAgg[r.rep]={name:fn,spec:fs}; });
+      const specMap={}, repAgg={};   // 품번별로 dedupe(한 품번이 여러 대표품번에 겹칠 수 있음)
+      PN_DATA.forEach(r=>{ let fn='',fs=''; (r.compats||[]).forEach(c=>{ const p=normPN(c), f=fileMap[p]; if(f){ if(!specMap[p]) specMap[p]={pn:p, name:f.name||null, spec:f.spec||null}; if(!fn&&f.name)fn=f.name; if(!fs&&f.spec)fs=f.spec; } }); if(fn||fs) repAgg[r.rep]={name:fn,spec:fs}; });
+      const specRows=Object.values(specMap);
       if(!specRows.length) return ru?'Совпадающих артикулов нет.':'매칭되는 호환품번이 없습니다.';
       for(let i=0;i<specRows.length;i+=400){ const {error}=await sb.from('kt_pn_specs').upsert(specRows.slice(i,i+400),{onConflict:'pn'}); if(error) return (ru?'Ошибка. Нужны столбцы name/spec в kt_pn_specs.':'실패 — kt_pn_specs 에 name/spec 컬럼 필요.')+'\nSQL: alter table kt_pn_specs add column if not exists name text; alter table kt_pn_specs add column if not exists spec text;\n['+(error.message||error.code)+']'; }
       const reps=Object.keys(repAgg);
@@ -6234,7 +6235,8 @@ function renderMyOrders(){
   myOrders.forEach(r=>{ totalsByRep[r.rep]=(totalsByRep[r.rep]||0)+(r.qty||0); });
   const rowsHtml=[]; const cardsHtml=[];
   myOrders.forEach(r=>{
-    const name = lang==='ko' ? r.name_ko : (r.name_ru||r.name_ko);
+    const name = pnName(r.rep, r.name_ko, r.name_ru);   // 품명은 품번조회 기준(없으면 주문 저장값)
+    const spec = pnSpec(r.rep, r.spec);                 // 규격도 품번조회 기준
     const flags=getGroupDotFlags(r.models);
     const modelTd=flags.map(f=>`<td style="padding:9px 12px;text-align:center">${dot(f)}</td>`).join('');
     const pending=findMyPendingRequest(r.orderId, r.rep);
@@ -6245,8 +6247,8 @@ function renderMyOrders(){
       actionHtmlMobile=`<span style="font-size:12px;color:#f59e0b;font-weight:600">${label}</span>`;
     } else {
       const nameEsc=escapeHtml(name).replace(/"/g,'&quot;');
-      const cancelCall=`requestCancelItem(${r.orderId},'${r.rep.replace(/'/g,"\\'")}','${(r.diag||'').replace(/'/g,"\\'")}','${nameEsc.replace(/'/g,"\\'")}','${escapeHtml(r.spec||'').replace(/'/g,"\\'")}',${r.qty})`;
-      const changeCall=`requestChangeItem(${r.orderId},'${r.rep.replace(/'/g,"\\'")}','${(r.diag||'').replace(/'/g,"\\'")}','${nameEsc.replace(/'/g,"\\'")}','${escapeHtml(r.spec||'').replace(/'/g,"\\'")}',${r.qty})`;
+      const cancelCall=`requestCancelItem(${r.orderId},'${r.rep.replace(/'/g,"\\'")}','${(r.diag||'').replace(/'/g,"\\'")}','${nameEsc.replace(/'/g,"\\'")}','${escapeHtml(spec||'').replace(/'/g,"\\'")}',${r.qty})`;
+      const changeCall=`requestChangeItem(${r.orderId},'${r.rep.replace(/'/g,"\\'")}','${(r.diag||'').replace(/'/g,"\\'")}','${nameEsc.replace(/'/g,"\\'")}','${escapeHtml(spec||'').replace(/'/g,"\\'")}',${r.qty})`;
       actionHtml=`<div style="display:flex;gap:6px;justify-content:center">
         <button class="req-action-btn" onclick="${cancelCall}">${t.reqCancelBtn}</button>
         <button class="req-action-btn" onclick="${changeCall}">${t.reqChangeBtn}</button>
@@ -6259,7 +6261,7 @@ function renderMyOrders(){
     rowsHtml.push(`<tr style="border-bottom:1px solid var(--border)">
       <td style="padding:9px 12px;color:var(--muted);white-space:nowrap">${escapeHtml(r.date)}</td>
       <td style="padding:9px 12px">${escapeHtml(name)}${engNameHtml(r.rep)}</td>
-      ${isKo?`<td style="padding:9px 12px;color:var(--muted)">${escapeHtml(r.spec)}</td>`:''}
+      ${isKo?`<td style="padding:9px 12px;color:var(--muted)">${escapeHtml(spec)}</td>`:''}
       <td style="padding:9px 12px"><span class="code">${escapeHtml(r.rep)}</span></td>
       ${modelTd}
       <td style="padding:9px 16px 9px 12px;text-align:right;color:var(--muted)">${totalsByRep[r.rep]||0}</td>
@@ -6269,7 +6271,7 @@ function renderMyOrders(){
 
     // ── 모바일 카드 (좌우 스크롤 없이 한 화면에서 모든 정보 확인) ──
     const tagHtml=MODEL_GROUPS.filter((g,i)=>flags[i]).map(g=>`<span class="mt" style="color:${g.color};background:${g.color}22;border-color:${g.color}44">${g.abbr}</span>`).join('');
-    const specHtml=isKo?`<div style="color:var(--muted);font-size:11px;margin-top:2px">${escapeHtml(r.spec)}</div>`:'';
+    const specHtml=isKo?`<div style="color:var(--muted);font-size:11px;margin-top:2px">${escapeHtml(spec)}</div>`:'';
     cardsHtml.push(`<div class="order-card">
       <div style="font-size:10px;color:var(--muted)">${escapeHtml(r.date)}</div>
       <div class="pc-name" style="margin-top:2px">${escapeHtml(name)}${engNameHtml(r.rep)}</div>
