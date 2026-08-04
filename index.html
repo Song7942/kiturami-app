@@ -744,7 +744,7 @@ input[type="text"]::placeholder{color:var(--muted)}
           <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           <span id="i18n-pndl">엑셀 다운로드</span>
         </button>
-        <button class="dl-btn" id="pnSplitBtn" onclick="togglePNSplit()" title="호환품번을 한 행씩 분리해 품번별 수출제한을 보고 필터링">
+        <button class="dl-btn" id="pnSplitBtn" onclick="togglePNSplit()" title="호환품번을 한 행씩 분리(기본). 끄면 1품목=1행으로 묶어 봅니다">
           <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
           <span>호환품번 단위</span>
         </button>
@@ -2597,15 +2597,16 @@ async function loadExportCtrl(){
   }catch(e){ _exportLoaded=false; }
 }
 function pnSplitKey(){ return 'kt_pnSplit:'+(_pnUid()||'anon'); }
-function pnSplitPref(){ try{ return localStorage.getItem(pnSplitKey())==='1'; }catch(e){ return false; } }
+function pnSplitPref(){ try{ const v=localStorage.getItem(pnSplitKey()); return v===null ? true : v==='1'; }catch(e){ return true; } }   // 기본: 항상 분리
 function togglePNSplit(){ _pnSplit=!_pnSplit; try{ localStorage.setItem(pnSplitKey(), _pnSplit?'1':'0'); }catch(e){} renderPN(); }
-// 분할 보기에선 편집/삭제를 끄고 읽기전용(한 품목이 여러 행으로 반복되므로 혼동 방지).
-function pnEditable(){ return userRole(currentUser).isMaster && !_pnSplit; }
-function pnDelVisible(){ return userRole(currentUser).isMaster && !_pnSplit; }
+// 분할 보기에서도 편집·삭제 가능. 공유열 수정은 대표품번 기준으로 저장되어 같은 품목의 모든 행에 반영된다.
+function pnEditable(){ return userRole(currentUser).isMaster; }
+function pnDelVisible(){ return userRole(currentUser).isMaster; }
 // 분할: 각 품목을 호환품번 1개씩의 행으로 확장(공유열은 반복). _compat 에 해당 호환품번.
+// _first: 그 품목의 첫 행(삭제 버튼은 첫 행에만 노출).
 function pnExpandRows(list){
   const out=[];
-  list.forEach(r=>{ const cs=(r.compats && r.compats.length)?r.compats:['']; cs.forEach(c=> out.push(Object.assign({}, r, {_split:true, _compat:c}))); });
+  list.forEach(r=>{ const cs=(r.compats && r.compats.length)?r.compats:['']; cs.forEach((c,i)=> out.push(Object.assign({}, r, {_split:true, _compat:c, _first:i===0}))); });
   return out;
 }
 // 열 순서: 사용자 id별 DB 저장(kt_user_prefs) — 어느 기기에서 로그인해도 따라온다.
@@ -2728,9 +2729,15 @@ function pnCellHtml(col, r, ctx){
     case 'rep': { const h=H('rep'); const inner=(isMaster?ed(r.rep,'rep',r.rep):`<span class="pn-badge pn-rep">${hlPN(r.rep,kw)}</span>`)+h.badge;
       return _pnTd(col, inner, h.cls.trim(), 'white-space:nowrap'); }
     case 'compat': { const h=H('compat');
-      const inner = r._split
-        ? `<span class="pn-badge pn-cur">${hlPN(pnUpperLead(r._compat||''),kw)}</span>`
-        : (isMaster?ed(r.rep,'compat',(r.compats||[]).map(pnUpperLead).join(', ')):(r.compats||[]).map(c=>`<span class="pn-badge pn-cur">${hlPN(pnUpperLead(c),kw)}</span>`).join(' '))+h.badge;
+      let inner;
+      if(r._split){
+        const raw=r._compat||'', disp=pnUpperLead(raw);
+        inner = isMaster
+          ? `<span contenteditable="true" class="pn-edit" data-pnrep="${escapeHtml(r.rep)}" data-pnfield="compat_one" data-pnorig="${escapeHtml(disp)}" data-pnrawold="${escapeHtml(raw)}" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()" onblur="onPNCellBlur(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}" style="display:inline-block;min-width:20px;outline:none;border-bottom:1px dashed var(--accent2);cursor:text;padding:0 2px">${escapeHtml(disp)}</span>`
+          : `<span class="pn-badge pn-cur">${hlPN(disp,kw)}</span>`;
+      } else {
+        inner = (isMaster?ed(r.rep,'compat',(r.compats||[]).map(pnUpperLead).join(', ')):(r.compats||[]).map(c=>`<span class="pn-badge pn-cur">${hlPN(pnUpperLead(c),kw)}</span>`).join(' '))+h.badge;
+      }
       return _pnTd(col, inner, h.cls.trim(), 'font-size:11px'); }
     case 'final': { const h=H('final'); const inner=(isMaster?ed(r.rep,'final',pnUpperLead(r.final||'')):(r.final?`<span class="pn-badge pn-fin">${hlPN(pnUpperLead(r.final),kw)}</span>`:''))+h.badge;
       return _pnTd(col, inner, h.cls.trim(), 'font-size:11px'); }
@@ -2860,8 +2867,9 @@ function renderPNChunk(startFrom=0){
   const meta=pnColMetaOrdered(isKo, showEng, showDel);
   const ctx={isMaster, isKo, kw, hlPN};
   const rows=chunk.map(r=>{
-    // 맨 앞 '삭제' 열(MASTER): 그 행(품목) 전체를 삭제. (항상 좌측 고정)
-    const delColCell = showDel ? `<td class="center" style="position:sticky;left:0;z-index:3;background:var(--bg)"><button title="이 행 삭제" onclick="event.stopPropagation();deletePNItem('${String(r.rep).replace(/'/g,"\\'")}')" style="border:none;background:none;color:#ef4444;cursor:pointer;font-size:14px;padding:2px 4px">✕</button></td>` : '';
+    // 맨 앞 '삭제' 열(MASTER): 그 품목(대표품번) 전체를 삭제. 분할 보기에선 그룹 첫 행에만 버튼.
+    const showDelBtn = !r._split || r._first;
+    const delColCell = showDel ? `<td class="center" style="position:sticky;left:0;z-index:3;background:var(--bg)">${showDelBtn?`<button title="이 품목 전체 삭제" onclick="event.stopPropagation();deletePNItem('${String(r.rep).replace(/'/g,"\\'")}')" style="border:none;background:none;color:#ef4444;cursor:pointer;font-size:14px;padding:2px 4px">✕</button>`:''}</td>` : '';
     return `<tr>${delColCell}${meta.map(c=>pnCellHtml(c, r, ctx)).join('')}</tr>`;
   }).join('');
   if(startFrom===0) tbody.innerHTML=rows;
@@ -3166,6 +3174,19 @@ async function onPNCellBlur(el){
   const rep=el.getAttribute('data-pnrep'), field=el.getAttribute('data-pnfield');
   const val=el.textContent.replace(/\s+/g,' ').trim();
   if(val===(el.getAttribute('data-pnorig')||'')) return;
+  // 분할 보기: 호환품번 한 개(그 행의 품번)만 수정 → 대표품번의 compat 배열에서 해당 값을 교체/삭제.
+  if(field==='compat_one'){
+    const rawOld=el.getAttribute('data-pnrawold')||'';
+    const p=PN_DATA.find(x=>x.rep===rep);
+    if(!p){ el.textContent=el.getAttribute('data-pnorig')||''; return; }
+    const arr=(p.compats||[]).slice();
+    const idx=arr.findIndex(c=>normPN(c)===normPN(rawOld));
+    if(val==='') { if(idx>=0) arr.splice(idx,1); }
+    else if(idx>=0) arr[idx]=val; else arr.push(val);
+    const res=await savePNCell(rep, 'compat', arr.join(', '));
+    if(res && res.ok){ renderPN(); } else { el.textContent=el.getAttribute('data-pnorig')||''; }
+    return;
+  }
   const r=await savePNCell(rep, field, val);
   if(r && r.ok){
     if(r.rerender){ renderPN(); }   // 대표품번·호환품번 변경은 표시(뱃지·행 식별)가 달라져 다시 그린다
