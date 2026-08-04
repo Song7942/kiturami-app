@@ -2607,9 +2607,13 @@ async function loadPnSpecs(){
   try{
     const page=1000;
     for(let from=0;;from+=page){
-      const { data, error }=await sb.from('kt_pn_specs').select('pn,nw,gw,cbm,dan').range(from, from+page-1);
-      if(error) return;
-      (data||[]).forEach(r=>{ const p=normPN(r.pn); if(p) _pnSpec.set(p,{nw:r.nw||'',gw:r.gw||'',cbm:r.cbm||'',dan:r.dan||''}); });
+      const { data, error }=await sb.from('kt_pn_specs').select('pn,nw,gw,cbm,dan,name,spec').range(from, from+page-1);
+      if(error){ // name/spec 컬럼이 없을 수 있어 재시도(구버전 스키마)
+        const r2=await sb.from('kt_pn_specs').select('pn,nw,gw,cbm,dan').range(from, from+page-1);
+        if(r2.error) return; (r2.data||[]).forEach(r=>{ const p=normPN(r.pn); if(p) _pnSpec.set(p,{nw:r.nw||'',gw:r.gw||'',cbm:r.cbm||'',dan:r.dan||'',name:'',spec:''}); });
+        if(!r2.data||r2.data.length<page) break; continue;
+      }
+      (data||[]).forEach(r=>{ const p=normPN(r.pn); if(p) _pnSpec.set(p,{nw:r.nw||'',gw:r.gw||'',cbm:r.cbm||'',dan:r.dan||'',name:r.name||'',spec:r.spec||''}); });
       if(!data || data.length<page) break;
     }
   }catch(e){}
@@ -2716,8 +2720,8 @@ function pnColMetaOrdered(isKo, showEng, isMaster){
 // 필터/검색용 셀 텍스트
 function pnColText(key, r){
   switch(key){
-    case 'name': return lang==='ko'?(r.name_ko||''):(r.name_ru||r.name_ko||'');
-    case 'spec': return r.spec||'';
+    case 'name': { if(lang==='ko' && r._split){ const s=pnSpecOf(r._compat); if(s&&s.name) return s.name; } return lang==='ko'?(r.name_ko||''):(r.name_ru||r.name_ko||''); }
+    case 'spec': { if(r._split){ const s=pnSpecOf(r._compat); if(s&&s.spec) return s.spec; } return r.spec||''; }
     case 'name_ru': return r.name_ru||'';
     case 'name_en': return engNameText(r.rep)||'';
     case 'rep': return r.rep||'';
@@ -2757,10 +2761,18 @@ function pnCellHtml(col, r, ctx){
   if(col.key==='export_ctrl'){ const on = r._split ? isExportRestricted(r._compat) : (r.compats||[]).some(isExportRestricted);
     return _pnTd(col, on?'<span style="color:#ef4444;font-weight:700;font-size:12px">O</span>':'', 'center', 'text-align:center'); }
   switch(col.key){
-    case 'name': { const h=H(isKo?'name_ko':'name_ru');
+    case 'name': {
+      if(isKo && r._split){ const dn=((pnSpecOf(r._compat)||{}).name)||r.name_ko||'';
+        const inner=isMaster?cspecEdit(r._compat,'name',dn):hlPN(dn,kw);
+        return _pnTd(col, inner, 'pn-wrap', 'font-weight:500;font-size:11px'); }
+      const h=H(isKo?'name_ko':'name_ru');
       const inner=(isMaster?ed(r.rep,isKo?'name_ko':'name_ru',isKo?r.name_ko:r.name_ru):(isKo?hlPN(r.name_ko,kw):hlPN(r.name_ru||r.name_ko,kw)))+h.badge;
       return _pnTd(col, inner, (h.cls+' pn-wrap').trim(), 'font-weight:500;font-size:11px'); }
-    case 'spec': { const h=H('spec'); const inner=(isMaster?ed(r.rep,'spec',r.spec):hlPN(r.spec,kw))+h.badge;
+    case 'spec': {
+      if(r._split){ const ds=((pnSpecOf(r._compat)||{}).spec)||r.spec||'';
+        const inner=isMaster?cspecEdit(r._compat,'spec',ds):hlPN(ds,kw);
+        return _pnTd(col, inner, 'pn-wrap', 'font-size:11px;color:var(--muted)'); }
+      const h=H('spec'); const inner=(isMaster?ed(r.rep,'spec',r.spec):hlPN(r.spec,kw))+h.badge;
       return _pnTd(col, inner, (h.cls+' pn-wrap').trim(), 'font-size:11px;color:var(--muted)'); }
     case 'name_ru': { const h=H('name_ru'); const inner=(isMaster?ed(r.rep,'name_ru',r.name_ru):hlPN(r.name_ru,kw))+h.badge;
       return _pnTd(col, inner, (h.cls+' pn-wrap').trim(), 'font-size:11px;color:var(--muted)'); }
@@ -3311,6 +3323,26 @@ async function handleSpecialPNUpload(wb){
       _pnLookupMap=null; _pnByRepMap=null; renderPN();
       return ru?('Обновлено: '+reps.length+' поз. (品名/규격/рус./модели) + 단종 '+danPns.length+' арт.')
               :('반영: 품명·규격·러품·적용모델 '+reps.length+'개 품목 + 단종 '+danPns.length+'개 품번(호환품번 단위).');
+    }
+  }
+  // ── 3) 품목코드정보 파일 (품목코드 + 품목명 + 규격) → 품명·규격을 호환품번 단위로 ──
+  {
+    const a=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:''});
+    const h=findHdr(a,row=>{ let code=-1,name=-1,spec=-1; row.forEach((v,c)=>{ const s=String(v).replace(/\s+/g,''); if(s==='품목코드')code=c; if(s==='품목명'||s==='품명')name=c; if(s==='규격')spec=c; }); return (code>=0 && (name>=0||spec>=0))?{code,name,spec}:null; });
+    if(h){
+      const C=h.col, fileMap={};
+      for(let r=h.row+1;r<a.length;r++){ const p=normPN(a[r][C.code]); if(!p||fileMap[p])continue; fileMap[p]={ name:C.name>=0?String(a[r][C.name]||'').trim():'', spec:C.spec>=0?String(a[r][C.spec]||'').trim():'' }; }
+      const specRows=[], repAgg={};
+      PN_DATA.forEach(r=>{ let fn='',fs=''; (r.compats||[]).forEach(c=>{ const f=fileMap[normPN(c)]; if(f){ specRows.push({pn:normPN(c), name:f.name||null, spec:f.spec||null}); if(!fn&&f.name)fn=f.name; if(!fs&&f.spec)fs=f.spec; } }); if(fn||fs) repAgg[r.rep]={name:fn,spec:fs}; });
+      if(!specRows.length) return ru?'Совпадающих артикулов нет.':'매칭되는 호환품번이 없습니다.';
+      for(let i=0;i<specRows.length;i+=400){ const {error}=await sb.from('kt_pn_specs').upsert(specRows.slice(i,i+400),{onConflict:'pn'}); if(error) return (ru?'Ошибка. Нужны столбцы name/spec в kt_pn_specs.':'실패 — kt_pn_specs 에 name/spec 컬럼 필요.')+'\nSQL: alter table kt_pn_specs add column if not exists name text; alter table kt_pn_specs add column if not exists spec text;\n['+(error.message||error.code)+']'; }
+      const reps=Object.keys(repAgg);
+      const rp=reps.map(rep=>{ const p=PN_DATA.find(x=>x.rep===rep)||{}; const x=repAgg[rep]; return { rep, name_ko:x.name||p.name_ko||'', spec:x.spec||p.spec||'' }; });
+      for(let i=0;i<rp.length;i+=400){ const {error}=await sb.from('kt_pn_overrides').upsert(rp.slice(i,i+400),{onConflict:'rep'}); if(error) return (ru?'Ошибка загрузки.':'업로드 실패.')+'\n['+(error.message||error.code)+']'; }
+      rp.forEach(x=>{ const p=PN_DATA.find(z=>z.rep===x.rep); if(p){ p.name_ko=x.name_ko; p.spec=x.spec; } });
+      await loadPnSpecs(); _pnLookupMap=null; _pnByRepMap=null; renderPN();
+      return ru?('品名/규격 обновлено: замен '+specRows.length+', позиций '+reps.length+'.')
+              :('품명·규격 반영: 호환품번 '+specRows.length+'개(품번 단위) + 대표품번 '+reps.length+'개.');
     }
   }
   return null;   // 표준 품번 양식
