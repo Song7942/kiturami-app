@@ -2917,22 +2917,32 @@ function renderPNChunk(startFrom=0){
   else tbody.insertAdjacentHTML('beforeend', rows);
   if(startFrom===0) scheduleSplitTableResync('pn-hdr-col','pn-body-col','pnTbody','fixed');
 
-  // ── 모바일 카드 (좌우 스크롤 없이 한 화면에서 모든 정보 확인) ──
+  // ── 모바일 카드 (좌우 스크롤 없이 한 화면에서 모든 정보 확인) — 호환품번 단위, 웹과 동일 항목 ──
+  const ru=lang==='ru';
+  const L=(label,val)=> val ? `<div style="display:flex;gap:6px;font-size:11px;margin-top:3px"><span style="color:var(--muted);min-width:70px;flex:none">${label}</span><span style="color:var(--text);word-break:break-all">${val}</span></div>` : '';
   const cards=chunk.map(r=>{
-    const name=isKo?hlPN(r.name_ko,kw):hlPN(r.name_ru||r.name_ko,kw);
-    const nameRuHtml=(isKo&&r.name_ru)?`<div style="color:var(--muted);font-size:11px;margin-top:2px">${hlPN(r.name_ru,kw)}</div>`:'';
-    const specHtml=isKo?`<div style="color:var(--muted);font-size:11px;margin-top:2px">${hlPN(r.spec,kw)}</div>`:'';
-    const compatsHtml=(r.compats||[]).map(c=>`<span class="pn-badge pn-cur">${hlPN(pnUpperLead(c),kw)}</span>`).join(' ')||'<span style="font-size:11px;color:var(--muted)">-</span>';
-    const finalHtml=r.final?`<span class="pn-badge pn-fin">${hlPN(pnUpperLead(r.final),kw)}</span>`:'<span style="font-size:11px;color:var(--muted)">-</span>';
+    const gv=k=>String(pnColText(k,r)||'');
+    const name=hlPN(gv('name'),kw);
+    const nameRu=isKo?gv('name_ru'):'';
+    const en=showEng?gv('name_en'):'';
+    const spec=isKo?gv('spec'):'';
+    const rep=gv('rep'), compat=gv('compat'), final=gv('final');
+    const exp=gv('export_ctrl'), nw=gv('nw'), gw=gv('gw'), cbm=gv('cbm'), dan=gv('note'), appl=gv('applied_models');
+    const modelTags=(typeof appliedModelsHtml==='function')?appliedModelsHtml(r.rep):'';
+    const expBadge = exp==='O' ? ` <span style="color:#ef4444;font-size:10px;font-weight:700;border:1px solid #ef4444;border-radius:4px;padding:0 4px;vertical-align:middle">${ru?'Эксп.O':'수출제한'}</span>` : '';
     return `<div class="part-card" style="border-bottom:1px solid var(--border);padding:10px 0">
-      <div class="pc-name" style="font-weight:600">${name}</div>
-      ${nameRuHtml}
-      ${showEng&&engNameText(r.rep)?`<div style="font-size:11px;color:var(--accent2);font-weight:600;margin-top:2px">${escapeHtml(engNameText(r.rep))}</div>`:''}
-      ${specHtml}
-      <div style="margin-top:8px;display:flex;flex-direction:column;gap:6px">
-        <div><span style="font-size:10px;color:var(--muted);display:block;margin-bottom:2px">${t.pnH1}</span><span class="pn-badge pn-rep">${hlPN(r.rep,kw)}</span></div>
-        <div><span style="font-size:10px;color:var(--muted);display:block;margin-bottom:2px">${t.pnH2}</span>${compatsHtml}</div>
-        <div><span style="font-size:10px;color:var(--muted);display:block;margin-bottom:2px">${t.pnH3}</span>${finalHtml}</div>
+      <div class="pc-name" style="font-weight:600">${name}${expBadge}</div>
+      ${nameRu?`<div style="color:var(--muted);font-size:11px;margin-top:2px">${hlPN(nameRu,kw)}</div>`:''}
+      ${en?`<div style="font-size:11px;color:var(--accent2);font-weight:600;margin-top:2px">${escapeHtml(en)}</div>`:''}
+      ${spec?`<div style="color:var(--muted);font-size:11px;margin-top:2px">${hlPN(spec,kw)}</div>`:''}
+      <div style="margin-top:8px">
+        ${L(t.pnH1, `<span class="pn-badge pn-rep">${hlPN(rep,kw)}</span>`)}
+        ${L(t.pnH2, `<span class="pn-badge pn-cur">${hlPN(pnUpperLead(compat),kw)}</span>`)}
+        ${L(t.pnH3, final?`<span class="pn-badge pn-fin">${hlPN(pnUpperLead(final),kw)}</span>`:'<span style="color:var(--muted)">-</span>')}
+        ${(nw||gw||cbm)?L('N/W·G/W·CBM', `${nw||'-'} · ${gw||'-'} · ${cbm||'-'}`):''}
+        ${dan?L(ru?'Снято':'단종', `<span style="color:#ef4444;font-weight:700">${escapeHtml(dan)}</span>`):''}
+        ${appl?L(ru?'Модели(вр.)':'적용모델(임시)', escapeHtml(appl)):''}
+        ${modelTags?L(ru?'Модели':'적용모델', modelTags):''}
       </div>
     </div>`;
   }).join('');
