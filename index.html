@@ -737,10 +737,6 @@ input[type="text"]::placeholder{color:var(--muted)}
           <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           <span id="i18n-pndl">엑셀 다운로드</span>
         </button>
-        <button class="dl-btn" id="pnSplitBtn" onclick="togglePNSplit()" title="호환품번을 한 행씩 분리(기본). 끄면 1품목=1행으로 묶어 봅니다">
-          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-          <span>호환품번 단위</span>
-        </button>
         <button class="dl-btn" id="pnResetBtn" onclick="pnResetColOrder()" title="열 순서·필터를 기본값으로">
           <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
           <span>열/필터 초기화</span>
@@ -2955,8 +2951,8 @@ function renderPN(){
   // 엑셀 업로드는 항상 노출(전략물자·영문명·품목/중량/단종 파일을 헤더로 자동 인식). 권한은 guardWrite('pn')가 처리.
   const isKo=lang==='ko';
   const showEng=canViewEngName();
-  _pnSplit=pnSplitPref();               // 호환품번 단위 분할 보기 토글 상태
-  const isMasterPN=pnDelVisible();      // 분할 보기에선 삭제열 숨김
+  _pnSplit=true;                        // 항상 호환품번 단위(한 셀에 여러 품번 묶지 않음)
+  const isMasterPN=pnDelVisible();
   let rows=PN_DATA;
   if(kw)rows=rows.filter(r=>searchRow(r.rep, kw, [r.name_ko,r.name_ru,r.spec,r.final,...(r.compats||[])]));
   if(_pnSplit) rows=pnExpandRows(rows);  // 각 호환품번을 한 행씩 분리(검색 후 확장)
@@ -3010,7 +3006,6 @@ function renderPN(){
   // MASTER 만 '품목 추가' 버튼 노출
   const addBtn=document.getElementById('pnAddBtn'); if(addBtn) addBtn.style.display=isMasterPN?'':'none';
   const resetBtn=document.getElementById('pnResetBtn'); if(resetBtn){ const sp=resetBtn.querySelector('span'); if(sp) sp.textContent=lang==='ru'?'Столбцы сброс':'열/필터 초기화'; }
-  const splitBtn=document.getElementById('pnSplitBtn'); if(splitBtn){ const sp=splitBtn.querySelector('span'); if(sp) sp.textContent=lang==='ru'?'По артикулам':'호환품번 단위'; splitBtn.style.background=_pnSplit?'#ef4444':''; splitBtn.style.borderColor=_pnSplit?'#ef4444':''; splitBtn.style.color=_pnSplit?'#fff':''; }
 
   // 청크 렌더링
   _pnFiltered=rows;
