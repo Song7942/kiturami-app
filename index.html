@@ -2576,22 +2576,25 @@ function debouncedRenderPN(){
 // ── 품번조회: 열 순서(사용자별·브라우저 저장) + 헤더 필터 ──
 let _pnFilters={};          // {colKey: '포함문자'}
 let _pnDragKey=null;
-// 수출제한: 호환품번(개별 품번) 기준. 제한 품번 집합을 kt_export_ctrl 에서 로드.
-let _exportPN=new Set();
-let _pnSplit=false;         // '호환품번 단위' 분할 보기 토글
+// 수출제한: 호환품번(개별 품번) 기준. '비해당'으로 대장에 오른 품번만 면제(빈칸),
+// 그 외(대장에 아예 없는 품번 포함)는 수출제한 O. 면제 집합을 kt_export_ctrl 에서 로드.
+let _exportExemptPN=new Set();   // '비해당'(면제) 품번 집합
+let _exportLoaded=false;         // 로드 여부(미로드 시엔 O 를 남발하지 않도록 빈칸)
+let _pnSplit=false;              // '호환품번 단위' 분할 보기 토글
 function normPN(x){ return String(x==null?'':x).toUpperCase().replace(/\s+/g,''); }
-function isExportRestricted(pn){ return _exportPN.has(normPN(pn)); }
+function isExportRestricted(pn){ if(!_exportLoaded) return false; const p=normPN(pn); if(!p) return false; return !_exportExemptPN.has(p); }
 async function loadExportCtrl(){
-  _exportPN=new Set();
+  _exportExemptPN=new Set(); _exportLoaded=false;
   try{
     const page=1000;
     for(let from=0;;from+=page){
       const { data, error }=await sb.from('kt_export_ctrl').select('pn').range(from, from+page-1);
-      if(error || !data || !data.length) break;
-      data.forEach(r=>{ const p=normPN(r.pn); if(p) _exportPN.add(p); });
-      if(data.length<page) break;   // 마지막 페이지
+      if(error) return;   // 테이블 없음/오류 → 미로드(안전하게 빈칸 유지)
+      (data||[]).forEach(r=>{ const p=normPN(r.pn); if(p) _exportExemptPN.add(p); });
+      if(!data || data.length<page) break;   // 마지막 페이지
     }
-  }catch(e){}
+    _exportLoaded=true;
+  }catch(e){ _exportLoaded=false; }
 }
 function pnSplitKey(){ return 'kt_pnSplit:'+(_pnUid()||'anon'); }
 function pnSplitPref(){ try{ return localStorage.getItem(pnSplitKey())==='1'; }catch(e){ return false; } }
@@ -5124,8 +5127,9 @@ function handleEngNameUpload(event){
   reader.readAsArrayBuffer(file);
 }
 // ── 전략물자 업로드(수출제한: 호환품번 개별 품번 기준) ──
-// '전략물자 통합관리대장' 양식: 품번 열 + '갱신 결과' 열. 갱신결과가 정확히 '비해당'이면 수출제한 아님,
-// 그 외(비해당(만료)·빈칸 포함)는 제한. 제한 품번을 kt_export_ctrl(pn) 에 통째로 갱신.
+// '전략물자 통합관리대장' 양식: 품번 열 + '갱신 결과' 열. 갱신결과가 정확히 '비해당'인 품번만
+// 면제(빈칸)이고, 그 외(비해당(만료)·대장에 없는 품번 포함)는 수출제한 O.
+// 면제(비해당) 품번을 kt_export_ctrl(pn) 에 통째로 갱신한다.
 function handleStrategicUpload(event){
   if(!userRole(currentUser).isMaster){ event.target.value=''; return; }
   const file=event.target.files[0]; if(!file){ event.target.value=''; return; }
@@ -5145,19 +5149,19 @@ function handleStrategicUpload(event){
         if(pc>=0&&rc>=0){ hdr=r; pnCol=pc; resCol=rc; break; }
       }
       if(hdr<0){ alert(ru?'Столбцы «품번/갱신 결과» не найдены.':'양식에서 품번/갱신결과 열을 찾지 못했습니다.'); event.target.value=''; return; }
-      // 제한 품번 집합(정규화). 갱신결과가 정확히 '비해당'인 품번만 제외.
-      const restr=new Set(); let seen=0;
+      // 면제(비해당) 품번 집합(정규화). 갱신결과가 정확히 '비해당'인 품번만 면제.
+      const exempt=new Set(); let seen=0;
       for(let r=hdr+1;r<arr.length;r++){
         const row=arr[r]||[];
         const raw=String(row[pnCol]==null?'':row[pnCol]).trim(); if(!raw) continue; seen++;
         const pn=normPN(raw);
         const res=String(row[resCol]==null?'':row[resCol]).replace(/\s+/g,' ').trim();
-        if(res==='비해당') restr.delete(pn);              // 비해당 → 제한 아님
-        else restr.add(pn);                               // 그 외 → 제한(같은 품번이 여러 행이면 제한 우선 아님, 마지막 비해당이면 제외)
+        if(res==='비해당') exempt.add(pn);                // 비해당 → 면제(빈칸)
+        else exempt.delete(pn);                           // 그 외 → 수출제한 O (같은 품번 여러 행이면 마지막이 비해당일 때만 면제)
       }
       if(!seen){ alert(ru?'Данных нет.':'데이터를 찾지 못했습니다.'); event.target.value=''; return; }
-      const list=[...restr];
-      // 테이블 전체 갱신: 싹 비우고 제한 품번만 다시 넣는다.
+      const list=[...exempt];
+      // 테이블 전체 갱신: 싹 비우고 면제(비해당) 품번만 다시 넣는다.
       { const { error }=await sb.from('kt_export_ctrl').delete().neq('pn','');
         if(error){ alert((ru?'Ошибка. Нужна таблица kt_export_ctrl.':'업로드 실패 — kt_export_ctrl 테이블이 필요합니다.')
           +'\nSQL: create table if not exists kt_export_ctrl (pn text primary key);\n['+(error.message||error.code)+']'); event.target.value=''; return; } }
@@ -5167,10 +5171,10 @@ function handleStrategicUpload(event){
       }
       await loadExportCtrl();
       _pnByRepMap=null; rerenderActiveTab();
-      // 호환품번 관점 반영 건수
-      let cO=0,cT=0; PN_DATA.forEach(r=>(r.compats||[]).forEach(c=>{ cT++; if(isExportRestricted(c)) cO++; }));
-      alert(ru?('Экспортконтроль обновлён: артикулов-ограничений '+list.length+'. Совпало '+cO+' из '+cT+' замен.')
-              :('수출제한 갱신: 제한 품번 '+list.length+'개. 호환품번 '+cT+'개 중 '+cO+'개 표시.'));
+      // 호환품번 관점 반영 건수(면제=빈칸, 나머지=O)
+      let cO=0,cT=0; PN_DATA.forEach(r=>(r.compats||[]).forEach(c=>{ if(!normPN(c))return; cT++; if(isExportRestricted(c)) cO++; }));
+      alert(ru?('Экспортконтроль обновлён: изъятий(«비해당») '+list.length+'. Ограничено '+cO+' из '+cT+' замен.')
+              :('수출제한 갱신: 면제(비해당) 품번 '+list.length+'개. 호환품번 '+cT+'개 중 O '+cO+'개 / 빈칸 '+(cT-cO)+'개.'));
     }catch(err){ console.error(err); alert(ru?'Ошибка загрузки.':'업로드에 실패했습니다.'); }
     event.target.value='';
   };
