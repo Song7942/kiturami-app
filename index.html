@@ -2680,7 +2680,7 @@ function renderPN(){
     const delTh=isMasterPN?`<th${rs} style="font-size:11px">${lang==='ru'?'Удал.':'삭제'}</th>`:'';
     const engTh=showEng?`<th${rs}>${lang==='ru'?'Англ. название':'영문품명'}</th>`:'';
     const modelTh=`<th${rs}>${lang==='ru'?'Модели (врем.)':'적용모델<br>(임시)'}</th>`;
-    const noteTh=`<th${rs}>${lang==='ru'?'Примечание':'참고내용'}</th>`;
+    const noteTh=`<th${rs}>${lang==='ru'?'Снято с пр-ва':'단종'}</th>`;
     const front = isKo
       ? `<th class="sticky-col1"${rs}>${t.pnH0}</th><th class="pn-sticky2"${rs}>${t.pnH0s}</th><th${rs}>러시아어 품명</th>${engTh}`
       : `<th class="sticky-col1"${rs}>${t.pnH0}</th>${engTh}`;
