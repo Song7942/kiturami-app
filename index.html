@@ -721,6 +721,11 @@ input[type="text"]::placeholder{color:var(--muted)}
           <input type="text" id="pnInput" placeholder="대표품번, 호환품번, 최종품번으로 검색…" oninput="debouncedRenderPN()">
         </div>
         <div class="count-badge" id="pnBadge"></div>
+        <button class="dl-btn" id="stratUploadBtn" onclick="document.getElementById('stratFileInput').click()" style="display:none;background:#ef4444;border-color:#ef4444;color:#fff">
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <span id="i18n-stratupload">전략물자 업로드</span>
+        </button>
+        <input type="file" id="stratFileInput" accept=".xlsx,.xls" style="display:none" onchange="handleStrategicUpload(event)">
         <button class="dl-btn" id="engNameUploadBtn" onclick="document.getElementById('engNameFileInput').click()" style="display:none;background:#f59e0b;border-color:#f59e0b;color:#fff">
           <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 20h16"/><path d="M12 4v12"/><polyline points="7 9 12 4 17 9"/></svg>
           <span id="i18n-engnameupload">영문명 업로드</span>
@@ -2599,6 +2604,7 @@ async function setPNColOrder(arr){
 // 기본(정본) 열 정의. '삭제' 열은 항상 맨 앞(재배치 대상 아님).
 function pnBaseCols(isKo, showEng){
   const t=T[lang], ru=(lang==='ru'); const c=[];
+  c.push({key:'export_ctrl', cap:64, label:ru?'Эксп.<br>контроль':'수출<br>제한'});
   c.push({key:'name', cap:280, label:t.pnH0});
   if(isKo){ c.push({key:'spec', cap:260, label:t.pnH0s}); c.push({key:'name_ru', cap:260, label:'러시아어 품명'}); }
   if(showEng) c.push({key:'name_en', cap:220, label:ru?'Англ. название':'영문품명'});
@@ -2622,7 +2628,8 @@ function pnColMetaOrdered(isKo, showEng, isMaster){
     const byKey={}; base.forEach(c=>byKey[c.key]=c);
     const seen=new Set(), out=[];
     saved.forEach(k=>{ const c=byKey[k]; if(c && !seen.has(k)){ out.push(c); seen.add(k); } });
-    base.forEach(c=>{ if(!seen.has(c.key)){ out.push(c); seen.add(c.key); } });
+    // 저장된 순서에 없는(새로 추가된) 열은 기본 위치(base 인덱스)에 끼워 넣는다 — 맨 끝에 붙지 않게.
+    base.forEach((c,bi)=>{ if(!seen.has(c.key)){ out.splice(Math.min(bi,out.length),0,c); seen.add(c.key); } });
     ordered=out;
   }
   ordered.forEach((c,i)=>{ c.groupStart = !!c.group && (i===0 || ordered[i-1].group!==c.group); c.freezeLeft=null; });
@@ -2645,13 +2652,14 @@ function pnColText(key, r){
     case 'cbm': return r.cbm!=null?String(r.cbm):'';
     case 'note': return r.note||'';
     case 'applied_models': return r.applied_models||'';
+    case 'export_ctrl': return r.export_ctrl==='O'?'O':'';
   }
   if(key&&key.indexOf('m:')===0){ const mk=key.slice(2); const md=(_partsModels(r.rep)||{}); return md[mk]?'O':''; }
   return '';
 }
 function pnColLabelShort(key){
   const t=T[lang];
-  const M={name:t.pnH0, spec:t.pnH0s, name_ru:(lang==='ru'?'Рус.название':'러시아어 품명'), name_en:(lang==='ru'?'Англ.название':'영문품명'), rep:t.pnH1, compat:t.pnH2, final:t.pnH3, nw:'N/W', gw:'G/W', cbm:'CBM', note:(lang==='ru'?'Снято с пр-ва':'단종'), applied_models:(lang==='ru'?'Модели':'적용모델(임시)')};
+  const M={export_ctrl:(lang==='ru'?'Эксп.контроль':'수출제한'), name:t.pnH0, spec:t.pnH0s, name_ru:(lang==='ru'?'Рус.название':'러시아어 품명'), name_en:(lang==='ru'?'Англ.название':'영문품명'), rep:t.pnH1, compat:t.pnH2, final:t.pnH3, nw:'N/W', gw:'G/W', cbm:'CBM', note:(lang==='ru'?'Снято с пр-ва':'단종'), applied_models:(lang==='ru'?'Модели':'적용모델(임시)')};
   return String(M[key]||key).replace(/<br>/g,' ');
 }
 // 셀 생성기(공용). col 은 pnColMetaOrdered 항목.
@@ -2664,6 +2672,8 @@ function pnCellHtml(col, r, ctx){
   const H=(f)=>pnCellHist(r.rep, f);
   if(col.group){ const md=_partsModels(r.rep)||{}; const bl=col.groupStart?'border-left:1px solid var(--border);':'';
     return _pnTd(col, dot(!!md[col.modelKey]), 'center', bl+'text-align:center'); }
+  if(col.key==='export_ctrl'){ const on=r.export_ctrl==='O';
+    return _pnTd(col, on?'<span style="color:#ef4444;font-weight:700;font-size:12px">O</span>':'', 'center', 'text-align:center'); }
   switch(col.key){
     case 'name': { const h=H(isKo?'name_ko':'name_ru');
       const inner=(isMaster?ed(r.rep,isKo?'name_ko':'name_ru',isKo?r.name_ko:r.name_ru):(isKo?hlPN(r.name_ko,kw):hlPN(r.name_ru||r.name_ko,kw)))+h.badge;
@@ -2845,6 +2855,7 @@ let _pnNextStart=-1;
 function renderPN(){
   const kw=document.getElementById('pnInput').value.trim().toLowerCase();const t=T[lang];
   const engBtn=document.getElementById('engNameUploadBtn'); if(engBtn) engBtn.style.display=userRole(currentUser).isMaster?'':'none';
+  const stratBtn=document.getElementById('stratUploadBtn'); if(stratBtn){ stratBtn.style.display=userRole(currentUser).isMaster?'':'none'; const sp=stratBtn.querySelector('span'); if(sp) sp.textContent=lang==='ru'?'Стратег. товары':'전략물자 업로드'; }
   const isKo=lang==='ko';
   const showEng=canViewEngName();
   const isMasterPN=userRole(currentUser).isMaster;
@@ -2959,12 +2970,13 @@ function applyPNOverrideRow(o){
     if(o.nw!=null) cur.nw=o.nw;
     if(o.gw!=null) cur.gw=o.gw;
     if(o.cbm!=null) cur.cbm=o.cbm;
+    if(o.export_ctrl!=null) cur.export_ctrl=o.export_ctrl;
     if(Array.isArray(o.history)) cur.history=o.history.slice();
   }else{
     // 새로 추가된 품목: 최종품번은 대표품번을 자동으로 따라가지 않는다(빈 값 허용).
     PN_DATA.push({ rep:o.rep, compats:Array.isArray(o.compats)?o.compats.slice():[], final:o.final||'',
                    name_ko:o.name_ko||'', name_ru:o.name_ru||'', spec:o.spec||'', note:o.note||'', applied_models:o.applied_models||'',
-                   nw:o.nw||'', gw:o.gw||'', cbm:o.cbm||'',
+                   nw:o.nw||'', gw:o.gw||'', cbm:o.cbm||'', export_ctrl:o.export_ctrl||'',
                    history:Array.isArray(o.history)?o.history.slice():[] });
   }
 }
@@ -3121,7 +3133,7 @@ async function loadPNOverrides(){
     if(typeof compats==='string'){ try{ compats=JSON.parse(compats); }catch(e){ compats=[]; } }
     let history=row.history;
     if(typeof history==='string'){ try{ history=JSON.parse(history); }catch(e){ history=[]; } }
-    applyPNOverrideRow({ rep:row.rep, name_ko:row.name_ko, name_ru:row.name_ru, spec:row.spec, final:row.final, compats:compats||[], note:row.note, applied_models:row.applied_models, nw:row.nw, gw:row.gw, cbm:row.cbm, history:Array.isArray(history)?history:[] });
+    applyPNOverrideRow({ rep:row.rep, name_ko:row.name_ko, name_ru:row.name_ru, spec:row.spec, final:row.final, compats:compats||[], note:row.note, applied_models:row.applied_models, nw:row.nw, gw:row.gw, cbm:row.cbm, export_ctrl:row.export_ctrl, history:Array.isArray(history)?history:[] });
   });
   _pnLookupMap=null; _pnByRepMap=null; _nameRuByRep=null;
 }
@@ -5061,6 +5073,56 @@ function handleEngNameUpload(event){
       rerenderActiveTab();
       alert(lang==='ru'?('Загружено: '+payload.length):('영문명 '+payload.length+'건을 반영했습니다.'));
     }catch(err){ console.error(err); alert(lang==='ru'?'Ошибка загрузки.':'업로드에 실패했습니다.'); }
+    event.target.value='';
+  };
+  reader.readAsArrayBuffer(file);
+}
+// ── 전략물자 업로드(수출제한 열) ──
+// '전략물자 통합관리대장' 양식: 품번 열 + '갱신 결과' 열. 갱신결과가 정확히 '비해당'이면 빈칸,
+// 그 외(비해당(만료)·빈칸 포함)는 O. kt_pn_overrides.export_ctrl 에 저장.
+function handleStrategicUpload(event){
+  if(!userRole(currentUser).isMaster){ event.target.value=''; return; }
+  const file=event.target.files[0]; if(!file){ event.target.value=''; return; }
+  const ru=lang==='ru';
+  const reader=new FileReader();
+  reader.onload=async function(e){
+    try{
+      const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
+      const arr=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:''});
+      // 헤더 행 탐색: '품번' 과 '갱신…결과' 열을 가진 행
+      let pnCol=-1,resCol=-1,hdr=-1;
+      for(let r=0;r<Math.min(arr.length,15);r++){
+        const row=arr[r]||[]; let pc=-1,rc=-1;
+        row.forEach((v,c)=>{ const s=String(v==null?'':v).replace(/\s+/g,'');
+          if(s==='품번'&&pc<0) pc=c;
+          if(s.indexOf('갱신')>=0&&s.indexOf('결과')>=0&&rc<0) rc=c; });
+        if(pc>=0&&rc>=0){ hdr=r; pnCol=pc; resCol=rc; break; }
+      }
+      if(hdr<0){ alert(ru?'Столбцы «품번/갱신 결과» не найдены.':'양식에서 품번/갱신결과 열을 찾지 못했습니다.'); event.target.value=''; return; }
+      const map={};   // rep -> 'O' | '' (한 품번이 여러 행이면 하나라도 O 면 O)
+      for(let r=hdr+1;r<arr.length;r++){
+        const row=arr[r]||[];
+        const pn=String(row[pnCol]==null?'':row[pnCol]).trim(); if(!pn) continue;
+        const rep=findMasterRep(pn); if(!rep) continue;
+        const res=String(row[resCol]==null?'':row[resCol]).replace(/\s+/g,' ').trim();
+        const val=(res==='비해당')?'':'O';   // 정확히 '비해당'만 빈칸
+        if(map[rep]!=='O') map[rep]=val;
+      }
+      const reps=Object.keys(map);
+      if(!reps.length){ alert(ru?'Совпадающих артикулов нет.':'매칭되는 품번이 없습니다.'); event.target.value=''; return; }
+      let oN=0; reps.forEach(rep=>{ if(map[rep]==='O') oN++; });
+      const payload=reps.map(rep=>({ rep, export_ctrl: map[rep]==='O'?'O':null }));
+      for(let i=0;i<payload.length;i+=400){
+        const { error }=await sb.from('kt_pn_overrides').upsert(payload.slice(i,i+400),{onConflict:'rep'});
+        if(error){ alert((ru?'Ошибка загрузки. Нужен столбец export_ctrl.':'업로드 실패 — export_ctrl 컬럼이 필요합니다.')
+          +'\nSQL: alter table kt_pn_overrides add column if not exists export_ctrl text;\n['+(error.message||error.code)+']'); event.target.value=''; return; }
+      }
+      reps.forEach(rep=>{ const p=PN_DATA.find(x=>x.rep===rep); if(p) p.export_ctrl=(map[rep]==='O')?'O':''; });
+      _pnByRepMap=null;
+      rerenderActiveTab();
+      alert(ru?('Экспортконтроль: O '+oN+' / пусто '+(reps.length-oN)+' (всего '+reps.length+')')
+              :('수출제한 반영: O '+oN+'건 / 빈칸 '+(reps.length-oN)+'건 (총 '+reps.length+'건)'));
+    }catch(err){ console.error(err); alert(ru?'Ошибка загрузки.':'업로드에 실패했습니다.'); }
     event.target.value='';
   };
   reader.readAsArrayBuffer(file);
