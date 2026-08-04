@@ -2567,9 +2567,35 @@ function debouncedRenderPN(){
 // ── 품번조회: 열 순서(사용자별·브라우저 저장) + 헤더 필터 ──
 let _pnFilters={};          // {colKey: '포함문자'}
 let _pnDragKey=null;
-function pnColOrderKey(){ const u=(typeof currentUser!=='undefined'&&currentUser)?(currentUser.id||'anon'):'anon'; return 'kt_pnColOrder:'+u; }
-function getPNColOrder(){ try{ return JSON.parse(localStorage.getItem(pnColOrderKey())||'null'); }catch(e){ return null; } }
-function setPNColOrder(arr){ try{ localStorage.setItem(pnColOrderKey(), JSON.stringify(arr)); }catch(e){} }
+// 열 순서: 사용자 id별 DB 저장(kt_user_prefs) — 어느 기기에서 로그인해도 따라온다.
+// 렌더는 동기라, DB 값은 로그인 시 캐시에 담아 두고 캐시를 읽는다(테이블 없으면 기본 순서).
+let _pnColOrderCache=null, _pnColOrderLoadedFor=null, _pnColOrderLoading=false;
+function _pnUid(){ return (typeof currentUser!=='undefined'&&currentUser)?(currentUser.id||null):null; }
+function getPNColOrder(){
+  const uid=_pnUid();
+  if(uid && _pnColOrderLoadedFor!==uid && !_pnColOrderLoading) loadPNColOrder();
+  return (_pnColOrderLoadedFor===uid)?_pnColOrderCache:null;
+}
+async function loadPNColOrder(){
+  const uid=_pnUid();
+  if(!uid){ _pnColOrderCache=null; _pnColOrderLoadedFor=null; return; }
+  _pnColOrderLoading=true;
+  try{
+    const { data, error }=await sb.from('kt_user_prefs').select('pn_col_order').eq('user_id',uid).limit(1);
+    let v=(!error && data && data[0])?data[0].pn_col_order:null;
+    if(typeof v==='string'){ try{ v=JSON.parse(v); }catch(e){ v=null; } }
+    _pnColOrderCache=Array.isArray(v)?v:null;
+  }catch(e){ _pnColOrderCache=null; }
+  _pnColOrderLoadedFor=uid; _pnColOrderLoading=false;
+  const pane=document.getElementById('pane-pn');
+  if(pane && pane.classList.contains('active') && typeof renderPN==='function') renderPN();   // 로딩 완료 시 저장순서로 다시 그림
+}
+async function setPNColOrder(arr){
+  const uid=_pnUid();
+  _pnColOrderCache=arr; _pnColOrderLoadedFor=uid;   // 화면은 즉시 반영
+  if(!uid) return;
+  try{ await sb.from('kt_user_prefs').upsert({ user_id:uid, pn_col_order:arr, updated_at:new Date().toISOString() }, { onConflict:'user_id' }); }catch(e){}
+}
 // 기본(정본) 열 정의. '삭제' 열은 항상 맨 앞(재배치 대상 아님).
 function pnBaseCols(isKo, showEng){
   const t=T[lang], ru=(lang==='ru'); const c=[];
@@ -2703,7 +2729,7 @@ function pnReorderCols(dragKey, targetKey){
   order.splice(to,0,dragKey);
   setPNColOrder(order); renderPN();
 }
-function pnResetColOrder(){ try{ localStorage.removeItem(pnColOrderKey()); }catch(e){} _pnFilters={}; renderPN(); }
+async function pnResetColOrder(){ const uid=_pnUid(); _pnColOrderCache=null; _pnColOrderLoadedFor=uid; _pnFilters={}; if(uid){ try{ await sb.from('kt_user_prefs').delete().eq('user_id',uid); }catch(e){} } renderPN(); }
 
 // ── 품번조회 페이지 렌더 (청크 방식) ──
 let _pnFiltered=[], _pnChunk=100;
