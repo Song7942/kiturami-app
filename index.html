@@ -2605,8 +2605,10 @@ function renderPNChunk(startFrom=0){
     const compatCell = `<td class="${cH.cls}" style="font-size:11px">${isMaster?ed(r.rep,'compat',(r.compats||[]).map(pnUpperLead).join(', ')):(r.compats||[]).map(c=>`<span class="pn-badge pn-cur">${hlPN(pnUpperLead(c),kw)}</span>`).join(' ')}${cH.badge}</td>`;
     const fH=H('final');
     const finalCell = `<td class="${fH.cls}" style="font-size:11px">${isMaster?ed(r.rep,'final',pnUpperLead(r.final||'')):(r.final?`<span class="pn-badge pn-fin">${hlPN(pnUpperLead(r.final),kw)}</span>`:'')}${fH.badge}</td>`;
-    // N/W·G/W·CBM 평균 (표시 전용, 파일에서 반영)
-    const numTd=(v)=>`<td style="text-align:right;padding:0 6px;font-size:11px;color:var(--muted)">${escapeHtml(r[v]!=null?String(r[v]):'')}</td>`;
+    // N/W·G/W·CBM 평균 (MASTER 편집 가능). 파일에서 반영된 값도 여기서 수정된다.
+    const numTd=(v)=> isMaster
+      ? `<td style="text-align:right;padding:0 6px;font-size:11px;color:var(--muted)">${ed(r.rep, v, r[v]!=null?String(r[v]):'')}</td>`
+      : `<td style="text-align:right;padding:0 6px;font-size:11px;color:var(--muted)">${escapeHtml(r[v]!=null?String(r[v]):'')}</td>`;
     const nwCell=numTd('nw'), gwCell=numTd('gw'), cbmCell=numTd('cbm');
     return `<tr>
       ${delColCell}${nameCell}
@@ -2834,15 +2836,15 @@ async function savePNCell(rep, field, value){
     await recordPNHistory(rep,'name_en',oldEn,val);
     return { ok:true };
   }
-  // 별도 컬럼(note·applied_models): 이름 편집과 upsert 를 분리해, 컬럼이 없어도 이름 편집은 안 깨진다.
-  if(field==='note' || field==='applied_models'){
+  // 별도 컬럼(note·applied_models·nw·gw·cbm): 이름 편집과 upsert 를 분리해, 컬럼이 없어도 이름 편집은 안 깨진다.
+  if(['note','applied_models','nw','gw','cbm'].includes(field)){
     let p=PN_DATA.find(x=>x.rep===rep); if(p) p[field]=val;
     _pnByRepMap=null;
     const { error } = await sb.from('kt_pn_overrides').upsert({ rep, [field]: val },{onConflict:'rep'});
     if(error){
-      const noCol=/note|applied_models|column|schema/i.test(error.message||'');
+      const noCol=/note|applied_models|nw|gw|cbm|column|schema/i.test(error.message||'');
       alert(noCol
-        ? '참고내용/적용모델을 저장하려면 Supabase 에서 아래 SQL 을 한 번 실행하세요(다른 표는 건드리지 마세요):\n\nalter table kt_pn_overrides add column if not exists note text;\nalter table kt_pn_overrides add column if not exists applied_models text;'
+        ? '이 열을 저장하려면 Supabase 에서 아래 SQL 을 한 번 실행하세요(다른 표는 건드리지 마세요):\n\nalter table kt_pn_overrides add column if not exists note text;\nalter table kt_pn_overrides add column if not exists applied_models text;\nalter table kt_pn_overrides add column if not exists nw text;\nalter table kt_pn_overrides add column if not exists gw text;\nalter table kt_pn_overrides add column if not exists cbm text;'
         : ('저장 실패\n['+(error.message||error.code)+']'));
       return { ok:false };
     }
