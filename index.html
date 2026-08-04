@@ -2735,8 +2735,14 @@ function pnColText(key, r){
 }
 function pnColLabelShort(key){
   const t=T[lang];
+  if(key && key.indexOf('m:')===0){ const mk=key.slice(2); const md=(typeof MODEL_DEFS!=='undefined'?MODEL_DEFS:[]).find(m=>m.key===mk); return md?(md.group+' '+md.label):key; }
   const M={export_ctrl:(lang==='ru'?'Эксп.контроль':'수출제한'), name:t.pnH0, spec:t.pnH0s, name_ru:(lang==='ru'?'Рус.название':'러시아어 품명'), name_en:(lang==='ru'?'Англ.название':'영문품명'), rep:t.pnH1, compat:t.pnH2, final:t.pnH3, nw:'N/W', gw:'G/W', cbm:'CBM', note:(lang==='ru'?'Снято с пр-ва':'단종'), applied_models:(lang==='ru'?'Модели':'적용모델(임시)')};
   return String(M[key]||key).replace(/<br>/g,' ');
+}
+// 모델 열용 소형 필터 아이콘(셀이 좁아 콤팩트하게)
+function pnFilterIconSm(key){
+  const active=_pnFilters[key]!=null;
+  return `<span onclick="event.stopPropagation();event.preventDefault();openPNFilter('${key}',this)" onmousedown="event.stopPropagation()" draggable="false" title="${lang==='ru'?'Фильтр':'필터'}" style="display:block;cursor:pointer;font-size:9px;line-height:1;margin-top:1px;color:${active?'#f59e0b':'var(--muted)'}">▾</span>`;
 }
 // 셀 생성기(공용). col 은 pnColMetaOrdered 항목.
 function _pnTd(col, inner, cls, style){
@@ -2994,7 +3000,7 @@ function renderPN(){
         const run=meta.slice(i,j);
         row1+=`<th colspan="${run.length}" style="text-align:center;font-size:10px;font-weight:700;color:${c.color||'#888'};border-left:1px solid var(--border)">${escapeHtml(c.group)}</th>`;
         run.forEach(m=>{ const mfrz=m.freezeLeft!=null?`position:sticky;left:${m.freezeLeft}px;z-index:7;background:var(--surface2);`:'';
-          row2+=`<th draggable="true" data-colkey="${m.key}" ondragstart="pnColDragStart(event)" ondragover="pnColDragOver(event)" ondragleave="pnColDragLeave(event)" ondrop="pnColDrop(event)" ondragend="pnColDragEnd(event)" class="pn-dcol" style="${mfrz}text-align:center;font-size:9px;color:var(--muted)${m.groupStart?';border-left:1px solid var(--border)':''};cursor:grab">${escapeHtml(m.capLabel)}</th>`; });
+          row2+=`<th draggable="true" data-colkey="${m.key}" ondragstart="pnColDragStart(event)" ondragover="pnColDragOver(event)" ondragleave="pnColDragLeave(event)" ondrop="pnColDrop(event)" ondragend="pnColDragEnd(event)" class="pn-dcol" style="${mfrz}text-align:center;font-size:9px;color:var(--muted)${m.groupStart?';border-left:1px solid var(--border)':''};cursor:grab">${escapeHtml(m.capLabel)}${pnFilterIconSm(m.key)}</th>`; });
         i=j;
       }
     }
@@ -3023,26 +3029,19 @@ function downloadParts(){
   XLSX.writeFile(wb,`KITURAMI_부품검색_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
 function downloadPN(){
-  const kw=document.getElementById('pnInput').value.trim().toLowerCase();let rows=PN_DATA;
-  if(kw)rows=rows.filter(r=>r.rep.toLowerCase().includes(kw)||r.compats.some(c=>c.toLowerCase().includes(kw))||r.final.toLowerCase().includes(kw));
-  if(!rows.length)return;const t=T[lang];
-  const isKo=lang==='ko';
-  // 양식: 품명 | 규격(KO만) | 대표품번 (미변경) | 호환품번 (변경) | 최종품번 (변경, 현시점)
-  // 호환품번이 여러 개면 행을 나눠서 출력. 품명/규격은 최종품번 기준(각 행의 name/spec).
-  const header=isKo?[t.pnH0,t.pnH0s,t.pnH1,t.pnH2,t.pnH3]:[t.pnH0,t.pnH1,t.pnH2,t.pnH3];
+  renderPN();   // 현재 검색·필터·정렬·분할 상태를 _pnFiltered 에 최신화
+  const rows=(_pnFiltered||[]).slice();
+  if(!rows.length) return;
+  const isKo=lang==='ko', showEng=canViewEngName();
+  // 화면에 보이는 열(순서 그대로). 삭제 열은 제외.
+  const meta=pnColMetaOrdered(isKo, showEng, false);
+  const labelFor=c=> c.group ? (c.group+' '+c.capLabel) : (String(c.label||'').replace(/<br>/g,' ').trim() || pnColLabelShort(c.key));
+  const header=meta.map(labelFor);
   const aoa=[header];
-  rows.forEach(r=>{
-    const name=isKo?(r.name_ko||''):(r.name_ru||r.name_ko||'');
-    const compats=(r.compats&&r.compats.length)?r.compats:[''];
-    compats.forEach(c=>{
-      aoa.push(isKo?[name,r.spec||'',r.rep,c,r.final]:[name,r.rep,c,r.final]);
-    });
-  });
+  rows.forEach(r=> aoa.push(meta.map(c=> pnColText(c.key, r))));
   const ws=XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols']=isKo
-    ? [{wch:22},{wch:30},{wch:18},{wch:18},{wch:22}]
-    : [{wch:34},{wch:18},{wch:18},{wch:22}];
-  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,lang==='ru'?'Артикулы':'품번조회');
+  ws['!cols']=meta.map(c=> ({ wch: Math.min(40, Math.max(6, Math.round((c.cap||60)/6.5))) }));
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,lang==='ru'?'Артикулы':'품번조회');
   XLSX.writeFile(wb,`KITURAMI_품번조회_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
 
