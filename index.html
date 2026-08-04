@@ -1713,6 +1713,7 @@ function setLang(l){
   const myInfoBtnEl=document.getElementById('i18n-myinfobtn'); if(myInfoBtnEl) myInfoBtnEl.textContent=t.myInfoBtn;
   const setTxtIfExists=(id,val)=>{const el=document.getElementById(id);if(el)el.textContent=val;};
   setTxtIfExists('i18n-pnupload', t.orderUpload);
+  setTxtIfExists('i18n-pnadd', lang==='ru'?'Добавить позицию':'품목 추가');
   setTxtIfExists('i18n-myinfotitle', t.myInfoTitle);
   setTxtIfExists('i18n-myinfo-company', t.myInfoCompany);
   setTxtIfExists('i18n-myinfo-id', t.myInfoId);
