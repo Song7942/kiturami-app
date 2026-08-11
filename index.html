@@ -3123,7 +3123,7 @@ function _offlineBoot(DB){
 }
 async function downloadOfflineHtml(){
   if(!userRole(currentUser).isMaster){ alert('MASTER 만 생성할 수 있습니다.'); return; }
-  if(!confirm('부품조회·품번조회·가격정보 3개 화면을 오프라인 HTML 앱으로 만듭니다.\n· 인터넷 통신 없음(데이터는 만든 시점 스냅샷)\n· 주문/배분 등 다중사용자 기능은 제외\n· 데이터가 커서 30초~1분, 파일 십수 MB 일 수 있습니다\n계속할까요?')) return;
+  if(!confirm('부품조회(분해도 포함)·품번조회·가격정보 3개 화면을 오프라인 HTML 앱으로 만듭니다.\n· 데이터는 만든 시점 스냅샷(외부 통신 없음). 단, 가격정보의 환율만 인터넷에서 가져옵니다(연결됐을 때).\n· 주문/배분 등 다중사용자 기능은 제외\n· 데이터가 커서 30초~1분, 파일 십수 MB 일 수 있습니다\n계속할까요?')) return;
   const _btn=document.getElementById('pnOfflineBtn'); const _sp=_btn&&_btn.querySelector('span'); const _t0=_sp?_sp.textContent:'';
   if(_sp){ _sp.textContent='생성 중…'; } if(_btn){ _btn.disabled=true; _btn.style.opacity='0.6'; }
   try{
@@ -3136,7 +3136,7 @@ async function downloadOfflineHtml(){
     const blob=new Blob([html],{type:'text/html;charset=utf-8'});
     const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='KITURAMI_오프라인앱_'+new Date().toISOString().slice(0,10)+'.html'; document.body.appendChild(a); a.click(); a.remove();
     setTimeout(function(){ URL.revokeObjectURL(a.href); },3000);
-    alert('오프라인 앱 파일을 저장했습니다 (약 '+Math.round(html.length/1024/1024)+'MB).\n더블클릭해 열면 인터넷 없이 3개 화면이 열립니다.');
+    alert('오프라인 앱 파일을 저장했습니다 (약 '+Math.round(html.length/1024/1024)+'MB).\n더블클릭해 열면 인터넷 없이 3개 화면(부품조회 분해도 포함)이 열립니다.\n환율은 인터넷 연결 시 자동으로 최신값을 가져옵니다.');
   }catch(e){ console.error(e); alert('생성 실패: '+(e.message||e)); }
   finally{ if(_sp) _sp.textContent=_t0||'오프라인 앱'; if(_btn){ _btn.disabled=false; _btn.style.opacity=''; } }
 }
