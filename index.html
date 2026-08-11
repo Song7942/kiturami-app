@@ -737,6 +737,10 @@ input[type="text"]::placeholder{color:var(--muted)}
           <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           <span id="i18n-pndl">엑셀 다운로드</span>
         </button>
+        <button class="dl-btn" id="pnHtmlBtn" onclick="downloadPNHtml()" title="오프라인 HTML로 저장(인터넷 통신 없음, 데이터가 파일에 포함). 내부 공유용" style="background:#7c3aed;border-color:#7c3aed;color:#fff">
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+          <span id="i18n-pnhtml">HTML 다운로드</span>
+        </button>
         <button class="dl-btn" id="pnResetBtn" onclick="pnResetColOrder()" title="열 순서·필터를 기본값으로">
           <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
           <span>열/필터 초기화</span>
@@ -1714,6 +1718,7 @@ function setLang(l){
   const setTxtIfExists=(id,val)=>{const el=document.getElementById(id);if(el)el.textContent=val;};
   setTxtIfExists('i18n-pnupload', t.orderUpload);
   setTxtIfExists('i18n-pnadd', lang==='ru'?'Добавить позицию':'품목 추가');
+  setTxtIfExists('i18n-pnhtml', lang==='ru'?'HTML (офлайн)':'HTML 다운로드');
   setTxtIfExists('i18n-myinfotitle', t.myInfoTitle);
   setTxtIfExists('i18n-myinfo-company', t.myInfoCompany);
   setTxtIfExists('i18n-myinfo-id', t.myInfoId);
@@ -3050,6 +3055,33 @@ function downloadPN(){
   ws['!cols']=meta.map(c=> ({ wch: Math.min(40, Math.max(6, Math.round((c.cap||60)/6.5))) }));
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,lang==='ru'?'Артикулы':'품번조회');
   XLSX.writeFile(wb,`KITURAMI_품번조회_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+// 자체완결형 HTML 다운로드: 데이터가 파일 안에 박히고 외부 통신이 전혀 없음(오프라인·내부 공유용).
+function downloadPNHtml(){
+  renderPN();
+  const rows=(_pnFiltered||[]).slice();
+  if(!rows.length) return;
+  const isKo=lang==='ko', showEng=canViewEngName(), ru=lang==='ru';
+  const meta=pnColMetaOrdered(isKo, showEng, false);
+  const labelFor=c=> c.group ? (c.group+' '+c.capLabel) : (String(c.label||'').replace(/<br>/g,' ').trim() || pnColLabelShort(c.key));
+  const esc=s=>String(s==null?'':s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+  const date=new Date().toISOString().slice(0,10);
+  const title=(ru?'KITURAMI Артикулы ':'KITURAMI 품번조회 ')+date;
+  const thead='<tr>'+meta.map(c=>'<th>'+esc(labelFor(c))+'</th>').join('')+'</tr>';
+  const tbody=rows.map(r=>'<tr>'+meta.map(c=>'<td>'+esc(pnColText(c.key,r))+'</td>').join('')+'</tr>').join('');
+  const css="body{font-family:'Segoe UI','Malgun Gothic',sans-serif;margin:0;padding:12px;background:#0f1117;color:#e5e7eb}"
+    +'h1{font-size:16px;margin:0 0 4px}.note{font-size:11px;color:#9ca3af;margin:0 0 10px}'
+    +'.wrap{overflow:auto;border:1px solid #262a36;border-radius:8px;max-height:88vh}'
+    +'table{border-collapse:collapse;white-space:nowrap;font-size:12px}th,td{border:1px solid #262a36;padding:5px 8px;text-align:left}'
+    +'thead th{position:sticky;top:0;background:#1a1d27;color:#9ca3af;font-weight:600}tbody tr:nth-child(even){background:#151822}'
+    +'@media(prefers-color-scheme:light){body{background:#fff;color:#111}thead th{background:#f3f4f6;color:#555}tbody tr:nth-child(even){background:#f9fafb}.wrap,th,td{border-color:#e5e7eb}}';
+  const note=ru?'Автономный файл — без интернета. Поиск: Ctrl+F. Данные встроены в файл.':'오프라인 파일 · 인터넷 통신 없음 · 검색은 Ctrl+F. 데이터가 파일에 포함되어 있습니다.';
+  const doc='<!doctype html><html lang="'+(ru?'ru':'ko')+'"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+esc(title)+'</title><style>'+css+'</style></head><body>'
+    +'<h1>'+esc(title)+'</h1><div class="note">'+esc(note)+' ('+rows.length+')</div>'
+    +'<div class="wrap"><table><thead>'+thead+'</thead><tbody>'+tbody+'</tbody></table></div></body></html>';
+  const blob=new Blob([doc],{type:'text/html;charset=utf-8'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='KITURAMI_품번조회_'+date+'.html'; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); },1500);
 }
 
 // ── 품번조회 엑셀 업로드 ──
