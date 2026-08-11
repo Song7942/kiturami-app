@@ -737,9 +737,9 @@ input[type="text"]::placeholder{color:var(--muted)}
           <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           <span id="i18n-pndl">엑셀 다운로드</span>
         </button>
-        <button class="dl-btn" id="pnHtmlBtn" onclick="downloadPNHtml()" title="오프라인 HTML로 저장(인터넷 통신 없음, 데이터가 파일에 포함). 내부 공유용" style="background:#7c3aed;border-color:#7c3aed;color:#fff">
+        <button class="dl-btn" id="pnOfflineBtn" onclick="downloadOfflineHtml()" title="부품조회·품번조회·가격정보 3개 화면을 인터넷 없이 쓰는 오프라인 앱(HTML)으로 저장. 내부 공유용" style="background:#7c3aed;border-color:#7c3aed;color:#fff">
           <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
-          <span id="i18n-pnhtml">HTML 다운로드</span>
+          <span id="i18n-pnoffline">오프라인 앱</span>
         </button>
         <button class="dl-btn" id="pnResetBtn" onclick="pnResetColOrder()" title="열 순서·필터를 기본값으로">
           <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
@@ -1718,7 +1718,7 @@ function setLang(l){
   const setTxtIfExists=(id,val)=>{const el=document.getElementById(id);if(el)el.textContent=val;};
   setTxtIfExists('i18n-pnupload', t.orderUpload);
   setTxtIfExists('i18n-pnadd', lang==='ru'?'Добавить позицию':'품목 추가');
-  setTxtIfExists('i18n-pnhtml', lang==='ru'?'HTML (офлайн)':'HTML 다운로드');
+  setTxtIfExists('i18n-pnoffline', lang==='ru'?'Офлайн-приложение':'오프라인 앱');
   setTxtIfExists('i18n-myinfotitle', t.myInfoTitle);
   setTxtIfExists('i18n-myinfo-company', t.myInfoCompany);
   setTxtIfExists('i18n-myinfo-id', t.myInfoId);
@@ -3082,6 +3082,63 @@ function downloadPNHtml(){
   const blob=new Blob([doc],{type:'text/html;charset=utf-8'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='KITURAMI_품번조회_'+date+'.html'; document.body.appendChild(a); a.click(); a.remove();
   setTimeout(function(){ URL.revokeObjectURL(a.href); },1500);
+}
+// ── 오프라인 앱(부품조회·품번조회·가격정보) HTML 생성 ──
+// Supabase(클라우드) 대신 파일에 박힌 데이터를 읽는 '가짜 sb' 를 주입 → 인터넷 통신 0.
+// 로그인은 file:// 에서 crypto 가 막힐 수 있어 자동진입(MASTER 뷰). 주문/배분 등 다중사용자 탭 제외.
+function _offlineBoot(DB){
+  const data='window.__DB__='+JSON.stringify(DB).replace(/<\/(script)/gi,'<\\/$1')+';';
+  const mock=[
+    'window.__OFFLINE__=true;',
+    'function __mkSb(){var DB=window.__DB__;function cl(o){return JSON.parse(JSON.stringify(o));}',
+    'function up(t,v,k){DB[t]=DB[t]||[];(Array.isArray(v)?v:[v]).forEach(function(x){var i=DB[t].findIndex(function(r){return String(r[k])===String(x[k]);});if(i>=0)Object.assign(DB[t][i],x);else DB[t].push(cl(x));});}',
+    'function wr(fn){return {then:function(res){try{fn();}catch(e){}return Promise.resolve({data:null,error:null}).then(res);},select:function(){return {then:function(res){try{fn();}catch(e){}return Promise.resolve({data:[],error:null}).then(res);}};}};}',
+    'function bld(t){var F=[],O=null,R=null,L=null,S=false,HC=false;',
+    'function run(){var o=(DB[t]||[]).filter(function(r){return F.every(function(f){return f(r);});});if(O)o=o.slice().sort(function(a,b){var x=a[O.c],y=b[O.c];var c=x<y?-1:x>y?1:0;return O.a?c:-c;});if(R)o=o.slice(R[0],R[1]+1);if(L!=null)o=o.slice(0,L);var n=o.length;if(HC)return{data:null,error:null,count:n};o=cl(o);if(S)return{data:o[0]||null,error:null};return{data:o,error:null,count:n};}',
+    'var B={select:function(c,o){if(o&&o.head)HC=true;return B;},',
+    'eq:function(c,v){F.push(function(r){return String(r[c])===String(v);});return B;},',
+    'neq:function(c,v){F.push(function(r){return String(r[c])!==String(v);});return B;},',
+    'is:function(c,v){F.push(function(r){return v===null?(r[c]==null):(r[c]===v);});return B;},',
+    'ilike:function(c,v){var p=String(v).replace(/%/g,"").toLowerCase();F.push(function(r){return String(r[c]==null?"":r[c]).toLowerCase().indexOf(p)>=0;});return B;},',
+    'like:function(c,v){return B.ilike(c,v);},',
+    'in:function(c,a){var s=(a||[]).map(String);F.push(function(r){return s.indexOf(String(r[c]))>=0;});return B;},',
+    'gte:function(){return B;},lte:function(){return B;},gt:function(){return B;},lt:function(){return B;},contains:function(){return B;},',
+    'order:function(c,o){O={c:c,a:!(o&&o.ascending===false)};return B;},range:function(a,b){R=[a,b];return B;},limit:function(n){L=n;return B;},',
+    'maybeSingle:function(){S=true;return B;},single:function(){S=true;return B;},',
+    'then:function(res,rej){return Promise.resolve(run()).then(res,rej);},',
+    'upsert:function(v,o){return wr(function(){up(t,v,(o&&o.onConflict)||"id");});},',
+    'insert:function(v){return wr(function(){DB[t]=DB[t]||[];(Array.isArray(v)?v:[v]).forEach(function(x){DB[t].push(cl(x));});});},',
+    'update:function(v){return {eq:function(c,val){return wr(function(){(DB[t]||[]).forEach(function(r){if(String(r[c])===String(val))Object.assign(r,v);});});},then:function(res){return wr(function(){}).then(res);}};},',
+    'delete:function(){var Dl=[];function ex(){return {then:function(res){DB[t]=(DB[t]||[]).filter(function(r){return !Dl.every(function(f){return f(r);});});return Promise.resolve({data:null,error:null}).then(res);}};}return {eq:function(c,v){Dl.push(function(r){return String(r[c])===String(v);});return ex();},neq:function(c,v){Dl.push(function(r){return String(r[c])!==String(v);});return ex();},in:function(c,a){var s=(a||[]).map(String);Dl.push(function(r){return s.indexOf(String(r[c]))>=0;});return ex();},then:function(res){return ex().then(res);}};}};',
+    'return B;}',
+    'return {from:function(t){return bld(t);},channel:function(){return {on:function(){return this;},subscribe:function(){return this;}};},removeChannel:function(){},auth:{getUser:function(){return Promise.resolve({data:{user:null}});}}};}',
+    'window.supabase={createClient:function(){return __mkSb();}};',
+    'try{sessionStorage.setItem("kt_session",JSON.stringify({id:"MASTER",company:"MASTER",is_admin:true}));}catch(e){}',   // authInit 이 이 세션으로 자동 진입(MASTER 뷰)
+    'window.addEventListener("load",function(){setTimeout(function(){try{if(typeof switchTab==="function")switchTab("pn");}catch(e){}},300);});'
+  ].join('');
+  const css='<style>#tab-order,#tab-adminOrders,#tab-inventory,#tab-shipments,#tab-memberManagement,#logoutBtn,#i18n-myinfobtn{display:none!important}'
+    +'#pnUploadBtn,#pnOfflineBtn,#pnAddBtn{display:none!important}'
+    +'#pane-pn .search-bar .dl-btn:not(#pnResetBtn),#pane-parts .search-bar .dl-btn{display:none!important}</style>';
+  return '<script>'+data+mock+'<\/script>'+css;
+}
+async function downloadOfflineHtml(){
+  if(!userRole(currentUser).isMaster){ alert('MASTER 만 생성할 수 있습니다.'); return; }
+  if(!confirm('부품조회·품번조회·가격정보 3개 화면을 오프라인 HTML 앱으로 만듭니다.\n· 인터넷 통신 없음(데이터는 만든 시점 스냅샷)\n· 주문/배분 등 다중사용자 기능은 제외\n· 데이터가 커서 30초~1분, 파일 십수 MB 일 수 있습니다\n계속할까요?')) return;
+  const _btn=document.getElementById('pnOfflineBtn'); const _sp=_btn&&_btn.querySelector('span'); const _t0=_sp?_sp.textContent:'';
+  if(_sp){ _sp.textContent='생성 중…'; } if(_btn){ _btn.disabled=true; _btn.style.opacity='0.6'; }
+  try{
+    async function all(t){ const out=[]; for(let f=0;;f+=1000){ const {data,error}=await sb.from(t).select('*').range(f,f+999); if(error) return out; out.push.apply(out,data||[]); if(!data||data.length<1000) break; } return out; }
+    const DB={};
+    for(const t of ['kt_pn_overrides','kt_pn_specs','kt_names_en','kt_price_calc','kt_price_settings','kt_company_prices','kt_users']){ DB[t]=await all(t); }
+    let html=await (await fetch('/index.html')).text();
+    html=html.replace(/<script src="https:\/\/cdnjs\.cloudflare[^"]*"><\/script>\s*/,'');   // XLSX CDN 제거
+    html=html.replace(/<script src="https:\/\/cdn\.jsdelivr\.net\/npm\/@supabase[^"]*"><\/script>/, _offlineBoot(DB));   // Supabase → 가짜 sb
+    const blob=new Blob([html],{type:'text/html;charset=utf-8'});
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='KITURAMI_오프라인앱_'+new Date().toISOString().slice(0,10)+'.html'; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); },3000);
+    alert('오프라인 앱 파일을 저장했습니다 (약 '+Math.round(html.length/1024/1024)+'MB).\n더블클릭해 열면 인터넷 없이 3개 화면이 열립니다.');
+  }catch(e){ console.error(e); alert('생성 실패: '+(e.message||e)); }
+  finally{ if(_sp) _sp.textContent=_t0||'오프라인 앱'; if(_btn){ _btn.disabled=false; _btn.style.opacity=''; } }
 }
 
 // ── 품번조회 엑셀 업로드 ──
