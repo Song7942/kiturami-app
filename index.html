@@ -3114,9 +3114,9 @@ function _offlineBoot(DB){
     'return {from:function(t){return bld(t);},channel:function(){return {on:function(){return this;},subscribe:function(){return this;}};},removeChannel:function(){},auth:{getUser:function(){return Promise.resolve({data:{user:null}});}}};}',
     'window.supabase={createClient:function(){return __mkSb();}};',
     'try{sessionStorage.setItem("kt_session",JSON.stringify({id:"MASTER",company:"MASTER",is_admin:true}));}catch(e){}',   // authInit 이 이 세션으로 자동 진입(MASTER 뷰)
-    'window.addEventListener("load",function(){setTimeout(function(){try{if(typeof switchTab==="function")switchTab("pn");}catch(e){}},300);});'
+    'window.addEventListener("load",function(){setTimeout(function(){try{if(typeof switchTab==="function")switchTab("order");}catch(e){}},300);});'
   ].join('');
-  const css='<style>#tab-order,#tab-adminOrders,#tab-inventory,#tab-shipments,#tab-memberManagement,#logoutBtn,#i18n-myinfobtn{display:none!important}'
+  const css='<style>#tab-adminOrders,#tab-inventory,#tab-shipments,#tab-memberManagement,#logoutBtn,#i18n-myinfobtn{display:none!important}'   /* 주문(order) 탭은 MASTER 에게 부품조회(분해도)라 노출 */
     +'#pnUploadBtn,#pnOfflineBtn,#pnAddBtn{display:none!important}'
     +'#pane-pn .search-bar .dl-btn:not(#pnResetBtn),#pane-parts .search-bar .dl-btn{display:none!important}</style>';
   return '<script>'+data+mock+'<\/script>'+css;
