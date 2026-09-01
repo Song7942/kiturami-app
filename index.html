@@ -5329,7 +5329,12 @@ async function saveEditMember(){
     if(dup && dup.length){ errEl.textContent=(lang==='ru'?'Такой ID уже есть.':'이미 존재하는 아이디입니다.'); return; }
     const insertRow={ id:newId, company: company||newId, contact_name:contactName, country, region,
       phone: (digits?phone:''), email,
-      supplier_company: (document.getElementById('emSupplier').value.trim()||null),
+      // 구매처 칸은 MASTER 에게만 보인다. 회사 계정이 회원을 추가하면 그 회원의 구매처는
+      // 언제나 자기 회사다. 비워 두면 목록이 구매처 기준으로 조회하므로 방금 만든 회원이
+      // 어느 목록에도 안 잡혀 사라진 것처럼 보인다.
+      supplier_company: (userRole(currentUser).isMaster
+        ? (document.getElementById('emSupplier').value.trim()||null)
+        : (String(currentUser&&currentUser.company||'').trim()||null)),
       status: document.getElementById('emStatus').value||'approved',
       password_hash: await sha256Hex(newPw) };
     const { error } = await sb.from('kt_users').insert(insertRow);
