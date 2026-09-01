@@ -3384,22 +3384,55 @@ async function handleSpecialPNUpload(wb){
   const V=(row,ci)=>ci!=null?String(row[ci]==null?'':row[ci]).trim():'';
 
   // ── A) 전략물자 대장 (품번 + 갱신 결과) → 수출제한(비해당=면제) ──
+  // 기준 품번은 '품번' 열. 면제(=화면에서 빈칸) 판단은 이렇게 한다.
+  //   · 갱신 결과 = '비해당'  → 면제
+  //   · 갱신 결과 = 그 외 값  → 수출제한 O
+  //   · 갱신 결과 빈칸       → 아직 갱신 전이므로 지난 판정을 본다.
+  //                            판정이력이 '비해당' 이고 '지난 판정 유효일' 이 아직 안 지났으면 면제.
+  //                            유효일이 지났거나('비해당 (만료)' 포함) 없으면 O.
   for(const sn of wb.SheetNames){
     const a=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:''});
-    let pnCol=-1,resCol=-1,hdr=-1;
-    for(let r=0;r<Math.min(a.length,15);r++){ const row=a[r]||[]; let pc=-1,rc=-1;
-      row.forEach((v,c)=>{ const s=String(v==null?'':v).replace(/\s+/g,''); if(s==='품번'&&pc<0)pc=c; if(s.indexOf('갱신')>=0&&s.indexOf('결과')>=0&&rc<0)rc=c; });
-      if(pc>=0&&rc>=0){ hdr=r; pnCol=pc; resCol=rc; break; } }
+    let pnCol=-1,resCol=-1,hisCol=-1,dueCol=-1,hdr=-1;
+    for(let r=0;r<Math.min(a.length,15);r++){ const row=a[r]||[]; let pc=-1,rc=-1,hc=-1,dc=-1;
+      row.forEach((v,c)=>{ const s=String(v==null?'':v).replace(/\s+/g,'');
+        if(s==='품번'&&pc<0)pc=c;
+        if(s.indexOf('갱신')>=0&&s.indexOf('결과')>=0&&rc<0)rc=c;
+        if(s.indexOf('판정이력')>=0&&hc<0)hc=c;
+        if(s.indexOf('지난')>=0&&s.indexOf('유효')>=0&&dc<0)dc=c; });
+      if(pc>=0&&rc>=0){ hdr=r; pnCol=pc; resCol=rc; hisCol=hc; dueCol=dc; break; } }
     if(hdr>=0){
-      const exempt=new Set();
-      for(let r=hdr+1;r<a.length;r++){ const raw=String(a[r][pnCol]==null?'':a[r][pnCol]).trim(); if(!raw)continue; const pn=normPN(raw);
-        const res=String(a[r][resCol]==null?'':a[r][resCol]).replace(/\s+/g,' ').trim(); if(res==='비해당')exempt.add(pn); else exempt.delete(pn); }
+      const today=new Date(); today.setHours(0,0,0,0);
+      // 유효일 칸: 'YYYY-MM-DD' 글자, 엑셀 날짜(일련번호), Date 객체를 모두 받는다
+      const dueDate=(v)=>{
+        if(v==null||v==='') return null;
+        if(v instanceof Date) return v;
+        if(typeof v==='number'){ const d=(XLSX.SSF&&XLSX.SSF.parse_date_code)?XLSX.SSF.parse_date_code(v):null;
+          return d?new Date(d.y,(d.m||1)-1,d.d||1):null; }
+        const m=String(v).trim().match(/^(\d{4})[-.\/](\d{1,2})[-.\/](\d{1,2})/);
+        return m?new Date(+m[1],+m[2]-1,+m[3]):null;
+      };
+      const exempt=new Set(); let byRenew=0, byPast=0;
+      for(let r=hdr+1;r<a.length;r++){
+        const row=a[r]||[];
+        const raw=String(row[pnCol]==null?'':row[pnCol]).trim(); if(!raw)continue; const pn=normPN(raw);
+        const res=String(row[resCol]==null?'':row[resCol]).replace(/\s+/g,' ').trim();
+        let ok;
+        if(res!==''){ ok=(res==='비해당'); if(ok) byRenew++; }
+        else{
+          const his=hisCol>=0?String(row[hisCol]==null?'':row[hisCol]).replace(/\s+/g,' ').trim():'';
+          const due=dueCol>=0?dueDate(row[dueCol]):null;
+          ok=(his==='비해당') && !!due && due>=today;   // 유효기간 안이면 지난 판정을 그대로 인정
+          if(ok) byPast++;
+        }
+        if(ok) exempt.add(pn); else exempt.delete(pn);
+      }
       const list=[...exempt];
       { const {error}=await sb.from('kt_export_ctrl').delete().neq('pn',''); if(error) return (ru?'Ошибка. Нужна таблица kt_export_ctrl.':'실패 — kt_export_ctrl 테이블 필요.')+'\nSQL: create table if not exists kt_export_ctrl (pn text primary key);\n['+(error.message||error.code)+']'; }
       for(let i=0;i<list.length;i+=500){ const {error}=await sb.from('kt_export_ctrl').upsert(list.slice(i,i+500).map(pn=>({pn})),{onConflict:'pn'}); if(error) return (ru?'Ошибка загрузки.':'업로드 실패.')+'\n['+(error.message||error.code)+']'; }
       await loadExportCtrl(); _pnByRepMap=null; renderPN();
       let cO=0,cT=0; PN_DATA.forEach(r=>(r.compats||[]).forEach(c=>{ if(!normPN(c))return; cT++; if(isExportRestricted(c))cO++; }));
-      return ru?('Экспортконтроль: изъятий '+list.length+', ограничено '+cO+'/'+cT+'.'):('수출제한 갱신: 면제(비해당) '+list.length+'개, 호환품번 O '+cO+'/'+cT+'개.');
+      return ru?('Экспортконтроль: изъятий '+list.length+' (по обновлению '+byRenew+', по прошлой оценке '+byPast+'), ограничено '+cO+'/'+cT+'.')
+               :('수출제한 갱신: 면제(비해당) '+list.length+'개 (갱신 결과 '+byRenew+'개 + 유효기간 남은 지난 판정 '+byPast+'개), 호환품번 O '+cO+'/'+cT+'개.');
     }
   }
 
