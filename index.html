@@ -4931,6 +4931,7 @@ function startRealtime(){
 function stopRealtime(){ if(_rtChannel){ try{ sb.removeChannel(_rtChannel); }catch(e){} _rtChannel=null; } }
 async function loadMemberManagementTab(){
   if(!currentUser) return;
+  clearMemberList();   // await 전에 동기로 비운다 — 조회가 끝나기 전까지 빈 화면을 보인다
   await refreshCurrentUser();
   await loadPendingSignups();
   renderPendingSignups();
@@ -5032,6 +5033,16 @@ async function updateMemberGrade(buyerCompany, supplierCompany, grade){
     memberGradeByCompany[buyer]=codeToGrade(code);
   }
 }
+// 회원목록을 화면·메모리에서 비운다.
+// 로그아웃해도 companyMembers 와 그려 둔 표가 그대로 남아 있어서, 다른 계정으로 다시
+// 로그인해 회원관리를 열면 새 데이터가 오기 전까지 앞 계정(예: MASTER 전체 목록)이
+// 잠깐 그대로 보였다. 로그아웃할 때와 탭을 열 때 먼저 부른다.
+function clearMemberList(){
+  companyMembers=[];
+  const tb=document.getElementById('adminSignupsList');     if(tb) tb.innerHTML='';
+  const cl=document.getElementById('adminSignupsCardList'); if(cl) cl.innerHTML='';
+  const em=document.getElementById('adminSignupsEmpty');    if(em) em.style.display='none';
+}
 function renderPendingSignups(){
   const t=T[lang];
   const addBtn=document.getElementById('addMemberBtn'); if(addBtn) addBtn.style.display = canAddMembersNow() ? '' : 'none';
@@ -5041,6 +5052,8 @@ function renderPendingSignups(){
   const emptyEl=document.getElementById('adminSignupsEmpty');
   if(!companyMembers.length){
     tbody.innerHTML='';
+    const cardList0=document.getElementById('adminSignupsCardList');
+    if(cardList0) cardList0.innerHTML='';   // 모바일 카드도 같이 비운다(안 비우면 옛 목록이 남는다)
     emptyEl.textContent=t.signupEmpty;
     emptyEl.style.display='block';
     return;
@@ -9612,6 +9625,7 @@ function doLogout(){
   currentUser=null;
   stopLive();
   stopRealtime();
+  clearMemberList();   // 앞 계정의 회원목록을 화면·메모리에서 지운다
   sessionStorage.removeItem(AUTH_SESSION_KEY);
   document.getElementById('appRoot').style.display='none';
   document.getElementById('authOverlay').style.display='flex';
