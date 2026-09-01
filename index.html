@@ -5491,60 +5491,6 @@ function handleEngNameUpload(event){
   };
   reader.readAsArrayBuffer(file);
 }
-// ── 전략물자 업로드(수출제한: 호환품번 개별 품번 기준) ──
-// '전략물자 통합관리대장' 양식: 품번 열 + '갱신 결과' 열. 갱신결과가 정확히 '비해당'인 품번만
-// 면제(빈칸)이고, 그 외(비해당(만료)·대장에 없는 품번 포함)는 수출제한 O.
-// 면제(비해당) 품번을 kt_export_ctrl(pn) 에 통째로 갱신한다.
-function handleStrategicUpload(event){
-  if(!userRole(currentUser).isMaster){ event.target.value=''; return; }
-  const file=event.target.files[0]; if(!file){ event.target.value=''; return; }
-  const ru=lang==='ru';
-  const reader=new FileReader();
-  reader.onload=async function(e){
-    try{
-      const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
-      const arr=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:''});
-      // 헤더 행 탐색: '품번' 과 '갱신…결과' 열을 가진 행
-      let pnCol=-1,resCol=-1,hdr=-1;
-      for(let r=0;r<Math.min(arr.length,15);r++){
-        const row=arr[r]||[]; let pc=-1,rc=-1;
-        row.forEach((v,c)=>{ const s=String(v==null?'':v).replace(/\s+/g,'');
-          if(s==='품번'&&pc<0) pc=c;
-          if(s.indexOf('갱신')>=0&&s.indexOf('결과')>=0&&rc<0) rc=c; });
-        if(pc>=0&&rc>=0){ hdr=r; pnCol=pc; resCol=rc; break; }
-      }
-      if(hdr<0){ alert(ru?'Столбцы «품번/갱신 결과» не найдены.':'양식에서 품번/갱신결과 열을 찾지 못했습니다.'); event.target.value=''; return; }
-      // 면제(비해당) 품번 집합(정규화). 갱신결과가 정확히 '비해당'인 품번만 면제.
-      const exempt=new Set(); let seen=0;
-      for(let r=hdr+1;r<arr.length;r++){
-        const row=arr[r]||[];
-        const raw=String(row[pnCol]==null?'':row[pnCol]).trim(); if(!raw) continue; seen++;
-        const pn=normPN(raw);
-        const res=String(row[resCol]==null?'':row[resCol]).replace(/\s+/g,' ').trim();
-        if(res==='비해당') exempt.add(pn);                // 비해당 → 면제(빈칸)
-        else exempt.delete(pn);                           // 그 외 → 수출제한 O (같은 품번 여러 행이면 마지막이 비해당일 때만 면제)
-      }
-      if(!seen){ alert(ru?'Данных нет.':'데이터를 찾지 못했습니다.'); event.target.value=''; return; }
-      const list=[...exempt];
-      // 테이블 전체 갱신: 싹 비우고 면제(비해당) 품번만 다시 넣는다.
-      { const { error }=await sb.from('kt_export_ctrl').delete().neq('pn','');
-        if(error){ alert((ru?'Ошибка. Нужна таблица kt_export_ctrl.':'업로드 실패 — kt_export_ctrl 테이블이 필요합니다.')
-          +'\nSQL: create table if not exists kt_export_ctrl (pn text primary key);\n['+(error.message||error.code)+']'); event.target.value=''; return; } }
-      for(let i=0;i<list.length;i+=500){
-        const { error }=await sb.from('kt_export_ctrl').upsert(list.slice(i,i+500).map(pn=>({pn})),{onConflict:'pn'});
-        if(error){ alert((ru?'Ошибка загрузки.':'업로드 실패.')+'\n['+(error.message||error.code)+']'); event.target.value=''; return; }
-      }
-      await loadExportCtrl();
-      _pnByRepMap=null; rerenderActiveTab();
-      // 호환품번 관점 반영 건수(면제=빈칸, 나머지=O)
-      let cO=0,cT=0; PN_DATA.forEach(r=>(r.compats||[]).forEach(c=>{ if(!normPN(c))return; cT++; if(isExportRestricted(c)) cO++; }));
-      alert(ru?('Экспортконтроль обновлён: изъятий(«비해당») '+list.length+'. Ограничено '+cO+' из '+cT+' замен.')
-              :('수출제한 갱신: 면제(비해당) 품번 '+list.length+'개. 호환품번 '+cT+'개 중 O '+cO+'개 / 빈칸 '+(cT-cO)+'개.'));
-    }catch(err){ console.error(err); alert(ru?'Ошибка загрузки.':'업로드에 실패했습니다.'); }
-    event.target.value='';
-  };
-  reader.readAsArrayBuffer(file);
-}
 // 영문명 로드 후 현재 보고 있는 탭만 다시 그린다.
 function rerenderActiveTab(){
   const A=id=>{ const e=document.getElementById(id); return e && e.classList.contains('active'); };
