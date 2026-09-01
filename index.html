@@ -1674,6 +1674,8 @@ function switchTab(tab){
   if(tab==='price'){
     // 크롬(계산식/공급가 서브탭·파라미터 바 등)은 역할만으로 정해지므로 즉시 정리한다.
     // 데이터 로드를 기다렸다 하면 그 사이 MASTER용 계산식 화면이 잠깐 비쳐 보인다.
+    // 표에 그려 둔 값(원가·공급가)도 같은 이유로 읽기 전에 비운다. 둘 다 await 전 동기 실행.
+    clearUserScopedViews();
     applyPriceTabChrome();
     Promise.all([loadPriceSettings(), loadPriceCalc(), loadPrices(), loadCompanyPrices()]).then(async()=>{ if(priceMode()==='master') await autoUpdateRatesIfNewMonth(); fillParamInputs(); applyPriceTabChrome(); renderPriceActive(); });
   }
@@ -5037,6 +5039,26 @@ async function updateMemberGrade(buyerCompany, supplierCompany, grade){
 // 로그아웃해도 companyMembers 와 그려 둔 표가 그대로 남아 있어서, 다른 계정으로 다시
 // 로그인해 회원관리를 열면 새 데이터가 오기 전까지 앞 계정(예: MASTER 전체 목록)이
 // 잠깐 그대로 보였다. 로그아웃할 때와 탭을 열 때 먼저 부른다.
+// 로그인한 사람에 따라 달라지는 화면을 한 번에 비운다.
+// 로그아웃해도 그려 둔 표가 DOM 에 그대로 남아 있어서, 다른 계정으로 다시 로그인해
+// 그 탭을 열면 새 데이터가 오기 전까지 앞 계정 화면(예: MASTER 의 원가·공급가)이
+// 잠깐 그대로 보였다. 가격은 특히 노출되면 안 되는 값이라 로그아웃 시점에 지운다.
+function clearUserScopedViews(){
+  const html=(...ids)=>ids.forEach(id=>{ const e=document.getElementById(id); if(e) e.innerHTML=''; });
+  // 가격정보 — 계산식·공급가 표와 모바일 카드, 열 정의, 안내 문구
+  priceCalcData=[]; priceData={};
+  companyPriceData={}; supplierPriceData={}; companySupplyByRep={}; supplierSupplyByRep={};
+  html('priceCalcThead','priceCalcTbody','priceSupplyThead','priceSupplyTbody',
+       'pricecalc-hdr-col','pricecalc-body-col','pricesupply-hdr-col','pricesupply-body-col','priceCardList');
+  const pb=document.getElementById('priceCountBadge');  if(pb) pb.innerHTML='';
+  const pl=document.getElementById('priceLastUpdated'); if(pl) pl.textContent='';
+  const pn0=document.getElementById('priceNoResult');   if(pn0) pn0.style.display='none';
+  const ps=document.getElementById('priceSearchInput'); if(ps) ps.value='';
+  // 주문·주문관리·재고·출고 — 같은 이유로 앞 계정 것이 남지 않게 한다
+  html('orderTbody','orderCardList','myOrdersTbody','myOrdersCardList',
+       'adminOrderTbody','adminOrderCardList','adminMyOrdersTbody','adminMyOrderCardList',
+       'inventoryTbody','inventoryCardList','shipmentsTbody','shipmentsCardList');
+}
 // 구매처·구매처담당자 열은 MASTER 에게만 보인다.
 // 표를 그릴 때만 정하면, 탭을 여는 순간부터 조회가 끝날 때까지 머리글이 잠깐 보인다.
 // 그래서 탭을 여는 시점(clearMemberList)에서도 동기로 먼저 맞춘다.
@@ -9652,7 +9674,8 @@ function doLogout(){
   currentUser=null;
   stopLive();
   stopRealtime();
-  clearMemberList();   // 앞 계정의 회원목록을 화면·메모리에서 지운다
+  clearMemberList();        // 앞 계정의 회원목록을 화면·메모리에서 지운다
+  clearUserScopedViews();   // 가격·주문·재고·출고도 함께 (특히 원가가 남으면 안 된다)
   sessionStorage.removeItem(AUTH_SESSION_KEY);
   document.getElementById('appRoot').style.display='none';
   document.getElementById('authOverlay').style.display='flex';
