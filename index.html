@@ -875,7 +875,7 @@ input[type="text"]::placeholder{color:var(--muted)}
       <div class="search-bar">
         <div class="search-wrap">
           <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-          <input type="text" id="priceSearchInput" placeholder="품명, 대표품번으로 검색…" oninput="renderPriceActive()">
+          <input type="text" id="priceSearchInput" placeholder="품명·규격·영문품명·대표/호환/최종품번으로 검색…" oninput="renderPriceActive()">
         </div>
         <div class="count-badge" id="priceCountBadge"></div>
         <button class="dl-btn" id="shipQtyUploadWrap" onclick="document.getElementById('shipQtyFileInput').click()" style="background:var(--surface2);border-color:var(--border);color:var(--text)">
@@ -5352,6 +5352,17 @@ function searchRow(rep, kw, fields){
     if(info.name_ko && String(info.name_ko).toLowerCase().includes(kw)) return true;
     if(info.name_ru && String(info.name_ru).toLowerCase().includes(kw)) return true;
     if(Array.isArray(info.compats) && info.compats.some(c=>String(c||'').toLowerCase().includes(kw))) return true;
+    // 호환품번 단위 품명·규격(kt_pn_specs)도 검색 대상에 넣는다.
+    // 분할 보기에서 화면에 실제로 보이는 값이라, 그 말로 찾을 수 있어야 한다.
+    if(Array.isArray(info.compats) && typeof pnSpecOf==='function'){
+      for(const c of info.compats){
+        const cs=pnSpecOf(c);
+        if(cs){
+          if(cs.name && String(cs.name).toLowerCase().includes(kw)) return true;
+          if(cs.spec && String(cs.spec).toLowerCase().includes(kw)) return true;
+        }
+      }
+    }
   }
   const en=engNameText(r);
   if(en && en.toLowerCase().includes(kw)) return true;
@@ -7266,7 +7277,27 @@ async function addPNItem(){
   if(rep==null) return;
   rep=String(rep).trim().toUpperCase();
   if(!rep) return;
-  if(PN_DATA.some(p=>p.rep===rep)){ alert('이미 있는 품번입니다: '+rep); return; }
+  // 이미 있는 대표품번이면 막지 않고, 그 대표품번에 호환품번을 한 줄 더 붙인다.
+  // 대표품번은 kt_pn_overrides 의 키라서 같은 값으로 품목을 둘 만들 수 없다(둘째가 첫째를 덮어써 사라진다).
+  // 품번조회는 호환품번마다 한 줄이므로, 같은 대표품번에 줄을 늘리는 올바른 방법이 호환품번 추가다.
+  const cur=PN_DATA.find(p=>p.rep===rep);
+  if(cur){
+    let pn=prompt('이미 등록된 대표품번입니다: '+rep+'\n\n이 대표품번에 추가할 호환품번을 입력하세요.\n같은 대표품번 아래 새 줄로 들어갑니다.');
+    if(pn==null) return;
+    pn=String(pn).trim().toUpperCase();
+    if(!pn) return;
+    const cs=(cur.compats||[]).slice();
+    if(cs.some(c=>normPN(c)===normPN(pn))){ alert('이 대표품번에 이미 있는 호환품번입니다: '+pn); return; }
+    cs.push(pn);
+    const { error } = await sb.from('kt_pn_overrides').upsert({ rep, compats:cs },{onConflict:'rep'});
+    if(error){ alert('저장 실패\n['+(error.message||error.code)+']'); return; }
+    cur.compats=cs;
+    _pnLookupMap=null; _pnByRepMap=null; _nameRuByRep=null;
+    await recordPNHistory(rep, 'compat', '', pn);
+    const inp2=document.getElementById('pnInput'); if(inp2) inp2.value=pn;   // 새로 만든 줄이 바로 보이게
+    renderPN();
+    return;
+  }
   // 최종품번(final)은 대표품번을 자동으로 따라가지 않는다 — 빈 값으로 두고 직접 입력.
   const row={ rep, name_ko:'', name_ru:'', spec:'', final:'', compats:[] };
   PN_DATA.unshift({ ...row });        // 목록 맨 위에 추가(바로 보이게)
@@ -7732,6 +7763,49 @@ function buildSupplyByRep(){
   });
   return map;
 }
+// 공급가를 호환품번 단위로 본다.
+// buildSupplyByRep() 은 대표품번으로 묶어 '가장 높은 공급가' 하나만 채택하는데,
+// 그러면 같은 대표품번에 묶인 호환품번이 전부 같은 값으로 보인다.
+// 여기서는 묶지 않고 계산식 행(=호환품번) 하나를 그대로 한 줄로 만든다.
+// 반환 항목 이름은 buildSupplyByRep() 과 같게 맞춰, 화면·엑셀이 그대로 쓰게 한다.
+function buildSupplyByCompat(){
+  const out=[];
+  priceCalcData.forEach(r=>{
+    if(!r.rep) return;
+    const c=calcPriceRow(r);
+    const pn=String(r.compat==null?'':r.compat).trim();
+    out.push({ rep:r.rep, compat:pn, compats:[pn||r.rep],
+      name_ko:r.name_ko, name_ru:r.name_ru, spec:r.spec, final:r.final,
+      krwRu:c.ruSupply, rub:c.ruRub, krwKz:c.kzSupply, usd:c.kzUsd,
+      cost:c.ruCost, costRub:c.costRub, costUsd:c.costUsd,
+      ruGp:c.ruGpVal, kzGp:c.kzGpVal, row_no:r.row_no });
+  });
+  return out;
+}
+// 대표품번 → 호환품번 순 정렬 (같은 품목의 호환품번이 붙어 보이게)
+function sortSupplyRows(list){
+  return list.slice().sort((a,b)=> (a.rep+'|'+a.compat).localeCompare(b.rep+'|'+b.compat));
+}
+// ── 엑셀 내보내기 보조 ──
+// 한 칸에 여러 품번이 들어 있으면 품번 하나당 하나로 쪼갠다.
+// ГТД/010423/3082130/01 처럼 품번 자체에 '/' 가 들어가므로 맨 '/' 는 구분자로 보지 않고,
+// 줄바꿈·쉼표·세미콜론·'|'·탭, 그리고 앞뒤 공백이 있는 ' / ' 만 구분자로 본다.
+// 비어 있으면 빈 값 하나를 돌려줘 행이 사라지지 않게 한다.
+function xlSplitPNs(v){
+  const out=String(v==null?'':v)
+    .split(/\r?\n|\r|[,;|]|\t|\s+\/\s+/)
+    .map(x=>x.trim()).filter(x=>x!=='');
+  return out.length?out:[''];
+}
+// 지정한 [행,열] 셀에 퍼센트 표시 서식을 준다(0-based). 저장된 값은 비율 그대로.
+function xlPercentFmt(ws, cells){
+  cells.forEach(rc=>{
+    try{
+      const cell=ws[XLSX.utils.encode_cell({ r:rc[0], c:rc[1] })];
+      if(cell && cell.t==='n') cell.z='0.0%';
+    }catch(e){}
+  });
+}
 // 주문 탭에서 쓰는 kt_prices(RUB)를 계산식 결과로 동기화
 async function syncKtPricesFromCalc(){
   const map=buildSupplyByRep();
@@ -7958,10 +8032,11 @@ function renderPriceCalc(){
   scheduleSplitTableResync('pricecalc-hdr-col','pricecalc-body-col','priceCalcTbody','fixed');
 }
 function renderPriceSupply(){
-  const map=buildSupplyByRep();
+  // 공급가는 호환품번 기준이다. 대표품번으로 묶어 가장 높은 값 하나만 쓰면
+  // 같은 대표품번의 호환품번이 전부 같은 가격으로 보이므로 묶지 않는다.
   const kwEl=document.getElementById('priceSearchInput');
   const kw=(kwEl?kwEl.value:'').trim().toLowerCase();
-  let list=Object.values(map).sort((a,b)=>a.rep.localeCompare(b.rep));
+  let list=sortSupplyRows(buildSupplyByCompat());
   if(kw) list=list.filter(m=>searchRow(m.rep, kw, [m.name_ko, m.name_ru, m.spec, m.final].concat(m.compats||[])));
   const t=T[lang];
   const isKo=lang==='ko';   // RU 에는 러시아어 규격이 없어 규격 열을 뺀다 (품번조회 탭과 동일)
@@ -8715,7 +8790,10 @@ function mapCalcColumns(arr){
   const nameCands=[];
   labels.forEach((L,c)=>{
     if(!L) return;
-    if(has(L,'품명')) { nameCands.push(c); return; }   // 품명 열은 여러 개일 수 있어(품명/품명2) 모아둔다
+    // 품명 열은 여러 개일 수 있어(품명/품명2) 모아둔다.
+    // 단 '영문품명'은 '품명'을 포함하지만 한/러 품명이 아니다. 후보에서 빼지 않으면
+    // 내용에 한글·키릴이 없어 러시아어 품명 열로 잘못 잡힌다.
+    if(has(L,'품명')) { if(!L.includes('영문') && !L.includes('АНГЛ') && !L.includes('ENG')) nameCands.push(c); return; }
     if(out.spec==null && has(L,'규격')) { out.spec=c; return; }
     if(out.rep==null && has(L,'대표품번')) { out.rep=c; return; }
     if(out.compat==null && has(L,'호환품번')) { out.compat=c; return; }
@@ -8823,20 +8901,22 @@ async function handlePriceCalcUpload(event){
       }
       if(!rows.length){ alert('업로드할 데이터가 없습니다. 계산식 시트 형식을 확인해 주세요.'); event.target.value=''; return; }
       // 품번조회(PN_DATA)에 있는 품목만 반영한다. 행의 대표/호환/최종품번 중 하나라도
-      // 품번조회에서 대표품번을 찾을 수 있어야 한다. 같은 대표품번이 여러 행이면
-      // 가장 높은 가격(원가 KRW 우선, 없으면 공급가)을 채택해 한 행으로 통합한다.
-      const byMaster={};
+      // 품번조회에서 대표품번을 찾을 수 있어야 한다.
+      // 가격은 호환품번 기준이므로 대표품번으로 묶지 않는다. 대표품번이 같아도
+      // 호환품번이 다르면 각자 한 행으로 남긴다(같은 호환품번이 겹칠 때만 비싼 쪽 채택).
+      const byCompat={};
       let dropped=0;
       for(const r of rows){
         const master=findMasterRep(r.rep)||findMasterRep(r.compat)||findMasterRep(r.final);
         if(!master){ dropped++; continue; }
         r.rep=master;
+        const key=normPN(r.compat) || ('@REP:'+normPN(master));
         const price=r.ru_cost!=null?r.ru_cost:(r.ru_supply_krw||0);
-        const prev=byMaster[master];
+        const prev=byCompat[key];
         const prevPrice=prev?(prev.ru_cost!=null?prev.ru_cost:(prev.ru_supply_krw||0)):-Infinity;
-        if(!prev || price>prevPrice) byMaster[master]=r;
+        if(!prev || price>prevPrice) byCompat[key]=r;
       }
-      const rowsFinal=Object.values(byMaster);
+      const rowsFinal=Object.values(byCompat);
       rowsFinal.forEach((r,i)=>{ r.row_no=i+1; });
       if(!rowsFinal.length){ alert('품번조회에 해당하는 품목이 없습니다.\n엑셀의 대표/호환/최종품번이 품번조회에 있는지 확인해 주세요.'); event.target.value=''; return; }
       const msg=`품번조회에 있는 품목 ${rowsFinal.length}건을 가격정보에 반영합니다.`
@@ -8876,33 +8956,55 @@ function downloadPriceActive(){
   if(m==='ru'||m==='kz') return downloadPriceRegion(m);
   if(m==='company') return downloadPriceCompany();
   if(priceView==='calc'){
-    // 열 순서는 화면과 같게 유지한다 (원가 KRW|RUB|USD 3열 포함).
-    // 6행(단위행)의 I열이 USD 인지로 이 양식을 알아본다 → handlePriceCalcUpload 참고.
+    // 열 구성은 화면(계산식 탭)과 똑같이 맞춘다:
+    //   품명 · 규격 · 영문품명 · 대표/호환/최종품번 · 출고
+    //   · 원가(KRW·RUB·USD) · 러시아(공급가 KRW·RUB·USD·GP)
+    // 카자흐스탄 블록은 화면에 없으므로 엑셀에서도 뺀다.
+    // USD 는 둘 다 최초매매기준율(전월말일)로 환산한 값이다:
+    //   원가 USD = 원가 KRW ÷ 기준환율,  공급가 USD = 공급가 KRW ÷ 기준환율 (소수 1자리 올림).
+    // 업로드는 열 위치가 아니라 머리글 글자로 열을 찾으므로(mapCalcColumns) 열이 바뀌어도 읽힌다.
+    const showEng=canViewEngName();
+    const engLabel=(lang==='ru'?'Англ. название':'영문품명');
+    const ins=(row,v)=>{ if(showEng) row.splice(2,0,v); return row; };
     const aoa=[];
-    aoa.push(['','','러시아','','카자흐스탄','','','','','','','','','','']);
-    aoa.push(['','','기준환율(KRW/RUB)',priceSettings.rub_rate,'기준환율(KRW/USD)',priceSettings.usd_rate,'','','','러시아 기준 GP','',priceSettings.ru_gp,'카자흐스탄 기준 GP','',priceSettings.kz_gp]);
-    aoa.push(['','','최초매매기준율(전월말일)','','최초매매기준율(전월말일)','','','','','','','','','','']);
-    aoa.push(['품명','규격','대표품번\n(미변경)','호환품번\n(변경)','최종품번\n(변경, 현시점)','출고\n(18y~)','원가','','','러시아','','','카자흐스탄','','']);
-    aoa.push(['','','','','','','','','','공급가','','GP','공급가','','GP']);
-    aoa.push(['','','','','','','KRW','RUB','USD','KRW','RUB','','KRW','USD','']);
+    aoa.push(ins(['','','러시아','','','','','','','','','',''],''));
+    aoa.push(ins(['','','기준환율(KRW/RUB)',priceSettings.rub_rate,'기준환율(KRW/USD)',priceSettings.usd_rate,'','','','러시아 기준 GP','','',priceSettings.ru_gp],''));
+    aoa.push(ins(['','','최초매매기준율(전월말일)','','최초매매기준율(전월말일)','','','','','','','',''],''));
+    aoa.push(ins(['품명','규격','대표품번\n(미변경)','호환품번\n(변경)','최종품번\n(변경, 현시점)','출고\n(18y~)','원가','','','러시아','','',''],engLabel));
+    aoa.push(ins(['','','','','','','','','','공급가','','','GP'],''));
+    aoa.push(ins(['','','','','','','KRW','RUB','USD','KRW','RUB','USD',''],''));
     priceCalcData.forEach(r=>{
       const c=calcPriceRow(r);
-      aoa.push([r.name_ko||'',r.spec||'',r.rep||'',r.compat||'',r.final||'',r.ship_qty??'',
-        c.ruCost??'',c.costRub??'',c.costUsd??'',
-        c.ruSupply??'',c.ruRub??'',c.ruGpVal!=null?Math.round(c.ruGpVal*1000)/1000:'',
-        c.kzSupply??'',c.kzUsd??'',c.kzGpVal!=null?Math.round(c.kzGpVal*1000)/1000:'']);
+      // 공급가 USD: 원가 USD 와 같은 규칙(공급가 KRW ÷ 최초매매기준율, 소수 1자리 올림)
+      const ruSupUsd=(c.ruSupply!=null&&c.ruSupply>0&&priceSettings.usd_rate>0)?ceil1(c.ruSupply/priceSettings.usd_rate):'';
+      // 호환품번이 한 칸에 여러 개 적혀 있으면 품번 하나당 한 행으로 나눈다.
+      // 나머지 열은 품번조회 분할 보기와 같게 반복해 적는다.
+      xlSplitPNs(r.compat).forEach(pn=>{
+        aoa.push(ins([r.name_ko||'',r.spec||'',r.rep||'',pn,r.final||'',r.ship_qty??'',
+          c.ruCost??'',c.costRub??'',c.costUsd??'',
+          c.ruSupply??'',c.ruRub??'',ruSupUsd,c.ruGpVal!=null?Math.round(c.ruGpVal*1000)/1000:''], engNameText(r.rep)));
+      });
     });
     const ws=XLSX.utils.aoa_to_sheet(aoa);
-    ws['!cols']=[{wch:18},{wch:24},{wch:15},{wch:15},{wch:15},{wch:8},{wch:11},{wch:10},{wch:9},{wch:11},{wch:10},{wch:7},{wch:11},{wch:9},{wch:7}];
+    // GP 는 엑셀에서도 퍼센트로 보이게 한다. 값은 비율(0.4) 그대로 두고 표시 서식만 주므로
+    // 다시 업로드해도, 셀을 계산에 써도 안전하다.
+    const gpRu=12+(showEng?1:0);
+    xlPercentFmt(ws, [[1,gpRu]]);                                 // 러시아 기준 GP
+    for(let i=6;i<aoa.length;i++) xlPercentFmt(ws, [[i,gpRu]]);   // 행별 GP
+    ws['!cols']=ins([{wch:18},{wch:24},{wch:15},{wch:15},{wch:15},{wch:8},{wch:11},{wch:10},{wch:9},{wch:11},{wch:10},{wch:10},{wch:7}],{wch:28});
     const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'계산식');
     XLSX.writeFile(wb,`KITURAMI_가격정보_계산식_${new Date().toISOString().slice(0,10)}.xlsx`);
   }else{
-    const map=buildSupplyByRep();
-    const list=Object.values(map).sort((a,b)=>a.rep.localeCompare(b.rep));
-    const aoa=[['품명','규격','대표품번 (미변경)','호환품번 (변경)','최종품번 (변경, 현시점)','공급가 (RUB)','공급가 (USD)']];
-    list.forEach(m=>aoa.push([m.name_ko||'',m.spec||'',m.rep,m.compats.join(' / '),m.final||'',m.rub??'',m.usd??'']));
+    // 화면과 같게 호환품번 단위로, 영문품명 열을 넣어 내보낸다 (대표품번으로 묶지 않는다)
+    const list=sortSupplyRows(buildSupplyByCompat());
+    const showEng=canViewEngName();
+    const engLabel=(lang==='ru'?'Англ. название':'영문품명');
+    const ins=(row,v)=>{ if(showEng) row.splice(2,0,v); return row; };
+    const aoa=[ins(['품명','규격','대표품번 (미변경)','호환품번 (변경)','최종품번 (변경, 현시점)','공급가 (RUB)','공급가 (USD)'],engLabel)];
+    list.forEach(m=>xlSplitPNs((m.compats||[]).join('\n')).forEach(pn=>
+      aoa.push(ins([m.name_ko||'',m.spec||'',m.rep,pn,m.final||'',m.rub??'',m.usd??''],engNameText(m.rep)))));
     const ws=XLSX.utils.aoa_to_sheet(aoa);
-    ws['!cols']=[{wch:18},{wch:24},{wch:16},{wch:22},{wch:16},{wch:12},{wch:12}];
+    ws['!cols']=ins([{wch:18},{wch:24},{wch:16},{wch:22},{wch:16},{wch:12},{wch:12}],{wch:28});
     const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'공급가');
     XLSX.writeFile(wb,`KITURAMI_가격정보_공급가_${new Date().toISOString().slice(0,10)}.xlsx`);
   }
@@ -8925,7 +9027,7 @@ function refreshPriceTexts(){
   setTxt('i18n-prm-rugp', lang==='ru'?'Базовый GP Россия (%)':'러시아 기준 GP(%)');
   setTxt('i18n-prm-kzgp', lang==='ru'?'Базовый GP Казахстан (%)':'카자흐스탄 기준 GP(%)');
   fillParamInputs(); // 기준월·환율 출처 안내문도 새 언어로 다시 씀
-  const sEl=document.getElementById('priceSearchInput'); if(sEl) sEl.placeholder=lang==='ru'?'Поиск по названию, артикулу…':'품명, 대표품번으로 검색…';
+  const sEl=document.getElementById('priceSearchInput'); if(sEl) sEl.placeholder=lang==='ru'?'Поиск: название, характеристика, артикул…':'품명·규격·영문품명·대표/호환/최종품번으로 검색…';
   if(document.getElementById('pane-price').classList.contains('active')) renderPriceActive();
 }
 
