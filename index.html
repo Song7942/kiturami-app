@@ -5626,7 +5626,10 @@ function ensureVisibleTab(){
   const id=String(first.id||'').replace(/^tab-/,'');
   if(id && typeof switchTab==='function') switchTab(id);
 }
-function applyPermTabVisibility(){
+// skipSwitch: 탭 숨김만 하고 탭 이동은 하지 않는다.
+// 로그인 직후 권한을 아직 다 읽지 못한 상태에서 부를 때 쓴다 — 그 시점의 판단으로
+// 탭을 옮겨 버리면, 권한이 있는 회원인데도 엉뚱한 탭에 떨어질 수 있다.
+function applyPermTabVisibility(skipSwitch){
   if(userRole(currentUser).isMaster) return;   // MASTER 는 항상 전체
   const pobj=_myPermObj();
   if(!pobj){
@@ -5635,7 +5638,7 @@ function applyPermTabVisibility(){
     ['tab-order','tab-parts','tab-adminOrders','tab-inventory','tab-shipments','tab-price','tab-memberManagement']
       .forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display='none'; });
     const pnEl=document.getElementById('tab-pn'); if(pnEl) pnEl.style.display='';
-    ensureVisibleTab();
+    if(!skipSwitch) ensureVisibleTab();
     return;
   }
   // 권한이 설정된 회원은 매핑된 탭을 권한값대로 부여/제한한다(체크=보임, 미체크=숨김).
@@ -5653,7 +5656,7 @@ function applyPermTabVisibility(){
   // 라벨(주문↔부품조회)·열 구성을 현재 권한 기준으로 다시 맞춘다.
   applyOrderTabLabel();
   if(document.getElementById('pane-order') && document.getElementById('pane-order').classList.contains('active')) renderOrderTable();
-  ensureVisibleTab();   // 열려 있던 탭이 권한으로 닫혔으면 보이는 탭으로 옮긴다
+  if(!skipSwitch) ensureVisibleTab();   // 열려 있던 탭이 권한으로 닫혔으면 보이는 탭으로 옮긴다
 }
 
 // 권한 편집 모달 (MASTER 전용)
@@ -9816,6 +9819,10 @@ function enterApp(user){
   // 초기화: KITURAMI(본사)는 구매처가 없어 조건에 걸려버리므로 명시적으로 제외한다.
   const tabReset=document.getElementById('tab-reset');
   if(tabReset) tabReset.style.display = (user.is_admin && !user.supplier_company && !role.isKituramiHQ) ? 'block' : 'none';
+  // 위까지는 '역할' 기준이라 권한을 안 준 회원에게도 탭이 다 열린다.
+  // 권한을 서버에서 읽어오는 동안(느리면 몇 초) 그대로 노출되므로, 지금 가지고 있는
+  // 권한 맵으로 먼저 한 번 닫아 둔다. 탭 이동은 다 읽은 뒤(아래 then)에 한다.
+  applyPermTabVisibility(true);
   loadOrderFeedStamps().then(updateOrderUnreadDots);   // 주문 알림 점 (탭을 열기 전에도 보이게)
   refreshSignupDot();                                  // 회원관리 알림 점 (대기 가입 신청)
   refreshOrderIncompleteMarks();                       // 출고 미완료 세모 (탭을 열기 전에도 보이게)
