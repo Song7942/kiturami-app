@@ -5048,6 +5048,14 @@ function renderPendingSignups(){
   const addBtn=document.getElementById('addMemberBtn'); if(addBtn) addBtn.style.display = canAddMembersNow() ? '' : 'none';
   const isMasterNow=userRole(currentUser).isMaster;
   const permBtnHtml=(idEsc)=> isMasterNow ? `<button class="news-btn-secondary" onclick="openPermModal('${idEsc}')">${lang==='ru'?'Права':'권한'}</button>` : '';
+  // 구매처·구매처담당자 열은 MASTER 에게만 보인다.
+  // 회사 계정에서는 모든 행의 구매처가 자기 회사라 늘 같은 값이고, 담당자는 그 구매처가
+  // KITURAMI 일 때 쓰는 데스크명이라 뜻이 없다. 휴대폰·이메일 열과 같은 방식으로 숨긴다.
+  const showSupCols = isMasterNow;
+  const hideSup = showSupCols ? '' : ';display:none';
+  ['i18n-signup-th-supplier','i18n-signup-th-contact'].forEach(id=>{
+    const th=document.getElementById(id); if(th) th.style.display = showSupCols ? '' : 'none';
+  });
   const tbody=document.getElementById('adminSignupsList');
   const emptyEl=document.getElementById('adminSignupsEmpty');
   if(!companyMembers.length){
@@ -5072,8 +5080,8 @@ function renderPendingSignups(){
     <td style="padding:9px 12px;text-align:center">${gradeSelectHtml(u)}</td>
     <td style="padding:9px 12px">${escapeHtml(u.company)}</td>
     <td style="padding:9px 12px">${escapeHtml(u.id)}</td>
-    <td style="padding:9px 12px">${escapeHtml(u.supplier_company||'-')}</td>
-    <td style="padding:9px 12px">${escapeHtml(u.contact_name||'')}</td>
+    <td style="padding:9px 12px${hideSup}">${escapeHtml(u.supplier_company||'-')}</td>
+    <td style="padding:9px 12px${hideSup}">${escapeHtml(u.contact_name||'')}</td>
     <td style="padding:9px 12px;display:none">${escapeHtml(u.phone||'')}</td>
     <td style="padding:9px 12px;display:none">${escapeHtml(u.email||'')}</td>
     <td style="padding:9px 12px;text-align:center">${statusLabel(u.status)}</td>
@@ -5095,11 +5103,11 @@ function renderPendingSignups(){
         ${statusLabel(u.status)}
       </div>
       <div style="margin-top:6px;font-size:12px;color:var(--muted);display:flex;flex-direction:column;gap:2px">
-        <div>${t.signupThContact}: <span style="color:var(--text)">${escapeHtml(u.contact_name||'-')}</span></div>
+        <div${showSupCols?'':' style="display:none"'}>${t.signupThContact}: <span style="color:var(--text)">${escapeHtml(u.contact_name||'-')}</span></div>
         <div style="display:none">${t.signupThPhone}: <span style="color:var(--text)">${escapeHtml(u.phone||'-')}</span></div>
         <div style="display:none">${t.signupThEmail}: <span style="color:var(--text)">${escapeHtml(u.email||'-')}</span></div>
         <div>ID: <span class="code">${escapeHtml(u.id)}</span></div>
-        <div>${t.signupThSupplier}: <span style="color:var(--text)">${escapeHtml(u.supplier_company||'-')}</span></div>
+        <div${showSupCols?'':' style="display:none"'}>${t.signupThSupplier}: <span style="color:var(--text)">${escapeHtml(u.supplier_company||'-')}</span></div>
         <div style="display:flex;align-items:center;gap:6px">${t.signupThGrade}: ${gradeSelectHtml(u)}</div>
       </div>
       <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
