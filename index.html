@@ -5037,7 +5037,17 @@ async function updateMemberGrade(buyerCompany, supplierCompany, grade){
 // 로그아웃해도 companyMembers 와 그려 둔 표가 그대로 남아 있어서, 다른 계정으로 다시
 // 로그인해 회원관리를 열면 새 데이터가 오기 전까지 앞 계정(예: MASTER 전체 목록)이
 // 잠깐 그대로 보였다. 로그아웃할 때와 탭을 열 때 먼저 부른다.
+// 구매처·구매처담당자 열은 MASTER 에게만 보인다.
+// 표를 그릴 때만 정하면, 탭을 여는 순간부터 조회가 끝날 때까지 머리글이 잠깐 보인다.
+// 그래서 탭을 여는 시점(clearMemberList)에서도 동기로 먼저 맞춘다.
+function applyMemberColVisibility(){
+  const show = userRole(currentUser).isMaster;
+  ['i18n-signup-th-supplier','i18n-signup-th-contact'].forEach(id=>{
+    const th=document.getElementById(id); if(th) th.style.display = show ? '' : 'none';
+  });
+}
 function clearMemberList(){
+  applyMemberColVisibility();
   companyMembers=[];
   const tb=document.getElementById('adminSignupsList');     if(tb) tb.innerHTML='';
   const cl=document.getElementById('adminSignupsCardList'); if(cl) cl.innerHTML='';
@@ -5048,14 +5058,11 @@ function renderPendingSignups(){
   const addBtn=document.getElementById('addMemberBtn'); if(addBtn) addBtn.style.display = canAddMembersNow() ? '' : 'none';
   const isMasterNow=userRole(currentUser).isMaster;
   const permBtnHtml=(idEsc)=> isMasterNow ? `<button class="news-btn-secondary" onclick="openPermModal('${idEsc}')">${lang==='ru'?'Права':'권한'}</button>` : '';
-  // 구매처·구매처담당자 열은 MASTER 에게만 보인다.
   // 회사 계정에서는 모든 행의 구매처가 자기 회사라 늘 같은 값이고, 담당자는 그 구매처가
   // KITURAMI 일 때 쓰는 데스크명이라 뜻이 없다. 휴대폰·이메일 열과 같은 방식으로 숨긴다.
   const showSupCols = isMasterNow;
   const hideSup = showSupCols ? '' : ';display:none';
-  ['i18n-signup-th-supplier','i18n-signup-th-contact'].forEach(id=>{
-    const th=document.getElementById(id); if(th) th.style.display = showSupCols ? '' : 'none';
-  });
+  applyMemberColVisibility();
   const tbody=document.getElementById('adminSignupsList');
   const emptyEl=document.getElementById('adminSignupsEmpty');
   if(!companyMembers.length){
