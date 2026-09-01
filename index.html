@@ -2711,7 +2711,7 @@ function pnBaseCols(isKo, showEng){
   if(showEng) c.push({key:'name_en', cap:130, label:ru?'Англ. название':'영문품명'});
   c.push({key:'rep', cap:110, label:String(t.pnH1||'').replace(' (','<br>('), rigid:true});
   c.push({key:'compat', cap:150, label:String(t.pnH2||'').replace(' (','<br>('), rigid:true});
-  c.push({key:'export_ctrl', cap:70, label:ru?'Эксп.<br>контроль':'수출<br>제한'});
+  if(canViewExportCtrl()) c.push({key:'export_ctrl', cap:70, label:ru?'Эксп.<br>контроль':'수출<br>제한'});
   c.push({key:'final', cap:110, label:String(t.pnH3||'').replace(' (','<br>('), rigid:true});
   c.push({key:'nw', cap:78, label:ru?'N/W ср.(kg)':'N/W<br>평균(kg)'});
   c.push({key:'gw', cap:78, label:ru?'G/W ср.(kg)':'G/W<br>평균(kg)'});
@@ -2967,7 +2967,8 @@ function renderPNChunk(startFrom=0){
     const en=showEng?gv('name_en'):'';
     const spec=isKo?gv('spec'):'';
     const rep=gv('rep'), compat=gv('compat'), final=gv('final');
-    const exp=gv('export_ctrl'), nw=gv('nw'), gw=gv('gw'), cbm=gv('cbm'), dan=gv('note'), appl=gv('applied_models');
+    const exp=canViewExportCtrl()?gv('export_ctrl'):'';   // 모바일 카드의 '수출제한' 배지도 같은 기준
+    const nw=gv('nw'), gw=gv('gw'), cbm=gv('cbm'), dan=gv('note'), appl=gv('applied_models');
     const modelTags=(typeof appliedModelsHtml==='function')?appliedModelsHtml(r.rep):'';
     const expBadge = exp==='O' ? ` <span style="color:#ef4444;font-size:10px;font-weight:700;border:1px solid #ef4444;border-radius:4px;padding:0 4px;vertical-align:middle">${ru?'Эксп.O':'수출제한'}</span>` : '';
     return `<div class="part-card" style="border-bottom:1px solid var(--border);padding:10px 0">
@@ -5600,10 +5601,35 @@ function applyAdminSubtabVisibility(){
 function guardWrite(cat){ if(permWrite(cat)===false){ alert(lang==='ru'?'Нет прав на изменение.':'수정(쓰기) 권한이 없습니다.'); return false; } return true; }
 function guardDelete(cat){ if(permDelete(cat)===false){ alert(lang==='ru'?'Нет прав на удаление.':'삭제 권한이 없습니다.'); return false; } return true; }
 // 보기 권한이 꺼진 탭은 숨긴다(제한만; 역할이 원래 안 주는 탭을 새로 열지는 않는다).
+// 수출제한 열은 MASTER 와 '권한을 부여한 회원'에게만 보인다.
+// 권한을 아직 주지 않은 회원에게는 품번조회만 열어 주므로, 그 화면에서도 뺀다.
+function canViewExportCtrl(){
+  if(userRole(currentUser).isMaster) return true;
+  return !!_myPermObj();
+}
+// 지금 열려 있는 탭이 숨겨졌으면 보이는 첫 탭으로 옮긴다.
+// 로그인 직후 기본 탭은 '주문'이라, 그 탭이 없는 회원은 탭 없이 주문 화면만 보게 된다.
+function ensureVisibleTab(){
+  const cur=document.querySelector('.tab-btn.active');
+  if(cur && getComputedStyle(cur).display!=='none') return;
+  const first=Array.prototype.find.call(document.querySelectorAll('.tab-btn'),
+    b=>getComputedStyle(b).display!=='none');
+  if(!first) return;
+  const id=String(first.id||'').replace(/^tab-/,'');
+  if(id && typeof switchTab==='function') switchTab(id);
+}
 function applyPermTabVisibility(){
   if(userRole(currentUser).isMaster) return;   // MASTER 는 항상 전체
   const pobj=_myPermObj();
-  if(!pobj) return;   // 권한 미설정 회원은 기존 역할 규칙 그대로
+  if(!pobj){
+    // 권한을 아직 부여하지 않은 회원: 품번조회 하나만 연다.
+    // 종전에는 역할 기본값을 그대로 써서 주문·재고관리·가격정보까지 다 보였다.
+    ['tab-order','tab-parts','tab-adminOrders','tab-inventory','tab-shipments','tab-price','tab-memberManagement']
+      .forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display='none'; });
+    const pnEl=document.getElementById('tab-pn'); if(pnEl) pnEl.style.display='';
+    ensureVisibleTab();
+    return;
+  }
   // 권한이 설정된 회원은 매핑된 탭을 권한값대로 부여/제한한다(체크=보임, 미체크=숨김).
   const map={ 'tab-pn':'pn','tab-inventory':'inventory','tab-shipments':'shipments','tab-price':'price','tab-memberManagement':'memberManagement' };
   Object.keys(map).forEach(tabId=>{ const el=document.getElementById(tabId); if(el) el.style.display = pobj[map[tabId]].v ? '' : 'none'; });
@@ -5619,6 +5645,7 @@ function applyPermTabVisibility(){
   // 라벨(주문↔부품조회)·열 구성을 현재 권한 기준으로 다시 맞춘다.
   applyOrderTabLabel();
   if(document.getElementById('pane-order') && document.getElementById('pane-order').classList.contains('active')) renderOrderTable();
+  ensureVisibleTab();   // 열려 있던 탭이 권한으로 닫혔으면 보이는 탭으로 옮긴다
 }
 
 // 권한 편집 모달 (MASTER 전용)
