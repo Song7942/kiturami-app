@@ -2573,19 +2573,52 @@ let _pnFilters={};          // {colKey: '포함문자'}
 let _pnDragKey=null;
 // 수출제한: 호환품번(개별 품번) 기준. '비해당'으로 대장에 오른 품번만 면제(빈칸),
 // 그 외(대장에 아예 없는 품번 포함)는 수출제한 O. 면제 집합을 kt_export_ctrl 에서 로드.
-let _exportExemptPN=new Set();   // '비해당'(면제) 품번 집합
+// 면제는 '기한이 있는 면제'다. 품번마다 면제가 유효한 마지막 날(valid_until)을 같이 들고 있다가
+// 화면에 그릴 때 오늘 날짜와 비교한다. 그래서 파일을 다시 올리지 않아도, 만료일이 지나면
+// 접속한 날 기준으로 자동으로 수출제한 O 로 바뀐다.
+let _exportExempt=new Map();     // normPN -> 'YYYY-MM-DD' (면제 만료일) | '' (기한 정보 없음)
 let _exportLoaded=false;         // 로드 여부(미로드 시엔 O 를 남발하지 않도록 빈칸)
 let _pnSplit=false;              // '호환품번 단위' 분할 보기 토글
 function normPN(x){ return String(x==null?'':x).toUpperCase().replace(/\s+/g,''); }
-function isExportRestricted(pn){ if(!_exportLoaded) return false; const p=normPN(pn); if(!p) return false; return !_exportExemptPN.has(p); }
+// 오늘 날짜(YYYY-MM-DD, 로컬 기준). 1분 캐시 — 창을 오래 켜 둔 채 날짜가 바뀌어도 곧 따라간다.
+let _todayCache={ t:0, s:'' };
+function todayYMD(){
+  const now=Date.now();
+  if(now-_todayCache.t < 60000 && _todayCache.s) return _todayCache.s;
+  const d=new Date(), p=n=>(n<10?'0':'')+n;
+  _todayCache={ t:now, s:d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate()) };
+  return _todayCache.s;
+}
+// 아무 꼴('YYYY-MM-DD' 글자, Date, 엑셀 일련번호)이나 받아 'YYYY-MM-DD' 로. 못 읽으면 ''.
+function toYMD(v){
+  if(v==null||v==='') return '';
+  const p=n=>(n<10?'0':'')+n;
+  if(v instanceof Date) return v.getFullYear()+'-'+p(v.getMonth()+1)+'-'+p(v.getDate());
+  if(typeof v==='number'){
+    const d=(typeof XLSX!=='undefined'&&XLSX.SSF&&XLSX.SSF.parse_date_code)?XLSX.SSF.parse_date_code(v):null;
+    return d?(d.y+'-'+p(d.m||1)+'-'+p(d.d||1)):'';
+  }
+  const m=String(v).trim().match(/^(\d{4})[-.\/](\d{1,2})[-.\/](\d{1,2})/);
+  return m?(m[1]+'-'+p(+m[2])+'-'+p(+m[3])):'';
+}
+function isExportRestricted(pn){
+  if(!_exportLoaded) return false;
+  const p=normPN(pn); if(!p) return false;
+  if(!_exportExempt.has(p)) return true;          // 대장에 면제로 오르지 않은 품번 → O
+  const until=_exportExempt.get(p);
+  if(!until) return false;                        // 만료일 정보가 없는 옛 데이터 → 종전대로 면제
+  return until < todayYMD();                      // 만료일이 지났으면 오늘부터 다시 O
+}
 async function loadExportCtrl(){
-  _exportExemptPN=new Set(); _exportLoaded=false;
+  _exportExempt=new Map(); _exportLoaded=false;
   try{
     const page=1000;
+    let cols='pn,valid_until';                    // valid_until 열이 없는 옛 스키마면 pn 만 읽는다
     for(let from=0;;from+=page){
-      const { data, error }=await sb.from('kt_export_ctrl').select('pn').range(from, from+page-1);
+      let { data, error }=await sb.from('kt_export_ctrl').select(cols).range(from, from+page-1);
+      if(error && cols!=='pn'){ cols='pn'; ({ data, error }=await sb.from('kt_export_ctrl').select(cols).range(from, from+page-1)); }
       if(error) return;   // 테이블 없음/오류 → 미로드(안전하게 빈칸 유지)
-      (data||[]).forEach(r=>{ const p=normPN(r.pn); if(p) _exportExemptPN.add(p); });
+      (data||[]).forEach(r=>{ const p=normPN(r.pn); if(p) _exportExempt.set(p, toYMD(r.valid_until)); });
       if(!data || data.length<page) break;   // 마지막 페이지
     }
     _exportLoaded=true;
@@ -3412,32 +3445,43 @@ async function handleSpecialPNUpload(wb){
         const m=String(v).trim().match(/^(\d{4})[-.\/](\d{1,2})[-.\/](\d{1,2})/);
         return m?new Date(+m[1],+m[2]-1,+m[3]):null;
       };
-      const exempt=new Set(); let byRenew=0, byPast=0, expiredRenew=0;
+      // 면제 품번 → 그 면제가 유효한 마지막 날. 화면에서 오늘과 비교해 O/빈칸을 정한다.
+      const exempt=new Map(); let byRenew=0, byPast=0, expiredRenew=0;
       for(let r=hdr+1;r<a.length;r++){
         const row=a[r]||[];
         const raw=String(row[pnCol]==null?'':row[pnCol]).trim(); if(!raw)continue; const pn=normPN(raw);
         const res=String(row[resCol]==null?'':row[resCol]).replace(/\s+/g,' ').trim();
-        let ok;
+        let ok, until='';
         if(res!==''){
           // 갱신 판정이 '비해당' 이어도 갱신 만료일이 지났으면 더는 면제가 아니다
           const exp=expCol>=0?dueDate(row[expCol]):null;
           ok=(res==='비해당') && !!exp && exp>=today;
-          if(ok) byRenew++; else if(res==='비해당') expiredRenew++;
+          if(ok){ byRenew++; until=toYMD(row[expCol]); } else if(res==='비해당') expiredRenew++;
         }
         else{
           const his=hisCol>=0?String(row[hisCol]==null?'':row[hisCol]).replace(/\s+/g,' ').trim():'';
           const due=dueCol>=0?dueDate(row[dueCol]):null;
           ok=(his==='비해당') && !!due && due>=today;   // 유효기간 안이면 지난 판정을 그대로 인정
-          if(ok) byPast++;
+          if(ok){ byPast++; until=toYMD(row[dueCol]); }
         }
-        if(ok) exempt.add(pn); else exempt.delete(pn);
+        if(ok) exempt.set(pn, until); else exempt.delete(pn);
       }
-      const list=[...exempt];
+      const list=[...exempt.keys()];
       { const {error}=await sb.from('kt_export_ctrl').delete().neq('pn',''); if(error) return (ru?'Ошибка. Нужна таблица kt_export_ctrl.':'실패 — kt_export_ctrl 테이블 필요.')+'\nSQL: create table if not exists kt_export_ctrl (pn text primary key);\n['+(error.message||error.code)+']'; }
-      for(let i=0;i<list.length;i+=500){ const {error}=await sb.from('kt_export_ctrl').upsert(list.slice(i,i+500).map(pn=>({pn})),{onConflict:'pn'}); if(error) return (ru?'Ошибка загрузки.':'업로드 실패.')+'\n['+(error.message||error.code)+']'; }
+      // 만료일까지 같이 저장한다. valid_until 열이 아직 없으면 품번만 저장하고 안내를 붙인다.
+      let withDate=true;
+      for(let i=0;i<list.length;i+=500){
+        const chunk=list.slice(i,i+500);
+        const rows=()=> withDate ? chunk.map(pn=>({pn, valid_until:exempt.get(pn)||null})) : chunk.map(pn=>({pn}));
+        let { error }=await sb.from('kt_export_ctrl').upsert(rows(),{onConflict:'pn'});
+        if(error && withDate){ withDate=false; ({ error }=await sb.from('kt_export_ctrl').upsert(rows(),{onConflict:'pn'})); }
+        if(error) return (ru?'Ошибка загрузки.':'업로드 실패.')+'\n['+(error.message||error.code)+']';
+      }
       await loadExportCtrl(); _pnByRepMap=null; renderPN();
       let cO=0,cT=0; PN_DATA.forEach(r=>(r.compats||[]).forEach(c=>{ if(!normPN(c))return; cT++; if(isExportRestricted(c))cO++; }));
-      const exTail = expiredRenew ? (ru?(' Просрочено: '+expiredRenew+'.'):(' · 비해당이지만 갱신 만료일이 지나 제외: '+expiredRenew+'개')) : '';
+      const exTail = (expiredRenew ? (ru?(' Просрочено: '+expiredRenew+'.'):(' · 비해당이지만 갱신 만료일이 지나 제외: '+expiredRenew+'개')) : '')
+        + (withDate ? '' : (ru?'\n※ Для авто-истечения выполните в Supabase: alter table kt_export_ctrl add column if not exists valid_until date;'
+                              :'\n※ 만료일 자동반영을 쓰려면 Supabase 에서 한 번 실행해 주세요:\nalter table kt_export_ctrl add column if not exists valid_until date;'));
       return ru?('Экспортконтроль: изъятий '+list.length+' (по обновлению '+byRenew+', по прошлой оценке '+byPast+'), ограничено '+cO+'/'+cT+'.'+exTail)
                :('수출제한 갱신: 면제(비해당) '+list.length+'개 (갱신 결과 '+byRenew+'개 + 유효기간 남은 지난 판정 '+byPast+'개), 호환품번 O '+cO+'/'+cT+'개.'+exTail);
     }
