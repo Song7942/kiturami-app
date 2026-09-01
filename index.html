@@ -2582,6 +2582,14 @@ let _exportExempt=new Map();     // normPN -> 'YYYY-MM-DD' (면제 만료일) | 
 let _exportLoaded=false;         // 로드 여부(미로드 시엔 O 를 남발하지 않도록 빈칸)
 let _pnSplit=false;              // '호환품번 단위' 분할 보기 토글
 function normPN(x){ return String(x==null?'':x).toUpperCase().replace(/\s+/g,''); }
+// 엑셀 파일명은 보고 있는 화면 언어를 따른다. 러시아어로 쓰는 사람에게 한글 파일명이
+// 내려가면 무슨 파일인지 알 수 없고, OS 에 따라 이름이 깨져 보이기도 한다.
+// 날짜는 뒤에 붙인다(YYYY-MM-DD). opt.noDate 면 날짜를 빼고 이름만 쓴다.
+function xlsxName(ko, ru, opt){
+  const base=(lang==='ru'?ru:ko);
+  const noDate=!!(opt&&opt.noDate);
+  return 'KITURAMI_'+base+(noDate?'':'_'+new Date().toISOString().slice(0,10))+'.xlsx';
+}
 // 오늘 날짜(YYYY-MM-DD, 로컬 기준). 1분 캐시 — 창을 오래 켜 둔 채 날짜가 바뀌어도 곧 따라간다.
 let _todayCache={ t:0, s:'' };
 function todayYMD(){
@@ -3074,7 +3082,7 @@ function downloadParts(){
   const nh=lang==='ko'?[t.thName,t.thSpec]:[t.thName];
   const ws=XLSX.utils.aoa_to_sheet([[t.thDiag,...nh,t.thRep,...MODEL_DEFS.map(m=>m.group+' '+m.label)],...rows.map(d=>[d.diag,...(lang==='ko'?[d.name_ko,d.spec]:[d.name_ru]),d.rep,...MODEL_DEFS.map(m=>d.models[m.key]?'■':'')])]);
   const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'부품검색');
-  XLSX.writeFile(wb,`KITURAMI_부품검색_${new Date().toISOString().slice(0,10)}.xlsx`);
+  XLSX.writeFile(wb, xlsxName('부품검색','Поиск_деталей'));
 }
 function downloadPN(){
   renderPN();   // 현재 검색·필터·정렬·분할 상태를 _pnFiltered 에 최신화
@@ -3090,7 +3098,7 @@ function downloadPN(){
   const ws=XLSX.utils.aoa_to_sheet(aoa);
   ws['!cols']=meta.map(c=> ({ wch: Math.min(40, Math.max(6, Math.round((c.cap||60)/6.5))) }));
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,lang==='ru'?'Артикулы':'품번조회');
-  XLSX.writeFile(wb,`KITURAMI_품번조회_${new Date().toISOString().slice(0,10)}.xlsx`);
+  XLSX.writeFile(wb, xlsxName('품번조회','Артикулы'));
 }
 // 자체완결형 HTML 다운로드: 데이터가 파일 안에 박히고 외부 통신이 전혀 없음(오프라인·내부 공유용).
 function downloadPNHtml(){
@@ -4052,7 +4060,7 @@ function downloadOrder(){
   ]);
   ws['!merges']=[{s:{r:0,c:0},e:{r:0,c:colCount-1}}];
   const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,lang==='ko'?'주문서':'Заказ');
-  XLSX.writeFile(wb,`KITURAMI_주문서_${new Date().toISOString().slice(0,10)}.xlsx`);
+  XLSX.writeFile(wb, xlsxName('주문서','Бланк_заказа'));
 }
 
 // 반응형
@@ -5158,7 +5166,7 @@ function downloadMembers(){
   const ws=XLSX.utils.aoa_to_sheet(aoa);
   ws['!cols']=[{wch:22},{wch:22},{wch:16},{wch:14},{wch:18},{wch:26},{wch:10}];
   const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,lang==='ru'?'Пользователи':'회원관리');
-  XLSX.writeFile(wb,`KITURAMI_회원관리_${new Date().toISOString().slice(0,10)}.xlsx`);
+  XLSX.writeFile(wb, xlsxName('회원관리','Участники'));
 }
 async function approveSignup(id){
   const t=T[lang];
@@ -6173,7 +6181,7 @@ function downloadAdminMyOrders(){
   const ws=XLSX.utils.aoa_to_sheet([header, ...rows]);
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, lang==='ko'?'내가신청한주문내역':'Мои заявки');
-  XLSX.writeFile(wb, `KITURAMI_내가신청한주문내역_${new Date().toISOString().slice(0,10)}.xlsx`);
+  XLSX.writeFile(wb, xlsxName('내가신청한주문내역','Мои_заявки'));
 }
 function downloadAdminOrders(){
   const t=T[lang];
@@ -6213,7 +6221,7 @@ function downloadAdminOrders(){
   const ws=XLSX.utils.aoa_to_sheet([header, ...rows]);
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, lang==='ko'?'회원및주문관리':'Заказы');
-  XLSX.writeFile(wb, `KITURAMI_주문내역_${new Date().toISOString().slice(0,10)}.xlsx`);
+  XLSX.writeFile(wb, xlsxName('주문내역','История_заказов'));
 }
 function refreshAdminTexts(){
   const t=T[lang];
@@ -6554,7 +6562,7 @@ function downloadMyOrders(){
   const ws=XLSX.utils.aoa_to_sheet([header, ...rows]);
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, lang==='ko'?'내주문내역':'Мои заказы');
-  XLSX.writeFile(wb, `KITURAMI_내주문내역_${new Date().toISOString().slice(0,10)}.xlsx`);
+  XLSX.writeFile(wb, xlsxName('내주문내역','Мои_заказы'));
 }
 function refreshMyOrdersTexts(){
   const t=T[lang];
@@ -7631,7 +7639,7 @@ function downloadInventoryData(){
   const ws=XLSX.utils.aoa_to_sheet([header, ...rows]);
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, lang==='ko'?'재고관리':'Склад');
-  XLSX.writeFile(wb, `KITURAMI_재고관리_${new Date().toISOString().slice(0,10)}.xlsx`);
+  XLSX.writeFile(wb, xlsxName('재고관리','Склад'));
 }
 function downloadShipmentsData(){
   const t=T[lang];
@@ -7648,7 +7656,7 @@ function downloadShipmentsData(){
   const ws=XLSX.utils.aoa_to_sheet([header, ...rows]);
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, lang==='ko'?'출고관리':'Отгрузки');
-  XLSX.writeFile(wb, `KITURAMI_출고관리_${new Date().toISOString().slice(0,10)}.xlsx`);
+  XLSX.writeFile(wb, xlsxName('출고관리','Отгрузки'));
 }
 function downloadInventoryTemplate(){
   const header=['Артикул', 'Количество'];
@@ -7656,7 +7664,7 @@ function downloadInventoryTemplate(){
   const ws=XLSX.utils.aoa_to_sheet([header, ...example]);
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, lang==='ko'?'재고양식':'Шаблон');
-  XLSX.writeFile(wb, `KITURAMI_재고양식.xlsx`);
+  XLSX.writeFile(wb, xlsxName('재고양식','Шаблон_склада',{noDate:true}));
 }
 async function handleInventoryUpload(event){
   const t=T[lang];
@@ -8570,7 +8578,7 @@ function downloadPriceRegion(region){
   const ws=XLSX.utils.aoa_to_sheet(aoa);
   ws['!cols']=[{wch:22},{wch:28},{wch:16},{wch:22},{wch:16},{wch:12},{wch:12},{wch:8}];
   const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'가격정보');
-  XLSX.writeFile(wb,`KITURAMI_가격정보_${isKz?'KAZAK':'RUSSIA'}_${new Date().toISOString().slice(0,10)}.xlsx`);
+  XLSX.writeFile(wb, xlsxName('가격정보_'+(isKz?'KAZAK':'RUSSIA'),'Цены_'+(isKz?'KAZAK':'RUSSIA')));
 }
 function downloadPriceCompany(){
   const list=companyPriceRows();
@@ -8581,7 +8589,7 @@ function downloadPriceCompany(){
   ws['!cols']=[{wch:22},{wch:28},{wch:16},{wch:22},{wch:16},{wch:12},{wch:11},{wch:11},{wch:11},{wch:11}];
   const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'가격정보');
   const co=String(userRole(currentUser).company||'회사').replace(/[\\\/\?\*\[\]:]/g,'_');
-  XLSX.writeFile(wb,`KITURAMI_가격정보_${co}_${new Date().toISOString().slice(0,10)}.xlsx`);
+  XLSX.writeFile(wb, xlsxName('가격정보_'+co,'Цены_'+co));
 }
 
 // ── 인라인 수정 ──
@@ -9112,7 +9120,7 @@ function downloadPriceActive(){
     for(let i=6;i<aoa.length;i++) xlPercentFmt(ws, [[i,gpRu]]);   // 행별 GP
     ws['!cols']=ins([{wch:18},{wch:24},{wch:15},{wch:15},{wch:15},{wch:8},{wch:11},{wch:10},{wch:9},{wch:11},{wch:10},{wch:10},{wch:7}],{wch:28});
     const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'계산식');
-    XLSX.writeFile(wb,`KITURAMI_가격정보_계산식_${new Date().toISOString().slice(0,10)}.xlsx`);
+    XLSX.writeFile(wb, xlsxName('가격정보_계산식','Цены_формула'));
   }else{
     // 화면과 같게 호환품번 단위로, 영문품명 열을 넣어 내보낸다 (대표품번으로 묶지 않는다)
     const list=sortSupplyRows(buildSupplyByCompat());
@@ -9125,7 +9133,7 @@ function downloadPriceActive(){
     const ws=XLSX.utils.aoa_to_sheet(aoa);
     ws['!cols']=ins([{wch:18},{wch:24},{wch:16},{wch:22},{wch:16},{wch:12},{wch:12}],{wch:28});
     const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'공급가');
-    XLSX.writeFile(wb,`KITURAMI_가격정보_공급가_${new Date().toISOString().slice(0,10)}.xlsx`);
+    XLSX.writeFile(wb, xlsxName('가격정보_공급가','Цены_поставки'));
   }
 }
 
