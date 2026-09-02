@@ -3562,20 +3562,23 @@ async function handlePNUpload(event){
       const special=await handleSpecialPNUpload(wb);   // 특수 양식 자동 인식
       if(special){ alert(special); event.target.value=''; return; }
       const aoa=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1, defval:''});
-      const norm=s=>String(s==null?'':s).trim().toLowerCase();
+      // 머리글 비교는 공백을 지우고 소문자로 맞춰서 한다.
+      // '러시아어 품명'과 '러시아어품명'처럼 띄어쓰기만 다른 표기를 모두 받기 위해서다.
+      const nkey=s=>String(s==null?'':s).replace(/\s+/g,'').toLowerCase();
       // 헤더 행 찾기: 한국어/러시아어 양식 모두 지원. 열 순서가 바뀌어도 라벨로 찾는다.
-      const want={ name:['품명','наименование'], spec:['규격'],
-                   ru:['러시아어 품명','러시아어품명'],
-                   en:['영문품명','영문명','англ. название','англ.название'],
+      // 같은 뜻으로 쓰는 이름은 다 받는다 (품명 = 품목명 = 품명(한글), 영문품명 = 영문명 = 제품명(영문)).
+      const want={ name:['품명','품목명','품명(한글)','наименование'], spec:['규격'],
+                   ru:['러시아어 품명','러시아어품명','품명(러문)'],
+                   en:['영문품명','영문명','제품명(영문)','англ. название'],
                    rep:['대표품번 (미변경)','대표품번','осн. артикул (неизм.)','осн. артикул'],
                    compat:['호환품번 (변경)','호환품번','артикул замены'],
                    final:['최종품번 (변경, 현시점)','최종품번','актуальный артикул'] };
       let hdr=-1, col={};
       for(let r=0;r<Math.min(10, aoa.length);r++){
-        const row=(aoa[r]||[]).map(norm);
+        const row=(aoa[r]||[]).map(nkey);
         const c={};
         Object.keys(want).forEach(k=>{
-          const i=row.findIndex(v=>v!=='' && want[k].some(w=>v===w.toLowerCase()));
+          const i=row.findIndex(v=>v!=='' && want[k].some(w=>v===nkey(w)));
           if(i>=0) c[k]=i;
         });
         if(c.rep!=null && c.final!=null){ hdr=r; col=c; break; }
