@@ -3528,15 +3528,16 @@ async function handleSpecialPNUpload(wb){
       for(let i=0;i<payload.length;i+=400){ const {error}=await sb.from('kt_pn_specs').upsert(payload.slice(i,i+400),{onConflict:'pn'}); if(error) return (ru?'Ошибка kt_pn_specs.':'실패 — kt_pn_specs 컬럼 필요(name/spec/nw/gw/cbm/dan).')+'\nSQL: alter table kt_pn_specs add column if not exists name text; alter table kt_pn_specs add column if not exists spec text;\n['+(error.message||error.code)+']'; } }
     // kt_pn_overrides 대표값 (다른 화면 공통)
     const reps=Object.keys(repAgg);
-    const ocols=[]; if(seen.name)ocols.push('name_ko'); if(seen.spec)ocols.push('spec'); if(seen.ru)ocols.push('name_ru'); if(seen.appl)ocols.push('applied_models');
+    // 품명·규격은 호환품번마다 다르므로 대표품번 값으로 올리지 않는다(kt_pn_specs 에만 저장).
+    // 러시아어 품명·영문품명은 품목 하나에 하나뿐이라 대표품번 단위로 저장하고,
+    // 그래서 같은 대표품번을 쓰는 호환품번들에 자동으로 같이 적용된다.
+    const ocols=[]; if(seen.ru)ocols.push('name_ru'); if(seen.appl)ocols.push('applied_models');
     if(ocols.length && reps.length){ const payload=reps.map(rep=>{ const p=PN_DATA.find(x=>x.rep===rep)||{}; const a=repAgg[rep]; const o={rep};
-        if(ocols.includes('name_ko'))o.name_ko=a.name||p.name_ko||'';
-        if(ocols.includes('spec'))o.spec=a.spec||p.spec||'';
         if(ocols.includes('name_ru'))o.name_ru=a.ru||p.name_ru||'';
         if(ocols.includes('applied_models'))o.applied_models=(a.appls.join(', '))||p.applied_models||'';
         return o; });
       for(let i=0;i<payload.length;i+=400){ const {error}=await sb.from('kt_pn_overrides').upsert(payload.slice(i,i+400),{onConflict:'rep'}); if(error) return (ru?'Ошибка загрузки.':'업로드 실패.')+'\n['+(error.message||error.code)+']'; }
-      payload.forEach(o=>{ const p=PN_DATA.find(z=>z.rep===o.rep); if(p){ if('name_ko'in o)p.name_ko=o.name_ko; if('spec'in o)p.spec=o.spec; if('name_ru'in o)p.name_ru=o.name_ru; if('applied_models'in o)p.applied_models=o.applied_models; } }); }
+      payload.forEach(o=>{ const p=PN_DATA.find(z=>z.rep===o.rep); if(p){ if('name_ru'in o)p.name_ru=o.name_ru; if('applied_models'in o)p.applied_models=o.applied_models; } }); }
     // kt_names_en 영문명 (대표품번)
     let enN=0;
     if(seen.en){ const ep=reps.filter(rep=>repAgg[rep].en).map(rep=>({rep, name_en:repAgg[rep].en})); enN=ep.length;
@@ -3564,6 +3565,8 @@ async function handlePNUpload(event){
       const norm=s=>String(s==null?'':s).trim().toLowerCase();
       // 헤더 행 찾기: 한국어/러시아어 양식 모두 지원. 열 순서가 바뀌어도 라벨로 찾는다.
       const want={ name:['품명','наименование'], spec:['규격'],
+                   ru:['러시아어 품명','러시아어품명'],
+                   en:['영문품명','영문명','англ. название','англ.название'],
                    rep:['대표품번 (미변경)','대표품번','осн. артикул (неизм.)','осн. артикул'],
                    compat:['호환품번 (변경)','호환품번','артикул замены'],
                    final:['최종품번 (변경, 현시점)','최종품번','актуальный артикул'] };
@@ -3579,35 +3582,49 @@ async function handlePNUpload(event){
       }
       if(hdr<0){ alert(t.pnUploadFail); return; }
 
-      // 대표품번별로 묶는다 (호환품번이 여러 행으로 나뉘어 있는 양식).
+      // 이 양식은 호환품번마다 한 줄이다. 그래서 값을 두 갈래로 나눠 담는다.
+      //  · 품명·규격 → 그 줄의 호환품번에만 (kt_pn_specs). 같은 대표품번의 다른 호환품번에는 옮기지 않는다.
+      //  · 러시아어 품명·영문품명 → 대표품번 단위. 결과적으로 같은 대표품번의 호환품번 전체에 함께 적용된다.
       const byRep=new Map();
+      const specRows=new Map();   // 호환품번 -> {pn, name, spec}
+      const isKoForm=(lang!=='ru');
       for(let r=hdr+1;r<aoa.length;r++){
         const row=aoa[r]||[];
         const rep=String(row[col.rep]==null?'':row[col.rep]).trim();
         if(!rep) continue;
-        if(!byRep.has(rep)) byRep.set(rep,{ rep, name:'', spec:'', final:'', compats:[] });
+        if(!byRep.has(rep)) byRep.set(rep,{ rep, ru:'', en:'', final:'', compats:[] });
         const o=byRep.get(rep);
         const name=col.name!=null?String(row[col.name]||'').trim():'';
         const spec=col.spec!=null?String(row[col.spec]||'').trim():'';
+        const ruV =col.ru!=null?String(row[col.ru]||'').trim():'';
+        const enV =col.en!=null?String(row[col.en]||'').trim():'';
         const fin =String(row[col.final]||'').trim();
         const cmp =col.compat!=null?String(row[col.compat]||'').trim():'';
-        if(name) o.name=name;
-        if(spec) o.spec=spec;
+        // 러시아어 화면의 양식에는 품명 열이 하나뿐이고 그 값이 러시아어 품명이다.
+        if(isKoForm){ if(ruV) o.ru=ruV; } else { if(name) o.ru=name; }
+        if(enV) o.en=enV;
         if(fin)  o.final=fin;
         if(cmp && !o.compats.includes(cmp)) o.compats.push(cmp);
+        // 품명·규격은 한국어 양식에서만 호환품번 단위로 받는다.
+        if(isKoForm && cmp && (name||spec)){
+          const key=normPN(cmp);
+          const s=specRows.get(key)||{pn:cmp.trim()};
+          if(name) s.name=name;
+          if(spec) s.spec=spec;
+          specRows.set(key,s);
+        }
       }
       const items=[...byRep.values()];
       if(!items.length){ alert(t.pnUploadFail); return; }
 
       const isKo=lang==='ko';
       const now=new Date().toISOString();
+      // 대표품번 단위: 러시아어 품명·최종품번·호환품번 목록. 품명·규격은 여기 담지 않는다.
       const payload=items.map(o=>{
         const base=PN_DATA.find(p=>p.rep===o.rep);
         return {
           rep:o.rep,
-          name_ko: isKo ? (o.name||(base?base.name_ko:'')) : (base?base.name_ko:''),
-          name_ru: isKo ? (base?base.name_ru:'') : (o.name||(base?base.name_ru:'')),
-          spec:    isKo ? (o.spec||(base?base.spec:'')) : (base?base.spec:''),
+          name_ru: o.ru||(base?base.name_ru:''),
           final:   o.final||(base?base.final:o.rep),
           compats: o.compats.length?o.compats:(base?base.compats:[]),
           updated_at: now
@@ -3615,6 +3632,21 @@ async function handlePNUpload(event){
       });
       const { error } = await sb.from('kt_pn_overrides').upsert(payload, { onConflict:'rep' });
       if(error){ console.error(error); alert(t.pnUploadFail+'\n\n['+(error.message||error.code)+']'); return; }
+      // 호환품번 단위: 품명·규격
+      const specPayload=[...specRows.values()].map(s=>({ pn:s.pn, name:(s.name!=null?s.name:null), spec:(s.spec!=null?s.spec:null) }))
+        .filter(s=>s.name!=null||s.spec!=null);
+      for(let i=0;i<specPayload.length;i+=400){
+        const { error:e2 } = await sb.from('kt_pn_specs').upsert(specPayload.slice(i,i+400), { onConflict:'pn' });
+        if(e2){ console.error(e2); alert(t.pnUploadFail+'\n\n['+(e2.message||e2.code)+']'); return; }
+      }
+      // 대표품번 단위: 영문품명
+      const enPayload=items.filter(o=>o.en).map(o=>({ rep:o.rep, name_en:o.en }));
+      for(let i=0;i<enPayload.length;i+=400){
+        const { error:e3 } = await sb.from('kt_names_en').upsert(enPayload.slice(i,i+400), { onConflict:'rep' });
+        if(e3){ console.error(e3); alert(t.pnUploadFail+'\n\n['+(e3.message||e3.code)+']'); return; }
+      }
+      if(enPayload.length && typeof loadEngNames==='function') await loadEngNames();
+      if(specPayload.length && typeof loadPnSpecs==='function') await loadPnSpecs();
 
       payload.forEach(applyPNOverrideRow);
       _pnLookupMap=null; _pnByRepMap=null;
