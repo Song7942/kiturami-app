@@ -1008,7 +1008,7 @@ input[type="text"]::placeholder{color:var(--muted)}
       <label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--muted)"><span id="i18n-psi-avg">보유월 평균</span>
         <input type="number" id="psiAvgN" min="1" max="24" style="width:48px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></label>
       <button class="dl-btn" onclick="renderPSI()"><span id="i18n-psi-apply">적용</span></button>
-      <button class="dl-btn" id="psiUploadBtn" onclick="document.getElementById('psiFileInput').click()" title="선적현황 / 입고현황 / 종합(선적·출고) 양식을 올리면 시트 이름으로 가려 반영합니다" style="display:none;background:var(--accent2);border-color:var(--accent2);color:#fff">
+      <button class="dl-btn" id="psiUploadBtn" onclick="document.getElementById('psiFileInput').click()" title="선적·입고·출고·재고 시트가 든 파일을 올리면 시트 이름으로 가려 반영합니다 (재고 시트는 이월재고용)" style="display:none;background:var(--accent2);border-color:var(--accent2);color:#fff">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
         <span id="i18n-psi-upload">엑셀 업로드</span>
       </button>
@@ -7904,14 +7904,18 @@ function refreshInventoryTexts(){
 //     · 종합.xlsx 출고 : 월별 출고 (열 머리글 2201…2712)                → data[ym].o
 //   선적(월) = s 가 있으면 s, 없으면 g  (선적 시트가 원본, 종합은 빈 달을 메우는 용도)
 //   입고(월) = n  — 입고는 입고 시트만 본다.
-//   재고 = 기산월부터 그 달까지 (입고 합 − 출고 합).  보유월 = 재고 ÷ 최근 N개월 평균 출고.
+//     · 재고 시트     : 월말 재고(잔액) — 이월재고를 뽑는 데만 쓴다              → data[ym].k
+//   이월재고 = 기산월 직전 달의 k. 재고 시트를 올려 두면 그 값에서 재고가 쌓인다.
+//   재고 = 이월재고 + 기산월부터 그 달까지 (입고 합 − 출고 합).  보유월 = 재고 ÷ 최근 N개월 평균 출고.
 // ══════════════════════════════════════════
 
 // 출고·입고 시트의 월 열은 2201 부터다. 2021년 값은 연도 열('21y')로만 알 수 있어서,
 // 그 값을 2021년 12월(2112)로 넣어 재고 누적에 포함시킨다(출고 14,176 / 입고 30,473).
 // 18y~20y 는 값이 없어 넣지 않는다.
 const PSI_YEAR_COL={ '21y':'2112' };
-const PSI_BASE_DEFAULT='2101';   // 재고 기산 기본 연월(입고 2102~, 출고 21y+2201~)
+// 재고 기산 기본 연월. 21년은 월별 입고 자료가 없어(연도 합계뿐) 21년말 재고를 이월재고로 받고
+// 22-01 부터 월별로 쌓는다. 이렇게 하면 통합문서 재고 시트와 달마다 정확히 일치한다.
+const PSI_BASE_DEFAULT='2201';
 let psiData={};        // normPN -> { rep, data:{ '2409':{s,g,n,o}, … } }
 let _psiFiltered=[];
 
@@ -7945,6 +7949,12 @@ function psiYmOf(v){
   }
   const m=String(v).trim().match(/^(\d{4})[-.\/](\d{1,2})/);
   return m?(String((+m[1])%100).padStart(2,'0')+p(+m[2])):'';
+}
+// 이월재고: 기산월 직전 달의 재고(재고 시트에서 올린 k). 없으면 0에서 시작한다.
+function psiOpenOf(d,base){
+  if(!d) return 0;
+  const o=d[psiYmAdd(base,-1)];
+  return (o && o.k!=null && o.k!=='') ? (Number(o.k)||0) : 0;
 }
 // 입고: 입고 시트의 월별 값(n)만 본다.
 function psiInOf(d,ym){ if(!d) return 0; const o=d[ym]; return o?(Number(o.n)||0):0; }
@@ -7986,7 +7996,8 @@ function psiFillCfgInputs(c){
 function psiRowVals(d,c,yms){
   const want={}; yms.forEach(y=>want[y]=1);
   const last=yms[yms.length-1];
-  let stock=0; const out={};
+  let stock=psiOpenOf(d,c.base); const out={};
+  out._open=stock;
   const start=(c.base<=last)?c.base:last;
   for(let k=start;k<=last;k=psiYmAdd(k,1)){
     stock += psiInOf(d,k)-psiOutOf(d,k);
@@ -8034,6 +8045,7 @@ function renderPSI(){
   if(cg){
     const w=['<col style="width:96px">','<col style="width:96px">','<col style="width:38px">','<col style="width:110px">'];
     if(isKo) w.push('<col style="width:110px">');
+    w.push('<col style="width:64px">');   // 이월재고
     yms.forEach(()=>{ w.push('<col style="width:56px">','<col style="width:56px">','<col style="width:56px">','<col style="width:60px">','<col style="width:52px">'); });
     cg.innerHTML=w.join('');
   }
@@ -8048,12 +8060,15 @@ function renderPSI(){
   const grp=yms.map(y=>'<th colspan="5" style="'+thS+bl+'">'+psiYmLabel(y)+'</th>').join('');
   const sub=yms.map(()=>[['선적','Отгрузка'],['입고','Приход'],['출고','Расход'],['재고','Остаток'],['보유월','Мес.']]
       .map((h,i)=>'<th style="'+thS+(i===0?bl:'')+'">'+L(h[0],h[1])+'</th>').join('')).join('');
+  // 이월재고: 기산월 직전 달의 재고. 재고 시트를 올려 두면 그 값에서 재고가 쌓인다.
+  const openTitle=L('이월재고('+psiYmLabel(psiYmAdd(c.base,-1))+')','Нач. остаток('+psiYmLabel(psiYmAdd(c.base,-1))+')');
   let head=['<tr>',
     '<th rowspan="2" style="'+thS+'">'+L('대표품번','Осн. артикул')+'</th>',
     '<th rowspan="2" style="'+thS+'">'+L('호환품번','Артикул замены')+'</th>',
     '<th rowspan="2" style="'+thS+'">'+L('단종','Снято')+'</th>',
     '<th rowspan="2" style="'+thS+'">'+L('품명','Наименование')+'</th>',
     isKo?('<th rowspan="2" style="'+thS+'">규격</th>'):'',
+    '<th rowspan="2" style="'+thS+bl+'" title="'+openTitle+'">'+L('이월<br>재고','Нач.<br>ост.')+'</th>',
     grp,'</tr><tr>',sub,'</tr>'].join('');
 
   if(!rows.length){
@@ -8070,6 +8085,7 @@ function renderPSI(){
   const numS=tdS+';text-align:right;white-space:nowrap';
   // 합계: 선적·입고·출고·재고는 더하고, 보유월은 그 달 값들의 평균(값이 있는 품번만)
   const tot={}; yms.forEach(y=>tot[y]={sh:0,i:0,o:0,st:0,moSum:0,moN:0});
+  let totOpen=0;
   // 같은 호환품번이 두 대표품번 아래에 걸쳐 두 줄로 나오는 경우가 있다.
   // 줄은 그대로 보여 주되, 합계는 호환품번당 한 번만 센다.
   const counted={};
@@ -8079,6 +8095,8 @@ function renderPSI(){
     const pn=normBadgePN(r._compat);
     const rec=psiData[key];
     const v=psiRowVals(rec?rec.data:null, c, yms);
+    const op=v._open||0;
+    if(!dup) totOpen+=op;
     const cells=yms.map((y,i)=>{
       const x=v[y]||{sh:0,i:0,o:0,st:0,mo:null};
       if(!dup){ const t=tot[y]; t.sh+=x.sh; t.i+=x.i; t.o+=x.o; t.st+=x.st;
@@ -8096,6 +8114,7 @@ function renderPSI(){
       + '<td style="'+tdS+';text-align:center;color:var(--muted)">'+escapeHtml(pnColText('note',r))+'</td>'
       + '<td style="'+tdS+';word-break:break-all;font-size:10.5px;line-height:1.25">'+escapeHtml(pnColText('name',r))+'</td>'
       + (isKo?('<td style="'+tdS+';color:var(--muted);word-break:break-all;font-size:10px;line-height:1.25">'+escapeHtml(pnColText('spec',r))+'</td>'):'')
+      + '<td style="'+numS+bl+';color:var(--muted)">'+n(op)+'</td>'
       + cells + '</tr>';
   }).join('');
 
@@ -8113,6 +8132,7 @@ function renderPSI(){
   head += '<tr>'
     + '<th colspan="'+(isKo?5:4)+'" style="'+sumS+';text-align:right">'
     + L('합계 '+Object.keys(counted).length+'건 · 보유월은 평균','Итого '+Object.keys(counted).length+' · Мес. — среднее')+'</th>'
+    + '<th style="'+sumS+';text-align:right'+bl+';color:var(--muted)">'+n(totOpen)+'</th>'
     + sumCells + '</tr>';
 
   if(thead) thead.innerHTML=head;
@@ -8129,6 +8149,7 @@ function downloadPSI(){
   const h1=[(lang==='ru'?'Осн. артикул':'대표품번'),(lang==='ru'?'Артикул замены':'호환품번'),(lang==='ru'?'Снято':'단종'),(lang==='ru'?'Наименование':'품명')];
   if(isKo) h1.push('규격');
   const g1=h1.map(()=>''); const g2=h1.slice();
+  g1.push(''); g2.push((lang==='ru'?'Нач. остаток':'이월재고')+'('+psiYmLabel(psiYmAdd(c.base,-1))+')');
   yms.forEach(y=>{ g1.push(psiYmLabel(y),'','','',''); g2.push(lang==='ru'?'Отгрузка':'선적', lang==='ru'?'Приход':'입고', lang==='ru'?'Расход':'출고', lang==='ru'?'Остаток':'재고', lang==='ru'?'Мес.':'보유월'); });
   const aoa=[g1,g2];
   (_psiFiltered||[]).forEach(r=>{
@@ -8136,11 +8157,12 @@ function downloadPSI(){
     const v=psiRowVals(rec?rec.data:null, c, yms);
     const row=[r.rep||'', normBadgePN(r._compat), pnColText('note',r), pnColText('name',r)];
     if(isKo) row.push(pnColText('spec',r));
+    row.push(v._open||0);
     yms.forEach(y=>{ const x=v[y]||{}; row.push(x.sh??'', x.i??'', x.o??'', x.st??'', (x.mo==null?'':x.mo)); });
     aoa.push(row);
   });
   const ws=XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols']=h1.map(()=>({wch:16})).concat(yms.map(()=>[{wch:9},{wch:9},{wch:9},{wch:10},{wch:8}]).reduce((a,b)=>a.concat(b),[]));
+  ws['!cols']=h1.map(()=>({wch:16})).concat([{wch:12}]).concat(yms.map(()=>[{wch:9},{wch:9},{wch:9},{wch:10},{wch:8}]).reduce((a,b)=>a.concat(b),[]));
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'PSI');
   XLSX.writeFile(wb, xlsxName('PSI','PSI'));
 }
@@ -8176,6 +8198,41 @@ function psiParseGrid(aoa, pnLabels, repLabels){
           const q=Number(String(rw[mc[0]]==null?'':rw[mc[0]]).replace(/,/g,''))||0;
           if(q) o.m[mc[1]]=(o.m[mc[1]]||0)+q;
         });
+      }
+      return out;
+    }
+  }
+  return null;
+}
+// 재고 시트 → { pn: {rep, m:{ym:재고}} }
+//   값이 흐름(수량)이 아니라 잔액이라 더하지 않고 덮어쓴다.
+//   연말 열(18y…26y)은 그 해 12월 재고로 읽고, 뒤에 오는 월 열이 있으면 월 열이 이긴다.
+function psiParseStockGrid(aoa, pnLabels, repLabels){
+  const nk=s=>String(s==null?'':s).replace(/\s+/g,'').toLowerCase();
+  for(let r=0;r<Math.min(aoa.length,12);r++){
+    const row=aoa[r]||[]; let pnCol=-1, repCol=-1; const mons=[];
+    row.forEach((v,ci)=>{ const s=nk(v);
+      if(pnCol<0 && pnLabels.some(w=>s===nk(w))) pnCol=ci;
+      if(repCol<0 && repLabels.some(w=>s===nk(w))) repCol=ci;
+      const mm=s.match(/^(\d{4})(?:[_\-].*)?$/);
+      if(mm){ mons.push([ci,mm[1]]); return; }
+      const yy=s.match(/^(\d\d)y$/); if(yy) mons.push([ci,yy[1]+'12']);
+    });
+    if(pnCol>=0 && mons.length>=6){
+      const out={};
+      for(let i=r+1;i<aoa.length;i++){
+        const rw=aoa[i]||[];
+        const pn=normPN(rw[pnCol]); if(!pn) continue;
+        const o=out[pn]||(out[pn]={rep:'',m:{}});
+        if(repCol>=0 && !o.rep){ const rp=String(rw[repCol]==null?'':rw[repCol]).trim(); if(rp) o.rep=rp; }
+        mons.forEach(mc=>{
+          const t=String(rw[mc[0]]==null?'':rw[mc[0]]).replace(/,/g,'').trim();
+          if(t==='') return;
+          const q=Number(t); if(isNaN(q)) return;
+          o.m[mc[1]]=q;
+        });
+        // 0 은 저장하지 않는다(값이 없을 때도 0 으로 읽히므로 결과는 같다)
+        Object.keys(o.m).forEach(k=>{ if(!o.m[k]) delete o.m[k]; });
       }
       return out;
     }
@@ -8218,13 +8275,13 @@ function handlePSIUpload(event){
   reader.onload=async function(e){
     try{
       const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
-      const upd={};   // pn -> {rep, s:{}, g:{}, n:{}, o:{}}
+      const upd={};   // pn -> {rep, s:{}, g:{}, n:{}, o:{}, k:{}}
       const put=(key,parsed)=>{
         if(!parsed) return 0;
         let n=0;
         Object.keys(parsed).forEach(pn=>{
           const src=parsed[pn]; if(!Object.keys(src.m).length) return;
-          const u=upd[pn]||(upd[pn]={rep:'',s:null,g:null,n:null,o:null});
+          const u=upd[pn]||(upd[pn]={rep:'',s:null,g:null,n:null,o:null,k:null});
           if(src.rep && !u.rep) u.rep=src.rep;
           u[key]=Object.assign(u[key]||{}, src.m); n++;
         });
@@ -8234,6 +8291,11 @@ function handlePSIUpload(event){
       for(const sn of wb.SheetNames){
         const aoa=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:''});
         const nm=String(sn).replace(/\s+/g,'');
+        // 재고 시트는 잔액이라 따로 읽는다(이월재고용)
+        if(nm.indexOf('재고')>=0){
+          const st=psiParseStockGrid(aoa, ['[품번]검색용','검색용','호환품번'], ['[품번]대표','대표품번']);
+          if(st){ if(put('k',st)) done.push(sn+'(재고)'); continue; }
+        }
         // 월 열이 가로로 늘어선 표(선적현황·입고현황·출고). 시트 이름으로 무엇인지 가른다.
         const grid1=psiParseGrid(aoa, ['[품번]검색용','검색용','호환품번'], ['[품번]대표','대표품번']);
         if(grid1){
@@ -8246,7 +8308,7 @@ function handlePSIUpload(event){
         if(shipRows){ if(put('g',shipRows)) done.push(sn+'(선적)'); continue; }
       }
       const pns=Object.keys(upd);
-      if(!pns.length){ alert(ru?'Подходящих листов не найдено.':'반영할 시트를 찾지 못했습니다.\n선적현황·입고현황(월별) 또는 종합(선적·출고) 양식을 올려주세요.'); event.target.value=''; return; }
+      if(!pns.length){ alert(ru?'Подходящих листов не найдено.':'반영할 시트를 찾지 못했습니다.\n선적·입고·출고·재고 시트가 있는 양식을 올려주세요.'); event.target.value=''; return; }
       if(!confirm((ru?'Обновить PSI: ':'PSI 자료를 반영합니다: ')+done.join(', ')+'\n'+(ru?'Артикулов: ':'호환품번 ')+pns.length+(ru?'':'개')+'\n\n'+(ru?'Продолжить?':'계속하시겠습니까?'))){ event.target.value=''; return; }
       await loadPSI();
       const c2r=psiCompatToRep();
@@ -8254,7 +8316,7 @@ function handlePSIUpload(event){
         const u=upd[pn];
         const cur=psiData[pn]||{rep:'',data:{}};
         const data=JSON.parse(JSON.stringify(cur.data||{}));
-        ['s','g','n','o'].forEach(k=>{
+        ['s','g','n','o','k'].forEach(k=>{
           if(!u[k]) return;
           Object.keys(u[k]).forEach(ym=>{ const cell=data[ym]||(data[ym]={}); cell[k]=u[k][ym]; });
         });
