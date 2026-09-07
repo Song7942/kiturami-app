@@ -1008,7 +1008,7 @@ input[type="text"]::placeholder{color:var(--muted)}
       <label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--muted)"><span id="i18n-psi-avg">보유월 평균</span>
         <input type="number" id="psiAvgN" min="1" max="24" style="width:48px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></label>
       <button class="dl-btn" onclick="renderPSI()"><span id="i18n-psi-apply">적용</span></button>
-      <button class="dl-btn" id="psiUploadBtn" onclick="document.getElementById('psiFileInput').click()" title="선적현황(월별 입고) / 종합(선적·출고) 양식을 올리면 자동으로 가려 반영합니다" style="display:none;background:var(--accent2);border-color:var(--accent2);color:#fff">
+      <button class="dl-btn" id="psiUploadBtn" onclick="document.getElementById('psiFileInput').click()" title="선적현황 / 입고현황 / 종합(선적·출고) 양식을 올리면 시트 이름으로 가려 반영합니다" style="display:none;background:var(--accent2);border-color:var(--accent2);color:#fff">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
         <span id="i18n-psi-upload">엑셀 업로드</span>
       </button>
@@ -7898,19 +7898,21 @@ function refreshInventoryTexts(){
 // PSI (입고 · 출고 · 재고 · 보유월)
 //   행은 품번조회와 같은 호환품번 단위. 대표품번·호환품번·단종·품명·규격은 품번조회에서 가져온다.
 //   숫자는 올린 엑셀에서 사이트가 집계한다.
-//     · 선적현황.xlsx  : 월별 입고 (열 머리글 2101…2612)              → data[ym].s
-//     · 종합.xlsx 선적 : 행 단위, 입고일 기준으로 월별 합계            → data[ym].g
-//     · 종합.xlsx 출고 : 월별 출고 (열 머리글 2201…2712)               → data[ym].o
-//   입고(월) = 월 <= PSI_SPLIT_YM ? s : (g 가 있으면 g, 없으면 s)
+//     · 선적현황.xlsx  : 월별 선적 (열 머리글 2101…2612)               → data[ym].s
+//     · 종합.xlsx 선적 : 행 단위, 입고일 기준으로 월별 합계             → data[ym].g
+//     · 입고현황.xlsx  : 월별 입고 (열 머리글 2201_입고…2612_입고)      → data[ym].n
+//     · 종합.xlsx 출고 : 월별 출고 (열 머리글 2201…2712)                → data[ym].o
+//   선적(월) = 월 <= PSI_SPLIT_YM ? s : (g 가 있으면 g, 없으면 s)
 //     "24년 6월까지는 선적현황" 지시를 따르고, 그 뒤로 종합에 값이 없는 달(2407·2408)은
 //     선적현황 값으로 메워 자료가 사라지지 않게 한다.
+//   입고(월) = n  — 입고는 입고현황.xlsx 만 본다.
 //   재고 = 기산월부터 그 달까지 (입고 합 − 출고 합).  보유월 = 재고 ÷ 최근 N개월 평균 출고.
 // ══════════════════════════════════════════
 const PSI_SPLIT_YM='2406';
-// 출고 시트의 월 열은 2201 부터다. 2021년 출고는 연도 열('21y')로만 알 수 있어서,
-// 그 값을 2021년 12월(2112) 출고로 넣어 재고 누적에 포함시킨다.
-// 18y~20y 는 대응하는 입고 자료(선적현황은 2102부터)가 없어 넣지 않는다.
-const PSI_YEAR_OUT={ '21y':'2112' };
+// 출고·입고 시트의 월 열은 2201 부터다. 2021년 값은 연도 열('21y')로만 알 수 있어서,
+// 그 값을 2021년 12월(2112)로 넣어 재고 누적에 포함시킨다(출고 14,176 / 입고 30,473).
+// 18y~20y 는 값이 없어 넣지 않는다.
+const PSI_YEAR_COL={ '21y':'2112' };
 const PSI_BASE_DEFAULT='2101';   // 재고 기산 기본 연월(입고 2102~, 출고 21y+2201~)
 let psiData={};        // normPN -> { rep, data:{ '2409':{s,g,o}, … } }
 let _psiFiltered=[];
@@ -7946,14 +7948,15 @@ function psiYmOf(v){
   const m=String(v).trim().match(/^(\d{4})[-.\/](\d{1,2})/);
   return m?(String((+m[1])%100).padStart(2,'0')+p(+m[2])):'';
 }
-function psiInOf(d,ym){
+// 입고: 입고현황.xlsx 의 월별 값(n)만 본다.
+function psiInOf(d,ym){ if(!d) return 0; const o=d[ym]; return o?(Number(o.n)||0):0; }
+function psiOutOf(d,ym){ if(!d) return 0; const o=d[ym]; return o?(Number(o.o)||0):0; }
+// 선적: 24년 6월까지는 선적현황(s), 그 뒤는 종합 선적(g) — 종합에 없는 달은 s 로 메운다.
+function psiShipOf(d,ym){
   if(!d) return 0; const o=d[ym]; if(!o) return 0;
   if(ym<=PSI_SPLIT_YM) return Number(o.s)||0;
   return (o.g!=null && o.g!=='') ? (Number(o.g)||0) : (Number(o.s)||0);
 }
-function psiOutOf(d,ym){ if(!d) return 0; const o=d[ym]; return o?(Number(o.o)||0):0; }
-// 선적: 선적현황.xlsx 의 월별 값(s)을 그대로 보여 준다. 입고와 따로 볼 수 있게 한 열.
-function psiShipOf(d,ym){ if(!d) return 0; const o=d[ym]; return o?(Number(o.s)||0):0; }
 // 자료에 들어 있는 가장 늦은 연월 (표시 기본값 계산용)
 function psiMaxYm(){
   let mx='';
@@ -8149,9 +8152,11 @@ function psiParseGrid(aoa, pnLabels, repLabels){
     row.forEach((v,ci)=>{ const s=nk(v);
       if(pnCol<0 && pnLabels.some(w=>s===nk(w))) pnCol=ci;
       if(repCol<0 && repLabels.some(w=>s===nk(w))) repCol=ci;
-      if(/^\d{4}$/.test(s)) mons.push([ci,s]);
+      // '2201' 뿐 아니라 '2201_입고'·'2201_출고' 처럼 뒤에 말이 붙은 머리글도 읽는다
+      const mm=s.match(/^(\d{4})(?:[_\-].*)?$/);
+      if(mm) mons.push([ci,mm[1]]);
       // 연도 열('21y')은 정해 둔 월로 환산해 함께 읽는다
-      else if(PSI_YEAR_OUT[s]) mons.push([ci,PSI_YEAR_OUT[s]]);
+      else if(PSI_YEAR_COL[s]) mons.push([ci,PSI_YEAR_COL[s]]);
     });
     if(pnCol>=0 && mons.length>=6){
       const out={};
@@ -8206,13 +8211,13 @@ function handlePSIUpload(event){
   reader.onload=async function(e){
     try{
       const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
-      const upd={};   // pn -> {rep, s:{}, g:{}, o:{}}
+      const upd={};   // pn -> {rep, s:{}, g:{}, n:{}, o:{}}
       const put=(key,parsed)=>{
         if(!parsed) return 0;
         let n=0;
         Object.keys(parsed).forEach(pn=>{
           const src=parsed[pn]; if(!Object.keys(src.m).length) return;
-          const u=upd[pn]||(upd[pn]={rep:'',s:null,g:null,o:null});
+          const u=upd[pn]||(upd[pn]={rep:'',s:null,g:null,n:null,o:null});
           if(src.rep && !u.rep) u.rep=src.rep;
           u[key]=Object.assign(u[key]||{}, src.m); n++;
         });
@@ -8222,19 +8227,19 @@ function handlePSIUpload(event){
       for(const sn of wb.SheetNames){
         const aoa=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:''});
         const nm=String(sn).replace(/\s+/g,'');
-        // 선적현황: [품번]대표 + [품번]검색용 + 월 열
+        // 월 열이 가로로 늘어선 표(선적현황·입고현황·출고). 시트 이름으로 무엇인지 가른다.
         const grid1=psiParseGrid(aoa, ['[품번]검색용','검색용','호환품번'], ['[품번]대표','대표품번']);
-        // 출고: 대표품번/호환품번 + 월 열 (시트 이름으로 입고/출고를 가른다)
         if(grid1){
           if(nm.indexOf('출고')>=0){ if(put('o',grid1)) done.push(sn+'(출고)'); }
-          else { if(put('s',grid1)) done.push(sn+'(입고)'); }
+          else if(nm.indexOf('입고')>=0){ if(put('n',grid1)) done.push(sn+'(입고)'); }
+          else { if(put('s',grid1)) done.push(sn+'(선적)'); }
           continue;
         }
         const shipRows=psiParseShipRows(aoa);
         if(shipRows){ if(put('g',shipRows)) done.push(sn+'(선적)'); continue; }
       }
       const pns=Object.keys(upd);
-      if(!pns.length){ alert(ru?'Подходящих листов не найдено.':'반영할 시트를 찾지 못했습니다.\n선적현황(월별 입고) 또는 종합(선적·출고) 양식을 올려주세요.'); event.target.value=''; return; }
+      if(!pns.length){ alert(ru?'Подходящих листов не найдено.':'반영할 시트를 찾지 못했습니다.\n선적현황·입고현황(월별) 또는 종합(선적·출고) 양식을 올려주세요.'); event.target.value=''; return; }
       if(!confirm((ru?'Обновить PSI: ':'PSI 자료를 반영합니다: ')+done.join(', ')+'\n'+(ru?'Артикулов: ':'호환품번 ')+pns.length+(ru?'':'개')+'\n\n'+(ru?'Продолжить?':'계속하시겠습니까?'))){ event.target.value=''; return; }
       await loadPSI();
       const c2r=psiCompatToRep();
@@ -8242,7 +8247,7 @@ function handlePSIUpload(event){
         const u=upd[pn];
         const cur=psiData[pn]||{rep:'',data:{}};
         const data=JSON.parse(JSON.stringify(cur.data||{}));
-        ['s','g','o'].forEach(k=>{
+        ['s','g','n','o'].forEach(k=>{
           if(!u[k]) return;
           Object.keys(u[k]).forEach(ym=>{ const cell=data[ym]||(data[ym]={}); cell[k]=u[k][ym]; });
         });
