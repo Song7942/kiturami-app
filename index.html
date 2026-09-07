@@ -1021,7 +1021,8 @@ input[type="text"]::placeholder{color:var(--muted)}
   </div>
   <div class="scroll-body" id="scrollBodyPSI" style="padding:0 12px 72px">
     <div class="pn-body-wrap">
-      <table id="psiTable" style="width:100%;border-collapse:collapse">
+      <table id="psiTable" style="width:100%;border-collapse:collapse;table-layout:fixed">
+        <colgroup id="psiColgroup"></colgroup>
         <thead id="psiThead"></thead>
         <tbody id="psiTbody"></tbody>
       </table>
@@ -8020,12 +8021,24 @@ function renderPSI(){
     isKo?('<th rowspan="2" style="'+thS+'">규격</th>'):'',
     grp,'</tr><tr>',sub,'</tr>'].join('');
   const thead=document.getElementById('psiThead'); if(thead) thead.innerHTML=head;
+  // 열 폭을 품번조회와 같은 감각으로 고정한다(table-layout:fixed).
+  // 안 정해 두면 품명·규격의 긴 글자 때문에 품번 열까지 밀려 표가 옆으로 늘어난다.
+  const cg=document.getElementById('psiColgroup');
+  if(cg){
+    const w=['<col style="width:96px">',    // 대표품번
+             '<col style="width:96px">',    // 호환품번
+             '<col style="width:38px">'];   // 단종
+    w.push('<col style="width:110px">');    // 품명
+    if(isKo) w.push('<col style="width:110px">');   // 규격
+    yms.forEach(()=>{ w.push('<col style="width:58px">','<col style="width:58px">','<col style="width:62px">','<col style="width:54px">'); });
+    cg.innerHTML=w.join('');
+  }
   const tbody=document.getElementById('psiTbody');
   const empty=document.getElementById('psiEmpty');
   if(!rows.length){ if(tbody) tbody.innerHTML=''; if(empty){ empty.textContent=(lang==='ru'?'Нет данных.':'결과가 없습니다.'); empty.style.display='block'; } return; }
   if(empty) empty.style.display='none';
   const n=v=>(v==null||v===''||isNaN(v))?'':Number(v).toLocaleString();
-  const tdS='padding:4px 6px;font-size:11px';
+  const tdS='padding:4px 5px;font-size:11px;overflow:hidden';
   const numS=tdS+';text-align:right;white-space:nowrap';
   tbody.innerHTML=rows.map(r=>{
     const pn=normBadgePN(r._compat);
@@ -8040,11 +8053,11 @@ function renderPSI(){
            + '<td style="'+numS+';color:var(--muted)">'+(x.mo==null?'':x.mo.toFixed(1))+'</td>';
     }).join('');
     return '<tr style="border-bottom:1px solid var(--border)">'
-      + '<td style="'+tdS+'"><span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">'+escapeHtml(r.rep||'')+'</span></td>'
-      + '<td style="'+tdS+'"><span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">'+escapeHtml(pn)+'</span></td>'
+      + '<td style="'+tdS+'"><span class="code" style="font-size:9.5px;padding:1px 3px;white-space:nowrap">'+escapeHtml(r.rep||'')+'</span></td>'
+      + '<td style="'+tdS+'"><span class="code" style="font-size:9.5px;padding:1px 3px;white-space:nowrap">'+escapeHtml(pn)+'</span></td>'
       + '<td style="'+tdS+';text-align:center;color:var(--muted)">'+escapeHtml(pnColText('note',r))+'</td>'
-      + '<td style="'+tdS+';word-break:break-all">'+escapeHtml(pnColText('name',r))+'</td>'
-      + (isKo?('<td style="'+tdS+';color:var(--muted);word-break:break-all">'+escapeHtml(pnColText('spec',r))+'</td>'):'')
+      + '<td style="'+tdS+';word-break:break-all;font-size:10.5px;line-height:1.25">'+escapeHtml(pnColText('name',r))+'</td>'
+      + (isKo?('<td style="'+tdS+';color:var(--muted);word-break:break-all;font-size:10px;line-height:1.25">'+escapeHtml(pnColText('spec',r))+'</td>'):'')
       + cells + '</tr>';
   }).join('');
 }
