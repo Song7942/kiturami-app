@@ -1021,7 +1021,7 @@ input[type="text"]::placeholder{color:var(--muted)}
   </div>
   <div class="scroll-body" id="scrollBodyPSI" style="padding:0 12px 72px">
     <div class="pn-body-wrap">
-      <table id="psiTable" style="width:100%;border-collapse:collapse;table-layout:fixed">
+      <table id="psiTable" style="width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed">
         <colgroup id="psiColgroup"></colgroup>
         <thead id="psiThead"></thead>
         <tbody id="psiTbody"></tbody>
@@ -7998,6 +7998,16 @@ function psiRowVals(d,c,yms){
 function psiYmLabel(ym){ return '20'+String(ym).slice(0,2)+'-'+String(ym).slice(2); }
 function debouncedRenderPSI(){ clearTimeout(window._psiT); window._psiT=setTimeout(renderPSI,200); }
 
+// 머리글 세 줄(연월 그룹 · 항목 · 합계)을 스크롤해도 위에 남게 붙인다.
+// 줄마다 top 을 실제 높이로 계산해 넣는다 — 고정 픽셀로 두면 줄이 겹쳐 글자가 깨진다.
+function psiStickHead(){
+  const thead=document.getElementById('psiThead'); if(!thead) return;
+  let acc=0;
+  Array.prototype.forEach.call(thead.rows, function(tr){
+    Array.prototype.forEach.call(tr.cells, function(th){ th.style.top=acc+'px'; });
+    acc += tr.getBoundingClientRect().height;
+  });
+}
 function renderPSI(){
   const pane=document.getElementById('pane-psi'); if(!pane) return;
   const c=psiCfg(); psiFillCfgInputs(c);
@@ -8005,54 +8015,69 @@ function renderPSI(){
   const kwEl=document.getElementById('psiInput');
   const kw=(kwEl?kwEl.value:'').trim().toLowerCase();
   const isKo=(lang!=='ru');
+  const L=(ko,ru)=>(lang==='ru'?ru:ko);
   // 행: 품번조회와 같은 호환품번 단위
   let rows=pnExpandRows(kw?PN_DATA.filter(r=>searchRow(r.rep,kw,[r.name_ko,r.name_ru,r.spec,r.final].concat(r.compats||[]))):PN_DATA);
   rows=rows.filter(r=>normPN(r._compat));
   _psiFiltered=rows;
   const badge=document.getElementById('psiBadge'); if(badge) badge.innerHTML='<b>'+rows.length+'</b>';
-  const thS='padding:6px 6px;text-align:center;vertical-align:middle;position:sticky;top:0;z-index:2;background:var(--surface2);font-size:11px;white-space:nowrap';
-  const grp=yms.map(y=>'<th colspan="4" style="'+thS+';border-left:1px solid var(--border)">'+psiYmLabel(y)+'</th>').join('');
-  const sub=yms.map(()=>['입고','출고','재고','보유월'].map((h,i)=>'<th style="'+thS+'top:26px'+(i===0?';border-left:1px solid var(--border)':'')+'">'+(lang==='ru'?({'입고':'Приход','출고':'Расход','재고':'Остаток','보유월':'Мес.'})[h]:h)+'</th>').join('')).join('');
-  const head=['<tr>',
-    '<th rowspan="2" style="'+thS+'">'+(lang==='ru'?'Осн. артикул':'대표품번')+'</th>',
-    '<th rowspan="2" style="'+thS+'">'+(lang==='ru'?'Артикул замены':'호환품번')+'</th>',
-    '<th rowspan="2" style="'+thS+'">'+(lang==='ru'?'Снято':'단종')+'</th>',
-    '<th rowspan="2" style="'+thS+'">'+(lang==='ru'?'Наименование':'품명')+'</th>',
-    isKo?('<th rowspan="2" style="'+thS+'">규격</th>'):'',
-    grp,'</tr><tr>',sub,'</tr>'].join('');
-  const thead=document.getElementById('psiThead'); if(thead) thead.innerHTML=head;
-  // 열 폭을 품번조회와 같은 감각으로 고정한다(table-layout:fixed).
-  // 안 정해 두면 품명·규격의 긴 글자 때문에 품번 열까지 밀려 표가 옆으로 늘어난다.
+
+  // 열 폭 고정(table-layout:fixed). 안 정해 두면 품명·규격의 긴 글자에 품번 열까지 밀린다.
   const cg=document.getElementById('psiColgroup');
   if(cg){
-    const w=['<col style="width:96px">',    // 대표품번
-             '<col style="width:96px">',    // 호환품번
-             '<col style="width:38px">'];   // 단종
-    w.push('<col style="width:110px">');    // 품명
-    if(isKo) w.push('<col style="width:110px">');   // 규격
+    const w=['<col style="width:96px">','<col style="width:96px">','<col style="width:38px">','<col style="width:110px">'];
+    if(isKo) w.push('<col style="width:110px">');
     yms.forEach(()=>{ w.push('<col style="width:58px">','<col style="width:58px">','<col style="width:62px">','<col style="width:54px">'); });
     cg.innerHTML=w.join('');
   }
+
   const tbody=document.getElementById('psiTbody');
+  const thead=document.getElementById('psiThead');
   const empty=document.getElementById('psiEmpty');
-  if(!rows.length){ if(tbody) tbody.innerHTML=''; if(empty){ empty.textContent=(lang==='ru'?'Нет данных.':'결과가 없습니다.'); empty.style.display='block'; } return; }
+  // 표는 border-collapse:separate 를 쓴다(collapse 면 sticky 머리글이 어긋난다) → 테두리를 칸에 직접 준다.
+  const thS='padding:5px 4px;text-align:center;vertical-align:middle;position:sticky;z-index:3;'
+    + 'background:var(--surface2);font-size:11px;white-space:nowrap;border-bottom:1px solid var(--border)';
+  const bl=';border-left:1px solid var(--border)';
+  const grp=yms.map(y=>'<th colspan="4" style="'+thS+bl+'">'+psiYmLabel(y)+'</th>').join('');
+  const sub=yms.map(()=>[['입고','Приход'],['출고','Расход'],['재고','Остаток'],['보유월','Мес.']]
+      .map((h,i)=>'<th style="'+thS+(i===0?bl:'')+'">'+L(h[0],h[1])+'</th>').join('')).join('');
+  let head=['<tr>',
+    '<th rowspan="2" style="'+thS+'">'+L('대표품번','Осн. артикул')+'</th>',
+    '<th rowspan="2" style="'+thS+'">'+L('호환품번','Артикул замены')+'</th>',
+    '<th rowspan="2" style="'+thS+'">'+L('단종','Снято')+'</th>',
+    '<th rowspan="2" style="'+thS+'">'+L('품명','Наименование')+'</th>',
+    isKo?('<th rowspan="2" style="'+thS+'">규격</th>'):'',
+    grp,'</tr><tr>',sub,'</tr>'].join('');
+
+  if(!rows.length){
+    if(thead) thead.innerHTML=head;
+    if(tbody) tbody.innerHTML='';
+    if(empty){ empty.textContent=L('결과가 없습니다.','Нет данных.'); empty.style.display='block'; }
+    psiStickHead();
+    return;
+  }
   if(empty) empty.style.display='none';
+
   const n=v=>(v==null||v===''||isNaN(v))?'':Number(v).toLocaleString();
-  const tdS='padding:4px 5px;font-size:11px;overflow:hidden';
+  const tdS='padding:4px 5px;font-size:11px;overflow:hidden;border-bottom:1px solid var(--border)';
   const numS=tdS+';text-align:right;white-space:nowrap';
-  tbody.innerHTML=rows.map(r=>{
+  // 합계: 입고·출고·재고는 더하고, 보유월은 그 달 값들의 평균(값이 있는 품번만)
+  const tot={}; yms.forEach(y=>tot[y]={i:0,o:0,st:0,moSum:0,moN:0});
+  const body=rows.map(r=>{
     const pn=normBadgePN(r._compat);
     const rec=psiData[normPN(r._compat)];
     const v=psiRowVals(rec?rec.data:null, c, yms);
     const cells=yms.map((y,i)=>{
       const x=v[y]||{i:0,o:0,st:0,mo:null};
-      const bl=i===0?';border-left:1px solid var(--border)':'';
-      return '<td style="'+numS+bl+'">'+n(x.i)+'</td>'
+      const t=tot[y]; t.i+=x.i; t.o+=x.o; t.st+=x.st;
+      if(x.mo!=null){ t.moSum+=x.mo; t.moN++; }
+      const b=i===0?bl:'';
+      return '<td style="'+numS+b+'">'+n(x.i)+'</td>'
            + '<td style="'+numS+'">'+n(x.o)+'</td>'
            + '<td style="'+numS+';font-weight:600">'+n(x.st)+'</td>'
            + '<td style="'+numS+';color:var(--muted)">'+(x.mo==null?'':x.mo.toFixed(1))+'</td>';
     }).join('');
-    return '<tr style="border-bottom:1px solid var(--border)">'
+    return '<tr>'
       + '<td style="'+tdS+'"><span class="code" style="font-size:9.5px;padding:1px 3px;white-space:nowrap">'+escapeHtml(r.rep||'')+'</span></td>'
       + '<td style="'+tdS+'"><span class="code" style="font-size:9.5px;padding:1px 3px;white-space:nowrap">'+escapeHtml(pn)+'</span></td>'
       + '<td style="'+tdS+';text-align:center;color:var(--muted)">'+escapeHtml(pnColText('note',r))+'</td>'
@@ -8060,6 +8085,25 @@ function renderPSI(){
       + (isKo?('<td style="'+tdS+';color:var(--muted);word-break:break-all;font-size:10px;line-height:1.25">'+escapeHtml(pnColText('spec',r))+'</td>'):'')
       + cells + '</tr>';
   }).join('');
+
+  // 합계 줄도 머리글에 붙여 스크롤해도 맨 위에 남게 한다
+  const sumS=thS+';font-weight:700;background:var(--surface)';
+  const sumCells=yms.map((y,i)=>{
+    const t=tot[y]; const b=i===0?bl:'';
+    const mo=t.moN?(t.moSum/t.moN):null;
+    return '<th style="'+sumS+';text-align:right'+b+'">'+n(t.i)+'</th>'
+         + '<th style="'+sumS+';text-align:right">'+n(t.o)+'</th>'
+         + '<th style="'+sumS+';text-align:right">'+n(t.st)+'</th>'
+         + '<th style="'+sumS+';text-align:right;color:var(--muted)">'+(mo==null?'':mo.toFixed(1))+'</th>';
+  }).join('');
+  head += '<tr>'
+    + '<th colspan="'+(isKo?5:4)+'" style="'+sumS+';text-align:right">'
+    + L('합계 '+rows.length+'건 · 보유월은 평균','Итого '+rows.length+' · Мес. — среднее')+'</th>'
+    + sumCells + '</tr>';
+
+  if(thead) thead.innerHTML=head;
+  if(tbody) tbody.innerHTML=body;
+  psiStickHead();
 }
 function normBadgePN(x){ return (typeof pnUpperLead==='function')?pnUpperLead(x||''):String(x||''); }
 
