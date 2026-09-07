@@ -7952,6 +7952,8 @@ function psiInOf(d,ym){
   return (o.g!=null && o.g!=='') ? (Number(o.g)||0) : (Number(o.s)||0);
 }
 function psiOutOf(d,ym){ if(!d) return 0; const o=d[ym]; return o?(Number(o.o)||0):0; }
+// 선적: 선적현황.xlsx 의 월별 값(s)을 그대로 보여 준다. 입고와 따로 볼 수 있게 한 열.
+function psiShipOf(d,ym){ if(!d) return 0; const o=d[ym]; return o?(Number(o.s)||0):0; }
 // 자료에 들어 있는 가장 늦은 연월 (표시 기본값 계산용)
 function psiMaxYm(){
   let mx='';
@@ -7983,9 +7985,9 @@ function psiRowVals(d,c,yms){
   const start=(c.base<=last)?c.base:last;
   for(let k=start;k<=last;k=psiYmAdd(k,1)){
     stock += psiInOf(d,k)-psiOutOf(d,k);
-    if(want[k]) out[k]={ i:psiInOf(d,k), o:psiOutOf(d,k), st:stock };
+    if(want[k]) out[k]={ sh:psiShipOf(d,k), i:psiInOf(d,k), o:psiOutOf(d,k), st:stock };
   }
-  yms.forEach(y=>{ if(!out[y]) out[y]={ i:psiInOf(d,y), o:psiOutOf(d,y), st:stock }; });
+  yms.forEach(y=>{ if(!out[y]) out[y]={ sh:psiShipOf(d,y), i:psiInOf(d,y), o:psiOutOf(d,y), st:stock }; });
   // 보유월: 재고 ÷ 최근 N개월 평균 출고
   yms.forEach(y=>{
     let sum=0,n=0;
@@ -8027,7 +8029,7 @@ function renderPSI(){
   if(cg){
     const w=['<col style="width:96px">','<col style="width:96px">','<col style="width:38px">','<col style="width:110px">'];
     if(isKo) w.push('<col style="width:110px">');
-    yms.forEach(()=>{ w.push('<col style="width:58px">','<col style="width:58px">','<col style="width:62px">','<col style="width:54px">'); });
+    yms.forEach(()=>{ w.push('<col style="width:56px">','<col style="width:56px">','<col style="width:56px">','<col style="width:60px">','<col style="width:52px">'); });
     cg.innerHTML=w.join('');
   }
 
@@ -8038,8 +8040,8 @@ function renderPSI(){
   const thS='padding:5px 4px;text-align:center;vertical-align:middle;position:sticky;z-index:3;'
     + 'background:var(--surface2);font-size:11px;white-space:nowrap;border-bottom:1px solid var(--border)';
   const bl=';border-left:1px solid var(--border)';
-  const grp=yms.map(y=>'<th colspan="4" style="'+thS+bl+'">'+psiYmLabel(y)+'</th>').join('');
-  const sub=yms.map(()=>[['입고','Приход'],['출고','Расход'],['재고','Остаток'],['보유월','Мес.']]
+  const grp=yms.map(y=>'<th colspan="5" style="'+thS+bl+'">'+psiYmLabel(y)+'</th>').join('');
+  const sub=yms.map(()=>[['선적','Отгрузка'],['입고','Приход'],['출고','Расход'],['재고','Остаток'],['보유월','Мес.']]
       .map((h,i)=>'<th style="'+thS+(i===0?bl:'')+'">'+L(h[0],h[1])+'</th>').join('')).join('');
   let head=['<tr>',
     '<th rowspan="2" style="'+thS+'">'+L('대표품번','Осн. артикул')+'</th>',
@@ -8061,18 +8063,19 @@ function renderPSI(){
   const n=v=>(v==null||v===''||isNaN(v))?'':Number(v).toLocaleString();
   const tdS='padding:4px 5px;font-size:11px;overflow:hidden;border-bottom:1px solid var(--border)';
   const numS=tdS+';text-align:right;white-space:nowrap';
-  // 합계: 입고·출고·재고는 더하고, 보유월은 그 달 값들의 평균(값이 있는 품번만)
-  const tot={}; yms.forEach(y=>tot[y]={i:0,o:0,st:0,moSum:0,moN:0});
+  // 합계: 선적·입고·출고·재고는 더하고, 보유월은 그 달 값들의 평균(값이 있는 품번만)
+  const tot={}; yms.forEach(y=>tot[y]={sh:0,i:0,o:0,st:0,moSum:0,moN:0});
   const body=rows.map(r=>{
     const pn=normBadgePN(r._compat);
     const rec=psiData[normPN(r._compat)];
     const v=psiRowVals(rec?rec.data:null, c, yms);
     const cells=yms.map((y,i)=>{
-      const x=v[y]||{i:0,o:0,st:0,mo:null};
-      const t=tot[y]; t.i+=x.i; t.o+=x.o; t.st+=x.st;
+      const x=v[y]||{sh:0,i:0,o:0,st:0,mo:null};
+      const t=tot[y]; t.sh+=x.sh; t.i+=x.i; t.o+=x.o; t.st+=x.st;
       if(x.mo!=null){ t.moSum+=x.mo; t.moN++; }
       const b=i===0?bl:'';
-      return '<td style="'+numS+b+'">'+n(x.i)+'</td>'
+      return '<td style="'+numS+b+';color:var(--muted)">'+n(x.sh)+'</td>'
+           + '<td style="'+numS+'">'+n(x.i)+'</td>'
            + '<td style="'+numS+'">'+n(x.o)+'</td>'
            + '<td style="'+numS+';font-weight:600">'+n(x.st)+'</td>'
            + '<td style="'+numS+';color:var(--muted)">'+(x.mo==null?'':x.mo.toFixed(1))+'</td>';
@@ -8091,7 +8094,8 @@ function renderPSI(){
   const sumCells=yms.map((y,i)=>{
     const t=tot[y]; const b=i===0?bl:'';
     const mo=t.moN?(t.moSum/t.moN):null;
-    return '<th style="'+sumS+';text-align:right'+b+'">'+n(t.i)+'</th>'
+    return '<th style="'+sumS+';text-align:right'+b+';color:var(--muted)">'+n(t.sh)+'</th>'
+         + '<th style="'+sumS+';text-align:right">'+n(t.i)+'</th>'
          + '<th style="'+sumS+';text-align:right">'+n(t.o)+'</th>'
          + '<th style="'+sumS+';text-align:right">'+n(t.st)+'</th>'
          + '<th style="'+sumS+';text-align:right;color:var(--muted)">'+(mo==null?'':mo.toFixed(1))+'</th>';
@@ -8115,18 +8119,18 @@ function downloadPSI(){
   const h1=[(lang==='ru'?'Осн. артикул':'대표품번'),(lang==='ru'?'Артикул замены':'호환품번'),(lang==='ru'?'Снято':'단종'),(lang==='ru'?'Наименование':'품명')];
   if(isKo) h1.push('규격');
   const g1=h1.map(()=>''); const g2=h1.slice();
-  yms.forEach(y=>{ g1.push(psiYmLabel(y),'','',''); g2.push(lang==='ru'?'Приход':'입고', lang==='ru'?'Расход':'출고', lang==='ru'?'Остаток':'재고', lang==='ru'?'Мес.':'보유월'); });
+  yms.forEach(y=>{ g1.push(psiYmLabel(y),'','','',''); g2.push(lang==='ru'?'Отгрузка':'선적', lang==='ru'?'Приход':'입고', lang==='ru'?'Расход':'출고', lang==='ru'?'Остаток':'재고', lang==='ru'?'Мес.':'보유월'); });
   const aoa=[g1,g2];
   (_psiFiltered||[]).forEach(r=>{
     const rec=psiData[normPN(r._compat)];
     const v=psiRowVals(rec?rec.data:null, c, yms);
     const row=[r.rep||'', normBadgePN(r._compat), pnColText('note',r), pnColText('name',r)];
     if(isKo) row.push(pnColText('spec',r));
-    yms.forEach(y=>{ const x=v[y]||{}; row.push(x.i??'', x.o??'', x.st??'', (x.mo==null?'':x.mo)); });
+    yms.forEach(y=>{ const x=v[y]||{}; row.push(x.sh??'', x.i??'', x.o??'', x.st??'', (x.mo==null?'':x.mo)); });
     aoa.push(row);
   });
   const ws=XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols']=h1.map(()=>({wch:16})).concat(yms.map(()=>[{wch:9},{wch:9},{wch:10},{wch:8}]).reduce((a,b)=>a.concat(b),[]));
+  ws['!cols']=h1.map(()=>({wch:16})).concat(yms.map(()=>[{wch:9},{wch:9},{wch:9},{wch:10},{wch:8}]).reduce((a,b)=>a.concat(b),[]));
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'PSI');
   XLSX.writeFile(wb, xlsxName('PSI','PSI'));
 }
