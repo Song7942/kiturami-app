@@ -8070,14 +8070,19 @@ function renderPSI(){
   const numS=tdS+';text-align:right;white-space:nowrap';
   // 합계: 선적·입고·출고·재고는 더하고, 보유월은 그 달 값들의 평균(값이 있는 품번만)
   const tot={}; yms.forEach(y=>tot[y]={sh:0,i:0,o:0,st:0,moSum:0,moN:0});
+  // 같은 호환품번이 두 대표품번 아래에 걸쳐 두 줄로 나오는 경우가 있다.
+  // 줄은 그대로 보여 주되, 합계는 호환품번당 한 번만 센다.
+  const counted={};
   const body=rows.map(r=>{
+    const key=normPN(r._compat);
+    const dup=!!counted[key]; counted[key]=1;
     const pn=normBadgePN(r._compat);
-    const rec=psiData[normPN(r._compat)];
+    const rec=psiData[key];
     const v=psiRowVals(rec?rec.data:null, c, yms);
     const cells=yms.map((y,i)=>{
       const x=v[y]||{sh:0,i:0,o:0,st:0,mo:null};
-      const t=tot[y]; t.sh+=x.sh; t.i+=x.i; t.o+=x.o; t.st+=x.st;
-      if(x.mo!=null){ t.moSum+=x.mo; t.moN++; }
+      if(!dup){ const t=tot[y]; t.sh+=x.sh; t.i+=x.i; t.o+=x.o; t.st+=x.st;
+        if(x.mo!=null){ t.moSum+=x.mo; t.moN++; } }
       const b=i===0?bl:'';
       return '<td style="'+numS+b+';color:var(--muted)">'+n(x.sh)+'</td>'
            + '<td style="'+numS+'">'+n(x.i)+'</td>'
@@ -8107,7 +8112,7 @@ function renderPSI(){
   }).join('');
   head += '<tr>'
     + '<th colspan="'+(isKo?5:4)+'" style="'+sumS+';text-align:right">'
-    + L('합계 '+rows.length+'건 · 보유월은 평균','Итого '+rows.length+' · Мес. — среднее')+'</th>'
+    + L('합계 '+Object.keys(counted).length+'건 · 보유월은 평균','Итого '+Object.keys(counted).length+' · Мес. — среднее')+'</th>'
     + sumCells + '</tr>';
 
   if(thead) thead.innerHTML=head;
