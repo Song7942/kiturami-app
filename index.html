@@ -1008,6 +1008,10 @@ input[type="text"]::placeholder{color:var(--muted)}
       <label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--muted)"><span id="i18n-psi-avg">보유월 평균</span>
         <input type="number" id="psiAvgN" min="1" max="24" style="width:48px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></label>
       <button class="dl-btn" onclick="renderPSI()"><span id="i18n-psi-apply">적용</span></button>
+      <button class="dl-btn" onclick="psiResetFilters()" title="헤더 필터·정렬을 기본값으로">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+        <span id="i18n-psi-reset">필터 초기화</span>
+      </button>
       <button class="dl-btn" id="psiUploadBtn" onclick="document.getElementById('psiFileInput').click()" title="선적·입고·출고·재고 시트가 든 파일을 올리면 시트 이름으로 가려 반영합니다 (재고 시트는 이월재고용)" style="display:none;background:var(--accent2);border-color:var(--accent2);color:#fff">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
         <span id="i18n-psi-upload">엑셀 업로드</span>
@@ -8014,6 +8018,136 @@ function psiRowVals(d,c,yms){
   return out;
 }
 function psiYmLabel(ym){ return '20'+String(ym).slice(0,2)+'-'+String(ym).slice(2); }
+// ── PSI 헤더 필터·정렬 (품번조회와 같은 엑셀식) ─────────────────────────
+// 글자 열(대표품번·호환품번·단종·품명·규격)은 값 목록 + 정렬,
+// 숫자 열(이월재고 · 월별 선적/입고/출고/재고/보유월)은 정렬만.
+let _psiFilters={};                  // {colKey: [선택한 값들]}
+let _psiSort={key:null, dir:'asc'};
+const PSI_TEXT_COLS={rep:1, compat:1, note:1, name:1, spec:1};
+function psiIsNumCol(key){ return !PSI_TEXT_COLS[key]; }
+function psiColText(key,r){
+  switch(key){
+    case 'rep': return String(r.rep||'');
+    case 'compat': return normBadgePN(r._compat);
+    case 'note': return pnColText('note',r);
+    case 'name': return pnColText('name',r);
+    case 'spec': return pnColText('spec',r);
+  }
+  return '';
+}
+// 숫자 열 값. it = {r, key, v}
+function psiNumOf(key,it){
+  if(key==='open') return Number(it.v._open)||0;
+  const p=String(key).split(':'); const f=p[0], ym=p[1];
+  const x=it.v[ym]; if(!x) return null;
+  if(f==='mo') return (x.mo==null)?null:x.mo;
+  const n=x[f]; return (n==null)?null:Number(n)||0;
+}
+function psiColLabel(key){
+  const ru=(lang==='ru');
+  const T={rep:[ '대표품번','Осн. артикул'], compat:['호환품번','Артикул замены'], note:['단종','Снято'],
+           name:['품명','Наименование'], spec:['규격','Хар-ки'], open:['이월재고','Нач. остаток']};
+  if(T[key]) return ru?T[key][1]:T[key][0];
+  const p=String(key).split(':');
+  const F={sh:['선적','Отгрузка'], i:['입고','Приход'], o:['출고','Расход'], st:['재고','Остаток'], mo:['보유월','Мес.']};
+  const f=F[p[0]]||['',''];
+  return psiYmLabel(p[1])+' '+(ru?f[1]:f[0]);
+}
+// 정렬 표시(활성일 때만 화살표)
+function psiSortMark(key){
+  if(_psiSort.key!==key) return '';
+  return '<span style="margin-left:3px;color:var(--accent2);font-size:10px">'+(_psiSort.dir==='desc'?'▼':'▲')+'</span>';
+}
+// 글자 열 머리글에 붙이는 필터 버튼
+function psiFilterIcon(key){
+  const on=(_psiFilters[key]!=null)||(_psiSort.key===key);
+  const glyph=(_psiSort.key===key)?(_psiSort.dir==='desc'?'▼':'▲'):'▾';
+  return '<span onclick="event.stopPropagation();openPSIFilter(&quot;'+key+'&quot;,this)"'
+    + ' title="'+(lang==='ru'?'Фильтр и сортировка':'필터·정렬')+'"'
+    + ' style="display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:16px;margin-left:4px;'
+    + 'border-radius:4px;border:1px solid '+(on?'var(--accent2)':'var(--border)')+';'
+    + 'background:'+(on?'var(--accent2)':'var(--bg)')+';color:'+(on?'#fff':'var(--muted)')+';'
+    + 'font-size:10px;line-height:1;cursor:pointer;vertical-align:middle">'+glyph+'</span>';
+}
+// 열의 고유값 목록(빈값은 '' 로 두고 라벨만 바꿔 보여 준다)
+function psiDistinctValues(key){
+  const set=new Set();
+  pnExpandRows(PN_DATA).forEach(r=>{ if(normPN(r._compat)) set.add(String(psiColText(key,r))); });
+  return [...set].sort((a,b)=>a.localeCompare(b,'ko'));
+}
+function _psiFilterEsc(e){ if(e.key==='Escape') closePSIFilter(); }
+function _psiFilterOutside(e){ const b=document.getElementById('psiFilterPop'); if(b && !b.contains(e.target)) closePSIFilter(); }
+function closePSIFilter(){ const b=document.getElementById('psiFilterPop'); if(b) b.remove();
+  document.removeEventListener('mousedown', _psiFilterOutside); document.removeEventListener('keydown', _psiFilterEsc); }
+function psiResetFilters(){ _psiFilters={}; _psiSort={key:null,dir:'asc'}; closePSIFilter(); renderPSI(); }
+function openPSIFilter(key, anchor){
+  closePSIFilter();
+  const ru=(lang==='ru');
+  const rect=anchor.getBoundingClientRect();
+  const isText=!psiIsNumCol(key);
+  const box=document.createElement('div'); box.id='psiFilterPop';
+  const W=258;
+  box.style.cssText='position:fixed;top:'+(rect.bottom+4)+'px;left:'+Math.max(6,Math.min(rect.left, window.innerWidth-W-6))+'px;'
+    + 'z-index:9999;background:var(--surface2);border:1px solid var(--border);border-radius:10px;box-shadow:0 10px 30px #0009;'
+    + 'width:'+W+'px;font-size:12px;color:var(--text);overflow:hidden';
+  const sortBtn=(dir,txt)=>'<button class="psif-sort" data-dir="'+dir+'" style="width:100%;text-align:left;padding:6px 8px;border:none;'
+    + 'background:'+((_psiSort.key===key&&_psiSort.dir===dir)?'var(--accent2)':'none')+';'
+    + 'color:'+((_psiSort.key===key&&_psiSort.dir===dir)?'#fff':'var(--text)')+';cursor:pointer;border-radius:6px;font-size:12px">'+txt+'</button>';
+  let html='<div style="padding:8px 8px 6px;border-bottom:1px solid var(--border)">'
+    + '<div style="font-size:11px;color:var(--muted);margin:0 2px 5px">'+escapeHtml(psiColLabel(key))+'</div>'
+    + sortBtn('asc','▲ '+(ru?'По возрастанию':'오름차순 정렬'))
+    + sortBtn('desc','▼ '+(ru?'По убыванию':'내림차순 정렬'))
+    + '</div>';
+  if(isText){
+    const vals=psiDistinctValues(key);
+    const cur=_psiFilters[key]?new Set(_psiFilters[key]):null;
+    const blank=ru?'(пусто)':'(비어 있음)';
+    const itemsHtml=vals.map(v=>{
+      const checked=(!cur||cur.has(v))?'checked':'';
+      const label=v===''?blank:escapeHtml(v);
+      return '<label class="psif-item" data-v="'+escapeHtml(v)+'" style="display:flex;align-items:center;gap:6px;padding:4px 8px;cursor:pointer;line-height:1.3">'
+        + '<input type="checkbox" class="psif-chk" '+checked+' style="cursor:pointer;flex:none">'
+        + '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+label+'</span></label>';
+    }).join('');
+    html+='<div style="padding:8px">'
+      + '<input id="psifSearch" type="text" placeholder="'+(ru?'Поиск значений…':'값 검색…')+'" style="width:100%;box-sizing:border-box;padding:5px 8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:12px">'
+      + '<label style="display:flex;align-items:center;gap:6px;padding:5px 4px 4px;cursor:pointer;font-weight:600;border-bottom:1px solid var(--border);margin-top:4px">'
+      + '<input type="checkbox" id="psifAll" checked style="cursor:pointer;flex:none"><span>'+(ru?'(Выбрать все)':'(모두 선택)')+'</span></label>'
+      + '<div id="psifList" style="max-height:230px;overflow:auto;margin-top:2px">'+itemsHtml+'</div></div>';
+  }
+  html+='<div style="display:flex;gap:6px;padding:8px;border-top:1px solid var(--border)">'
+    + (isText?'<button id="psifApply" style="flex:1;padding:6px;border:none;border-radius:7px;background:var(--accent2);color:#fff;cursor:pointer;font-size:12px;font-weight:600">'+(ru?'ОК':'적용')+'</button>':'')
+    + '<button id="psifClear" style="flex:1;padding:6px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);cursor:pointer;font-size:12px">'+(ru?'Сброс':'해제')+'</button>'
+    + '<button id="psifCancel" style="flex:none;padding:6px 10px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);cursor:pointer;font-size:12px">'+(ru?'✕':'취소')+'</button>'
+    + '</div>';
+  box.innerHTML=html;
+  document.body.appendChild(box);
+  box.querySelectorAll('.psif-sort').forEach(b=>{ b.onclick=()=>{ _psiSort={key, dir:b.getAttribute('data-dir')}; closePSIFilter(); renderPSI(); }; });
+  if(isText){
+    const listEl=box.querySelector('#psifList');
+    const allChk=box.querySelector('#psifAll');
+    const search=box.querySelector('#psifSearch');
+    const items=()=>[...listEl.querySelectorAll('.psif-item')];
+    const visItems=()=>items().filter(it=>it.style.display!=='none');
+    const syncAll=()=>{ const vis=visItems(); const chk=vis.filter(it=>it.querySelector('.psif-chk').checked);
+      allChk.checked=vis.length>0&&chk.length===vis.length; allChk.indeterminate=chk.length>0&&chk.length<vis.length; };
+    search.oninput=()=>{ const q=search.value.trim().toLowerCase();
+      items().forEach(it=>{ const v=(it.getAttribute('data-v')||'').toLowerCase(); it.style.display=(!q||v.includes(q))?'':'none'; }); syncAll(); };
+    allChk.onchange=()=>{ visItems().forEach(it=> it.querySelector('.psif-chk').checked=allChk.checked); };
+    listEl.addEventListener('change', syncAll);
+    syncAll(); search.focus();
+    box.querySelector('#psifApply').onclick=()=>{
+      const all=items();
+      const checked=all.filter(it=>it.querySelector('.psif-chk').checked).map(it=>it.getAttribute('data-v'));
+      if(checked.length===all.length) delete _psiFilters[key]; else _psiFilters[key]=checked;
+      closePSIFilter(); renderPSI();
+    };
+  }
+  box.querySelector('#psifClear').onclick=()=>{ delete _psiFilters[key]; if(_psiSort.key===key) _psiSort={key:null,dir:'asc'}; closePSIFilter(); renderPSI(); };
+  box.querySelector('#psifCancel').onclick=()=> closePSIFilter();
+  document.addEventListener('keydown', _psiFilterEsc);
+  setTimeout(()=>document.addEventListener('mousedown', _psiFilterOutside), 0);
+}
 function debouncedRenderPSI(){ clearTimeout(window._psiT); window._psiT=setTimeout(renderPSI,200); }
 
 // 머리글 세 줄(연월 그룹 · 항목 · 합계)을 스크롤해도 위에 남게 붙인다.
@@ -8037,8 +8171,38 @@ function renderPSI(){
   // 행: 품번조회와 같은 호환품번 단위
   let rows=pnExpandRows(kw?PN_DATA.filter(r=>searchRow(r.rep,kw,[r.name_ko,r.name_ru,r.spec,r.final].concat(r.compats||[]))):PN_DATA);
   rows=rows.filter(r=>normPN(r._compat));
-  _psiFiltered=rows;
-  const badge=document.getElementById('psiBadge'); if(badge) badge.innerHTML='<b>'+rows.length+'</b>';
+
+  // 값을 먼저 계산해 둔다(헤더 정렬이 숫자 열도 다루므로)
+  let items=rows.map(r=>{ const key=normPN(r._compat); const rec=psiData[key];
+    return { r, key, v:psiRowVals(rec?rec.data:null, c, yms) }; });
+
+  // 헤더 열 필터(엑셀식: 선택한 값만, 여러 열은 AND)
+  const fkeys=Object.keys(_psiFilters);
+  if(fkeys.length){
+    const sets=fkeys.map(k=>({k, set:new Set((_psiFilters[k]||[]).map(String))}));
+    items=items.filter(it=> sets.every(a=> a.set.has(String(psiColText(a.k,it.r)))));
+  }
+  // 정렬(한 열 기준 오름/내림, 빈값은 뒤로)
+  if(_psiSort.key){
+    const k=_psiSort.key, dir=_psiSort.dir==='desc'?-1:1;
+    if(psiIsNumCol(k)){
+      items=items.slice().sort((a,b)=>{
+        const na=psiNumOf(k,a), nb=psiNumOf(k,b);
+        const ea=(na==null), eb=(nb==null);
+        if(ea&&eb) return 0; if(ea) return 1; if(eb) return -1;
+        return (na-nb)*dir;
+      });
+    }else{
+      items=items.slice().sort((a,b)=>{
+        const va=String(psiColText(k,a.r)), vb=String(psiColText(k,b.r));
+        const ea=va==='', eb=vb==='';
+        if(ea&&eb) return 0; if(ea) return 1; if(eb) return -1;
+        return va.localeCompare(vb,'ko')*dir;
+      });
+    }
+  }
+  _psiFiltered=items.map(it=>it.r);
+  const badge=document.getElementById('psiBadge'); if(badge) badge.innerHTML='<b>'+items.length+'</b>';
 
   // 열 폭 고정(table-layout:fixed). 안 정해 두면 품명·규격의 긴 글자에 품번 열까지 밀린다.
   const cg=document.getElementById('psiColgroup');
@@ -8058,20 +8222,25 @@ function renderPSI(){
     + 'background:var(--surface2);font-size:11px;white-space:nowrap;border-bottom:1px solid var(--border)';
   const bl=';border-left:1px solid var(--border)';
   const grp=yms.map(y=>'<th colspan="5" style="'+thS+bl+'">'+psiYmLabel(y)+'</th>').join('');
-  const sub=yms.map(()=>[['선적','Отгрузка'],['입고','Приход'],['출고','Расход'],['재고','Остаток'],['보유월','Мес.']]
-      .map((h,i)=>'<th style="'+thS+(i===0?bl:'')+'">'+L(h[0],h[1])+'</th>').join('')).join('');
-  // 이월재고: 기산월 직전 달의 재고. 재고 시트를 올려 두면 그 값에서 재고가 쌓인다.
+  // 월별 하위 머리글: 칸이 좁아 아이콘 대신 머리글 자체를 눌러 정렬 팝업을 띄운다
+  const subF=[['sh','선적','Отгрузка'],['i','입고','Приход'],['o','출고','Расход'],['st','재고','Остаток'],['mo','보유월','Мес.']];
+  const sub=yms.map(y=>subF.map((h,i)=>{
+      const key=h[0]+':'+y;
+      return '<th onclick="openPSIFilter(&quot;'+key+'&quot;,this)" title="'+L('정렬','Сортировка')+'" style="'+thS+(i===0?bl:'')+';cursor:pointer">'
+        + L(h[1],h[2]) + psiSortMark(key) + '</th>';
+    }).join('')).join('');
   const openTitle=L('이월재고('+psiYmLabel(psiYmAdd(c.base,-1))+')','Нач. остаток('+psiYmLabel(psiYmAdd(c.base,-1))+')');
   let head=['<tr>',
-    '<th rowspan="2" style="'+thS+'">'+L('대표품번','Осн. артикул')+'</th>',
-    '<th rowspan="2" style="'+thS+'">'+L('호환품번','Артикул замены')+'</th>',
-    '<th rowspan="2" style="'+thS+'">'+L('단종','Снято')+'</th>',
-    '<th rowspan="2" style="'+thS+'">'+L('품명','Наименование')+'</th>',
-    isKo?('<th rowspan="2" style="'+thS+'">규격</th>'):'',
-    '<th rowspan="2" style="'+thS+bl+'" title="'+openTitle+'">'+L('이월<br>재고','Нач.<br>ост.')+'</th>',
+    '<th rowspan="2" style="'+thS+'">'+L('대표품번','Осн. артикул')+psiFilterIcon('rep')+'</th>',
+    '<th rowspan="2" style="'+thS+'">'+L('호환품번','Артикул замены')+psiFilterIcon('compat')+'</th>',
+    '<th rowspan="2" style="'+thS+'">'+L('단종','Снято')+psiFilterIcon('note')+'</th>',
+    '<th rowspan="2" style="'+thS+'">'+L('품명','Наименование')+psiFilterIcon('name')+'</th>',
+    isKo?('<th rowspan="2" style="'+thS+'">규격'+psiFilterIcon('spec')+'</th>'):'',
+    '<th rowspan="2" onclick="openPSIFilter(&quot;open&quot;,this)" title="'+openTitle+'" style="'+thS+bl+';cursor:pointer">'
+      + L('이월<br>재고','Нач.<br>ост.') + psiSortMark('open') + '</th>',
     grp,'</tr><tr>',sub,'</tr>'].join('');
 
-  if(!rows.length){
+  if(!items.length){
     if(thead) thead.innerHTML=head;
     if(tbody) tbody.innerHTML='';
     if(empty){ empty.textContent=L('결과가 없습니다.','Нет данных.'); empty.style.display='block'; }
@@ -8089,12 +8258,10 @@ function renderPSI(){
   // 같은 호환품번이 두 대표품번 아래에 걸쳐 두 줄로 나오는 경우가 있다.
   // 줄은 그대로 보여 주되, 합계는 호환품번당 한 번만 센다.
   const counted={};
-  const body=rows.map(r=>{
-    const key=normPN(r._compat);
+  const body=items.map(it=>{
+    const r=it.r, v=it.v, key=it.key;
     const dup=!!counted[key]; counted[key]=1;
     const pn=normBadgePN(r._compat);
-    const rec=psiData[key];
-    const v=psiRowVals(rec?rec.data:null, c, yms);
     const op=v._open||0;
     if(!dup) totOpen+=op;
     const cells=yms.map((y,i)=>{
