@@ -1990,7 +1990,71 @@ function mountModelDiag(target){
 }
 
 // ── 언어 ──
-function setLang(l){
+// PSI 계열 화면(PSI·발주시뮬레이션·발주현황·선적/입고현황·미출현황)의 글자를 언어에 맞춘다.
+// 이 화면들은 만들어질 때 한글로 박혀 있어서 언어를 바꿀 때마다 여기서 갈아 끼운다.
+function refreshPsiTexts(){
+  const ru=(lang==='ru');
+  const L=(ko,rr)=>(ru?rr:ko);
+  const set=(id,ko,rr)=>{ const e=document.getElementById(id); if(e) e.textContent=L(ko,rr); };
+  const ph=(id,ko,rr)=>{ const e=document.getElementById(id); if(e) e.placeholder=L(ko,rr); };
+  const DL=['엑셀 다운로드','Скачать Excel'], COLS=['보기','Столбцы'], ALL=['전체 기간','Все периоды'];
+  // 숨은 탭 단추
+  set('i18n-tab-psi','📈 PSI','📈 PSI');
+  set('i18n-tab-po','📋 발주현황','📋 Заказы');
+  set('i18n-tab-ship','🚢 선적/입고현황','🚢 Отгрузка/Приход');
+  set('i18n-tab-ms','⚠ 미출현황','⚠ Невыполненные');
+  set('i18n-tab-sim','📈 발주시뮬레이션','📈 Симуляция заказа');
+  // PSI 화면
+  ph('psiInput','품명·규격·대표/호환품번으로 검색…','Поиск: наименование, хар-ки, артикул…');
+  set('i18n-psi-from','시작월','С месяца');
+  set('i18n-psi-months','개월','Мес.');
+  set('i18n-psi-base','재고 기산','База остатка');
+  set('i18n-psi-avg','보유월 향후','Мес. вперёд');
+  set('i18n-psi-apply','적용','Применить');
+  set('i18n-psi-cols',COLS[0],COLS[1]);
+  set('i18n-psi-reset','필터 초기화','Сброс фильтров');
+  set('i18n-psi-upload','엑셀 업로드','Загрузить Excel');
+  set('i18n-psi-dl',DL[0],DL[1]);
+  set('i18n-psi-fc','출고예상수량 산식','Формула прогноза');
+  set('i18n-ship-tab','선적/입고현황','Отгрузка/Приход');
+  set('i18n-sim-tab','발주시뮬레이션','Симуляция заказа');
+  set('i18n-po-tab','발주현황','Заказы');
+  set('i18n-ms-tab','미출현황','Невыполненные');
+  // 발주시뮬레이션
+  ph('simInput','품명·규격·대표/호환품번으로 검색…','Поиск: наименование, хар-ки, артикул…');
+  set('i18n-sim-from','시작월','С месяца');
+  set('i18n-sim-months','개월','Мес.');
+  set('i18n-sim-base','재고 기산','База остатка');
+  set('i18n-sim-avg','보유월 향후','Мес. вперёд');
+  set('i18n-sim-apply','적용','Применить');
+  set('i18n-sim-cols',COLS[0],COLS[1]);
+  set('i18n-sim-reset','필터 초기화','Сброс фильтров');
+  set('i18n-sim-manual','수기 초기화','Сброс ручных');
+  set('i18n-sim-dl',DL[0],DL[1]);
+  // 발주현황
+  ph('poInput','차수·발주년월·대표코드·발주코드·품명으로 검색…','Поиск: партия, месяц, код, наименование…');
+  set('i18n-po-all',ALL[0],ALL[1]);
+  set('i18n-po-up','발주 업로드','Загрузить заказы');
+  set('i18n-po-dl',DL[0],DL[1]);
+  // 선적/입고현황
+  ph('shipInput','인보이스·선적일·품번·품명으로 검색…','Поиск: инвойс, дата, артикул, наименование…');
+  set('i18n-ship-inv','선적차수','Партии');
+  set('i18n-ship-dl',DL[0],DL[1]);
+  // 미출현황
+  ph('msInput','대표품번·호환품번·품명·규격으로 검색…','Поиск: артикул, наименование, хар-ки…');
+  set('i18n-ms-cols',COLS[0],COLS[1]);
+  set('i18n-ms-all',ALL[0],ALL[1]);
+  set('i18n-ms-dl',DL[0],DL[1]);
+  // 보고 있는 화면을 그 자리에서 다시 그린다
+  const A=id=>{ const e=document.getElementById(id); return !!(e && e.classList.contains('active')); };
+  try{
+    if(A('pane-psi')) renderPSI();
+    else if(A('pane-sim')) renderSIM();
+    else if(A('pane-po')) renderPO();
+    else if(A('pane-ship')) renderShip();
+    else if(A('pane-ms')) renderMS();
+  }catch(e){}
+}function setLang(l){
   lang=l;
   document.querySelectorAll('.lang-btn').forEach(b=>b.classList.toggle('active',b.getAttribute('onclick')===`setLang('${l}')`));
   const t=T[l];
@@ -2059,6 +2123,7 @@ function setLang(l){
   refreshMyOrdersTexts();
   refreshInventoryTexts();
   refreshPriceTexts();
+  refreshPsiTexts();
   renderModelBar(); if(openGroup) buildDropdown(openGroup); else if(openSeries) buildSeriesDropdown(openSeries);
   renderTable(); renderPN();
   mountModelDiag('order'); // 부품검색 탭 제거로 기본 탭이 주문이 되어, 공용 모델바/분해도를 주문 슬롯에 장착
@@ -9285,12 +9350,12 @@ function psiCfg(){
   const avgN=Math.max(1,Math.min(24,parseInt(g('AvgN')?g('AvgN').value:'',10)||6));
   return { from, months, base, avgN };
 }
+// 칸에는 지금 화면에 쓰이고 있는 값을 그대로 보여 준다(적고 있는 칸은 건드리지 않는다).
 function psiFillCfgInputs(c){
-  const g=id=>document.getElementById(id);
-  if(g('FromYm') && !g('FromYm').value) g('FromYm').value=c.from;
-  if(g('Months') && !g('Months').value) g('Months').value=c.months;
-  if(g('BaseYm') && !g('BaseYm').value) g('BaseYm').value=c.base;
-  if(g('AvgN') && !g('AvgN').value) g('AvgN').value=c.avgN;
+  const g=sfx=>pgEl(sfx);
+  const put=(sfx,v)=>{ const e=g(sfx);
+    if(e && document.activeElement!==e && String(e.value)!==String(v)) e.value=v; };
+  put('FromYm', c.from); put('Months', c.months); put('BaseYm', c.base); put('AvgN', c.avgN);
 }
 // 한 품번의 표시 구간 값. 재고는 기산월부터 한 번만 훑어 누적한다.
 function psiRowVals(d,c,yms){
