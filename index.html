@@ -567,6 +567,7 @@ input[type="text"]::placeholder{color:var(--muted)}
   <button class="tab-btn" style="display:none" onclick="switchTab('po')"        id="tab-po"><span id="i18n-tab-po">📋 발주현황</span></button>
   <button class="tab-btn" style="display:none" onclick="switchTab('ship')"      id="tab-ship"><span id="i18n-tab-ship">🚢 선적/입고현황</span></button>
   <button class="tab-btn" style="display:none" onclick="switchTab('ms')"        id="tab-ms"><span id="i18n-tab-ms">⚠ 미출현황</span></button>
+  <button class="tab-btn" style="display:none" onclick="switchTab('sim')"       id="tab-sim"><span id="i18n-tab-sim">📈 발주시뮬레이션</span></button>
   <button class="tab-btn" style="display:none;position:relative" onclick="switchTab('memberManagement')" id="tab-memberManagement"><span id="i18n-tab-membermgmt">👥 회원관리</span><span id="memberMgmtUnreadDot" style="display:none;position:absolute;top:4px;right:2px;width:8px;height:8px;border-radius:50%;background:#ef4444;box-shadow:0 0 0 2px var(--bg)"></span></button>
   <button class="tab-btn" style="display:none" onclick="switchTab('reset')" id="tab-reset"><span id="i18n-tab-reset">🗑️ 초기화</span></button>
   <button class="tab-btn" style="display:none" onclick="switchTab('parts')" id="tab-parts">🔧 부품 검색</button>
@@ -1110,6 +1111,54 @@ input[type="text"]::placeholder{color:var(--muted)}
   </div>
 </div>
 
+<!-- 발주시뮬레이션 (MASTER 전용) -->
+<div class="tab-pane" id="pane-sim">
+  <div class="fixed-top">
+    <div class="search-bar">
+      <div class="search-wrap">
+        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+        <input type="text" id="simInput" placeholder="품명·규격·대표/호환품번으로 검색…" oninput="debouncedRenderSIM()">
+      </div>
+      <button class="dl-btn" onclick="switchTab('psi')" title="PSI 화면으로 돌아가기">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+        <span id="i18n-sim-back">PSI</span>
+      </button>
+      <label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--muted)"><span id="i18n-sim-from">시작월</span>
+        <input type="text" id="simFromYm" maxlength="4" placeholder="2609" oninput="this.dataset.user='1'" style="width:52px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></label>
+      <label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--muted)"><span id="i18n-sim-months">개월</span>
+        <input type="number" id="simMonths" min="1" max="12" style="width:48px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></label>
+      <label style="display:none;align-items:center;gap:4px;font-size:10px;color:var(--muted)"><span id="i18n-sim-base">재고 기산</span>
+        <input type="text" id="simBaseYm" maxlength="4" style="width:52px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></label>
+      <span id="simOpenNote" style="display:none;font-size:10px;color:var(--muted);white-space:nowrap"></span>
+      <label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--muted)" title="보유월 = 그 달 재고 ÷ (다음 달부터 이 개월 수만큼의 출고 합계 ÷ 개월 수)"><span id="i18n-sim-avg">보유월 향후</span>
+        <input type="number" id="simAvgN" min="1" max="24" style="width:48px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></label>
+      <button class="dl-btn" onclick="renderSIM()"><span id="i18n-sim-apply">적용</span></button>
+      <button class="dl-btn" onclick="openPsiColsPanel()" title="표에 보일 열을 고릅니다(아이디별로 저장)">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="9" y1="4" x2="9" y2="20"/><line x1="15" y1="4" x2="15" y2="20"/></svg>
+        <span id="i18n-sim-cols">보기</span>
+      </button>
+      <button class="dl-btn" onclick="psiResetFilters()" title="헤더 필터·정렬을 기본값으로">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+        <span id="i18n-sim-reset">필터 초기화</span>
+      </button>
+      <button class="dl-btn" onclick="downloadSIM()">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        <span id="i18n-sim-dl">엑셀 다운로드</span>
+      </button>
+      <span id="simNote" style="font-size:10px;color:#7c3aed;white-space:nowrap"></span>
+    </div>
+  </div>
+  <div class="scroll-body" id="scrollBodySIM" style="padding:0 12px 72px">
+    <div class="pn-body-wrap">
+      <table id="simTable" style="width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed">
+        <colgroup id="simColgroup"></colgroup>
+        <thead id="simThead"></thead>
+        <tbody id="simTbody"></tbody>
+      </table>
+    </div>
+    <div class="news-empty" id="simEmpty" style="display:none"></div>
+  </div>
+</div>
 <div class="tab-pane" id="pane-psi">
   <div class="fixed-top">
     <div class="search-bar">
@@ -1147,6 +1196,10 @@ input[type="text"]::placeholder{color:var(--muted)}
       <button class="dl-btn" onclick="switchTab('ship')" title="인보이스별 선적 내역" style="background:#14b8a6;border-color:#14b8a6;color:#fff">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 17l2-6h14l2 6"/><path d="M5 11V7a2 2 0 012-2h10a2 2 0 012 2v4"/><path d="M2 20c2 0 2-1 4-1s2 1 4 1 2-1 4-1 2 1 4 1 2-1 4-1"/></svg>
         <span id="i18n-ship-tab">선적/입고현황</span>
+      </button>
+      <button class="dl-btn" onclick="switchTab('sim')" title="발주현황의 미공급수량이 다음 달 선적된다고 보고 재고·보유월을 다시 계산합니다" style="background:#8b5cf6;border-color:#8b5cf6;color:#fff">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg>
+        <span id="i18n-sim-tab">발주시뮬레이션</span>
       </button>
       <button class="dl-btn" onclick="switchTab('po')" title="차수별 수주·공급·미공급 현황" style="background:#f59e0b;border-color:#f59e0b;color:#fff">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h4"/></svg>
@@ -1866,6 +1919,7 @@ function switchTab(tab){
   if(tab==='po'){ loadPOTab(); }
   if(tab==='ship'){ loadShipTab(); }
   if(tab==='ms'){ loadMSTab(); }
+  if(tab==='sim'){ loadSimTab(); }
   if(tab==='adminOrders'){ loadAdminOrdersTab(); }
   if(tab==='memberManagement'){ loadMemberManagementTab(); }
 }
@@ -5826,6 +5880,7 @@ function rerenderActiveTab(){
     else if(A('pane-shipments')) renderShipmentsList();
     else if(A('pane-price')) renderPriceActive();
     else if(A('pane-psi')) renderPSI();
+    else if(A('pane-sim')) renderSIM();
     else if(A('pane-po')) renderPO();
     else if(A('pane-ship')) renderShip();
     else if(A('pane-ms')) renderMS();
@@ -5894,7 +5949,7 @@ function applyPermTabVisibility(skipSwitch){
   if(!pobj){
     // 권한을 아직 부여하지 않은 회원: 품번조회 하나만 연다.
     // 종전에는 역할 기본값을 그대로 써서 주문·재고관리·가격정보까지 다 보였다.
-    ['tab-order','tab-parts','tab-adminOrders','tab-inventory','tab-shipments','tab-price','tab-psi','tab-po','tab-ship','tab-ms','tab-memberManagement']
+    ['tab-order','tab-parts','tab-adminOrders','tab-inventory','tab-shipments','tab-price','tab-psi','tab-po','tab-ship','tab-ms','tab-sim','tab-memberManagement']
       .forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display='none'; });
     const pnEl=document.getElementById('tab-pn'); if(pnEl) pnEl.style.display='';
     if(!skipSwitch) ensureVisibleTab();
@@ -5906,6 +5961,7 @@ function applyPermTabVisibility(skipSwitch){
   const poEl=document.getElementById('tab-po'); if(poEl) poEl.style.display='none';
   const shipEl=document.getElementById('tab-ship'); if(shipEl) shipEl.style.display='none';
   const msEl=document.getElementById('tab-ms'); if(msEl) msEl.style.display='none';
+  const simEl=document.getElementById('tab-sim'); if(simEl) simEl.style.display='none';
   const map={ 'tab-pn':'pn','tab-inventory':'inventory','tab-shipments':'shipments','tab-price':'price','tab-memberManagement':'memberManagement' };
   Object.keys(map).forEach(tabId=>{ const el=document.getElementById(tabId); if(el) el.style.display = pobj[map[tabId]].v ? '' : 'none'; });
   // 주문관리 탭: '주문접수' 또는 '주문' 서브탭 권한이 있으면 노출. 서브탭 버튼도 권한대로.
@@ -9068,9 +9124,10 @@ function psiOpenOf(d,base){
 }
 // 입고: 인보이스에 입고일을 적으면 그 값(w)을 쓰고, 없으면 입고 시트의 월별 값(n).
 function psiInOf(d,ym){
-  if(!d) return 0; const o=d[ym]; if(!o) return 0;
-  if(o.w!=null && o.w!=='') return Number(o.w)||0;
-  return Number(o.n)||0;
+  const o=d?d[ym]:null;
+  let v=!o?0:((o.w!=null && o.w!=='')?(Number(o.w)||0):(Number(o.n)||0));
+  if(psiSimOn && d){ const z=_simZ.get(d); if(z && z[ym]) v+=z[ym]; }
+  return v;
 }
 // 출고: 예측 시작월부터는 실적 대신 예상수량을 쓴다(psiFc 설정)
 function psiOutOf(d,ym){
@@ -9095,22 +9152,30 @@ function psiMaxYm(){
   const now=psiNowYm();
   return (mx && mx>now) ? now : mx;
 }
+// PSI 화면과 발주시뮬레이션 화면이 같은 그리기 코드를 쓴다. PSIP 가 지금 그리는 쪽.
+let PSIP='psi';
+function pgEl(sfx){ return document.getElementById(PSIP+sfx); }
+// 활성 화면을 다시 그린다(필터·보기·산식 창에서 부른다)
+function psiRepaint(){
+  const s=document.getElementById('pane-sim');
+  if(s && s.classList.contains('active')) renderSIM(); else renderPSI();
+}
 function psiCfg(){
-  const g=id=>document.getElementById(id);
+  const g=sfx=>pgEl(sfx);
   const clean=v=>String(v||'').replace(/\D/g,'').slice(0,4);
-  const months=Math.max(1,Math.min(12,parseInt(g('psiMonths')?g('psiMonths').value:'',10)||2));
-  let from=clean(g('psiFromYm')?g('psiFromYm').value:'');
+  const months=Math.max(1,Math.min(12,parseInt(g('Months')?g('Months').value:'',10)||2));
+  let from=clean(g('FromYm')?g('FromYm').value:'');
   if(from.length!==4){ const mx=psiMaxYm(); from=mx?psiYmAdd(mx,-(months-1)):'2601'; }
-  let base=clean(g('psiBaseYm')?g('psiBaseYm').value:''); if(base.length!==4) base=PSI_BASE_DEFAULT;
-  const avgN=Math.max(1,Math.min(24,parseInt(g('psiAvgN')?g('psiAvgN').value:'',10)||6));
+  let base=clean(g('BaseYm')?g('BaseYm').value:''); if(base.length!==4) base=PSI_BASE_DEFAULT;
+  const avgN=Math.max(1,Math.min(24,parseInt(g('AvgN')?g('AvgN').value:'',10)||6));
   return { from, months, base, avgN };
 }
 function psiFillCfgInputs(c){
   const g=id=>document.getElementById(id);
-  if(g('psiFromYm') && !g('psiFromYm').value) g('psiFromYm').value=c.from;
-  if(g('psiMonths') && !g('psiMonths').value) g('psiMonths').value=c.months;
-  if(g('psiBaseYm') && !g('psiBaseYm').value) g('psiBaseYm').value=c.base;
-  if(g('psiAvgN') && !g('psiAvgN').value) g('psiAvgN').value=c.avgN;
+  if(g('FromYm') && !g('FromYm').value) g('FromYm').value=c.from;
+  if(g('Months') && !g('Months').value) g('Months').value=c.months;
+  if(g('BaseYm') && !g('BaseYm').value) g('BaseYm').value=c.base;
+  if(g('AvgN') && !g('AvgN').value) g('AvgN').value=c.avgN;
 }
 // 한 품번의 표시 구간 값. 재고는 기산월부터 한 번만 훑어 누적한다.
 function psiRowVals(d,c,yms){
@@ -9223,7 +9288,7 @@ function openPsiColsPanel(){
     if(done) return; done=true;
     const v={}; box.querySelectorAll('.pcChk').forEach(c=>{ v[c.getAttribute('data-k')]=c.checked; });
     if(psiCols && psiCols.__ms) v.__ms=psiCols.__ms;      // 미출현황 열 선택은 건드리지 않는다
-    psiCols=v; closePsiColsPanel(); renderPSI();
+    psiCols=v; closePsiColsPanel(); psiRepaint();
     const ok=await savePsiCols();
     if(!ok) console.log('psi_cols: 이 브라우저에만 저장');
   };
@@ -9475,7 +9540,7 @@ function _psiFilterEsc(e){ if(e.key==='Escape') closePSIFilter(); }
 function _psiFilterOutside(e){ const b=document.getElementById('psiFilterPop'); if(b && !b.contains(e.target)) closePSIFilter(); }
 function closePSIFilter(){ const b=document.getElementById('psiFilterPop'); if(b) b.remove();
   document.removeEventListener('mousedown', _psiFilterOutside); document.removeEventListener('keydown', _psiFilterEsc); }
-function psiResetFilters(){ _psiFilters={}; _psiSort={key:null,dir:'asc'}; closePSIFilter(); renderPSI(); }
+function psiResetFilters(){ _psiFilters={}; _psiSort={key:null,dir:'asc'}; closePSIFilter(); psiRepaint(); }
 function openPSIFilter(key, anchor){
   closePSIFilter();
   const ru=(lang==='ru');
@@ -9533,11 +9598,11 @@ function openPSIFilter(key, anchor){
     + '</div>';
   box.innerHTML=html;
   document.body.appendChild(box);
-  box.querySelectorAll('.psif-sort').forEach(b=>{ b.onclick=()=>{ _psiSort={key, dir:b.getAttribute('data-dir')}; closePSIFilter(); renderPSI(); }; });
+  box.querySelectorAll('.psif-sort').forEach(b=>{ b.onclick=()=>{ _psiSort={key, dir:b.getAttribute('data-dir')}; closePSIFilter(); psiRepaint(); }; });
   box.querySelectorAll('.psifClr').forEach(b=>{ b.onclick=()=>{
     const v=b.getAttribute('data-v');
     if(v) _psiFilters['clr:'+clrYm]=[v]; else delete _psiFilters['clr:'+clrYm];
-    closePSIFilter(); renderPSI(); }; });
+    closePSIFilter(); psiRepaint(); }; });
   if(isText){
     const listEl=box.querySelector('#psifList');
     const allChk=box.querySelector('#psifAll');
@@ -9555,10 +9620,10 @@ function openPSIFilter(key, anchor){
       const all=items();
       const checked=all.filter(it=>it.querySelector('.psif-chk').checked).map(it=>it.getAttribute('data-v'));
       if(checked.length===all.length) delete _psiFilters[key]; else _psiFilters[key]=checked;
-      closePSIFilter(); renderPSI();
+      closePSIFilter(); psiRepaint();
     };
   }
-  box.querySelector('#psifClear').onclick=()=>{ delete _psiFilters[key]; if(_psiSort.key===key) _psiSort={key:null,dir:'asc'}; closePSIFilter(); renderPSI(); };
+  box.querySelector('#psifClear').onclick=()=>{ delete _psiFilters[key]; if(_psiSort.key===key) _psiSort={key:null,dir:'asc'}; closePSIFilter(); psiRepaint(); };
   box.querySelector('#psifCancel').onclick=()=> closePSIFilter();
   document.addEventListener('keydown', _psiFilterEsc);
   setTimeout(()=>document.addEventListener('mousedown', _psiFilterOutside), 0);
@@ -9568,19 +9633,89 @@ function debouncedRenderPSI(){ clearTimeout(window._psiT); window._psiT=setTimeo
 // 머리글 세 줄(연월 그룹 · 항목 · 합계)을 스크롤해도 위에 남게 붙인다.
 // 줄마다 top 을 실제 높이로 계산해 넣는다 — 고정 픽셀로 두면 줄이 겹쳐 글자가 깨진다.
 function psiStickHead(){
-  const thead=document.getElementById('psiThead'); if(!thead) return;
+  const thead=pgEl('Thead'); if(!thead) return;
   let acc=0;
   Array.prototype.forEach.call(thead.rows, function(tr){
     Array.prototype.forEach.call(tr.cells, function(th){ th.style.top=acc+'px'; });
     acc += tr.getBoundingClientRect().height;
   });
 }
+// ══════════════════════════════════════════
+// 발주시뮬레이션 (PSI 화면 + 발주현황의 미공급수량을 다음 달 선적으로 얹어 본다)
+//   미공급수량이 다음 달 1일에 선적된다고 보고, 늘 쓰던 대로 선적일 + 49일을 입고일로 잡는다.
+//   그 달 입고가 늘어나므로 재고와 보유월이 달라진다. 실제 자료(kt_psi)에는 손대지 않는다.
+//   품번은 변경코드(최종품번)가 있으면 그 쪽, 없으면 발주코드 그대로.
+// ══════════════════════════════════════════
+let psiSimOn=false;
+const _simZ=new Map();          // psiData[pn].data 객체 → {ym: 더할 입고수량}
+let _simInfo=null;
+function simBuild(){
+  _simZ.clear();
+  const t=new Date(), d1=new Date(t.getFullYear(), t.getMonth()+1, 1);
+  const p2=x=>(x<10?'0':'')+x;
+  const sail=d1.getFullYear()+'-'+p2(d1.getMonth()+1)+'-'+p2(d1.getDate());
+  const arrive=shipAutoArrive(sail);
+  const ym=(typeof shipYmOf==='function')?shipYmOf(arrive):'';
+  let rows=0, total=0;
+  if(ym){
+    (poData||[]).forEach(r=>{
+      const rest=(Number(r.qty)||0)-(Number(r.supplied)||0); if(rest<=0) return;
+      const info=poLookup(r.pn)||{};
+      const pn=normPN(info.fin||'')||normPN(r.pn); if(!pn) return;
+      const rec=psiData[pn]||(psiData[pn]={rep:info.rep||'', data:{}});
+      const dat=rec.data||(rec.data={});
+      const z=_simZ.get(dat)||{}; z[ym]=(z[ym]||0)+rest; _simZ.set(dat, z);
+      rows++; total+=rest;
+    });
+  }
+  _simInfo={sail, arrive, ym, rows, total};
+  return _simInfo;
+}
+function renderSIM(){
+  if(!document.getElementById('pane-sim')) return;
+  simBuild();
+  // 처음 열 때는 이번 달부터, 얹은 입고달이 보일 만큼 넉넉히 잡는다
+  const fEl=document.getElementById('simFromYm'), mEl=document.getElementById('simMonths');
+  if(fEl && !fEl.value){ const t=new Date();
+    fEl.value=String(t.getFullYear()).slice(2)+((t.getMonth()+1)<10?'0':'')+(t.getMonth()+1); }
+  if(mEl && !mEl.value){
+    let k=6;
+    if(_simInfo && _simInfo.ym && fEl && fEl.value){
+      let c=1; for(let y=fEl.value; c<=12; c++){ if(y===_simInfo.ym) break; y=psiYmAdd(y,1); }
+      k=Math.min(12, Math.max(6, c+1));
+    }
+    mEl.value=k; }
+  const prevP=PSIP, prevS=psiSimOn;
+  PSIP='sim'; psiSimOn=true;
+  try{ renderPSI(); } finally { PSIP=prevP; psiSimOn=prevS; }
+  const note=document.getElementById('simNote');
+  if(note && _simInfo){
+    const ru=(lang==='ru');
+    note.textContent = _simInfo.ym
+      ? (ru ? ('Недопоставка '+_simInfo.total.toLocaleString()+' → отгрузка '+_simInfo.sail+', приход '+_simInfo.arrive)
+            : ('미공급 '+_simInfo.total.toLocaleString()+'개('+_simInfo.rows+'줄)를 '+_simInfo.sail+' 선적 → '+_simInfo.arrive+' 입고('+psiYmLabel(_simInfo.ym)+')로 얹음'))
+      : '';
+  }
+}
+function debouncedRenderSIM(){ clearTimeout(window._simT); window._simT=setTimeout(renderSIM,200); }
+async function loadSimTab(){
+  if(!Object.keys(psiData).length) await loadPSI();
+  if(!poData.length) await loadPO();
+  if(typeof loadPsiCols==='function') await loadPsiCols();
+  renderSIM();
+}
+function downloadSIM(){
+  simBuild();
+  const prevP=PSIP, prevS=psiSimOn;
+  PSIP='sim'; psiSimOn=true;
+  try{ downloadPSI(); } finally { PSIP=prevP; psiSimOn=prevS; }
+}
 function renderPSI(){
-  const pane=document.getElementById('pane-psi'); if(!pane) return;
+  const pane=document.getElementById('pane-'+PSIP); if(!pane) return;
   const c=psiCfg(); psiFillCfgInputs(c);
   _psiLowN=c.avgN;
   const yms=[]; for(let i=0;i<c.months;i++) yms.push(psiYmAdd(c.from,i));
-  const kwEl=document.getElementById('psiInput');
+  const kwEl=pgEl('Input');
   const kw=(kwEl?kwEl.value:'').trim().toLowerCase();
   const isKo=(lang!=='ru');
   const L=(ko,ru)=>(lang==='ru'?ru:ko);
@@ -9621,16 +9756,16 @@ function renderPSI(){
   _psiFiltered=items.map(it=>it.r);
   const badge=document.getElementById('psiBadge'); if(badge) badge.innerHTML='<b>'+items.length+'</b>';
 
-  const cg=document.getElementById('psiColgroup');
+  const cg=pgEl('Colgroup');
   if(cg){
     const w=FX.map(d=>'<col style="width:'+d.w+'px">');
     yms.forEach(()=>SB.forEach(d=>w.push('<col style="width:'+d.w+'px">')));
     cg.innerHTML=w.join('');
   }
 
-  const tbody=document.getElementById('psiTbody');
-  const thead=document.getElementById('psiThead');
-  const empty=document.getElementById('psiEmpty');
+  const tbody=pgEl('Tbody');
+  const thead=pgEl('Thead');
+  const empty=pgEl('Empty');
   const thS='padding:5px 4px;text-align:center;vertical-align:middle;position:sticky;z-index:3;'
     + 'background:var(--surface2);font-size:11px;white-space:nowrap;border-bottom:1px solid var(--border)';
   const bl=';border-left:1px solid var(--border)';
@@ -9642,7 +9777,7 @@ function renderPSI(){
         + L(d.ko,d.ru) + psiSortMark(key) + clr + '</th>';
     }).join('')).join('');
   const openYm=psiYmAdd(c.base,-1);
-  const noteEl=document.getElementById('psiOpenNote');
+  const noteEl=pgEl('OpenNote');
   if(noteEl) noteEl.textContent=L('이월재고 = '+psiYmLabel(openYm)+' 재고','Нач. остаток = остаток '+psiYmLabel(openYm));
   let head=['<tr>',
     FX.map(d=>'<th rowspan="2" style="'+thS+'">'+L(d.ko,d.ru)+psiFilterIcon(d.k)+'</th>').join(''),
@@ -9674,6 +9809,16 @@ function renderPSI(){
     yms.forEach(y=>{ const x=it.v[y]||{}; const a=g.agg[y];
       a.sh+=x.sh||0; a.i+=x.i||0; a.o+=x.o||0; a.ms+=x.ms||0; a.st+=x.st||0; a.fut+=futOut(it.d,y); });
   });
+  if(psiSimOn){
+    // 보유월이 '향후 N개월' 미만인 대표품번을 맨 위로. 낮은 것부터, 하위 호환품번도 따라 올라간다.
+    groups.forEach(g=>{ let mn=null;
+      yms.forEach(y=>{ const a=g.agg[y]; const m=moOf(a.st,a.fut);
+        if(m!=null && (mn==null || m<mn)) mn=m; });
+      g._mo=mn; g._low=(mn!=null && mn<psiLowN()); });
+    groups.sort((a,b)=>{ if(a._low!==b._low) return a._low?-1:1;
+      if(!a._low) return 0;
+      return (a._mo==null?1e9:a._mo)-(b._mo==null?1e9:b._mo); });
+  }
   _psiGroups=groups;
 
   const tot={}; yms.forEach(y=>tot[y]={sh:0,i:0,o:0,ms:0,st:0,fut:0});
@@ -12003,6 +12148,8 @@ function enterApp(user){
   if(tabShipStat) tabShipStat.style.display='none';
   const tabMs=document.getElementById('tab-ms');
   if(tabMs) tabMs.style.display='none';
+  const tabSim=document.getElementById('tab-sim');
+  if(tabSim) tabSim.style.display='none';
   // 출고관리: MASTER 는 출고하지 않으므로 숨긴다.
   // 재고관리: MASTER 는 자기 창고는 없지만 KITURAMI 창고를 감독하므로 보여준다.
   if(tabInv) tabInv.style.display = 'block';
