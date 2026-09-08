@@ -1002,7 +1002,6 @@ input[type="text"]::placeholder{color:var(--muted)}
         <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
         <input type="text" id="msInput" placeholder="대표품번·호환품번·품명·규격으로 검색…" oninput="debouncedRenderMS()">
       </div>
-      <div class="count-badge" id="msBadge"></div>
       <button class="dl-btn" onclick="switchTab('psi')" title="PSI 화면으로 돌아가기">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
         <span id="i18n-ms-back">PSI</span>
@@ -8096,11 +8095,11 @@ const MS_COL_DEFS=[
   {k:'name',   w:210, ko:'품명',     ru:'Наименование'},
   {k:'spec',   w:168, ko:'규격',     ru:'Хар-ки', koOnly:1},
   {k:'qty',    w:86,  ko:'미출수량', ru:'Невыполнено'},
-  {k:'q',      w:74,  ko:'수량',     ru:'Кол-во'}
+  {k:'q', w:74, off:1, ko:'수량', ru:'Кол-во'}   // 미출수량과 같은 값이라 기본은 숨김
 ];
 function msColsMap(){
   const src=(psiCols && psiCols.__ms && typeof psiCols.__ms==='object')?psiCols.__ms:null;
-  const m={}; MS_COL_DEFS.forEach(d=>m[d.k]=true);
+  const m={}; MS_COL_DEFS.forEach(d=>m[d.k]=!d.off);
   if(src) MS_COL_DEFS.forEach(d=>{ if(src[d.k]===false) m[d.k]=false; });
   return m;
 }
@@ -8233,7 +8232,7 @@ function renderMS(){
   const sty={ rep:tdS, compat:tdS, ymd:tdS+';text-align:center;color:var(--muted);white-space:nowrap',
               name:tdS+';word-break:break-all;font-size:10.5px;line-height:1.25',
               spec:tdS+';color:var(--muted);word-break:break-all;font-size:10px;line-height:1.25',
-              qty:tdS+';text-align:right;white-space:nowrap;font-weight:600;color:#b91c1c',
+              qty:tdS+';text-align:right;white-space:nowrap',   // 하위 호환품번은 검은 보통 글자
               q:tdS+';text-align:right;white-space:nowrap' };
   const gsty={ rep:gS, compat:gS, ymd:gS+';text-align:center',
                name:gS+';word-break:break-all;font-size:10.5px;line-height:1.25',
