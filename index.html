@@ -8203,7 +8203,24 @@ function shipParseInvoice(wb){
     const p=n=>(n<10?'0':'')+n;
     const iso=d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());
     const ym=String(d.getFullYear()%100).padStart(2,'0')+p(d.getMonth()+1);
-    const inv=String(sn).replace(/^\s*(CI|PL)\s+/i,'').trim() || sn;
+    // 인보이스 번호: '9) No. & Date of Invoice' 값(보통 라벨 바로 아랫줄 같은 칸)
+    let invNo='';
+    for(let r=0;r<Math.min(40,a.length) && !invNo;r++){
+      const w=a[r]||[];
+      for(let c=0;c<w.length && !invNo;c++){
+        if(!/no\.?\s*&\s*date\s*of\s*invoice/i.test(String(w[c]==null?'':w[c]))) continue;
+        const cand=[];
+        for(let k=c+1;k<Math.min(c+4,w.length);k++) cand.push(w[k]);
+        const nx=a[r+1]||[];
+        cand.push(nx[c]);
+        for(let k=c+1;k<Math.min(c+4,nx.length);k++) cand.push(nx[k]);
+        for(const v of cand){
+          const t=String(v==null?'':v).replace(/^\s*:\s*/,'').trim();
+          if(/^[A-Za-z]{2,}[A-Za-z0-9_\-\/]{3,}$/.test(t)){ invNo=t; break; }
+        }
+      }
+    }
+    const inv=invNo || String(sn).replace(/^\s*(CI|PL)\s+/i,'').trim() || sn;
     return { inv, sail:iso, ym, sheet:sn, items };
   }
   return null;
