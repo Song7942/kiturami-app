@@ -2680,20 +2680,24 @@ async function loadExportCtrl(){
   }catch(e){ _exportLoaded=false; }
 }
 // N/W·G/W·CBM·단종: 호환품번(개별 품번) 단위 저장(kt_pn_specs). 품번마다 값이 다를 수 있어 rep 가 아닌 품번 키.
-let _pnSpec=new Map();   // normPN -> {nw,gw,cbm,dan}
+let _pnSpec=new Map();   // normPN -> {nw,gw,cbm,dan,name,spec,name_ru}
 function pnSpecOf(pn){ return _pnSpec.get(normPN(pn)) || null; }
 async function loadPnSpecs(){
   _pnSpec=new Map();
   try{
     const page=1000;
     for(let from=0;;from+=page){
-      const { data, error }=await sb.from('kt_pn_specs').select('pn,nw,gw,cbm,dan,name,spec').range(from, from+page-1);
-      if(error){ // name/spec 컬럼이 없을 수 있어 재시도(구버전 스키마)
+      let { data, error }=await sb.from('kt_pn_specs').select('pn,nw,gw,cbm,dan,name,spec,name_ru').range(from, from+page-1);
+      if(error){ // name_ru 컬럼이 없을 수 있어 한 단계 낮춰 재시도
+        const r3=await sb.from('kt_pn_specs').select('pn,nw,gw,cbm,dan,name,spec').range(from, from+page-1);
+        data=r3.data; error=r3.error;
+      }
+      if(error){ // name/spec 컬럼도 없을 수 있어 재시도(구버전 스키마)
         const r2=await sb.from('kt_pn_specs').select('pn,nw,gw,cbm,dan').range(from, from+page-1);
-        if(r2.error) return; (r2.data||[]).forEach(r=>{ const p=normPN(r.pn); if(p) _pnSpec.set(p,{nw:r.nw||'',gw:r.gw||'',cbm:r.cbm||'',dan:r.dan||'',name:'',spec:''}); });
+        if(r2.error) return; (r2.data||[]).forEach(r=>{ const p=normPN(r.pn); if(p) _pnSpec.set(p,{nw:r.nw||'',gw:r.gw||'',cbm:r.cbm||'',dan:r.dan||'',name:'',spec:'',name_ru:''}); });
         if(!r2.data||r2.data.length<page) break; continue;
       }
-      (data||[]).forEach(r=>{ const p=normPN(r.pn); if(p) _pnSpec.set(p,{nw:r.nw||'',gw:r.gw||'',cbm:r.cbm||'',dan:r.dan||'',name:r.name||'',spec:r.spec||''}); });
+      (data||[]).forEach(r=>{ const p=normPN(r.pn); if(p) _pnSpec.set(p,{nw:r.nw||'',gw:r.gw||'',cbm:r.cbm||'',dan:r.dan||'',name:r.name||'',spec:r.spec||'',name_ru:r.name_ru||''}); });
       if(!data || data.length<page) break;
     }
   }catch(e){}
@@ -2800,9 +2804,13 @@ function pnColMetaOrdered(isKo, showEng, isMaster){
 // 필터/검색용 셀 텍스트
 function pnColText(key, r){
   switch(key){
-    case 'name': { if(lang==='ko' && r._split){ const s=pnSpecOf(r._compat); if(s&&s.name) return s.name; } return lang==='ko'?(r.name_ko||''):(r.name_ru||r.name_ko||''); }
+    // 품명은 호환품번 단위 값(kt_pn_specs)이 있으면 그것을 먼저 쓴다. 한글은 name, 러문은 name_ru.
+    case 'name': { if(r._split){ const s=pnSpecOf(r._compat);
+        if(lang==='ko'){ if(s&&s.name) return s.name; }
+        else if(s&&s.name_ru) return s.name_ru; }
+      return lang==='ko'?(r.name_ko||''):(r.name_ru||r.name_ko||''); }
     case 'spec': { if(r._split){ const s=pnSpecOf(r._compat); if(s&&s.spec) return s.spec; } return r.spec||''; }
-    case 'name_ru': return r.name_ru||'';
+    case 'name_ru': { if(r._split){ const s=pnSpecOf(r._compat); if(s&&s.name_ru) return s.name_ru; } return r.name_ru||''; }
     case 'name_en': return engNameText(r.rep)||'';
     case 'rep': return r.rep||'';
     case 'compat': return r._split ? pnUpperLead(r._compat||'') : (r.compats||[]).map(pnUpperLead).join(', ');
