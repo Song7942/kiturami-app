@@ -217,6 +217,10 @@ input[type="text"]::placeholder{color:var(--muted)}
 .pt tr.g.band td{background:var(--tag-bg)}
 .pt span.c{font-family:'Courier New',monospace;font-size:9.5px;white-space:nowrap}
 .pt td.low,.pt tr.g td.low{background:#fee2e2;color:#b91c1c;font-weight:700}
+.pt td.ed{cursor:text;border-bottom:1px dashed var(--accent2)}
+.pt td input.ni{width:100%;box-sizing:border-box;text-align:right;font-size:11px;font-weight:700;
+  padding:0 3px;border:1px solid var(--accent2);border-radius:4px;background:var(--surface);color:var(--text)}
+.pt td input.ni:focus{outline:none}
 .dl-btn{flex-shrink:0;display:flex;align-items:center;gap:4px;padding:6px 10px;background:linear-gradient(135deg,#166534,#15803d);border:1px solid #166534;border-radius:7px;color:#bbf7d0;font-size:11px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif}
 
 /* ── 품번조회·가격정보 데이터 정렬 ──
@@ -9251,9 +9255,35 @@ function psiVisSub(){ const m=psiColsMap();
   if(typeof psiSimOn!=='undefined' && psiSimOn) v=v.concat(PSI_SIM_COL_DEFS);
   return v; }
 const PSI_SIM_COL_DEFS=[
-  {k:'need', w:64, ko:'발주필요',    ru:'Дозаказ'},
-  {k:'mo2',  w:60, ko:'발주후 보유월', ru:'Мес. после'}
+  {k:'need', w:64, ko:'발주필요', ru:'Дозаказ'},
+  {k:'mo2',  w:60, ko:'발주후<br>보유월', ru:'Мес.<br>после'}
 ];
+// 발주필요를 손으로 고친 값. '대표품번|연월' → 수량. 화면에서만 쓰고 저장하지 않는다.
+let _simNeed={};
+function simNeedKey(rep,ym){ return rep+'|'+ym; }
+// 값을 고치면 그 줄의 '발주후 보유월'만 바로 다시 적는다(표 전체를 다시 그리지 않는다)
+function simNeedApply(td, raw){
+  const rep=td.getAttribute('data-rep'), ym=td.getAttribute('data-ym');
+  const st=Number(td.getAttribute('data-st'))||0, avg=Number(td.getAttribute('data-avg'))||0;
+  const t=String(raw).replace(/[^0-9-]/g,'');
+  const num=(t===''||t==='-')?null:Math.round(Number(t));
+  if(num==null) delete _simNeed[simNeedKey(rep,ym)]; else _simNeed[simNeedKey(rep,ym)]=num;
+  const next=td.nextElementSibling;
+  if(next) next.textContent = avg>0 ? (Math.round(((st+(num||0))/avg)*10)/10).toFixed(1) : '';
+  return num;
+}
+// 칸을 누르면 그때 입력칸을 만든다. 줄마다 input 을 깔아 두면 1만 개가 되어 표가 느려진다.
+function simNeedFocus(td){
+  if(td.querySelector('input')) return;
+  const cur=td.textContent.trim().replace(/,/g,'');
+  td.innerHTML='<input class="ni" type="text" value="'+escapeHtml(cur)+'">';
+  const el=td.querySelector('input');
+  el.oninput=()=>simNeedApply(td, el.value);
+  el.onkeydown=(e)=>{ if(e.key==='Enter'||e.key==='Escape') el.blur(); };
+  el.onblur=()=>{ const num=simNeedApply(td, el.value);
+    td.textContent=(num?psiFmt(num):''); };
+  el.focus(); el.select();
+}
 function _psiColsKey(){ const u=(typeof currentUser!=='undefined'&&currentUser)?(currentUser.id||''):''; return 'kt_psi_cols:'+u; }
 async function loadPsiCols(){
   const uid=(typeof currentUser!=='undefined'&&currentUser)?(currentUser.id||null):null;
@@ -9856,6 +9886,7 @@ function renderPSI(){
   // 대표품번 줄 색(참고 엑셀의 연한 파랑 띠)
   // 하위 호환품번 줄이 없으면(대표품번만 보기) 띠를 칠하지 않는다 — 모든 줄이 같은 색이면 의미가 없다
   const band=psiShowKids()?' band':'';
+  const needTot={};                       // 달마다 발주필요 합계(손으로 고친 값 포함)
   const kCls={ rep:'', compat:'', note:'ct', name:'nm', spec:'sp' };   // 하위 줄 고정열
   const body=groups.map(g=>{
     const r0=g.first;
@@ -9868,11 +9899,18 @@ function renderPSI(){
     const gCells=yms.map((y,i)=>{
       const a=g.agg[y]; const b=i===0?' bl':'';
       const mo=moOf(a.st,a.fut);
-      const nd=needOf(a.st,a.fut), m2=moOf(a.st+nd,a.fut);
+      const man=_simNeed[simNeedKey(g.rep,y)];
+      const nd=(man!=null)?man:needOf(a.st,a.fut);
+      const m2=moOf(a.st+nd,a.fut);
+      needTot[y]=(needTot[y]||0)+nd;
+      const nAttr=' data-rep="'+escapeHtml(g.rep)+'" data-ym="'+y+'" data-st="'+a.st
+        +'" data-avg="'+(a.fut/c.avgN)+'" onclick="simNeedFocus(this)" title="'
+        +L('눌러서 고치면 오른쪽 보유월이 따라 바뀝니다','Нажмите, чтобы изменить')+'"';
       const val={sh:n(a.sh), i:n(a.i), o:n(a.o), ms:n(a.ms), st:n(a.st), mo:(mo==null?'':mo.toFixed(1)),
                  need:(nd?n(nd):''), mo2:(m2==null?'':m2.toFixed(1))};
       const low=psiLow(mo);
-      return SB.map((d,j)=>'<td class="n'+(j===0?b:'')+((low&&d.k==='mo')?' low':'')+'">'+val[d.k]+'</td>').join('');
+      return SB.map((d,j)=>'<td class="n'+(j===0?b:'')+((low&&d.k==='mo')?' low':'')+(d.k==='need'?' ed':'')
+        +'"'+(d.k==='need'?nAttr:'')+'>'+val[d.k]+'</td>').join('');
     }).join('');
     const gRow='<tr class="g'+band+'">'+gFix+gCells+'</tr>';
     const kids=g.rows.map(it=>{
@@ -9897,7 +9935,7 @@ function renderPSI(){
   const sumCells=yms.map((y,i)=>{
     const t=tot[y]; const b=i===0?bl:'';
     const mo=moOf(t.st,t.fut);
-    const tn=needOf(t.st,t.fut), tm2=moOf(t.st+tn,t.fut);
+    const tn=(needTot[y]!=null)?needTot[y]:needOf(t.st,t.fut), tm2=moOf(t.st+tn,t.fut);
     const val={sh:n(t.sh), i:n(t.i), o:n(t.o), ms:n(t.ms), st:n(t.st), mo:(mo==null?'':mo.toFixed(1)),
                need:(tn?n(tn):''), mo2:(tm2==null?'':tm2.toFixed(1))};
     const dim={sh:1, ms:1, mo:1, mo2:1};
@@ -9927,7 +9965,7 @@ function downloadPSI(){
   const g1=h1.map(()=>''); const g2=h1.slice();
   g1.push(''); g2.push(ru ? ('Нач. остаток ('+psiYmLabel(psiYmAdd(c.base,-1))+')')
                           : ('이월재고 ('+psiYmLabel(psiYmAdd(c.base,-1))+' 재고)'));
-  yms.forEach(y=>{ g1.push(psiYmLabel(y)); SB.slice(1).forEach(()=>g1.push('')); SB.forEach(d=>g2.push(ru?d.ru:d.ko)); });
+  yms.forEach(y=>{ g1.push(psiYmLabel(y)); SB.slice(1).forEach(()=>g1.push('')); SB.forEach(d=>g2.push(String(ru?d.ru:d.ko).replace(/<br>/g,' '))); });
   const moOf=(st,fut)=>{ const avg=fut/c.avgN; return avg>0 ? Math.round((st/avg)*10)/10 : ''; };
   const needOf=(st,fut)=>{ const avg=fut/c.avgN; if(avg<=0) return 0; return Math.max(0, Math.ceil(avg*c.avgN-st)); };
   const tot={}; yms.forEach(y=>tot[y]={sh:0,i:0,o:0,ms:0,st:0,fut:0});
