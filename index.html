@@ -1080,6 +1080,10 @@ input[type="text"]::placeholder{color:var(--muted)}
       </button>
       <select id="shipInv" onchange="renderShip()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></select>
       <select id="shipYm" onchange="renderShip()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></select>
+      <button class="dl-btn" onclick="openShipColsPanel()" title="표에 보일 열을 고릅니다(아이디별로 저장)">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="9" y1="4" x2="9" y2="20"/><line x1="15" y1="4" x2="15" y2="20"/></svg>
+        <span id="i18n-ship-cols">보기</span>
+      </button>
       <button class="dl-btn" onclick="openShipInvPanel()" title="인보이스 넘버·선적일·입고일을 고칩니다" style="background:var(--accent2);border-color:var(--accent2);color:#fff">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="8" y1="14" x2="16" y2="14"/></svg>
         <span id="i18n-ship-inv">선적차수</span>
@@ -2037,6 +2041,7 @@ function refreshPsiTexts(){
   set('i18n-po-dl',DL[0],DL[1]);
   // 선적/입고현황
   ph('shipInput','인보이스·선적일·품번·품명으로 검색…','Поиск: инвойс, дата, артикул, наименование…');
+  set('i18n-ship-cols',COLS[0],COLS[1]);
   set('i18n-ship-inv','선적차수','Партии');
   set('i18n-ship-dl',DL[0],DL[1]);
   // 미출현황
@@ -2047,7 +2052,7 @@ function refreshPsiTexts(){
   // 마우스를 올렸을 때 나오는 도움말
   const ttl=(sel,ko,rr)=>{ document.querySelectorAll(sel).forEach(e=>{ e.title=L(ko,rr); }); };
   ttl('[onclick="switchTab(\'psi\')"]','PSI 화면으로 돌아가기','Вернуться к PSI');
-  ttl('[onclick="openPsiColsPanel()"],[onclick="openMsColsPanel()"]',
+  ttl('[onclick="openPsiColsPanel()"],[onclick="openMsColsPanel()"],[onclick="openShipColsPanel()"]',
       '표에 보일 열을 고릅니다(아이디별로 저장)','Выбор столбцов (сохраняется для этого ID)');
   ttl('[onclick="psiResetFilters()"]','헤더 필터·정렬을 기본값으로','Сбросить фильтры и сортировку');
   ttl('[onclick="msAllPeriod()"]','기간을 전체로 돌리기','Показать весь период');
@@ -8584,7 +8589,81 @@ async function loadShip(){
 }
 function shipInvList(){ const s=new Set(); shipData.forEach(r=>{ if(r.inv) s.add(r.inv); }); return [...s].sort(); }
 function shipYmList(){ const s=new Set(); shipData.forEach(r=>{ if(r.ym) s.add(r.ym); }); return [...s].sort(); }
-function renderShip(){
+// ── 선적/입고현황 열 고르기 ────────────────────────────────
+//   한글 화면에서는 한글품명·규격을, 러시아어 화면에서는 러시아어품명을 보여 준다.
+//   영문품명은 인보이스에 적힌 그대로, 나머지 이름은 품번조회에서 가져온다.
+const SHIP_COL_DEFS=[
+  {k:'inv',    w:128, ko:'인보이스 넘버', ru:'Инвойс'},
+  {k:'sail',   w:80,  ko:'선적일',        ru:'Отгрузка'},
+  {k:'arr',    w:80,  ko:'입고일',        ru:'Приход'},
+  {k:'rep',    w:104, ko:'대표품번',      ru:'Осн. артикул'},
+  {k:'pn',     w:104, ko:'호환품번',      ru:'Артикул'},
+  {k:'nameKo', w:180, ko:'한글품명',      ru:'Наим. (KO)', koOnly:1},
+  {k:'spec',   w:150, ko:'규격',          ru:'Хар-ки',     koOnly:1},
+  {k:'nameRu', w:200, ko:'러시아어품명',  ru:'Наименование', ruOnly:1},
+  {k:'nameEn', w:200, ko:'영문품명',      ru:'Наим. (EN)'},
+  {k:'hs',     w:90,  ko:'HS CODE',       ru:'HS'},
+  {k:'qty',    w:64,  ko:'수량',          ru:'Кол-во'},
+  {k:'price',  w:84,  ko:'단가(RUB)',     ru:'Цена'},
+  {k:'amt',    w:96,  ko:'금액(RUB)',     ru:'Сумма'}
+];
+function shipColsMap(){
+  const src=(psiCols && psiCols.__ship && typeof psiCols.__ship==='object')?psiCols.__ship:null;
+  const m={}; SHIP_COL_DEFS.forEach(d=>m[d.k]=true);
+  if(src) SHIP_COL_DEFS.forEach(d=>{ if(src[d.k]===false) m[d.k]=false; });
+  return m;
+}
+function shipVisCols(){
+  const isKo=(lang!=='ru'), m=shipColsMap();
+  const v=SHIP_COL_DEFS.filter(d=>(!d.koOnly||isKo) && (!d.ruOnly||!isKo) && m[d.k]);
+  return v.length?v:SHIP_COL_DEFS.filter(d=>d.k==='inv');
+}
+// 품명·규격은 품번조회 자료에서. 영문품명만 인보이스에 적힌 값을 쓴다.
+function shipPnInfo(pn){
+  const sp=(typeof pnSpecOf==='function' ? pnSpecOf(pn) : null) || {};
+  const rep=(poLookup(pn)||{}).rep||'';
+  const p=rep?(getPNInfo(rep)||null):null;
+  return { ko: sp.name || (p?p.name_ko:'') || '',
+           ru: sp.name_ru || (p?p.name_ru:'') || '',
+           spec: sp.spec || (p?p.spec:'') || '' };
+}
+function closeShipColsPanel(){ const b=document.getElementById('shipColsPop'); if(b) b.remove(); }
+function openShipColsPanel(){
+  closeShipColsPanel();
+  const ru=(lang==='ru'), isKo=!ru;
+  const m=shipColsMap();
+  const box=document.createElement('div'); box.id='shipColsPop';
+  box.style.cssText='position:fixed;inset:0;z-index:10000;background:#0008;display:flex;align-items:center;justify-content:center';
+  const item=d=>'<label style="display:flex;align-items:center;gap:7px;padding:5px 4px;cursor:pointer">'
+    + '<input type="checkbox" class="scChk" data-k="'+d.k+'" '+(m[d.k]?'checked':'')+'>'
+    + '<span>'+(ru?d.ru:d.ko)+'</span></label>';
+  box.innerHTML=
+    '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;width:300px;max-width:92vw;'
+      +'box-shadow:0 16px 44px #000a;font-size:12px;color:var(--text)">'
+    + '<div style="padding:12px 14px;border-bottom:1px solid var(--border);font-weight:700;font-size:13px">'+(ru?'Столбцы':'보기 — 열 선택')+'</div>'
+    + '<div style="padding:10px 14px;max-height:60vh;overflow:auto">'
+      + SHIP_COL_DEFS.filter(d=>(!d.koOnly||isKo) && (!d.ruOnly||!isKo)).map(item).join('')
+    + '</div>'
+    + '<div style="padding:0 14px 8px;font-size:11px;color:var(--muted)">'+(ru?'Выбор сохраняется для этого ID при закрытии.':'닫으면 그대로 저장되어 이 아이디에 다음에도 남습니다.')+'</div>'
+    + '<div style="display:flex;gap:7px;padding:11px 14px;border-top:1px solid var(--border)">'
+      + '<button id="scAll" style="flex:none;padding:7px 12px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);cursor:pointer;font-size:12px">'+(ru?'Все':'전체 선택')+'</button>'
+      + '<button id="scClose" style="flex:1;padding:7px;border:none;border-radius:7px;background:var(--accent2);color:#fff;cursor:pointer;font-size:12px;font-weight:700">'+(ru?'Закрыть':'닫기')+'</button>'
+    + '</div></div>';
+  document.body.appendChild(box);
+  let done=false;
+  const commit=async()=>{
+    if(done) return; done=true;
+    const v=(psiCols && psiCols.__ship && typeof psiCols.__ship==='object')?psiCols.__ship:{};
+    box.querySelectorAll('.scChk').forEach(c=>{ v[c.getAttribute('data-k')]=c.checked; });
+    if(!psiCols || typeof psiCols!=='object') psiCols={};
+    psiCols.__ship=v; closeShipColsPanel(); renderShip();
+    const ok=await savePsiCols();
+    if(!ok) console.log('ship_cols: 이 브라우저에만 저장');
+  };
+  box.querySelector('#scAll').onclick=()=>box.querySelectorAll('.scChk').forEach(c=>c.checked=true);
+  box.querySelector('#scClose').onclick=commit;
+  box.onmousedown=(e)=>{ if(e.target===box) commit(); };
+}function renderShip(){
   const pane=document.getElementById('pane-ship'); if(!pane) return;
   _poRepMap=null;
   const ru=(lang==='ru'), L=(ko,rr)=>(ru?rr:ko);
@@ -8622,35 +8701,40 @@ function renderShip(){
   const tdS='padding:5px 6px;font-size:11px;border-bottom:1px solid var(--border)';
   const numS=tdS+';text-align:right;white-space:nowrap';
   const codeS="font-family:'Courier New',monospace;font-size:9.5px;white-space:nowrap";
-  const heads=[[L('인보이스 넘버','Инвойс'),128],[L('선적일','Отгрузка'),80],[L('입고일','Приход'),80],[L('대표품번','Осн. артикул'),104],
-               [L('호환품번','Артикул'),104],[L('영문품명','Наименование'),210],[L('HS CODE','HS'),90],
-               [L('수량','Кол-во'),64],[L('단가(RUB)','Цена'),84],[L('금액(RUB)','Сумма'),96]];
+  const CO=shipVisCols();
   const cg=document.getElementById('shipColgroup');
-  if(cg) cg.innerHTML=heads.map(h=>'<col style="width:'+h[1]+'px">').join('');
+  if(cg) cg.innerHTML=CO.map(d=>'<col style="width:'+d.w+'px">').join('');
+  const nameS=tdS+';word-break:break-all;font-size:10.5px;line-height:1.25';
+  const sty={ inv:tdS+';white-space:nowrap', sail:tdS+';text-align:center;white-space:nowrap',
+              arr:tdS+';text-align:center;white-space:nowrap;color:var(--muted)',
+              rep:tdS, pn:tdS, nameKo:nameS, spec:nameS+';color:var(--muted);font-size:10px',
+              nameRu:nameS, nameEn:nameS+';color:var(--accent2)',
+              hs:tdS+';text-align:center;color:var(--muted)',
+              qty:numS, price:numS+';color:var(--muted)', amt:numS };
   let tq=0, ta=0;
   const body=rows.map(r=>{
-    const i=poLookup(r.pn);
+    const i=poLookup(r.pn), nm=shipPnInfo(r.pn);
     tq+=r.qty; ta+=r.amount;
-    return '<tr>'
-      + '<td style="'+tdS+';white-space:nowrap">'+escapeHtml(r.inv)+'</td>'
-      + '<td style="'+tdS+';text-align:center;white-space:nowrap">'+escapeHtml(r.sail||'')+'</td>'
-      + '<td style="'+tdS+';text-align:center;white-space:nowrap;color:var(--muted)">'+escapeHtml(r.arrive||'')+'</td>'
-      + '<td style="'+tdS+'"><span style="'+codeS+'">'+escapeHtml(i.rep||'')+'</span></td>'
-      + '<td style="'+tdS+'"><span style="'+codeS+'">'+escapeHtml(normBadgePN(r.pn))+'</span></td>'
-      + '<td style="'+tdS+';word-break:break-all;font-size:10.5px;line-height:1.25">'+escapeHtml(r.name_en||'')+'</td>'
-      + '<td style="'+tdS+';text-align:center;color:var(--muted)">'+escapeHtml(r.hs||'')+'</td>'
-      + '<td style="'+numS+'">'+(r.qty?r.qty.toLocaleString():'')+'</td>'
-      + '<td style="'+numS+';color:var(--muted)">'+(r.price?Math.round(r.price*100)/100:'').toLocaleString()+'</td>'
-      + '<td style="'+numS+'">'+(r.amount?Math.round(r.amount).toLocaleString():'')+'</td>'
-      + '</tr>';
+    const val={ inv:escapeHtml(r.inv), sail:escapeHtml(r.sail||''), arr:escapeHtml(r.arrive||''),
+      rep:'<span style="'+codeS+'">'+escapeHtml(i.rep||'')+'</span>',
+      pn:'<span style="'+codeS+'">'+escapeHtml(normBadgePN(r.pn))+'</span>',
+      nameKo:escapeHtml(nm.ko), spec:escapeHtml(nm.spec), nameRu:escapeHtml(nm.ru),
+      nameEn:escapeHtml(r.name_en||''), hs:escapeHtml(r.hs||''),
+      qty:(r.qty?r.qty.toLocaleString():''),
+      price:(r.price?Math.round(r.price*100)/100:'').toLocaleString(),
+      amt:(r.amount?Math.round(r.amount).toLocaleString():'') };
+    return '<tr>'+CO.map(d=>'<td style="'+sty[d.k]+'">'+val[d.k]+'</td>').join('')+'</tr>';
   }).join('');
   const thead=document.getElementById('shipThead');
-  if(thead) thead.innerHTML='<tr>'+heads.map(h=>'<th style="'+thS+'">'+h[0]+'</th>').join('')+'</tr>'
-    + '<tr><th colspan="7" style="'+thS+';font-weight:700;background:var(--surface);top:28px;text-align:right">'
-    + L('합계 '+rows.length+'건','Итого '+rows.length)+'</th>'
-    + '<th style="'+thS+';font-weight:700;background:var(--surface);top:28px;text-align:right">'+tq.toLocaleString()+'</th>'
-    + '<th style="'+thS+';background:var(--surface);top:28px"></th>'
-    + '<th style="'+thS+';font-weight:700;background:var(--surface);top:28px;text-align:right">'+Math.round(ta).toLocaleString()+'</th></tr>';
+  const sumS=thS+';font-weight:700;background:var(--surface);top:28px;text-align:right';
+  const nLead=CO.findIndex(d=>d.k==='qty');
+  const lead=(nLead<0?CO.length:nLead);
+  const tail=CO.slice(lead).map(d=>{
+    const v=(d.k==='qty')?tq.toLocaleString():((d.k==='amt')?Math.round(ta).toLocaleString():'');
+    return '<th style="'+sumS+'">'+v+'</th>'; }).join('');
+  if(thead) thead.innerHTML='<tr>'+CO.map(d=>'<th style="'+thS+'">'+(ru?d.ru:d.ko)+'</th>').join('')+'</tr>'
+    + '<tr><th colspan="'+Math.max(1,lead)+'" style="'+sumS+'">'
+    + L('합계 '+rows.length+'건','Итого '+rows.length)+'</th>'+tail+'</tr>';
   const tbody=document.getElementById('shipTbody'); if(tbody) tbody.innerHTML=body;
   const empty=document.getElementById('shipEmpty');
   if(empty){ empty.textContent=L('자료가 없습니다. PSI 화면의 엑셀 업로드로 인보이스를 올려주세요.','Нет данных.');
@@ -8662,14 +8746,23 @@ async function loadShipTab(){ await loadShip(); renderShip(); }
 function downloadShip(){
   renderShip();
   const ru=(lang==='ru');
-  const head=[ru?'Инвойс':'인보이스 넘버', ru?'Отгрузка':'선적일', ru?'Приход':'입고일', ru?'Осн. артикул':'대표품번', ru?'Артикул':'호환품번',
-              ru?'Наименование':'영문품명','HS CODE', ru?'Кол-во':'수량', ru?'Цена(RUB)':'단가(RUB)', ru?'Сумма(RUB)':'금액(RUB)'];
-  const aoa=[head]; let tq=0, ta=0;
-  (_shipFiltered||[]).forEach(r=>{ const i=poLookup(r.pn); tq+=r.qty; ta+=r.amount;
-    aoa.push([r.inv, r.sail||'', r.arrive||'', i.rep||'', normBadgePN(r.pn), r.name_en||'', r.hs||'', r.qty, r.price, r.amount]); });
-  aoa.splice(1,0,[(ru?'Итого ':'합계 ')+(_shipFiltered||[]).length+(ru?'':'건'),'','','','','','',tq,'',Math.round(ta)]);
+  const CO=shipVisCols();
+  const aoa=[CO.map(d=>ru?d.ru:d.ko)];
+  let tq=0, ta=0;
+  (_shipFiltered||[]).forEach(r=>{
+    const i=poLookup(r.pn), nm=shipPnInfo(r.pn);
+    tq+=r.qty; ta+=r.amount;
+    const val={ inv:r.inv, sail:r.sail||'', arr:r.arrive||'', rep:i.rep||'', pn:normBadgePN(r.pn),
+      nameKo:nm.ko, spec:nm.spec, nameRu:nm.ru, nameEn:r.name_en||'', hs:r.hs||'',
+      qty:r.qty, price:r.price, amt:r.amount };
+    aoa.push(CO.map(d=>val[d.k]));
+  });
+  const sum={}; CO.forEach(d=>sum[d.k]='');
+  sum[CO[0].k]=(ru?'Итого ':'합계 ')+(_shipFiltered||[]).length+(ru?'':'건');
+  sum.qty=tq; sum.amt=Math.round(ta);
+  aoa.splice(1,0,CO.map(d=>sum[d.k]));
   const ws=XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols']=[{wch:18},{wch:12},{wch:12},{wch:14},{wch:14},{wch:34},{wch:12},{wch:9},{wch:12},{wch:14}];
+  ws['!cols']=CO.map(d=>({wch:Math.round(d.w/7)+4}));
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'SHIP');
   XLSX.writeFile(wb, xlsxName('선적입고현황','Отгрузки'));
 }
