@@ -1005,7 +1005,8 @@ input[type="text"]::placeholder{color:var(--muted)}
         <input type="number" id="psiMonths" min="1" max="12" style="width:48px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></label>
       <label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--muted)"><span id="i18n-psi-base">재고 기산</span>
         <input type="text" id="psiBaseYm" maxlength="4" style="width:52px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></label>
-      <label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--muted)"><span id="i18n-psi-avg">보유월 평균</span>
+      <span id="psiOpenNote" style="font-size:10px;color:var(--muted);white-space:nowrap"></span>
+      <label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--muted)" title="보유월 = 그 달 재고 ÷ (다음 달부터 이 개월 수만큼의 출고 합계 ÷ 개월 수)"><span id="i18n-psi-avg">보유월 향후</span>
         <input type="number" id="psiAvgN" min="1" max="24" style="width:48px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></label>
       <button class="dl-btn" onclick="renderPSI()"><span id="i18n-psi-apply">적용</span></button>
       <button class="dl-btn" onclick="psiResetFilters()" title="헤더 필터·정렬을 기본값으로">
@@ -8019,7 +8020,7 @@ function psiCfg(){
   let from=clean(g('psiFromYm')?g('psiFromYm').value:'');
   if(from.length!==4){ const mx=psiMaxYm(); from=mx?psiYmAdd(mx,-(months-1)):'2601'; }
   let base=clean(g('psiBaseYm')?g('psiBaseYm').value:''); if(base.length!==4) base=PSI_BASE_DEFAULT;
-  const avgN=Math.max(1,Math.min(24,parseInt(g('psiAvgN')?g('psiAvgN').value:'',10)||3));
+  const avgN=Math.max(1,Math.min(24,parseInt(g('psiAvgN')?g('psiAvgN').value:'',10)||6));
   return { from, months, base, avgN };
 }
 function psiFillCfgInputs(c){
@@ -8041,11 +8042,12 @@ function psiRowVals(d,c,yms){
     if(want[k]) out[k]={ sh:psiShipOf(d,k), i:psiInOf(d,k), o:psiOutOf(d,k), st:stock };
   }
   yms.forEach(y=>{ if(!out[y]) out[y]={ sh:psiShipOf(d,y), i:psiInOf(d,y), o:psiOutOf(d,y), st:stock }; });
-  // 보유월: 재고 ÷ 최근 N개월 평균 출고
+  // 보유월: 그 달 재고 ÷ (다음 달부터 N개월 출고 합계 ÷ N)
+  //   예) 26-01 재고 100, 26-02~26-07 출고 합계 30 → 평균 5 → 20.0
   yms.forEach(y=>{
-    let sum=0,n=0;
-    for(let k=psiYmAdd(y,-(c.avgN-1));k<=y;k=psiYmAdd(k,1)){ sum+=psiOutOf(d,k); n++; }
-    const avg=n?sum/n:0;
+    let sum=0;
+    for(let i=1;i<=c.avgN;i++) sum+=psiOutOf(d, psiYmAdd(y,i));
+    const avg=sum/c.avgN;
     out[y].mo = avg>0 ? Math.round((out[y].st/avg)*10)/10 : null;
   });
   return out;
@@ -8267,7 +8269,7 @@ function renderPSI(){
   if(cg){
     const w=['<col style="width:96px">','<col style="width:96px">','<col style="width:38px">','<col style="width:110px">'];
     if(isKo) w.push('<col style="width:110px">');
-    w.push('<col style="width:64px">');   // 이월재고
+
     yms.forEach(()=>{ w.push('<col style="width:56px">','<col style="width:56px">','<col style="width:56px">','<col style="width:60px">','<col style="width:52px">'); });
     cg.innerHTML=w.join('');
   }
@@ -8287,15 +8289,16 @@ function renderPSI(){
       return '<th onclick="openPSIFilter(&quot;'+key+'&quot;,this)" title="'+L('정렬','Сортировка')+'" style="'+thS+(i===0?bl:'')+';cursor:pointer">'
         + L(h[1],h[2]) + psiSortMark(key) + '</th>';
     }).join('')).join('');
-  const openTitle=L('이월재고('+psiYmLabel(psiYmAdd(c.base,-1))+')','Нач. остаток('+psiYmLabel(psiYmAdd(c.base,-1))+')');
+  // 이월재고는 화면에 열로 두지 않고, 어느 달 재고인지만 검색줄에 적어 둔다(엑셀에는 열로 들어간다)
+  const openYm=psiYmAdd(c.base,-1);
+  const openTitle=L('이월재고 = '+psiYmLabel(openYm)+' 재고','Нач. остаток = остаток '+psiYmLabel(openYm));
+  const noteEl=document.getElementById('psiOpenNote'); if(noteEl) noteEl.textContent=openTitle;
   let head=['<tr>',
     '<th rowspan="2" style="'+thS+'">'+L('대표품번','Осн. артикул')+psiFilterIcon('rep')+'</th>',
     '<th rowspan="2" style="'+thS+'">'+L('호환품번','Артикул замены')+psiFilterIcon('compat')+'</th>',
     '<th rowspan="2" style="'+thS+'">'+L('단종','Снято')+psiFilterIcon('note')+'</th>',
     '<th rowspan="2" style="'+thS+'">'+L('품명','Наименование')+psiFilterIcon('name')+'</th>',
     isKo?('<th rowspan="2" style="'+thS+'">규격'+psiFilterIcon('spec')+'</th>'):'',
-    '<th rowspan="2" onclick="openPSIFilter(&quot;open&quot;,this)" title="'+openTitle+'" style="'+thS+bl+';cursor:pointer">'
-      + L('이월<br>재고','Нач.<br>ост.') + psiSortMark('open') + '</th>',
     grp,'</tr><tr>',sub,'</tr>'].join('');
 
   if(!items.length){
@@ -8339,7 +8342,6 @@ function renderPSI(){
       + '<td style="'+tdS+';text-align:center;color:var(--muted)">'+escapeHtml(pnColText('note',r))+'</td>'
       + '<td style="'+tdS+';word-break:break-all;font-size:10.5px;line-height:1.25">'+escapeHtml(pnColText('name',r))+'</td>'
       + (isKo?('<td style="'+tdS+';color:var(--muted);word-break:break-all;font-size:10px;line-height:1.25">'+escapeHtml(pnColText('spec',r))+'</td>'):'')
-      + '<td style="'+numS+bl+';color:var(--muted)">'+n(op)+'</td>'
       + cells + '</tr>';
   }).join('');
 
@@ -8357,7 +8359,6 @@ function renderPSI(){
   head += '<tr>'
     + '<th colspan="'+(isKo?5:4)+'" style="'+sumS+';text-align:right">'
     + L('합계 '+Object.keys(counted).length+'건 · 보유월은 평균','Итого '+Object.keys(counted).length+' · Мес. — среднее')+'</th>'
-    + '<th style="'+sumS+';text-align:right'+bl+';color:var(--muted)">'+n(totOpen)+'</th>'
     + sumCells + '</tr>';
 
   if(thead) thead.innerHTML=head;
@@ -8374,7 +8375,8 @@ function downloadPSI(){
   const h1=[(lang==='ru'?'Осн. артикул':'대표품번'),(lang==='ru'?'Артикул замены':'호환품번'),(lang==='ru'?'Снято':'단종'),(lang==='ru'?'Наименование':'품명')];
   if(isKo) h1.push('규격');
   const g1=h1.map(()=>''); const g2=h1.slice();
-  g1.push(''); g2.push((lang==='ru'?'Нач. остаток':'이월재고')+'('+psiYmLabel(psiYmAdd(c.base,-1))+')');
+  g1.push(''); g2.push(lang==='ru' ? ('Нач. остаток ('+psiYmLabel(psiYmAdd(c.base,-1))+')')
+                                   : ('이월재고 ('+psiYmLabel(psiYmAdd(c.base,-1))+' 재고)'));
   yms.forEach(y=>{ g1.push(psiYmLabel(y),'','','',''); g2.push(lang==='ru'?'Отгрузка':'선적', lang==='ru'?'Приход':'입고', lang==='ru'?'Расход':'출고', lang==='ru'?'Остаток':'재고', lang==='ru'?'Мес.':'보유월'); });
   // 합계 줄을 화면과 같은 값으로 셋째 줄에 넣는다.
   // 같은 호환품번이 두 대표품번 아래 두 줄로 나오는 경우가 있어, 합계는 호환품번당 한 번만 센다.
