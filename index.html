@@ -8460,7 +8460,7 @@ function renderMS(){
   const head='<tr>'+CO.map(d=>'<th style="'+thS+'">'+(ru?d.ru:d.ko)+'</th>').join('')+'</tr>'
     + '<tr><th colspan="'+Math.max(1,CO.length-nq)+'" style="'+thS+';font-weight:700;background:var(--surface);top:28px;text-align:right">'
     + escapeHtml(L('합계 '+groups.length+'개 대표품번 / '+nPn+'개 호환품번 · '+R.label,
-                   'Итого '+groups.length+' / '+nPn+' · '+R.label))+'</th>'
+                   'Итого '+groups.length+' Осн. артикул / '+nPn+' Артикул · '+R.label))+'</th>'
     + CO.filter(d=>d.k==='qty').map(d=>'<th style="'+thS+';font-weight:700;background:var(--surface);top:28px;text-align:right">'
         +tot.toLocaleString()+'</th>').join('')
     + '</tr>';
@@ -8528,8 +8528,8 @@ async function downloadMS(){
     }));
   });
   const sum={}; CO.forEach(d=>sum[d.k]='');
-  sum[CO[0].k]=(ru?'Итого ':'합계 ')+(_msGroups||[]).length+(ru?'':'개 대표품번')+' / '+nPn+(ru?'':'개 호환품번')
-    +' · '+R.label;
+  sum[CO[0].k]=(ru?'Итого ':'합계 ')+(_msGroups||[]).length+(ru?' Осн. артикул':'개 대표품번')
+    +' / '+nPn+(ru?' Артикул':'개 호환품번')+' · '+R.label;
   sum.qty=tot;
   aoa.splice(1,0,rowOf(sum));
   const ws=XLSX.utils.aoa_to_sheet(aoa);
@@ -10320,7 +10320,7 @@ function renderPSI(){
   head += '<tr>'
     + '<th colspan="'+FX.length+'" class="fxs fx0 fxend" style="'+sumS+';text-align:right">'
     + L('합계 '+groups.length+'개 대표품번 / '+Object.keys(counted).length+'개 호환품번',
-        'Осн. '+groups.length+' · Артикулов '+Object.keys(counted).length)+'</th>'
+        'Итого '+groups.length+' Осн. артикул / '+Object.keys(counted).length+' Артикул')+'</th>'
     + sumCells + '</tr>';
 
   // 머리글 높이는 '빈 표'에서 잰다. 수천 줄을 붙인 뒤에 재면 표 전체가 다시 계산되어 2초씩 걸린다.
@@ -10377,7 +10377,7 @@ async function downloadPSI(){
       body.push(row);
     });
   });
-  const sumRow=FX.map((d,i)=>i===0?((ru?'Осн. ':'합계 ')+(_psiGroups||[]).length+(ru?'':'개 대표품번')):'');
+  const sumRow=FX.map((d,i)=>i===0?((ru?'Итого ':'합계 ')+(_psiGroups||[]).length+(ru?' Осн. артикул':'개 대표품번')):'');
   sumRow.push(totOpen);
   yms.forEach(y=>{ const t=tot[y];
     const tn=needOf(t.st,t.fut);
