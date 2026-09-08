@@ -2679,28 +2679,53 @@ async function loadExportCtrl(){
     _exportLoaded=true;
   }catch(e){ _exportLoaded=false; }
 }
-// N/W·G/W·CBM·단종: 호환품번(개별 품번) 단위 저장(kt_pn_specs). 품번마다 값이 다를 수 있어 rep 가 아닌 품번 키.
-let _pnSpec=new Map();   // normPN -> {nw,gw,cbm,dan,name,spec,name_ru}
+// N/W·G/W·CBM·단종·품명·규격: 호환품번(개별 품번) 단위 저장(kt_pn_specs). 품번마다 값이 다를 수 있어 rep 가 아닌 품번 키.
+// 이 표는 ERP 품목 마스터라 12만 행이 넘는다. 전부 내려받으면 접속이 느려지므로
+// 품번조회에 실제로 쓰이는 호환품번만 골라 온다(URL 길이 때문에 200개씩 나눠 요청).
+let _pnSpec=new Map();        // normPN -> {nw,gw,cbm,dan,name,spec,name_ru}
+let _pnSpecAsked=new Set();   // 이미 물어본 품번(행이 없어도 다시 묻지 않게)
 function pnSpecOf(pn){ return _pnSpec.get(normPN(pn)) || null; }
-async function loadPnSpecs(){
-  _pnSpec=new Map();
-  try{
-    const page=1000;
-    for(let from=0;;from+=page){
-      let { data, error }=await sb.from('kt_pn_specs').select('pn,nw,gw,cbm,dan,name,spec,name_ru').range(from, from+page-1);
-      if(error){ // name_ru 컬럼이 없을 수 있어 한 단계 낮춰 재시도
-        const r3=await sb.from('kt_pn_specs').select('pn,nw,gw,cbm,dan,name,spec').range(from, from+page-1);
-        data=r3.data; error=r3.error;
-      }
-      if(error){ // name/spec 컬럼도 없을 수 있어 재시도(구버전 스키마)
-        const r2=await sb.from('kt_pn_specs').select('pn,nw,gw,cbm,dan').range(from, from+page-1);
-        if(r2.error) return; (r2.data||[]).forEach(r=>{ const p=normPN(r.pn); if(p) _pnSpec.set(p,{nw:r.nw||'',gw:r.gw||'',cbm:r.cbm||'',dan:r.dan||'',name:'',spec:'',name_ru:''}); });
-        if(!r2.data||r2.data.length<page) break; continue;
-      }
-      (data||[]).forEach(r=>{ const p=normPN(r.pn); if(p) _pnSpec.set(p,{nw:r.nw||'',gw:r.gw||'',cbm:r.cbm||'',dan:r.dan||'',name:r.name||'',spec:r.spec||'',name_ru:r.name_ru||''}); });
-      if(!data || data.length<page) break;
+// 품번조회가 쓰는 호환품번 전체
+function pnSpecWanted(){
+  const s=new Set();
+  (PN_DATA||[]).forEach(p=>(p.compats||[]).forEach(c=>{ const k=normPN(c); if(k) s.add(k); }));
+  return [...s];
+}
+// 주어진 품번들 중 아직 안 물어본 것만 조회해 _pnSpec 에 채운다
+async function pnSpecFetch(pns){
+  const list=(pns||[]).filter(p=>p && !_pnSpecAsked.has(p));
+  if(!list.length) return 0;
+  // 구버전 스키마도 견디도록 열 목록을 단계적으로 낮춘다
+  const cols=['pn,nw,gw,cbm,dan,name,spec,name_ru','pn,nw,gw,cbm,dan,name,spec','pn,nw,gw,cbm,dan'];
+  let got=0;
+  const batches=[];
+  for(let i=0;i<list.length;i+=200) batches.push(list.slice(i,i+200));
+  const one=async(slice)=>{
+    for(const sel of cols){
+      const r=await sb.from('kt_pn_specs').select(sel).in('pn', slice);
+      if(!r.error) return r.data||[];
     }
-  }catch(e){}
+    return null;
+  };
+  const res=await Promise.all(batches.map(one));   // 배치를 동시에 보낸다
+  batches.forEach((slice,bi)=>{
+    slice.forEach(p=>_pnSpecAsked.add(p));
+    const data=res[bi]; if(!data) return;
+    data.forEach(r=>{ const p=normPN(r.pn); if(!p) return;
+      _pnSpec.set(p,{nw:r.nw||'',gw:r.gw||'',cbm:r.cbm||'',dan:r.dan||'',
+                     name:r.name||'',spec:r.spec||'',name_ru:r.name_ru||''});
+      got++; });
+  });
+  return got;
+}
+async function loadPnSpecs(){
+  _pnSpec=new Map(); _pnSpecAsked=new Set();
+  try{ await pnSpecFetch(pnSpecWanted()); }catch(e){}
+}
+// 대표품번 오버라이드가 나중에 얹히며 새로 생긴 호환품번을 뒤늦게 채운다.
+// 이미 물어본 품번은 건너뛰므로 여러 번 불러도 요청이 늘지 않는다.
+async function pnSpecTopUp(){
+  try{ return await pnSpecFetch(pnSpecWanted()); }catch(e){ return 0; }
 }
 // 그룹(비분할) 모드 집계: nw/gw/cbm 은 첫 비어있지 않은 값, dan 은 O>△ 우선.
 function pnSpecAgg(r, f){
@@ -10580,7 +10605,10 @@ function enterApp(user){
   startLive();                                         // 폴링(8초)으로 실시간처럼 갱신
   startRealtime();                                     // Realtime 구독(활성화 시 즉시 반영)
   Promise.all([loadMyOrderTotals(), loadInventory(), loadGlobalSuppliedTotals(), loadReceivedOrderTotals(), loadPrices(), loadPNOverrides(), loadExportCtrl(), loadPnSpecs(), loadCompanyPrices(),
-               (role.region==='kz'?Promise.all([loadPriceSettings(),loadPriceCalc()]):Promise.resolve())]).then(()=>{
+               (role.region==='kz'?Promise.all([loadPriceSettings(),loadPriceCalc()]):Promise.resolve())]).then(async()=>{
+    // 오버라이드가 얹힌 뒤 새로 생긴 호환품번의 품명·규격을 뒤늦게 채운다
+    const added=await pnSpecTopUp();
+    if(added){ _pnLookupMap=null; _pnByRepMap=null; }
     if(document.getElementById('pane-order').classList.contains('active')) renderOrderTable();
     if(document.getElementById('pane-pn').classList.contains('active')) renderPN();
   });
