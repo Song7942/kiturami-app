@@ -10511,7 +10511,72 @@ function psiParseShipRows(aoa){
   }
   return out;
 }
-function handlePSIUpload(event){
+// ── 1C 보고서(Ведомость по партиям) 읽기 ───────────────────
+//   9행쯤에 날짜(01.MM.YYYY), 그 아래 줄에 항목(Расход·Приход), A열에 품번.
+//   1C 는 '01.01.2021' 을 2020년 12월 실적으로 적는다 — 한 달 앞으로 당겨 읽는다.
+function psi1CYm(v){
+  let y=null, m=null;
+  if(v instanceof Date){ y=v.getFullYear(); m=v.getMonth()+1; }
+  else{
+    const g=String(v||'').trim().match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/);
+    if(!g) return '';
+    y=+g[3]; m=+g[2];
+  }
+  if(!y || !m) return '';
+  m-=1; if(m<1){ m=12; y-=1; }
+  return String(y).slice(2)+(m<10?'0':'')+m;
+}
+// 품번처럼 생겼는지(숫자가 섞인 코드). 'Accessories' 같은 묶음 이름은 걸러낸다.
+function psi1CIsPn(v){
+  const t=String(v||'').trim();
+  if(t.length<5 || /\s/.test(t)) return false;
+  return /[0-9]/.test(t) && /^[A-Za-z0-9][A-Za-z0-9._\-]*$/.test(t);
+}
+function psiParse1C(aoa){
+  let hr=-1;
+  for(let r=0;r<Math.min(40,aoa.length);r++){
+    if((aoa[r]||[]).some(v=>/^(Расход|Приход)$/i.test(String(v||'').trim()))){ hr=r; break; }
+  }
+  if(hr<0) return null;
+  let dr=-1, best=0;
+  for(let r=Math.max(0,hr-5); r<hr; r++){
+    const cnt=(aoa[r]||[]).filter(v=>psi1CYm(v)).length;
+    if(cnt>best){ best=cnt; dr=r; }
+  }
+  if(dr<0) return null;
+  const hrow=aoa[hr]||[];
+  let pcol=hrow.findIndex(v=>/артикул/i.test(String(v||'')));
+  if(pcol<0) pcol=0;
+  const cols=[];
+  (aoa[dr]||[]).forEach((v,ci)=>{
+    const ym=psi1CYm(v); if(!ym) return;
+    const met=String(hrow[ci]||'').trim();
+    let key=null;
+    if(/^Расход/i.test(met)) key='o';
+    else if(/^Приход/i.test(met)) key='n';
+    if(key) cols.push({ci, ym, key});
+  });
+  if(!cols.length) return null;
+  const out={};
+  for(let r=hr+1;r<aoa.length;r++){
+    const row=aoa[r]||[];
+    if(!psi1CIsPn(row[pcol])) continue;
+    const pn=normPN(row[pcol]); if(!pn) continue;
+    cols.forEach(cc=>{
+      const raw=row[cc.ci];
+      let v=0;
+      if(raw!=null && raw!==''){
+        const t=String(raw).replace(/\s/g,'').replace(/,/g,'');
+        v=Number(t.replace(/[^0-9.\-]/g,''));
+        if(!isFinite(v)) v=0;
+      }
+      const o=out[cc.key]||(out[cc.key]={});
+      const q=o[pn]||(o[pn]={rep:'', m:{}});
+      q.m[cc.ym]=Math.round(v);     // 빈칸은 0(그 달 움직임 없음)
+    });
+  }
+  return Object.keys(out).length?out:null;
+}function handlePSIUpload(event){
   if(!userRole(currentUser).usesMasterView){ event.target.value=''; return; }
   const file=event.target.files[0]; if(!file){ event.target.value=''; return; }
   const ru=lang==='ru';
@@ -10555,6 +10620,13 @@ function handlePSIUpload(event){
       for(const sn of wb.SheetNames){
         const aoa=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:''});
         const nm=String(sn).replace(/\s+/g,'');
+        // 1C 보고서(Расход/Приход)면 항목 이름으로 가른다
+        const one=psiParse1C(aoa);
+        if(one){
+          if(one.o && put('o',one.o)) done.push(sn+'(출고 Расход)');
+          if(one.n && put('n',one.n)) done.push(sn+'(입고 Приход)');
+          continue;
+        }
         // 재고 시트는 잔액이라 따로 읽는다(이월재고용)
         if(nm.indexOf('재고')>=0){
           const st=psiParseStockGrid(aoa, ['[품번]검색용','검색용','호환품번'], ['[품번]대표','대표품번']);
