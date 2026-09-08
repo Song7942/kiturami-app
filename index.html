@@ -10061,7 +10061,18 @@ function renderPSI(){
       const sh=a.sh+shipped[i], inq=a.i+arrive[i];
       const mo=moOf(a.st,a.fut);              // 보유월은 발주 전
       const man=_simNeed[simNeedKey(g.rep,y)];
-      const nd=psiSimOn ? ((man!=null)?man:needOf(st,a.fut)) : 0;   // PSI 화면에서는 발주를 넣지 않는다
+      // 이 달 발주분은 ai 달에 들어온다. 그 달 보유월이 N 이 되도록 수량을 잡는다.
+      //   그 사이에 들어올 기(旣)선적분·앞선 발주분은 이미 셈에 들어 있다.
+      const ai=yms.indexOf(simArriveYm(y));
+      let nd=0;
+      if(psiSimOn){
+        if(man!=null) nd=man;
+        else if(ai>i){
+          const at=g.agg[yms[ai]];
+          let got=0; for(let k=0;k<=ai;k++) got+=arrive[k];
+          nd=needOf(at.st+got, at.fut);
+        }
+      }
       const m2=moOf(st,a.fut);                // 발주후 보유월 = 들어온 것까지만
       needTot[y]=(needTot[y]||0)+nd;
       stAdd[y]=(stAdd[y]||0)+addSt;
@@ -10069,11 +10080,11 @@ function renderPSI(){
       inTot[y]=(inTot[y]||0)+arrive[i];
       const si=yms.indexOf(psiYmAdd(y,1));    // 다음 달 말 선적
       if(si>i) shipped[si]+=nd;
-      const ai=yms.indexOf(simArriveYm(y));   // 이 달 발주분이 들어올 달
       if(ai>i) arrive[ai]+=nd;
       const nAttr=' data-rep="'+escapeHtml(g.rep)+'" data-ym="'+y+'" data-st="'+st
         +'" data-avg="'+(a.fut/c.avgN)+'" onclick="simNeedFocus(this)" title="'
-        +L('눌러서 고치면 '+(simArriveYm(y)?psiYmLabel(simArriveYm(y)):'')+' 입고로 잡혀 그 뒤 달까지 다시 계산됩니다',
+        +L((simArriveYm(y)?psiYmLabel(simArriveYm(y))+' 입고 기준 수량입니다. ':'')
+           +'눌러서 고치면 선적·입고와 그 뒤 달까지 다시 계산됩니다',
            'Нажмите, чтобы изменить')+'"';
       const val={sh:n(sh), i:n(inq), o:n(a.o), ms:n(a.ms), st:n(st), mo:(mo==null?'':mo.toFixed(1)),
                  need:(nd?n(nd):''), mo2:(m2==null?'':m2.toFixed(1))};
@@ -10106,7 +10117,7 @@ function renderPSI(){
     const t=tot[y]; const b=i===0?bl:'';
     const tst=t.st+(stAdd[y]||0);
     const mo=moOf(t.st,t.fut);                              // 보유월은 발주 전
-    const tn=psiSimOn ? ((needTot[y]!=null)?needTot[y]:needOf(tst,t.fut)) : 0, tm2=moOf(tst,t.fut);
+    const tn=psiSimOn ? (needTot[y]||0) : 0, tm2=moOf(tst,t.fut);
     const val={sh:n(t.sh+(shipTot[y]||0)), i:n(t.i+(inTot[y]||0)), o:n(t.o), ms:n(t.ms), st:n(tst),
                mo:(mo==null?'':mo.toFixed(1)), need:(tn?n(tn):''), mo2:(tm2==null?'':tm2.toFixed(1))};
     const dim={sh:1, ms:1, mo:1, mo2:1};
