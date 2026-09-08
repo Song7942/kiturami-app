@@ -9343,8 +9343,9 @@ function simNeedFocus(td){
   const el=td.querySelector('input');
   el.oninput=()=>simNeedApply(td, el.value);
   el.onkeydown=(e)=>{ if(e.key==='Enter'||e.key==='Escape') el.blur(); };
-  el.onblur=()=>{ const num=simNeedApply(td, el.value);
-    td.textContent=(num?psiFmt(num):''); };
+  el.onblur=()=>{ simNeedApply(td, el.value);
+    renderSIM();          // 그 뒤 달 재고·보유월·발주필요까지 다시 계산한다
+  };
   el.focus(); el.select();
 }
 function _psiColsKey(){ const u=(typeof currentUser!=='undefined'&&currentUser)?(currentUser.id||''):''; return 'kt_psi_cols:'+u; }
@@ -9950,6 +9951,7 @@ function renderPSI(){
   // 하위 호환품번 줄이 없으면(대표품번만 보기) 띠를 칠하지 않는다 — 모든 줄이 같은 색이면 의미가 없다
   const band=psiShowKids()?' band':'';
   const needTot={};                       // 달마다 발주필요 합계(손으로 고친 값 포함)
+  const stAdd={};                         // 달마다 '앞선 달 발주분'이 재고에 더해진 양의 합계
   const kCls={ rep:'', compat:'', note:'ct', name:'nm', spec:'sp' };   // 하위 줄 고정열
   const body=groups.map(g=>{
     const r0=g.first;
@@ -9959,17 +9961,22 @@ function renderPSI(){
                  compat:(fin?('<span class="c">'+escapeHtml(normBadgePN(fin))+'</span>'):''),
                  note:'', name:escapeHtml(pnColText('name',finRow)), spec:escapeHtml(pnColText('spec',finRow)) };
     const gFix=FX.map(d=>'<td class="'+((d.k==='name'||d.k==='spec')?'nm':'')+'">'+gTxt[d.k]+'</td>').join('');
+    // 어느 달에 발주하면 그 뒤 달 재고에도 그대로 쌓인다 — 재고·보유월·발주필요가 함께 바뀐다
+    let addSt=0;
     const gCells=yms.map((y,i)=>{
       const a=g.agg[y]; const b=i===0?' bl':'';
-      const mo=moOf(a.st,a.fut);
+      const st=a.st+addSt;
+      const mo=moOf(st,a.fut);
       const man=_simNeed[simNeedKey(g.rep,y)];
-      const nd=(man!=null)?man:needOf(a.st,a.fut);
-      const m2=moOf(a.st+nd,a.fut);
+      const nd=(man!=null)?man:needOf(st,a.fut);
+      const m2=moOf(st+nd,a.fut);
       needTot[y]=(needTot[y]||0)+nd;
-      const nAttr=' data-rep="'+escapeHtml(g.rep)+'" data-ym="'+y+'" data-st="'+a.st
+      stAdd[y]=(stAdd[y]||0)+addSt;
+      addSt+=nd;
+      const nAttr=' data-rep="'+escapeHtml(g.rep)+'" data-ym="'+y+'" data-st="'+st
         +'" data-avg="'+(a.fut/c.avgN)+'" onclick="simNeedFocus(this)" title="'
-        +L('눌러서 고치면 오른쪽 보유월이 따라 바뀝니다','Нажмите, чтобы изменить')+'"';
-      const val={sh:n(a.sh), i:n(a.i), o:n(a.o), ms:n(a.ms), st:n(a.st), mo:(mo==null?'':mo.toFixed(1)),
+        +L('눌러서 고치면 재고·보유월과 그 뒤 달까지 다시 계산됩니다','Нажмите, чтобы изменить')+'"';
+      const val={sh:n(a.sh), i:n(a.i), o:n(a.o), ms:n(a.ms), st:n(st), mo:(mo==null?'':mo.toFixed(1)),
                  need:(nd?n(nd):''), mo2:(m2==null?'':m2.toFixed(1))};
       const low=psiLow(mo);
       return SB.map((d,j)=>'<td class="n'+(j===0?b:'')+((low&&d.k==='mo')?' low':'')+(d.k==='need'?' ed':'')
@@ -9997,9 +10004,10 @@ function renderPSI(){
   const sumS=thS+';font-weight:700;background:var(--surface)';
   const sumCells=yms.map((y,i)=>{
     const t=tot[y]; const b=i===0?bl:'';
-    const mo=moOf(t.st,t.fut);
-    const tn=(needTot[y]!=null)?needTot[y]:needOf(t.st,t.fut), tm2=moOf(t.st+tn,t.fut);
-    const val={sh:n(t.sh), i:n(t.i), o:n(t.o), ms:n(t.ms), st:n(t.st), mo:(mo==null?'':mo.toFixed(1)),
+    const tst=t.st+(stAdd[y]||0);
+    const mo=moOf(tst,t.fut);
+    const tn=(needTot[y]!=null)?needTot[y]:needOf(tst,t.fut), tm2=moOf(tst+tn,t.fut);
+    const val={sh:n(t.sh), i:n(t.i), o:n(t.o), ms:n(t.ms), st:n(tst), mo:(mo==null?'':mo.toFixed(1)),
                need:(tn?n(tn):''), mo2:(tm2==null?'':tm2.toFixed(1))};
     const dim={sh:1, ms:1, mo:1, mo2:1};
     return SB.map((d,j)=>'<th style="'+sumS+';text-align:right'+(j===0?b:'')+(dim[d.k]?';color:var(--muted)':'')+'">'+val[d.k]+'</th>').join('');
