@@ -1011,7 +1011,10 @@ input[type="text"]::placeholder{color:var(--muted)}
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
         <span id="i18n-ms-cols">보기</span>
       </button>
-      <select id="msYm" onchange="renderMS()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></select>
+      <select id="msFrom" onchange="renderMS()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></select>
+      <span style="font-size:11px;color:var(--muted)">~</span>
+      <select id="msTo" onchange="renderMS()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></select>
+      <button class="dl-btn" onclick="msAllPeriod()" title="기간을 전체로 돌리기"><span id="i18n-ms-all">전체 기간</span></button>
       <button class="dl-btn" onclick="downloadMS()">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         <span id="i18n-ms-dl">엑셀 다운로드</span>
@@ -8151,7 +8154,7 @@ function msYmList(){
   return [...s].sort();
 }
 // 대표품번 → 호환품번 → (일자, 수량) 로 접어 둔다
-function msBuild(ym, kw){
+function msBuild(from, to, kw){
   const gmap={}, groups=[];
   pnExpandRows(PN_DATA).forEach(r=>{
     const k=normPN(r._compat); if(!k) return;
@@ -8161,8 +8164,8 @@ function msBuild(ym, kw){
     if(g.seen[k]) return; g.seen[k]=1;
     const d=(psiData[k]||{}).data||{};
     const days=[];
-    if(ym){ const q=Number((d[ym]||{}).u)||0; if(q>0) days.push({ym, q}); }
-    else Object.keys(d).sort().forEach(y=>{ if(!/^\d{4}$/.test(y)) return;
+    Object.keys(d).sort().forEach(y=>{ if(!/^\d{4}$/.test(y)) return;
+      if((from && y<from) || (to && y>to)) return;
       const q=Number(d[y].u)||0; if(q>0) days.push({ym:y, q}); });
     if(!days.length) return;
     const sum=days.reduce((a,x)=>a+x.q,0);
@@ -8179,22 +8182,40 @@ function msBuild(ym, kw){
   out.sort((a,b)=>b.total-a.total);
   return out;
 }
+// 기간 select 두 개를 채우고 고른 구간을 돌려준다(거꾸로 고르면 서로 바꾸어 쓴다)
+function msFillRange(){
+  const ru=(lang==='ru'), L=(ko,rr)=>(ru?rr:ko);
+  const list=msYmList();
+  const f=document.getElementById('msFrom'), t=document.getElementById('msTo');
+  if(!list.length) return {from:'', to:'', label:L('전 기간','все')};
+  if(f && f.getAttribute('data-list')!==list.join('|')){
+    const cf=f.value, ct=t?t.value:'';
+    const opts=list.map(v=>'<option value="'+v+'">'+psiYmLabel(v)+'</option>').join('');
+    f.innerHTML=opts; if(t) t.innerHTML=opts;
+    f.setAttribute('data-list',list.join('|')); if(t) t.setAttribute('data-list',list.join('|'));
+    f.value=(cf && list.indexOf(cf)>=0)?cf:list[0];
+    if(t) t.value=(ct && list.indexOf(ct)>=0)?ct:list[list.length-1];
+  }
+  let from=f?f.value:'', to=t?t.value:'';
+  if(from && to && from>to){ const x=from; from=to; to=x; }
+  const whole=(from===list[0] && to===list[list.length-1]);
+  const label = whole ? L('전 기간','все периоды')
+    : (from===to ? psiYmLabel(from) : (psiYmLabel(from)+' ~ '+psiYmLabel(to)));
+  return {from, to, label};
+}
+function msAllPeriod(){
+  const list=msYmList(); if(!list.length) return;
+  const f=document.getElementById('msFrom'), t=document.getElementById('msTo');
+  if(f) f.value=list[0]; if(t) t.value=list[list.length-1];
+  renderMS();
+}
 function renderMS(){
   const pane=document.getElementById('pane-ms'); if(!pane) return;
   const ru=(lang==='ru'), L=(ko,rr)=>(ru?rr:ko);
   const isKo=(lang!=='ru');
   const kw=(document.getElementById('msInput')?document.getElementById('msInput').value:'').trim().toLowerCase();
-  const sel=document.getElementById('msYm');
-  const list=msYmList();
-  if(sel && sel.getAttribute('data-list')!==list.join('|')){
-    const cur=sel.value;
-    sel.innerHTML='<option value="">'+L('전체 기간','Все периоды')+'</option>'
-      + list.map(v=>'<option value="'+v+'">'+psiYmLabel(v)+'</option>').join('');
-    sel.setAttribute('data-list',list.join('|'));
-    sel.value=cur || (list.length?list[list.length-1]:'');
-  }
-  const ym=sel?sel.value:'';
-  const groups=msBuild(ym, kw);
+  const R=msFillRange();
+  const groups=msBuild(R.from, R.to, kw);
   _msGroups=groups;
   const nPn=groups.reduce((a,g)=>a+g.kids.length,0);
   const tot=groups.reduce((a,g)=>a+g.total,0);
@@ -8233,7 +8254,7 @@ function renderMS(){
                   ymd:(x.ym?psiYmLabel(x.ym):''),
                   name:(i===0?escapeHtml(pnColText('name',it.r)):''),
                   spec:(i===0?escapeHtml(pnColText('spec',it.r)):''),
-                  qty:(i===0?it.sum.toLocaleString():''),
+                  qty:x.q.toLocaleString(),
                   q:x.q.toLocaleString() };
       return '<tr>'+CO.map(d=>'<td style="'+sty[d.k]+'">'+txt[d.k]+'</td>').join('')+'</tr>';
     }).join('')).join('');
@@ -8243,8 +8264,8 @@ function renderMS(){
   const nq=CO.filter(d=>d.k==='qty'||d.k==='q').length;
   const head='<tr>'+CO.map(d=>'<th style="'+thS+'">'+(ru?d.ru:d.ko)+'</th>').join('')+'</tr>'
     + '<tr><th colspan="'+Math.max(1,CO.length-nq)+'" style="'+thS+';font-weight:700;background:var(--surface);top:28px;text-align:right">'
-    + escapeHtml(L('합계 '+groups.length+'대표품번 · '+nPn+'품번'+(ym?(' · '+psiYmLabel(ym)):' · 전 기간'),
-                   'Итого '+groups.length+' / '+nPn+(ym?(' · '+psiYmLabel(ym)):'')))+'</th>'
+    + escapeHtml(L('합계 '+groups.length+'대표품번 · '+nPn+'품번 · '+R.label,
+                   'Итого '+groups.length+' / '+nPn+' · '+R.label))+'</th>'
     + CO.filter(d=>d.k==='qty'||d.k==='q').map(d=>'<th style="'+thS+';font-weight:700;background:var(--surface);top:28px;text-align:right">'
         +(d.k==='qty'?tot.toLocaleString():'')+'</th>').join('')
     + '</tr>';
@@ -8258,7 +8279,7 @@ async function loadMSTab(){ if(!Object.keys(psiData).length) await loadPSI(); aw
 function downloadMS(){
   renderMS();
   const ru=(lang==='ru'), isKo=(lang!=='ru');
-  const sel=document.getElementById('msYm'); const ym=sel?sel.value:'';
+  const R=msFillRange();
   const CO=msVisCols(isKo);
   const aoa=[CO.map(d=>ru?d.ru:d.ko)];
   let tot=0, nPn=0;
@@ -8273,12 +8294,12 @@ function downloadMS(){
     g.kids.forEach(it=>(msShowDays()?it.days:[{ym:'',q:it.sum}]).forEach((x,i)=>{
       aoa.push(rowOf({ rep:'', compat:(i===0?normBadgePN(it.r._compat):''), ymd:(x.ym?psiYmLabel(x.ym):''),
         name:(i===0?pnColText('name',it.r):''), spec:(i===0?pnColText('spec',it.r):''),
-        qty:(i===0?it.sum:''), q:x.q }));
+        qty:x.q, q:x.q }));
     }));
   });
   const sum={}; CO.forEach(d=>sum[d.k]='');
   sum[CO[0].k]=(ru?'Итого ':'합계 ')+(_msGroups||[]).length+(ru?'':'대표품번')+' / '+nPn+(ru?'':'품번')
-    +(ym?(' · '+psiYmLabel(ym)):(ru?'':' · 전 기간'));
+    +' · '+R.label;
   sum.qty=tot;
   aoa.splice(1,0,rowOf(sum));
   const ws=XLSX.utils.aoa_to_sheet(aoa);
