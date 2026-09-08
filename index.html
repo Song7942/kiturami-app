@@ -1036,6 +1036,10 @@ input[type="text"]::placeholder{color:var(--muted)}
         <span id="i18n-ms-dl">엑셀 다운로드</span>
       </button>
     </div>
+      <!-- 가로 슬라이드 막대(품번조회와 같은 방식). 가로로 넘칠 때만 보인다 -->
+      <div class="tbl-scrollbar" id="msTblScrollbar" style="display:none;margin:4px 0 0">
+        <div class="tbl-scrollbar-thumb" id="msTblScrollbarThumb"></div>
+      </div>
   </div>
   <div class="scroll-body" id="scrollBodyMS" style="padding:0 12px 72px">
     <div class="pn-body-wrap">
@@ -1073,6 +1077,10 @@ input[type="text"]::placeholder{color:var(--muted)}
         <span id="i18n-ship-dl">엑셀 다운로드</span>
       </button>
     </div>
+      <!-- 가로 슬라이드 막대(품번조회와 같은 방식). 가로로 넘칠 때만 보인다 -->
+      <div class="tbl-scrollbar" id="shipTblScrollbar" style="display:none;margin:4px 0 0">
+        <div class="tbl-scrollbar-thumb" id="shipTblScrollbarThumb"></div>
+      </div>
   </div>
   <div class="scroll-body" id="scrollBodySHIP" style="padding:0 12px 72px">
 
@@ -1114,6 +1122,10 @@ input[type="text"]::placeholder{color:var(--muted)}
         <span id="i18n-po-dl">엑셀 다운로드</span>
       </button>
     </div>
+      <!-- 가로 슬라이드 막대(품번조회와 같은 방식). 가로로 넘칠 때만 보인다 -->
+      <div class="tbl-scrollbar" id="poTblScrollbar" style="display:none;margin:4px 0 0">
+        <div class="tbl-scrollbar-thumb" id="poTblScrollbarThumb"></div>
+      </div>
   </div>
   <div class="scroll-body" id="scrollBodyPO" style="padding:0 12px 72px">
     <div class="pn-body-wrap">
@@ -1163,6 +1175,10 @@ input[type="text"]::placeholder{color:var(--muted)}
       </button>
       <span id="simNote" style="font-size:10px;color:#7c3aed;white-space:nowrap"></span>
     </div>
+      <!-- 가로 슬라이드 막대(품번조회와 같은 방식). 가로로 넘칠 때만 보인다 -->
+      <div class="tbl-scrollbar" id="simTblScrollbar" style="display:none;margin:4px 0 0">
+        <div class="tbl-scrollbar-thumb" id="simTblScrollbarThumb"></div>
+      </div>
   </div>
   <div class="scroll-body" id="scrollBodySIM" style="padding:0 12px 72px">
     <div class="pn-body-wrap">
@@ -1230,6 +1246,10 @@ input[type="text"]::placeholder{color:var(--muted)}
         <span id="i18n-psi-fc">출고예상수량 산식</span>
       </button>
     </div>
+      <!-- 가로 슬라이드 막대(품번조회와 같은 방식). 가로로 넘칠 때만 보인다 -->
+      <div class="tbl-scrollbar" id="psiTblScrollbar" style="display:none;margin:4px 0 0">
+        <div class="tbl-scrollbar-thumb" id="psiTblScrollbarThumb"></div>
+      </div>
   </div>
   <div class="scroll-body" id="scrollBodyPSI" style="padding:0 12px 72px">
     <div class="pn-body-wrap">
@@ -2405,6 +2425,8 @@ function setupHTableScroll(scrollId,headerId,trackId,thumbId){
 
   return update;
 }
+const _hbars={};
+function updatePaneHBar(key){ const f=_hbars[key]; if(f) f(); }
 let updatePartsTableScrollbar=function(){};
 let updateOrderTableScrollbar=function(){};
 let updatePNTableScrollbar=function(){};
@@ -8337,28 +8359,63 @@ function renderMS(){
   const tbody=document.getElementById('msTbody'); if(tbody) tbody.innerHTML=body;
   const empty=document.getElementById('msEmpty');
   if(empty){ empty.textContent=L('미출 자료가 없습니다.','Нет данных.'); empty.style.display=groups.length?'none':'block'; }
+  updatePaneHBar('ms');
 }
 function debouncedRenderMS(){ clearTimeout(window._msT); window._msT=setTimeout(renderMS,200); }
 async function loadMSTab(){ if(!Object.keys(psiData).length) await loadPSI(); await loadPsiCols(); renderMS(); }
-function downloadMS(){
+// 엑셀에 바탕색을 넣으려면 스타일을 쓰는 판(xlsx-js-style)이 필요하다.
+// 기본 xlsx 는 색을 못 적으므로, 색이 필요할 때만 불러 온다. 못 불러오면 색 없이 그대로 나간다.
+let _xlsxStyleLoad=null;
+function ensureXlsxStyle(){
+  if(_xlsxStyleLoad) return _xlsxStyleLoad;
+  _xlsxStyleLoad=new Promise(res=>{
+    if(window.XLSX && window.XLSX.__styled) return res(true);
+    const sc=document.createElement('script');
+    sc.src='https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js';
+    sc.onload=()=>{ try{ window.XLSX.__styled=true; }catch(e){} res(true); };
+    sc.onerror=()=>res(false);
+    document.head.appendChild(sc);
+  });
+  return _xlsxStyleLoad;
+}
+// 엑셀 칸 색·글씨. xlsx-js-style 이 없으면 조용히 넘어간다.
+function xlPaint(ws, rowIdx, nCol, style){
+  if(!(window.XLSX && window.XLSX.__styled)) return;
+  for(let c=0;c<nCol;c++){
+    const a=XLSX.utils.encode_cell({r:rowIdx, c});
+    if(!ws[a]) ws[a]={t:'s', v:''};
+    ws[a].s=style;
+  }
+}
+const XL_BORDER={ top:{style:'thin',color:{rgb:'D9D9D9'}}, bottom:{style:'thin',color:{rgb:'D9D9D9'}},
+                  left:{style:'thin',color:{rgb:'D9D9D9'}}, right:{style:'thin',color:{rgb:'D9D9D9'}} };
+const XL_HEAD={ font:{bold:true}, fill:{fgColor:{rgb:'EFEFEF'}}, border:XL_BORDER };
+const XL_SUM ={ font:{bold:true}, fill:{fgColor:{rgb:'FCE4D6'}}, border:XL_BORDER };   // 합계: 연한 붉은색
+const XL_GRP ={ font:{bold:true}, fill:{fgColor:{rgb:'DDEBF7'}}, border:XL_BORDER };   // 대표품번: 연한 파랑
+async function downloadMS(){
   renderMS();
+  await ensureXlsxStyle();
   const ru=(lang==='ru'), isKo=(lang!=='ru');
   const R=msFillRange();
   const CO=msVisCols(isKo);
   const aoa=[CO.map(d=>ru?d.ru:d.ko)];
+  const grpRows=[];                 // 색을 칠할 대표품번 줄 번호
   let tot=0, nPn=0;
   const rowOf=o=>CO.map(d=>o[d.k]);
   (_msGroups||[]).forEach(g=>{
     const fin=String(g.first.final||'');
     const finRow=Object.assign({}, g.first, {_split:true, _compat:fin});
     tot+=g.total; nPn+=g.kids.length;
-    if(msShowGroups()) aoa.push(rowOf({ rep:g.rep||'', compat:(fin?normBadgePN(fin):''), ymd:'',
-      name:pnColText('name',finRow), spec:pnColText('spec',finRow), qty:g.total }));
+    if(msShowGroups()){
+      grpRows.push(aoa.length);
+      aoa.push(rowOf({ rep:g.rep||'', compat:(fin?normBadgePN(fin):''), ymd:'',
+        name:pnColText('name',finRow), spec:pnColText('spec',finRow), qty:g.total }));
+    }
     if(!msShowKids()) return;
-    g.kids.forEach(it=>(msShowDays()?it.days:[{ym:'',q:it.sum}]).forEach((x,i)=>{
-      aoa.push(rowOf({ rep:'', compat:(i===0?normBadgePN(it.r._compat):''), ymd:(x.ym?psiYmLabel(x.ym):''),
-        name:(i===0?pnColText('name',it.r):''), spec:(i===0?pnColText('spec',it.r):''),
-        qty:x.q }));
+    // 엑셀에서는 걸러 보기 쉽도록 대표품번·호환품번·품명·규격을 줄마다 모두 적는다
+    g.kids.forEach(it=>(msShowDays()?it.days:[{ym:'',q:it.sum}]).forEach(x=>{
+      aoa.push(rowOf({ rep:g.rep||'', compat:normBadgePN(it.r._compat), ymd:(x.ym?psiYmLabel(x.ym):''),
+        name:pnColText('name',it.r), spec:pnColText('spec',it.r), qty:x.q }));
     }));
   });
   const sum={}; CO.forEach(d=>sum[d.k]='');
@@ -8368,6 +8425,10 @@ function downloadMS(){
   aoa.splice(1,0,rowOf(sum));
   const ws=XLSX.utils.aoa_to_sheet(aoa);
   ws['!cols']=CO.map(d=>({wch:Math.round(d.w/7)+4}));
+  xlPaint(ws, 0, CO.length, XL_HEAD);
+  xlPaint(ws, 1, CO.length, XL_SUM);
+  grpRows.forEach(r=>xlPaint(ws, r+1, CO.length, XL_GRP));   // 합계 줄을 끼워 넣어 한 줄씩 밀린다
+  ws['!freeze']={xSplit:0, ySplit:2};
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'MS');
   XLSX.writeFile(wb, xlsxName('미출현황','Невыполненные'));
 }
@@ -8471,6 +8532,7 @@ function renderShip(){
   const empty=document.getElementById('shipEmpty');
   if(empty){ empty.textContent=L('자료가 없습니다. PSI 화면의 엑셀 업로드로 인보이스를 올려주세요.','Нет данных.');
              empty.style.display=rows.length?'none':'block'; }
+  updatePaneHBar('ship');
 }
 function debouncedRenderShip(){ clearTimeout(window._shipT); window._shipT=setTimeout(renderShip,200); }
 async function loadShipTab(){ await loadShip(); renderShip(); }
@@ -8968,6 +9030,7 @@ function renderPO(){
   if(tbody) tbody.innerHTML=body;
   if(empty){ empty.textContent=L('자료가 없습니다. 엑셀 업로드로 발주 자료를 올려주세요.','Нет данных.');
              empty.style.display=rows.length?'none':'block'; }
+  updatePaneHBar('po');
 }
 function debouncedRenderPO(){ clearTimeout(window._poT); window._poT=setTimeout(renderPO,200); }
 async function loadPOTab(){
@@ -9952,6 +10015,7 @@ function renderPSI(){
   if(thead) thead.innerHTML=head;
   psiStickHead();
   if(tbody) tbody.innerHTML=body;
+  updatePaneHBar(PSIP);
 }
 function normBadgePN(x){ return (typeof pnUpperLead==='function')?pnUpperLead(x||''):String(x||''); }
 
@@ -11570,6 +11634,12 @@ setupSimpleHeaderScrollSync('scrollBodyInventory','invHdrWrap');
 setupSimpleHeaderScrollSync('scrollBodyShipments','shipHdrWrap');
 // 품번조회는 열이 많아 가로 스크롤이 필요하므로, 검색창과 헤더 사이의 커스텀 스크롤바로 제어(헤더 동기화 포함).
 updatePNTableScrollbar=setupHTableScroll('scrollBodyPN','pnHdrWrap','pnTblScrollbar','pnTblScrollbarThumb');
+// PSI 계열 화면(PSI·발주시뮬레이션·발주현황·선적/입고현황·미출현황)도 같은 가로 슬라이드 막대를 쓴다.
+// 이 화면들은 머리글이 표 안에 있어서 따로 맞출 헤더가 없다 — 스크롤 칸을 헤더 자리에 그대로 넘긴다.
+[['psi','scrollBodyPSI'],['sim','scrollBodySIM'],['po','scrollBodyPO'],
+ ['ship','scrollBodySHIP'],['ms','scrollBodyMS']].forEach(function(x){
+  _hbars[x[0]]=setupHTableScroll(x[1], x[1], x[0]+'TblScrollbar', x[0]+'TblScrollbarThumb');
+});
 setupSimpleHeaderScrollSync('scrollBodyPrice','priceCalcHdrWrap');
 setupSimpleHeaderScrollSync('scrollBodyPrice','priceSupplyHdrWrap');
 updatePartsTableScrollbar();updateOrderTableScrollbar();
