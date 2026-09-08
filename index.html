@@ -1074,7 +1074,6 @@ input[type="text"]::placeholder{color:var(--muted)}
         <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
         <input type="text" id="shipInput" placeholder="인보이스·선적일·품번·품명으로 검색…" oninput="debouncedRenderShip()">
       </div>
-      <div class="count-badge" id="shipBadge"></div>
       <button class="dl-btn" onclick="switchTab('psi')" title="PSI 화면으로 돌아가기">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
         <span id="i18n-ship-back">PSI</span>
@@ -5921,8 +5920,10 @@ const PERM_ADD_BIT=24;
 const PERM_ENGNAME_BIT=25;   // 영문명 보기 권한
 const PERM_ADMINRECV_BIT=26; // 주문관리 > '주문접수' 서브탭 보기
 const PERM_ADMINMINE_BIT=27; // 주문관리 > '주문' 서브탭 보기
-function encodePerms(p){ let n=0; PERM_CATS.forEach((c,i)=>_PA.forEach((a,j)=>{ if(p&&p[c.key]&&p[c.key][a]) n|=(1<<(i*3+j)); })); if(p&&p.add) n|=(1<<PERM_ADD_BIT); if(p&&p.engName) n|=(1<<PERM_ENGNAME_BIT); if(p&&p.adminRecv) n|=(1<<PERM_ADMINRECV_BIT); if(p&&p.adminMine) n|=(1<<PERM_ADMINMINE_BIT); return n>>>0; }
-function decodePerms(n){ n=Number(n)||0; const p={add:!!(n&(1<<PERM_ADD_BIT)), engName:!!(n&(1<<PERM_ENGNAME_BIT)), adminRecv:!!(n&(1<<PERM_ADMINRECV_BIT)), adminMine:!!(n&(1<<PERM_ADMINMINE_BIT))}; PERM_CATS.forEach((c,i)=>{ p[c.key]={}; _PA.forEach((a,j)=>{ p[c.key][a]=!!(n&(1<<(i*3+j))); }); }); return p; }
+const PERM_PSI_BIT=28;       // PSI 보기 (PSI·발주시뮬레이션·발주현황·선적/입고현황·미출현황)
+const PERM_PSIW_BIT=29;      // PSI 쓰기 (엑셀 업로드·선적차수 수정 등)
+function encodePerms(p){ let n=0; PERM_CATS.forEach((c,i)=>_PA.forEach((a,j)=>{ if(p&&p[c.key]&&p[c.key][a]) n|=(1<<(i*3+j)); })); if(p&&p.add) n|=(1<<PERM_ADD_BIT); if(p&&p.engName) n|=(1<<PERM_ENGNAME_BIT); if(p&&p.adminRecv) n|=(1<<PERM_ADMINRECV_BIT); if(p&&p.adminMine) n|=(1<<PERM_ADMINMINE_BIT); if(p&&p.psiV) n|=(1<<PERM_PSI_BIT); if(p&&p.psiW) n|=(1<<PERM_PSIW_BIT); return n>>>0; }
+function decodePerms(n){ n=Number(n)||0; const p={add:!!(n&(1<<PERM_ADD_BIT)), engName:!!(n&(1<<PERM_ENGNAME_BIT)), adminRecv:!!(n&(1<<PERM_ADMINRECV_BIT)), adminMine:!!(n&(1<<PERM_ADMINMINE_BIT)), psiV:!!(n&(1<<PERM_PSI_BIT)), psiW:!!(n&(1<<PERM_PSIW_BIT))}; PERM_CATS.forEach((c,i)=>{ p[c.key]={}; _PA.forEach((a,j)=>{ p[c.key][a]=!!(n&(1<<(i*3+j))); }); }); return p; }
 // ── 영문명 (kt_names_en: rep, name_en). MASTER 가 권한 준 회원만 본다 ──
 let engNameByRep={};   // 대표품번(대문자) -> 영문명
 function canViewEngName(){ const r=userRole(currentUser); if(r.isMaster) return true; if(r.company==='KITURAMI') return true; /* KITURAMI 본사·데스크(GLOBAL·RUSSIA 등)는 영문명 노출 */ const p=_myPermObj(); return !!(p&&p.engName); }
@@ -6053,6 +6054,12 @@ function _partsLookupOnly(){
 function permView(cat){ if(userRole(currentUser).isMaster) return true; const p=_myPermObj(); return p?!!(p[cat]&&p[cat].v):null; }
 function permWrite(cat){ if(userRole(currentUser).isMaster) return true; const p=_myPermObj(); return p?!!(p[cat]&&p[cat].w):null; }
 function permDelete(cat){ if(userRole(currentUser).isMaster) return true; const p=_myPermObj(); return p?!!(p[cat]&&p[cat].d):null; }
+// PSI 계열 화면(PSI·발주시뮬레이션·발주현황·선적/입고현황·미출현황).
+// MASTER·KITURAMI(본사)는 늘 열려 있고, 그 밖의 회원은 회원관리에서 준 권한을 본다.
+function canSeePsi(){ const r=userRole(currentUser); if(r.usesMasterView) return true;
+  const p=_myPermObj(); return !!(p && (p.psiV || p.psiW)); }
+function canEditPsi(){ const r=userRole(currentUser); if(r.usesMasterView) return true;
+  const p=_myPermObj(); return !!(p && p.psiW); }
 function canAddMembersNow(){ if(userRole(currentUser).isMaster) return true; const p=_myPermObj(); return !!(p&&p.add); }
 // 주문관리 서브탭 보기 권한. 권한 미설정(null)이면 종전대로 둘 다 보인다.
 // 주문관리 '보기(v)' 를 켜면 두 서브탭을 모두 포함한다(하위 호환·간편 부여).
@@ -6171,6 +6178,12 @@ function openPermModal(id){
       <label style="display:flex;align-items:center;gap:8px;margin-top:10px;color:var(--text);font-size:13px;cursor:pointer">
         <input type="checkbox" class="_pmEng" ${p.engName?'checked':''} style="width:16px;height:16px"> ${ru?'Видеть англ. название':'영문명 보기 권한'}
       </label>
+      <label style="display:flex;align-items:center;gap:8px;margin-top:10px;color:var(--text);font-size:13px;cursor:pointer">
+        <input type="checkbox" class="_pmPsiV" ${p.psiV?'checked':''} style="width:16px;height:16px"> ${ru?'PSI — просмотр':'PSI 보기 (발주현황·선적/입고현황·미출현황·발주시뮬레이션 포함)'}
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;margin-top:10px;color:var(--text);font-size:13px;cursor:pointer">
+        <input type="checkbox" class="_pmPsiW" ${p.psiW?'checked':''} style="width:16px;height:16px"> ${ru?'PSI — изменение (загрузка Excel)':'PSI 쓰기 (엑셀 업로드·선적차수 수정)'}
+      </label>
       <div style="font-size:11px;color:var(--muted);margin-top:8px">${ru?'Ничего не отмечено = стандартные права по роли.':'아무것도 체크 안 하면 역할 기본값으로 동작합니다.'}</div>
       <button class="_pmSave news-btn-primary" style="width:100%;padding:11px;margin-top:16px">${ru?'Сохранить':'저장'}</button>
     </div>
@@ -6184,6 +6197,7 @@ function openPermModal(id){
     const idU=String(id).trim().toUpperCase();
     if(idU==='MASTER'){ alert(lang==='ru'?'MASTER всегда имеет полный доступ.':'MASTER는 항상 전체 권한입니다.'); close(); return; }
     const np={add:ov.querySelector('._pmAdd').checked, engName:ov.querySelector('._pmEng').checked,
+              psiV:ov.querySelector('._pmPsiV').checked, psiW:ov.querySelector('._pmPsiW').checked,
               adminRecv:ov.querySelector('[data-sub="adminRecv"]').checked,
               adminMine:ov.querySelector('[data-sub="adminMine"]').checked};
     PERM_CATS.forEach(c=>{ np[c.key]={}; });
@@ -8386,11 +8400,11 @@ function msFillRange(){
   const list=msYmList();
   const f=document.getElementById('msFrom'), t=document.getElementById('msTo');
   if(!list.length) return {from:'', to:'', label:L('전 기간','все')};
-  if(f && f.getAttribute('data-list')!==list.join('|')){
+  if(f && f.getAttribute('data-list')!==lang+'|'+list.join('|')){
     const cf=f.value, ct=t?t.value:'';
     const opts=list.map(v=>'<option value="'+v+'">'+psiYmLabel(v)+'</option>').join('');
     f.innerHTML=opts; if(t) t.innerHTML=opts;
-    f.setAttribute('data-list',list.join('|')); if(t) t.setAttribute('data-list',list.join('|'));
+    f.setAttribute('data-list',lang+'|'+list.join('|')); if(t) t.setAttribute('data-list',lang+'|'+list.join('|'));
     f.value=(cf && list.indexOf(cf)>=0)?cf:list[0];
     if(t) t.value=(ct && list.indexOf(ct)>=0)?ct:list[list.length-1];
   }
@@ -8577,19 +8591,19 @@ function renderShip(){
   const kw=(document.getElementById('shipInput')?document.getElementById('shipInput').value:'').trim().toLowerCase();
   const fill=(el,list,allTxt)=>{ if(!el) return '';
     const cur=el.value;
-    if(el.getAttribute('data-list')!==list.join('|')){
+    if(el.getAttribute('data-list')!==lang+'|'+list.join('|')){
       el.innerHTML='<option value="">'+allTxt+'</option>'+list.map(v=>'<option>'+escapeHtml(v)+'</option>').join('');
-      el.setAttribute('data-list',list.join('|')); el.value=cur;
+      el.setAttribute('data-list',lang+'|'+list.join('|')); el.value=cur;
     }
     return el.value; };
   const inv=fill(document.getElementById('shipInv'), shipInvList(), L('인보이스 전체','Все инвойсы'));
   const ymSel=document.getElementById('shipYm');
   const ymList=shipYmList();
-  if(ymSel && ymSel.getAttribute('data-list')!==ymList.join('|')){
+  if(ymSel && ymSel.getAttribute('data-list')!==lang+'|'+ymList.join('|')){
     const cur=ymSel.value;
     ymSel.innerHTML='<option value="">'+L('선적월 전체','Все месяцы')+'</option>'
       +ymList.map(v=>'<option value="'+v+'">'+psiYmLabel(v)+'</option>').join('');
-    ymSel.setAttribute('data-list',ymList.join('|')); ymSel.value=cur;
+    ymSel.setAttribute('data-list',lang+'|'+ymList.join('|')); ymSel.value=cur;
   }
   const ym=ymSel?ymSel.value:'';
   let rows=shipData.slice();
@@ -9048,11 +9062,11 @@ function poFillRange(){
   const list=poYmList();
   const f=document.getElementById('poFrom'), t=document.getElementById('poTo');
   if(!list.length) return {from:'', to:'', label:L('전 기간','все')};
-  if(f && f.getAttribute('data-list')!==list.join('|')){
+  if(f && f.getAttribute('data-list')!==lang+'|'+list.join('|')){
     const cf=f.value, ct=t?t.value:'';
     const opts=list.map(v=>'<option value="'+v+'">'+v+'</option>').join('');
     f.innerHTML=opts; if(t) t.innerHTML=opts;
-    f.setAttribute('data-list',list.join('|')); if(t) t.setAttribute('data-list',list.join('|'));
+    f.setAttribute('data-list',lang+'|'+list.join('|')); if(t) t.setAttribute('data-list',lang+'|'+list.join('|'));
     f.value=(cf && list.indexOf(cf)>=0)?cf:list[0];
     if(t) t.value=(ct && list.indexOf(ct)>=0)?ct:list[list.length-1];
   }
@@ -9079,7 +9093,7 @@ function renderPO(){
     const cur=chaSel.value;
     const list=poChaList();
     const want='<option value="">'+L('차수 전체','Все партии')+'</option>'+list.map(c=>'<option>'+escapeHtml(c)+'</option>').join('');
-    if(chaSel.getAttribute('data-list')!==list.join('|')){ chaSel.innerHTML=want; chaSel.setAttribute('data-list',list.join('|')); chaSel.value=cur; }
+    if(chaSel.getAttribute('data-list')!==lang+'|'+list.join('|')){ chaSel.innerHTML=want; chaSel.setAttribute('data-list',lang+'|'+list.join('|')); chaSel.value=cur; }
   }
   const R=poFillRange();
   const cha=chaSel?chaSel.value:'';
@@ -9143,7 +9157,7 @@ function renderPO(){
 }
 function debouncedRenderPO(){ clearTimeout(window._poT); window._poT=setTimeout(renderPO,200); }
 async function loadPOTab(){
-  const m=userRole(currentUser).usesMasterView;
+  const m=canEditPsi();
   ['poUploadBtn'].forEach(id=>{ const b=document.getElementById(id); if(b) b.style.display=m?'':'none'; });
   await loadPO();
   renderPO();
@@ -10577,7 +10591,7 @@ function psiParse1C(aoa){
   }
   return Object.keys(out).length?out:null;
 }function handlePSIUpload(event){
-  if(!userRole(currentUser).usesMasterView){ event.target.value=''; return; }
+  if(!canEditPsi()){ event.target.value=''; return; }
   const file=event.target.files[0]; if(!file){ event.target.value=''; return; }
   const ru=lang==='ru';
   const reader=new FileReader();
@@ -10672,7 +10686,7 @@ function psiParse1C(aoa){
 }
 async function loadPSITab(){
   const btn=document.getElementById('psiUploadBtn');
-  if(btn) btn.style.display = userRole(currentUser).usesMasterView ? '' : 'none';
+  if(btn) btn.style.display = canEditPsi() ? '' : 'none';
   await loadPsiFc();
   await loadPsiCols();
   await loadPSI();
@@ -12684,7 +12698,7 @@ function enterApp(user){
   const tabPrice=document.getElementById('tab-price');
   // PSI: 수입·출고 실적과 재고를 다루므로 MASTER·KITURAMI(본사)만 본다.
   const tabPsi=document.getElementById('tab-psi');
-  if(tabPsi) tabPsi.style.display = role.usesMasterView ? 'block' : 'none';
+  if(tabPsi) tabPsi.style.display = canSeePsi() ? 'block' : 'none';
   // 발주현황은 위 탭줄이 아니라 PSI 화면의 단추로 연다(탭 요소는 switchTab 을 위해 남겨 두고 감춘다)
   const tabPo=document.getElementById('tab-po');
   if(tabPo) tabPo.style.display='none';
