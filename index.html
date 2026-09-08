@@ -1076,25 +1076,22 @@ input[type="text"]::placeholder{color:var(--muted)}
     <div class="search-bar">
       <div class="search-wrap">
         <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-        <input type="text" id="poInput" placeholder="차수·발주월·대표코드·발주코드·품명으로 검색…" oninput="debouncedRenderPO()">
+        <input type="text" id="poInput" placeholder="차수·발주년월·대표코드·발주코드·품명으로 검색…" oninput="debouncedRenderPO()">
       </div>
-      <div class="count-badge" id="poBadge"></div>
       <button class="dl-btn" onclick="switchTab('psi')" title="PSI 화면으로 돌아가기">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
         <span id="i18n-po-back">PSI</span>
       </button>
       <select id="poCha" onchange="renderPO()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></select>
-      <select id="poMon" onchange="renderPO()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></select>
+      <select id="poFrom" onchange="renderPO()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></select>
+      <span style="font-size:11px;color:var(--muted)">~</span>
+      <select id="poTo" onchange="renderPO()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></select>
+      <button class="dl-btn" onclick="poAllPeriod()" title="발주년월을 전체로 돌리기"><span id="i18n-po-all">전체 기간</span></button>
       <button class="dl-btn" id="poUploadBtn" onclick="document.getElementById('poFileInput').click()" title="차수·발주월·발주코드·수주수량 이 있는 엑셀을 올리면 반영합니다" style="display:none;background:var(--accent2);border-color:var(--accent2);color:#fff">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
         <span id="i18n-po-up">발주 업로드</span>
       </button>
       <input type="file" id="poFileInput" accept=".xlsx,.xls" style="display:none" onchange="handlePOUpload(event,'order')">
-      <button class="dl-btn" id="poSupplyBtn" onclick="document.getElementById('poSupplyInput').click()" title="차수·발주코드·공급수량 이 있는 엑셀을 올리면 공급수량만 채웁니다" style="display:none;background:#0ea5e9;border-color:#0ea5e9;color:#fff">
-        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>
-        <span id="i18n-po-sup">공급 업로드</span>
-      </button>
-      <input type="file" id="poSupplyInput" accept=".xlsx,.xls" style="display:none" onchange="handlePOUpload(event,'supply')">
       <button class="dl-btn" onclick="downloadPO()">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         <span id="i18n-po-dl">엑셀 다운로드</span>
@@ -8530,6 +8527,41 @@ async function shipSyncMonth(ym, field){
   await loadPSI();
   return { ok:true, pns:Object.keys(sum).length, total:Object.keys(sum).reduce((a,k)=>a+sum[k],0) };
 }
+// 선적(인보이스) 수량을 발주현황 공급수량에 채운다.
+//   품번 하나가 여러 차수에 걸쳐 있으면 발주년월이 이른 줄부터 미공급분만큼 채우고 남는 것은 다음 줄로 넘긴다.
+//   짝짓기는 발주코드가 먼저, 없거나 모자라면 변경코드(최종품번)를 본다.
+//   shipData(=모든 인보이스) 전체로 다시 계산하므로 같은 인보이스를 두 번 올려도 이중으로 세지 않는다.
+async function poRecalcSupply(){
+  if(!poData.length) await loadPO();
+  if(!poData.length) return {ok:true, rows:0, total:0};
+  const need={};
+  (shipData||[]).forEach(r=>{ const k=normPN(r.pn); if(!k) return; need[k]=(need[k]||0)+(Number(r.qty)||0); });
+  const before={}; poData.forEach(r=>{ before[r.cha+'\u0000'+r.pn]=r.supplied; r.supplied=0; });
+  const byYm=(a,b)=>{ const ya=poYmOf(a)||'9999-99', yb=poYmOf(b)||'9999-99';
+    return (ya===yb) ? String(a.cha).localeCompare(String(b.cha)) : ya.localeCompare(yb); };
+  Object.keys(need).sort().forEach(pn=>{
+    let left=need[pn]; if(left<=0) return;
+    const own=[], chg=[];
+    poData.forEach(r=>{ const k=normPN(r.pn);
+      if(k===pn){ own.push(r); return; }
+      const fin=normPN((poLookup(r.pn)||{}).fin||'');
+      if(fin && fin===pn) chg.push(r); });
+    own.sort(byYm); chg.sort(byYm);
+    own.concat(chg).forEach(r=>{
+      if(left<=0) return;
+      const room=(Number(r.qty)||0)-r.supplied; if(room<=0) return;
+      const take=Math.min(room, left); r.supplied+=take; left-=take; });
+  });
+  const dirty=poData.filter(r=>before[r.cha+'\u0000'+r.pn]!==r.supplied);
+  let total=0; poData.forEach(r=>total+=r.supplied);
+  for(let i=0;i<dirty.length;i+=300){
+    const rows=dirty.slice(i,i+300).map(r=>({cha:r.cha, pn:r.pn, mon:r.mon, qty:r.qty,
+      supplied:r.supplied, updated_at:new Date().toISOString()}));
+    const { error }=await sb.from('kt_po').upsert(rows,{onConflict:'cha,pn'});
+    if(error) return {ok:false, msg:(error.message||error.code)};
+  }
+  return {ok:true, rows:dirty.length, total};
+}
 async function shipApplyInvoice(pi){
   const arrive=shipAutoArrive(pi.sail);         // 기본 입고일 = 선적일 + 49일
   const arrYm=shipYmOf(arrive);
@@ -8545,8 +8577,9 @@ async function shipApplyInvoice(pi){
   if(!r.ok) return r;
   let rin={pns:0,total:0};
   if(arrYm){ rin=await shipSyncMonth(arrYm,'w'); if(!rin.ok) return rin; }
+  const sup=await poRecalcSupply();          // 발주현황 공급수량 다시 계산
   return { ok:true, saved:rows.length, month:pi.ym, pns:r.pns, total:r.total,
-           arrive, arrMonth:arrYm, arrTotal:rin.total };
+           arrive, arrMonth:arrYm, arrTotal:rin.total, sup };
 }
 // 입고일 기본값: 선적일 + 49일
 const SHIP_LEAD_DAYS=49;
@@ -8748,6 +8781,47 @@ function poMonList(){
     return na-nb;
   });
 }
+// 발주년월: kt_po 의 발주월(달 숫자)에 차수(RUS 260301 → 2026-03)의 연도를 붙인다.
+//   발주월이 차수의 달보다 크면 해가 하나 앞선다(예: 차수 2601, 발주월 12 → 2025-12).
+function poYmOf(r){
+  const mon=parseInt(String(r&&r.mon||'').replace(/\D/g,''),10);
+  if(!mon || mon<1 || mon>12) return '';
+  const d=String(r.cha||'').replace(/\D/g,'');
+  if(d.length<4) return '';
+  let y=2000+parseInt(d.slice(0,2),10), cm=parseInt(d.slice(2,4),10);
+  if(cm>=1 && cm<=12 && mon>cm) y-=1;
+  return y+'-'+(mon<10?'0':'')+mon;
+}
+function poYmList(){
+  const s=new Set(); poData.forEach(r=>{ const y=poYmOf(r); if(y) s.add(y); });
+  return [...s].sort();
+}
+// 발주년월 select 두 개를 채우고 고른 구간을 돌려준다(거꾸로 고르면 서로 바꾸어 쓴다)
+function poFillRange(){
+  const ru=(lang==='ru'), L=(ko,rr)=>(ru?rr:ko);
+  const list=poYmList();
+  const f=document.getElementById('poFrom'), t=document.getElementById('poTo');
+  if(!list.length) return {from:'', to:'', label:L('전 기간','все')};
+  if(f && f.getAttribute('data-list')!==list.join('|')){
+    const cf=f.value, ct=t?t.value:'';
+    const opts=list.map(v=>'<option value="'+v+'">'+v+'</option>').join('');
+    f.innerHTML=opts; if(t) t.innerHTML=opts;
+    f.setAttribute('data-list',list.join('|')); if(t) t.setAttribute('data-list',list.join('|'));
+    f.value=(cf && list.indexOf(cf)>=0)?cf:list[0];
+    if(t) t.value=(ct && list.indexOf(ct)>=0)?ct:list[list.length-1];
+  }
+  let from=f?f.value:'', to=t?t.value:'';
+  if(from && to && from>to){ const x=from; from=to; to=x; }
+  const whole=(from===list[0] && to===list[list.length-1]);
+  const label = whole ? L('전 기간','все периоды') : (from===to ? from : (from+' ~ '+to));
+  return {from, to, label, whole};
+}
+function poAllPeriod(){
+  const list=poYmList(); if(!list.length) return;
+  const f=document.getElementById('poFrom'), t=document.getElementById('poTo');
+  if(f) f.value=list[0]; if(t) t.value=list[list.length-1];
+  renderPO();
+}
 function renderPO(){
   const pane=document.getElementById('pane-po'); if(!pane) return;
   _poRepMap=null;
@@ -8761,34 +8835,25 @@ function renderPO(){
     const want='<option value="">'+L('차수 전체','Все партии')+'</option>'+list.map(c=>'<option>'+escapeHtml(c)+'</option>').join('');
     if(chaSel.getAttribute('data-list')!==list.join('|')){ chaSel.innerHTML=want; chaSel.setAttribute('data-list',list.join('|')); chaSel.value=cur; }
   }
-  const monSel=document.getElementById('poMon');
-  if(monSel){
-    const cur=monSel.value;
-    const list=poMonList();
-    if(monSel.getAttribute('data-list')!==list.join('|')){
-      monSel.innerHTML='<option value="">'+L('발주월 전체','Все месяцы')+'</option>'
-        +list.map(m=>'<option>'+escapeHtml(m)+'</option>').join('');
-      monSel.setAttribute('data-list',list.join('|')); monSel.value=cur;
-    }
-  }
+  const R=poFillRange();
   const cha=chaSel?chaSel.value:'';
-  const mon=monSel?monSel.value:'';
   let rows=poData.slice();
   if(cha) rows=rows.filter(r=>r.cha===cha);
-  if(mon) rows=rows.filter(r=>String(r.mon||'').trim()===mon);
+  if(R.from || R.to) rows=rows.filter(r=>{ const y=poYmOf(r);
+    if(!y) return !!R.whole;                 // 발주년월을 못 잡는 줄(미상)은 전 기간일 때만 보인다
+    return (!R.from || y>=R.from) && (!R.to || y<=R.to); });
   if(kw) rows=rows.filter(r=>{
     const i=poLookup(r.pn);
-    return [r.cha, r.mon, r.pn, i.rep, i.fin, poName(r.pn)].some(v=>String(v||'').toLowerCase().includes(kw));
+    return [r.cha, poYmOf(r), r.pn, i.rep, i.fin, poName(r.pn)].some(v=>String(v||'').toLowerCase().includes(kw));
   });
   rows.sort((a,b)=> (a.cha===b.cha) ? String(a.pn).localeCompare(String(b.pn)) : String(a.cha).localeCompare(String(b.cha)));
   _poFiltered=rows;
-  const badge=document.getElementById('poBadge'); if(badge) badge.innerHTML='<b>'+rows.length+'</b>';
 
   const thS='padding:6px 5px;text-align:center;vertical-align:middle;position:sticky;top:0;z-index:3;'
     + 'background:var(--surface2);font-size:11px;white-space:nowrap;border-bottom:1px solid var(--border)';
   const tdS='padding:5px 6px;font-size:11px;border-bottom:1px solid var(--border)';
   const numS=tdS+';text-align:right;white-space:nowrap';
-  const heads=[[L('차수','Партия'),90],[L('발주월','Мес.'),52],[L('대표코드','Осн. код'),104],
+  const heads=[[L('차수','Партия'),90],[L('발주년월','Мес. заказа'),68],[L('대표코드','Осн. код'),104],
                [L('발주코드','Код заказа'),104],[L('변경코드(공급)','Код замены'),104],
                [L('품명','Наименование'),170],[L('수주수량','Заказано'),70],
                [L('공급수량','Поставлено'),70],[L('미공급수량','Недопоставка'),78]];
@@ -8808,7 +8873,7 @@ function renderPO(){
     const codeS="font-family:'Courier New',monospace;font-size:9.5px;white-space:nowrap";
     return '<tr>'
       + '<td style="'+tdS+';white-space:nowrap">'+escapeHtml(r.cha)+'</td>'
-      + '<td style="'+tdS+';text-align:center;color:var(--muted)">'+escapeHtml(String(r.mon||''))+'</td>'
+      + '<td style="'+tdS+';text-align:center;color:var(--muted);white-space:nowrap">'+escapeHtml(poYmOf(r))+'</td>'
       + '<td style="'+tdS+'">'+(i.rep?('<span style="'+codeS+'">'+escapeHtml(i.rep)+'</span>'):'')+'</td>'
       + '<td style="'+tdS+'"><span style="'+codeS+'">'+escapeHtml(normBadgePN(r.pn))+'</span></td>'
       + '<td style="'+tdS+'">'+(chg?('<span style="'+codeS+';color:#b91c1c;font-weight:600">'+escapeHtml(normBadgePN(chg))+'</span>'):'')+'</td>'
@@ -8821,7 +8886,7 @@ function renderPO(){
 
   if(thead) thead.innerHTML='<tr>'+heads.map(h=>'<th style="'+thS+'">'+h[0]+'</th>').join('')+'</tr>'
     + '<tr><th colspan="6" style="'+thS+';font-weight:700;background:var(--surface);top:27px;text-align:right">'
-    + L('합계 '+rows.length+'건','Итого '+rows.length)+'</th>'
+    + escapeHtml(L('합계 '+rows.length+'건 · '+R.label,'Итого '+rows.length+' · '+R.label))+'</th>'
     + '<th style="'+thS+';font-weight:700;background:var(--surface);top:27px;text-align:right">'+tq.toLocaleString()+'</th>'
     + '<th style="'+thS+';font-weight:700;background:var(--surface);top:27px;text-align:right">'+ts.toLocaleString()+'</th>'
     + '<th style="'+thS+';font-weight:700;background:var(--surface);top:27px;text-align:right">'+(tq-ts).toLocaleString()+'</th></tr>';
@@ -8832,7 +8897,7 @@ function renderPO(){
 function debouncedRenderPO(){ clearTimeout(window._poT); window._poT=setTimeout(renderPO,200); }
 async function loadPOTab(){
   const m=userRole(currentUser).usesMasterView;
-  ['poUploadBtn','poSupplyBtn'].forEach(id=>{ const b=document.getElementById(id); if(b) b.style.display=m?'':'none'; });
+  ['poUploadBtn'].forEach(id=>{ const b=document.getElementById(id); if(b) b.style.display=m?'':'none'; });
   await loadPO();
   renderPO();
 }
@@ -8918,7 +8983,7 @@ function handlePOUpload(event, mode){
 function downloadPO(){
   renderPO();
   const ru=(lang==='ru');
-  const head=[ru?'Партия':'차수', ru?'Мес.':'발주월', ru?'Осн. код':'대표코드', ru?'Код заказа':'발주코드',
+  const head=[ru?'Партия':'차수', ru?'Мес. заказа':'발주년월', ru?'Осн. код':'대표코드', ru?'Код заказа':'발주코드',
               ru?'Код замены':'변경코드(공급)', ru?'Наименование':'품명',
               ru?'Заказано':'수주수량', ru?'Поставлено':'공급수량', ru?'Недопоставка':'미공급수량'];
   const aoa=[head];
@@ -8927,7 +8992,7 @@ function downloadPO(){
     const i=poLookup(r.pn);
     const chg=(i.fin && i.fin!==normPN(r.pn)) ? normBadgePN(i.fin) : '';
     tq+=r.qty; ts+=r.supplied;
-    aoa.push([r.cha, r.mon||'', i.rep||'', normBadgePN(r.pn), chg, poName(r.pn), r.qty, r.supplied, r.qty-r.supplied]);
+    aoa.push([r.cha, poYmOf(r), i.rep||'', normBadgePN(r.pn), chg, poName(r.pn), r.qty, r.supplied, r.qty-r.supplied]);
   });
   aoa.splice(1,0,[(ru?'Итого ':'합계 ')+(_poFiltered||[]).length+(ru?'':'건'),'','','','','',tq,ts,tq-ts]);
   const ws=XLSX.utils.aoa_to_sheet(aoa);
@@ -9856,7 +9921,9 @@ function handlePSIUpload(event){
         renderPSI();
         alert((ru?'Готово. ':'반영 완료. ')+pi.inv+' / '+psiYmLabel(r.month)
           +'\n'+(ru?'Строк: ':'선적현황 ')+r.saved+(ru?'':'건')
-          +'\n'+psiYmLabel(r.month)+(ru?' итого ':' 선적 합계 ')+r.total.toLocaleString()+' ('+r.pns+(ru?'':'품번')+')');
+          +'\n'+psiYmLabel(r.month)+(ru?' итого ':' 선적 합계 ')+r.total.toLocaleString()+' ('+r.pns+(ru?'':'품번')+')'
+          +((r.sup&&r.sup.ok)?('\n'+(ru?'Поставлено: ':'발주현황 공급수량 ')+r.sup.total.toLocaleString()
+            +(ru?'':' (고친 줄 '+r.sup.rows+')')):((r.sup&&r.sup.msg)?('\n'+(ru?'Заказы: ошибка':'발주현황 반영 실패')+' ['+r.sup.msg+']'):'')));
         event.target.value=''; return;
       }
       const upd={};   // pn -> {rep, s:{}, g:{}, n:{}, o:{}, k:{}}
