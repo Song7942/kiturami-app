@@ -1052,6 +1052,10 @@ input[type="text"]::placeholder{color:var(--muted)}
       <label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--muted)" title="보유월 = 그 달 재고 ÷ (다음 달부터 이 개월 수만큼의 출고 합계 ÷ 개월 수)"><span id="i18n-psi-avg">보유월 향후</span>
         <input type="number" id="psiAvgN" min="1" max="24" style="width:48px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></label>
       <button class="dl-btn" onclick="renderPSI()"><span id="i18n-psi-apply">적용</span></button>
+      <button class="dl-btn" onclick="openPsiColsPanel()" title="표에 보일 열을 고릅니다(아이디별로 저장)">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="9" y1="4" x2="9" y2="20"/><line x1="15" y1="4" x2="15" y2="20"/></svg>
+        <span id="i18n-psi-cols">보기</span>
+      </button>
       <button class="dl-btn" onclick="psiResetFilters()" title="헤더 필터·정렬을 기본값으로">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
         <span id="i18n-psi-reset">필터 초기화</span>
@@ -8338,6 +8342,95 @@ function psiRowVals(d,c,yms){
   return out;
 }
 function psiYmLabel(ym){ return '20'+String(ym).slice(0,2)+'-'+String(ym).slice(2); }
+// ── PSI 보기(열 선택) ────────────────────────────────────────────────
+// 아이디별로 kt_user_prefs.psi_cols 에 저장한다(컬럼이 없으면 이 브라우저에만).
+const PSI_COL_DEFS=[
+  {k:'rep',    fixed:1, w:96,  ko:'대표품번', ru:'Осн. артикул'},
+  {k:'compat', fixed:1, w:96,  ko:'호환품번', ru:'Артикул замены'},
+  {k:'note',   fixed:1, w:38,  ko:'단종',     ru:'Снято'},
+  {k:'name',   fixed:1, w:110, ko:'품명',     ru:'Наименование'},
+  {k:'spec',   fixed:1, w:110, ko:'규격',     ru:'Хар-ки', koOnly:1},
+  {k:'sh',     w:56, ko:'선적',   ru:'Отгрузка'},
+  {k:'i',      w:56, ko:'입고',   ru:'Приход'},
+  {k:'o',      w:56, ko:'출고',   ru:'Расход'},
+  {k:'ms',     w:52, ko:'미출',   ru:'Невып.'},
+  {k:'st',     w:60, ko:'재고',   ru:'Остаток'},
+  {k:'mo',     w:52, ko:'보유월', ru:'Мес.'}
+];
+let psiCols=null;                 // {key:true/false}. null 이면 전부 보임
+let _psiColsLoadedFor=null;
+function psiColsMap(){
+  const m={}; PSI_COL_DEFS.forEach(d=>m[d.k]=true);
+  if(psiCols) PSI_COL_DEFS.forEach(d=>{ if(psiCols[d.k]===false) m[d.k]=false; });
+  return m;
+}
+function psiVisFixed(isKo){ const m=psiColsMap();
+  const v=PSI_COL_DEFS.filter(d=>d.fixed && (!d.koOnly||isKo) && m[d.k]);
+  return v.length?v:PSI_COL_DEFS.filter(d=>d.k==='compat'); }   // 전부 끄면 호환품번은 남긴다
+function psiVisSub(){ const m=psiColsMap();
+  const v=PSI_COL_DEFS.filter(d=>!d.fixed && m[d.k]);
+  return v.length?v:PSI_COL_DEFS.filter(d=>d.k==='st'); }
+function _psiColsKey(){ const u=(typeof currentUser!=='undefined'&&currentUser)?(currentUser.id||''):''; return 'kt_psi_cols:'+u; }
+async function loadPsiCols(){
+  const uid=(typeof currentUser!=='undefined'&&currentUser)?(currentUser.id||null):null;
+  if(_psiColsLoadedFor===uid) return;
+  _psiColsLoadedFor=uid;
+  let v=null;
+  if(uid){
+    try{
+      const { data, error }=await sb.from('kt_user_prefs').select('psi_cols').eq('user_id',uid).limit(1);
+      if(!error && data && data[0] && data[0].psi_cols) v=data[0].psi_cols;
+    }catch(e){}
+  }
+  if(!v){ try{ const s=localStorage.getItem(_psiColsKey()); if(s) v=JSON.parse(s); }catch(e){} }
+  psiCols=(v&&typeof v==='object')?v:null;
+}
+async function savePsiCols(){
+  try{ localStorage.setItem(_psiColsKey(), JSON.stringify(psiCols||{})); }catch(e){}
+  const uid=(typeof currentUser!=='undefined'&&currentUser)?(currentUser.id||null):null;
+  if(!uid) return false;
+  try{
+    const { error }=await sb.from('kt_user_prefs').upsert({ user_id:uid, psi_cols:(psiCols||{}), updated_at:new Date().toISOString() },{ onConflict:'user_id' });
+    return !error;
+  }catch(e){ return false; }
+}
+function closePsiColsPanel(){ const b=document.getElementById('psiColsPop'); if(b) b.remove(); }
+function openPsiColsPanel(){
+  closePsiColsPanel();
+  const ru=(lang==='ru'), isKo=(lang!=='ru');
+  const m=psiColsMap();
+  const box=document.createElement('div'); box.id='psiColsPop';
+  box.style.cssText='position:fixed;inset:0;z-index:10000;background:#0008;display:flex;align-items:center;justify-content:center';
+  const item=d=>'<label style="display:flex;align-items:center;gap:7px;padding:5px 4px;cursor:pointer">'
+    + '<input type="checkbox" class="pcChk" data-k="'+d.k+'" '+(m[d.k]?'checked':'')+'>'
+    + '<span>'+(ru?d.ru:d.ko)+'</span></label>';
+  box.innerHTML=
+    '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;width:330px;max-width:92vw;'
+      +'box-shadow:0 16px 44px #000a;font-size:12px;color:var(--text)">'
+    + '<div style="padding:12px 14px;border-bottom:1px solid var(--border);font-weight:700;font-size:13px">'+(ru?'Столбцы':'보기 — 열 선택')+'</div>'
+    + '<div style="padding:10px 14px;display:flex;gap:18px">'
+      + '<div style="flex:1"><div style="font-size:11px;color:var(--muted);margin-bottom:3px">'+(ru?'Артикул':'품번 정보')+'</div>'
+        + PSI_COL_DEFS.filter(d=>d.fixed&&(!d.koOnly||isKo)).map(item).join('')+'</div>'
+      + '<div style="flex:1"><div style="font-size:11px;color:var(--muted);margin-bottom:3px">'+(ru?'По месяцам':'월별 수치')+'</div>'
+        + PSI_COL_DEFS.filter(d=>!d.fixed).map(item).join('')+'</div>'
+    + '</div>'
+    + '<div style="padding:0 14px 8px;font-size:11px;color:var(--muted)">'+(ru?'Выбор сохраняется для этого ID.':'선택은 이 아이디에 저장되어 다음에도 그대로 보입니다.')+'</div>'
+    + '<div style="display:flex;gap:7px;padding:11px 14px;border-top:1px solid var(--border)">'
+      + '<button id="pcSave" style="flex:1;padding:7px;border:none;border-radius:7px;background:var(--accent2);color:#fff;cursor:pointer;font-size:12px;font-weight:700">'+(ru?'Сохранить':'저장')+'</button>'
+      + '<button id="pcAll" style="flex:none;padding:7px 12px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);cursor:pointer;font-size:12px">'+(ru?'Все':'전체 선택')+'</button>'
+      + '<button id="pcCancel" style="flex:none;padding:7px 12px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);cursor:pointer;font-size:12px">'+(ru?'Отмена':'닫기')+'</button>'
+    + '</div></div>';
+  document.body.appendChild(box);
+  box.querySelector('#pcAll').onclick=()=>box.querySelectorAll('.pcChk').forEach(c=>c.checked=true);
+  box.querySelector('#pcCancel').onclick=closePsiColsPanel;
+  box.querySelector('#pcSave').onclick=async()=>{
+    const v={}; box.querySelectorAll('.pcChk').forEach(c=>{ v[c.getAttribute('data-k')]=c.checked; });
+    psiCols=v; closePsiColsPanel(); renderPSI();
+    const ok=await savePsiCols();
+    if(!ok) console.log('psi_cols: 이 브라우저에만 저장');
+  };
+  box.onmousedown=(e)=>{ if(e.target===box) closePsiColsPanel(); };
+}
 // ── 출고 예상수량 ───────────────────────────────────────────────────────
 // 통합문서 'dispatch forecasting logic' 시트의 산식을 옮긴 것.
 //   해당월 전후 n개월을 전년·전전년에서 각각 뽑아 가중합하고, 개월 수로 나눈 뒤 증가율을 곱한다.
@@ -8661,6 +8754,8 @@ function renderPSI(){
   const kw=(kwEl?kwEl.value:'').trim().toLowerCase();
   const isKo=(lang!=='ru');
   const L=(ko,ru)=>(lang==='ru'?ru:ko);
+  const FX=psiVisFixed(isKo), SB=psiVisSub();     // 보기에서 고른 열
+  const has=k=>SB.some(d=>d.k===k);
   // 행: 품번조회와 같은 호환품번 단위
   let rows=pnExpandRows(kw?PN_DATA.filter(r=>searchRow(r.rep,kw,[r.name_ko,r.name_ru,r.spec,r.final].concat(r.compats||[]))):PN_DATA);
   rows=rows.filter(r=>normPN(r._compat));
@@ -8669,14 +8764,12 @@ function renderPSI(){
   let items=rows.map(r=>{ const key=normPN(r._compat); const rec=psiData[key];
     return { r, key, d:(rec?rec.data:null), v:psiRowVals(rec?rec.data:null, c, yms) }; });
 
-  _psiAllItems=items;                  // 숫자 열 값 목록은 이 화면의 계산값에서 모은다
-  // 헤더 열 필터(엑셀식: 선택한 값만, 여러 열은 AND)
+  _psiAllItems=items;
   const fkeys=Object.keys(_psiFilters);
   if(fkeys.length){
     const sets=fkeys.map(k=>({k, set:new Set((_psiFilters[k]||[]).map(String))}));
     items=items.filter(it=> sets.every(a=> a.set.has(psiCellVal(a.k,it))));
   }
-  // 정렬(한 열 기준 오름/내림, 빈값은 뒤로)
   if(_psiSort.key){
     const k=_psiSort.key, dir=_psiSort.dir==='desc'?-1:1;
     if(psiIsNumCol(k)){
@@ -8698,40 +8791,30 @@ function renderPSI(){
   _psiFiltered=items.map(it=>it.r);
   const badge=document.getElementById('psiBadge'); if(badge) badge.innerHTML='<b>'+items.length+'</b>';
 
-  // 열 폭 고정(table-layout:fixed). 안 정해 두면 품명·규격의 긴 글자에 품번 열까지 밀린다.
   const cg=document.getElementById('psiColgroup');
   if(cg){
-    const w=['<col style="width:96px">','<col style="width:96px">','<col style="width:38px">','<col style="width:110px">'];
-    if(isKo) w.push('<col style="width:110px">');
-    yms.forEach(()=>{ w.push('<col style="width:56px">','<col style="width:56px">','<col style="width:56px">','<col style="width:52px">','<col style="width:60px">','<col style="width:52px">'); });
+    const w=FX.map(d=>'<col style="width:'+d.w+'px">');
+    yms.forEach(()=>SB.forEach(d=>w.push('<col style="width:'+d.w+'px">')));
     cg.innerHTML=w.join('');
   }
 
   const tbody=document.getElementById('psiTbody');
   const thead=document.getElementById('psiThead');
   const empty=document.getElementById('psiEmpty');
-  // 표는 border-collapse:separate 를 쓴다(collapse 면 sticky 머리글이 어긋난다) → 테두리를 칸에 직접 준다.
   const thS='padding:5px 4px;text-align:center;vertical-align:middle;position:sticky;z-index:3;'
     + 'background:var(--surface2);font-size:11px;white-space:nowrap;border-bottom:1px solid var(--border)';
   const bl=';border-left:1px solid var(--border)';
-  const grp=yms.map(y=>'<th colspan="6" style="'+thS+bl+'">'+psiYmLabel(y)+'</th>').join('');
-  // 월별 하위 머리글: 칸이 좁아 아이콘 대신 머리글 자체를 눌러 정렬 팝업을 띄운다
-  const subF=[['sh','선적','Отгрузка'],['i','입고','Приход'],['o','출고','Расход'],['ms','미출','Невып.'],['st','재고','Остаток'],['mo','보유월','Мес.']];
-  const sub=yms.map(y=>subF.map((h,i)=>{
-      const key=h[0]+':'+y;
+  const grp=yms.map(y=>'<th colspan="'+SB.length+'" style="'+thS+bl+'">'+psiYmLabel(y)+'</th>').join('');
+  const sub=yms.map(y=>SB.map((d,i)=>{
+      const key=d.k+':'+y;
       return '<th onclick="openPSIFilter(&quot;'+key+'&quot;,this)" title="'+L('정렬','Сортировка')+'" style="'+thS+(i===0?bl:'')+';cursor:pointer">'
-        + L(h[1],h[2]) + psiSortMark(key) + '</th>';
+        + L(d.ko,d.ru) + psiSortMark(key) + '</th>';
     }).join('')).join('');
-  // 이월재고는 화면에 열로 두지 않고, 어느 달 재고인지만 검색줄에 적어 둔다(엑셀에는 열로 들어간다)
   const openYm=psiYmAdd(c.base,-1);
-  const openTitle=L('이월재고 = '+psiYmLabel(openYm)+' 재고','Нач. остаток = остаток '+psiYmLabel(openYm));
-  const noteEl=document.getElementById('psiOpenNote'); if(noteEl) noteEl.textContent=openTitle;
+  const noteEl=document.getElementById('psiOpenNote');
+  if(noteEl) noteEl.textContent=L('이월재고 = '+psiYmLabel(openYm)+' 재고','Нач. остаток = остаток '+psiYmLabel(openYm));
   let head=['<tr>',
-    '<th rowspan="2" style="'+thS+'">'+L('대표품번','Осн. артикул')+psiFilterIcon('rep')+'</th>',
-    '<th rowspan="2" style="'+thS+'">'+L('호환품번','Артикул замены')+psiFilterIcon('compat')+'</th>',
-    '<th rowspan="2" style="'+thS+'">'+L('단종','Снято')+psiFilterIcon('note')+'</th>',
-    '<th rowspan="2" style="'+thS+'">'+L('품명','Наименование')+psiFilterIcon('name')+'</th>',
-    isKo?('<th rowspan="2" style="'+thS+'">규격'+psiFilterIcon('spec')+'</th>'):'',
+    FX.map(d=>'<th rowspan="2" style="'+thS+'">'+L(d.ko,d.ru)+psiFilterIcon(d.k)+'</th>').join(''),
     grp,'</tr><tr>',sub,'</tr>'].join('');
 
   if(!items.length){
@@ -8746,11 +8829,10 @@ function renderPSI(){
   const n=v=>(v==null||v===''||isNaN(v))?'':Number(v).toLocaleString();
   const tdS='padding:4px 5px;font-size:11px;overflow:hidden;border-bottom:1px solid var(--border)';
   const numS=tdS+';text-align:right;white-space:nowrap';
-  // 보유월 분모: 다음 달부터 avgN 개월 출고 합
   const futOut=(d,y)=>{ let s=0; for(let i=1;i<=c.avgN;i++) s+=psiOutOf(d,psiYmAdd(y,i)); return s; };
   const moOf=(st,fut)=>{ const avg=fut/c.avgN; return avg>0 ? Math.round((st/avg)*10)/10 : null; };
 
-  // 대표품번끼리 묶는다(엑셀처럼 대표품번 줄을 먼저 두고 그 아래 호환품번 줄)
+  // 대표품번끼리 묶는다(대표품번 줄을 먼저 두고 그 아래 호환품번 줄)
   const groups=[]; const gmap={};
   items.forEach(it=>{ const rep=String(it.r.rep||'');
     let g=gmap[rep];
@@ -8763,7 +8845,6 @@ function renderPSI(){
   });
   _psiGroups=groups;
 
-  // 합계: 선적·입고·출고·미출·재고는 더하고, 보유월은 전체 재고 ÷ (전체 향후 출고 ÷ 개월)
   const tot={}; yms.forEach(y=>tot[y]={sh:0,i:0,o:0,ms:0,st:0,fut:0});
   const counted={};
   groups.forEach(g=>{ Object.keys(g.seen).forEach(k=>counted[k]=1);
@@ -8773,69 +8854,52 @@ function renderPSI(){
   // 대표품번 줄 색(참고 엑셀의 연한 파랑 띠)
   const gS=tdS+';background:var(--tag-bg);font-weight:700';
   const gNum=gS+';text-align:right;white-space:nowrap';
+  const badgeS='font-size:9.5px;padding:1px 3px;white-space:nowrap';
   const body=groups.map(g=>{
     const r0=g.first;
-    // 대표품번 줄의 품명·규격·품번 칸은 그 대표품번의 최종품번을 기준으로 적는다
     const fin=String(r0.final||'');
     const finRow=Object.assign({}, r0, {_split:true, _compat:fin});
-    const gName=pnColText('name', finRow);
-    const gSpec=pnColText('spec', finRow);
+    const gTxt={ rep:'<span class="code" style="'+badgeS+'">'+escapeHtml(g.rep)+'</span>',
+                 compat:(fin?('<span class="code" style="'+badgeS+'">'+escapeHtml(normBadgePN(fin))+'</span>'):''),
+                 note:'', name:escapeHtml(pnColText('name',finRow)), spec:escapeHtml(pnColText('spec',finRow)) };
+    const gFix=FX.map(d=>'<td style="'+gS+(d.k==='name'||d.k==='spec'?';word-break:break-all;font-size:10.5px;line-height:1.25':'')+'">'+gTxt[d.k]+'</td>').join('');
     const gCells=yms.map((y,i)=>{
       const a=g.agg[y]; const b=i===0?bl:'';
       const mo=moOf(a.st,a.fut);
-      return '<td style="'+gNum+b+'">'+n(a.sh)+'</td>'
-           + '<td style="'+gNum+'">'+n(a.i)+'</td>'
-           + '<td style="'+gNum+'">'+n(a.o)+'</td>'
-           + '<td style="'+gNum+'">'+n(a.ms)+'</td>'
-           + '<td style="'+gNum+'">'+n(a.st)+'</td>'
-           + '<td style="'+gNum+'">'+(mo==null?'':mo.toFixed(1))+'</td>';
+      const val={sh:n(a.sh), i:n(a.i), o:n(a.o), ms:n(a.ms), st:n(a.st), mo:(mo==null?'':mo.toFixed(1))};
+      return SB.map((d,j)=>'<td style="'+gNum+(j===0?b:'')+'">'+val[d.k]+'</td>').join('');
     }).join('');
-    const gRow='<tr>'
-      + '<td style="'+gS+'"><span class="code" style="font-size:9.5px;padding:1px 3px;white-space:nowrap">'+escapeHtml(g.rep)+'</span></td>'
-      + '<td style="'+gS+'">'+(fin?('<span class="code" style="font-size:9.5px;padding:1px 3px;white-space:nowrap">'+escapeHtml(normBadgePN(fin))+'</span>'):'')+'</td>'
-      + '<td style="'+gS+'"></td>'
-      + '<td style="'+gS+';word-break:break-all;font-size:10.5px;line-height:1.25">'+escapeHtml(gName)+'</td>'
-      + (isKo?('<td style="'+gS+';word-break:break-all;font-size:10px;line-height:1.25">'+escapeHtml(gSpec)+'</td>'):'')
-      + gCells + '</tr>';
-    // 하위 호환품번 줄 (보유월은 대표품번 줄에만 적는다)
+    const gRow='<tr>'+gFix+gCells+'</tr>';
     const kids=g.rows.map(it=>{
       const r=it.r, v=it.v;
-      const pn=normBadgePN(r._compat);
+      const kTxt={ rep:'', compat:'<span class="code" style="'+badgeS+'">'+escapeHtml(normBadgePN(r._compat))+'</span>',
+                   note:escapeHtml(pnColText('note',r)), name:escapeHtml(pnColText('name',r)), spec:escapeHtml(pnColText('spec',r)) };
+      const kSty={ rep:tdS, compat:tdS, note:tdS+';text-align:center;color:var(--muted)',
+                   name:tdS+';word-break:break-all;font-size:10.5px;line-height:1.25',
+                   spec:tdS+';color:var(--muted);word-break:break-all;font-size:10px;line-height:1.25' };
+      const kFix=FX.map(d=>'<td style="'+kSty[d.k]+'">'+kTxt[d.k]+'</td>').join('');
       const cells=yms.map((y,i)=>{
         const x=v[y]||{sh:0,i:0,o:0,ms:0,st:0};
         const b=i===0?bl:'';
-        return '<td style="'+numS+b+';color:var(--muted)">'+n(x.sh)+'</td>'
-             + '<td style="'+numS+'">'+n(x.i)+'</td>'
-             + '<td style="'+numS+'">'+n(x.o)+'</td>'
-             + '<td style="'+numS+';color:var(--muted)">'+n(x.ms)+'</td>'
-             + '<td style="'+numS+'">'+n(x.st)+'</td>'
-             + '<td style="'+numS+'"></td>';
+        const val={sh:n(x.sh), i:n(x.i), o:n(x.o), ms:n(x.ms), st:n(x.st), mo:''};
+        const dim={sh:1, ms:1};
+        return SB.map((d,j)=>'<td style="'+numS+(j===0?b:'')+(dim[d.k]?';color:var(--muted)':'')+'">'+val[d.k]+'</td>').join('');
       }).join('');
-      return '<tr>'
-        + '<td style="'+tdS+';color:var(--muted)"></td>'
-        + '<td style="'+tdS+'"><span class="code" style="font-size:9.5px;padding:1px 3px;white-space:nowrap">'+escapeHtml(pn)+'</span></td>'
-        + '<td style="'+tdS+';text-align:center;color:var(--muted)">'+escapeHtml(pnColText('note',r))+'</td>'
-        + '<td style="'+tdS+';word-break:break-all;font-size:10.5px;line-height:1.25">'+escapeHtml(pnColText('name',r))+'</td>'
-        + (isKo?('<td style="'+tdS+';color:var(--muted);word-break:break-all;font-size:10px;line-height:1.25">'+escapeHtml(pnColText('spec',r))+'</td>'):'')
-        + cells + '</tr>';
+      return '<tr>'+kFix+cells+'</tr>';
     }).join('');
     return gRow+kids;
   }).join('');
 
-  // 합계 줄도 머리글에 붙여 스크롤해도 맨 위에 남게 한다
   const sumS=thS+';font-weight:700;background:var(--surface)';
   const sumCells=yms.map((y,i)=>{
     const t=tot[y]; const b=i===0?bl:'';
     const mo=moOf(t.st,t.fut);
-    return '<th style="'+sumS+';text-align:right'+b+';color:var(--muted)">'+n(t.sh)+'</th>'
-         + '<th style="'+sumS+';text-align:right">'+n(t.i)+'</th>'
-         + '<th style="'+sumS+';text-align:right">'+n(t.o)+'</th>'
-         + '<th style="'+sumS+';text-align:right;color:var(--muted)">'+n(t.ms)+'</th>'
-         + '<th style="'+sumS+';text-align:right">'+n(t.st)+'</th>'
-         + '<th style="'+sumS+';text-align:right;color:var(--muted)">'+(mo==null?'':mo.toFixed(1))+'</th>';
+    const val={sh:n(t.sh), i:n(t.i), o:n(t.o), ms:n(t.ms), st:n(t.st), mo:(mo==null?'':mo.toFixed(1))};
+    const dim={sh:1, ms:1, mo:1};
+    return SB.map((d,j)=>'<th style="'+sumS+';text-align:right'+(j===0?b:'')+(dim[d.k]?';color:var(--muted)':'')+'">'+val[d.k]+'</th>').join('');
   }).join('');
   head += '<tr>'
-    + '<th colspan="'+(isKo?5:4)+'" style="'+sumS+';text-align:right">'
+    + '<th colspan="'+FX.length+'" style="'+sumS+';text-align:right">'
     + L('대표품번 '+groups.length+'개 · 호환품번 '+Object.keys(counted).length+'건',
         'Осн. '+groups.length+' · Артикулов '+Object.keys(counted).length)+'</th>'
     + sumCells + '</tr>';
@@ -8847,50 +8911,54 @@ function renderPSI(){
 function normBadgePN(x){ return (typeof pnUpperLead==='function')?pnUpperLead(x||''):String(x||''); }
 
 function downloadPSI(){
-  renderPSI();                 // 화면과 같은 묶음(_psiGroups)을 만들어 둔다
+  renderPSI();                 // 화면과 같은 묶음(_psiGroups)·같은 열 선택을 쓴다
   const c=psiCfg();
   const yms=[]; for(let i=0;i<c.months;i++) yms.push(psiYmAdd(c.from,i));
-  const isKo=(lang!=='ru');
-  const h1=[(lang==='ru'?'Осн. артикул':'대표품번'),(lang==='ru'?'Артикул замены':'호환품번'),(lang==='ru'?'Снято':'단종'),(lang==='ru'?'Наименование':'품명')];
-  if(isKo) h1.push('규격');
+  const isKo=(lang!=='ru'), ru=(lang==='ru');
+  const FX=psiVisFixed(isKo), SB=psiVisSub();
+  const h1=FX.map(d=>ru?d.ru:d.ko);
   const g1=h1.map(()=>''); const g2=h1.slice();
-  g1.push(''); g2.push(lang==='ru' ? ('Нач. остаток ('+psiYmLabel(psiYmAdd(c.base,-1))+')')
-                                   : ('이월재고 ('+psiYmLabel(psiYmAdd(c.base,-1))+' 재고)'));
-  yms.forEach(y=>{ g1.push(psiYmLabel(y),'','','','',''); g2.push(lang==='ru'?'Отгрузка':'선적', lang==='ru'?'Приход':'입고', lang==='ru'?'Расход':'출고', lang==='ru'?'Невып.':'미출', lang==='ru'?'Остаток':'재고', lang==='ru'?'Мес.':'보유월'); });
-  // 화면과 같이 대표품번 줄(합계) + 그 아래 호환품번 줄. 보유월은 대표품번 줄에만 적는다.
+  g1.push(''); g2.push(ru ? ('Нач. остаток ('+psiYmLabel(psiYmAdd(c.base,-1))+')')
+                          : ('이월재고 ('+psiYmLabel(psiYmAdd(c.base,-1))+' 재고)'));
+  yms.forEach(y=>{ g1.push(psiYmLabel(y)); SB.slice(1).forEach(()=>g1.push('')); SB.forEach(d=>g2.push(ru?d.ru:d.ko)); });
   const moOf=(st,fut)=>{ const avg=fut/c.avgN; return avg>0 ? Math.round((st/avg)*10)/10 : ''; };
   const tot={}; yms.forEach(y=>tot[y]={sh:0,i:0,o:0,ms:0,st:0,fut:0});
-  let totOpen=0, kidCnt=0;
+  let totOpen=0;
   const body=[];
   (_psiGroups||[]).forEach(g=>{
     const r0=g.first, fin=String(r0.final||'');
     const finRow=Object.assign({}, r0, {_split:true, _compat:fin});
-    const gRow=[g.rep||'', fin?normBadgePN(fin):'', '', pnColText('name',finRow)];
-    if(isKo) gRow.push(pnColText('spec',finRow));
-    gRow.push(g.open||0);
-    totOpen+=g.open||0;
+    const gTxt={ rep:g.rep||'', compat:(fin?normBadgePN(fin):''), note:'',
+                 name:pnColText('name',finRow), spec:pnColText('spec',finRow) };
+    const gRow=FX.map(d=>gTxt[d.k]);
+    gRow.push(g.open||0); totOpen+=g.open||0;
     yms.forEach(y=>{ const a=g.agg[y]||{sh:0,i:0,o:0,ms:0,st:0,fut:0}; const t=tot[y];
       t.sh+=a.sh; t.i+=a.i; t.o+=a.o; t.ms+=a.ms; t.st+=a.st; t.fut+=a.fut;
-      gRow.push(a.sh, a.i, a.o, a.ms, a.st, moOf(a.st,a.fut)); });
+      const val={sh:a.sh, i:a.i, o:a.o, ms:a.ms, st:a.st, mo:moOf(a.st,a.fut)};
+      SB.forEach(d=>gRow.push(val[d.k])); });
     body.push(gRow);
     g.rows.forEach(it=>{
       const r=it.r, v=it.v;
-      kidCnt++;
-      const row=[g.rep||'', normBadgePN(r._compat), pnColText('note',r), pnColText('name',r)];
-      if(isKo) row.push(pnColText('spec',r));
+      const kTxt={ rep:g.rep||'', compat:normBadgePN(r._compat), note:pnColText('note',r),
+                   name:pnColText('name',r), spec:pnColText('spec',r) };
+      const row=FX.map(d=>kTxt[d.k]);
       row.push(v._open||0);
       yms.forEach(y=>{ const x=v[y]||{};
-        row.push(x.sh??'', x.i??'', x.o??'', x.ms??'', x.st??'', ''); });
+        const val={sh:x.sh??'', i:x.i??'', o:x.o??'', ms:x.ms??'', st:x.st??'', mo:''};
+        SB.forEach(d=>row.push(val[d.k])); });
       body.push(row);
     });
   });
-  const sumRow=h1.map((v,i)=>i===0?((lang==='ru'?'Осн. ':'대표품번 ')+(_psiGroups||[]).length+(lang==='ru'?'':'개')):'');
+  const sumRow=FX.map((d,i)=>i===0?((ru?'Осн. ':'대표품번 ')+(_psiGroups||[]).length+(ru?'':'개')):'');
   sumRow.push(totOpen);
-  yms.forEach(y=>{ const t=tot[y]; sumRow.push(t.sh, t.i, t.o, t.ms, t.st, moOf(t.st,t.fut)); });
+  yms.forEach(y=>{ const t=tot[y];
+    const val={sh:t.sh, i:t.i, o:t.o, ms:t.ms, st:t.st, mo:moOf(t.st,t.fut)};
+    SB.forEach(d=>sumRow.push(val[d.k])); });
   const aoa=[g1,g2,sumRow];
   body.forEach(r=>aoa.push(r));
   const ws=XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols']=h1.map(()=>({wch:16})).concat([{wch:12}]).concat(yms.map(()=>[{wch:9},{wch:9},{wch:9},{wch:9},{wch:10},{wch:8}]).reduce((a,b)=>a.concat(b),[]));
+  ws['!cols']=FX.map(()=>({wch:16})).concat([{wch:12}])
+    .concat(yms.map(()=>SB.map(d=>({wch:(d.k==='st'?10:(d.k==='mo'?8:9))}))).reduce((a,b)=>a.concat(b),[]));
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'PSI');
   XLSX.writeFile(wb, xlsxName('PSI','PSI'));
 }
@@ -9066,6 +9134,7 @@ async function loadPSITab(){
   const btn=document.getElementById('psiUploadBtn');
   if(btn) btn.style.display = userRole(currentUser).usesMasterView ? '' : 'none';
   await loadPsiFc();
+  await loadPsiCols();
   await loadPSI();
   // 시작월은 자료의 마지막 달을 따라간다. 사용자가 직접 적은 값(dataset.user)은 건드리지 않는다.
   const f=document.getElementById('psiFromYm');
