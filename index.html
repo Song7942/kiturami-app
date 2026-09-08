@@ -8266,7 +8266,10 @@ async function shipSyncMonth(ym, field){
   return { ok:true, pns:Object.keys(sum).length, total:Object.keys(sum).reduce((a,k)=>a+sum[k],0) };
 }
 async function shipApplyInvoice(pi){
-  const rows=pi.items.map(it=>({ inv:pi.inv, pn:it.pn, sail:pi.sail, ym:pi.ym, name_en:it.name_en,
+  const arrive=shipAutoArrive(pi.sail);         // 기본 입고일 = 선적일 + 49일
+  const arrYm=shipYmOf(arrive);
+  const rows=pi.items.map(it=>({ inv:pi.inv, pn:it.pn, sail:pi.sail, ym:pi.ym,
+    arrive:arrive||null, arr_ym:arrYm||null, name_en:it.name_en,
     hs:it.hs, qty:it.qty, price:it.price, amount:it.amount, updated_at:new Date().toISOString() }));
   for(let i=0;i<rows.length;i+=300){
     const { error }=await sb.from('kt_ship').upsert(rows.slice(i,i+300),{onConflict:'inv,pn'});
@@ -8275,7 +8278,20 @@ async function shipApplyInvoice(pi){
   await loadShip();
   const r=await shipSyncMonth(pi.ym,'v');
   if(!r.ok) return r;
-  return { ok:true, saved:rows.length, month:pi.ym, pns:r.pns, total:r.total };
+  let rin={pns:0,total:0};
+  if(arrYm){ rin=await shipSyncMonth(arrYm,'w'); if(!rin.ok) return rin; }
+  return { ok:true, saved:rows.length, month:pi.ym, pns:r.pns, total:r.total,
+           arrive, arrMonth:arrYm, arrTotal:rin.total };
+}
+// 입고일 기본값: 선적일 + 49일
+const SHIP_LEAD_DAYS=49;
+function shipAutoArrive(sail){
+  const m=String(sail||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if(!m) return '';
+  const d=new Date(+m[1], +m[2]-1, +m[3]);
+  d.setDate(d.getDate()+SHIP_LEAD_DAYS);
+  const p=n=>(n<10?'0':'')+n;
+  return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());
 }
 // 'YYYY-MM-DD' → 'YYMM'
 function shipYmOf(s){
@@ -8309,7 +8325,8 @@ function openShipInvPanel(){
     + '<div id="siList" style="padding:8px 14px 12px;overflow:auto"></div>'
     + '<div style="display:flex;gap:7px;padding:11px 14px;border-top:1px solid var(--border)">'
       + '<div style="flex:1;font-size:11px;color:var(--muted);align-self:center">'
-      + L('입고일을 넣으면 그 달 PSI 입고에 품번별 수량이 들어갑니다.','Дата прихода заполняет приход в PSI.')+'</div>'
+      + L('입고일은 기본으로 선적일 + 49일입니다. 비우고 저장하면 다시 자동으로 잡히고, 적어 넣으면 그 날짜를 씁니다.',
+          'Приход по умолчанию = отгрузка + 49 дней.')+'</div>'
       + '<button id="siClose" style="padding:7px 14px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);cursor:pointer;font-size:12px">'+L('닫기','Закрыть')+'</button>'
     + '</div></div>';
   document.body.appendChild(box);
@@ -8341,7 +8358,7 @@ function shipInvPanelList(){
     + list.map(o=>'<tr data-inv="'+escapeHtml(o.inv)+'">'
         + '<td style="'+td+'"><input class="siInv" style="'+inp+';width:100%;box-sizing:border-box" value="'+escapeHtml(o.inv)+'"></td>'
         + '<td style="'+td+'"><input class="siSail" placeholder="2026-09-15" style="'+inp+';width:104px" value="'+escapeHtml(o.sail||'')+'"></td>'
-        + '<td style="'+td+'"><input class="siArr" placeholder="2026-10-10" style="'+inp+';width:104px" value="'+escapeHtml(o.arrive||'')+'"></td>'
+        + '<td style="'+td+'"><input class="siArr" placeholder="'+escapeHtml(shipAutoArrive(o.sail)||'2026-10-10')+'" style="'+inp+';width:104px" value="'+escapeHtml(o.arrive||'')+'"></td>'
         + '<td style="'+td+';text-align:right;color:var(--muted)">'+o.n+'</td>'
         + '<td style="'+td+';text-align:right">'+o.qty.toLocaleString()+'</td>'
         + '<td style="'+td+'"><button class="siSave" style="padding:4px 11px;border:none;border-radius:6px;background:var(--accent2);color:#fff;cursor:pointer;font-size:11px">'+L('저장','ОК')+'</button></td>'
@@ -8362,6 +8379,9 @@ async function shipSaveInvoice(oldInv, newInv, sail, arrive, btn){
   const before=shipData.filter(r=>r.inv===oldInv);
   const oldSailYm=before.length?before[0].ym:'';
   const oldArrYm=before.length?(before[0].arr_ym||''):'';
+  // 입고일을 비우거나 예전 선적일의 자동값 그대로면 새 선적일 기준으로 다시 잡는다
+  const autoOld=before.length?shipAutoArrive(before[0].sail):'';
+  if(!arrive || arrive===autoOld) arrive=shipAutoArrive(sail);
   const newSailYm=shipYmOf(sail), newArrYm=shipYmOf(arrive);
   if(btn){ btn.disabled=true; btn.textContent='…'; }
   try{
@@ -8842,22 +8862,24 @@ function openPsiColsPanel(){
       + '<div style="flex:1"><div style="font-size:11px;color:var(--muted);margin-bottom:3px">'+(ru?'По месяцам':'월별 수치')+'</div>'
         + PSI_COL_DEFS.filter(d=>!d.fixed).map(item).join('')+'</div>'
     + '</div>'
-    + '<div style="padding:0 14px 8px;font-size:11px;color:var(--muted)">'+(ru?'Выбор сохраняется для этого ID.':'선택은 이 아이디에 저장되어 다음에도 그대로 보입니다.')+'</div>'
+    + '<div style="padding:0 14px 8px;font-size:11px;color:var(--muted)">'+(ru?'Выбор сохраняется для этого ID при закрытии.':'닫으면 그대로 저장되어 이 아이디에 다음에도 남습니다.')+'</div>'
     + '<div style="display:flex;gap:7px;padding:11px 14px;border-top:1px solid var(--border)">'
-      + '<button id="pcSave" style="flex:1;padding:7px;border:none;border-radius:7px;background:var(--accent2);color:#fff;cursor:pointer;font-size:12px;font-weight:700">'+(ru?'Сохранить':'저장')+'</button>'
       + '<button id="pcAll" style="flex:none;padding:7px 12px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);cursor:pointer;font-size:12px">'+(ru?'Все':'전체 선택')+'</button>'
-      + '<button id="pcCancel" style="flex:none;padding:7px 12px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);cursor:pointer;font-size:12px">'+(ru?'Отмена':'닫기')+'</button>'
+      + '<button id="pcClose" style="flex:1;padding:7px;border:none;border-radius:7px;background:var(--accent2);color:#fff;cursor:pointer;font-size:12px;font-weight:700">'+(ru?'Закрыть':'닫기')+'</button>'
     + '</div></div>';
   document.body.appendChild(box);
-  box.querySelector('#pcAll').onclick=()=>box.querySelectorAll('.pcChk').forEach(c=>c.checked=true);
-  box.querySelector('#pcCancel').onclick=closePsiColsPanel;
-  box.querySelector('#pcSave').onclick=async()=>{
+  // 저장 단추 없이, 닫을 때 고른 값을 그대로 저장한다
+  let done=false;
+  const commit=async()=>{
+    if(done) return; done=true;
     const v={}; box.querySelectorAll('.pcChk').forEach(c=>{ v[c.getAttribute('data-k')]=c.checked; });
     psiCols=v; closePsiColsPanel(); renderPSI();
     const ok=await savePsiCols();
     if(!ok) console.log('psi_cols: 이 브라우저에만 저장');
   };
-  box.onmousedown=(e)=>{ if(e.target===box) closePsiColsPanel(); };
+  box.querySelector('#pcAll').onclick=()=>box.querySelectorAll('.pcChk').forEach(c=>c.checked=true);
+  box.querySelector('#pcClose').onclick=commit;
+  box.onmousedown=(e)=>{ if(e.target===box) commit(); };
 }
 // ── 출고 예상수량 ───────────────────────────────────────────────────────
 // 통합문서 'dispatch forecasting logic' 시트의 산식을 옮긴 것.
@@ -9291,7 +9313,7 @@ function renderPSI(){
     const r0=g.first;
     const fin=String(r0.final||'');
     const finRow=Object.assign({}, r0, {_split:true, _compat:fin});
-    const gTxt={ rep:'<span class="code" style="'+badgeS+'">'+escapeHtml(g.rep)+'</span>',
+    const gTxt={ rep:'<span style="'+plainS+'">'+escapeHtml(g.rep)+'</span>',
                  compat:(fin?('<span style="'+plainS+'">'+escapeHtml(normBadgePN(fin))+'</span>'):''),
                  note:'', name:escapeHtml(pnColText('name',finRow)), spec:escapeHtml(pnColText('spec',finRow)) };
     const gFix=FX.map(d=>'<td style="'+gS+(d.k==='name'||d.k==='spec'?';word-break:break-all;font-size:10.5px;line-height:1.25':'')+'">'+gTxt[d.k]+'</td>').join('');
