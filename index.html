@@ -221,6 +221,9 @@ input[type="text"]::placeholder{color:var(--muted)}
 .pt tr.g.band td{background:var(--tag-bg)}
 .pt span.c{font-family:'Courier New',monospace;font-size:9.5px;white-space:nowrap}
 .pt td.low,.pt tr.g td.low{background:#fee2e2;color:#b91c1c;font-weight:700}
+/* 손으로 고친 칸 — 셈한 값이 아니라는 표시 */
+.pt td.man,.pt tr.g td.man{background:#ffedd5;color:#9a3412;font-weight:700;
+  border-bottom:1px solid #f97316}
 .pt td.ed{cursor:text;border-bottom:1px dashed var(--accent2)}
 .pt td input.ni{width:100%;box-sizing:border-box;text-align:right;font-size:11px;font-weight:700;
   padding:0 3px;border:1px solid var(--accent2);border-radius:4px;background:var(--surface);color:var(--text)}
@@ -10169,8 +10172,9 @@ function renderPSI(){
                  mo:(mo==null?'':mo.toFixed(1)),
                  need:(nd?n(nd):''), mo2:(m2==null?'':m2.toFixed(1))};
       const low=psiLow(mo);
+      const manMark=d=>(psiSimOn && ((d.k==='sh' && manShip!=null) || (d.k==='need' && man!=null)))?' man':'';
       return SB.map((d,j)=>'<td class="n'+(j===0?b:'')+((low&&d.k==='mo')?' low':'')
-        +((d.k==='need'||(psiSimOn&&d.k==='sh'))?' ed':'')+'"'
+        +((d.k==='need'||(psiSimOn&&d.k==='sh'))?' ed':'')+manMark(d)+'"'
         +(d.k==='need'?nAttr:((psiSimOn&&d.k==='sh')?sAttr:''))+'>'+val[d.k]+'</td>').join('');
     }).join('');
     const gRow='<tr class="g'+band+'">'+gFix+gCells+'</tr>';
