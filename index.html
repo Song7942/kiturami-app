@@ -1003,9 +1003,9 @@ input[type="text"]::placeholder{color:var(--muted)}
         <input type="text" id="psiFromYm" maxlength="4" placeholder="2609" oninput="this.dataset.user='1'" style="width:52px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></label>
       <label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--muted)"><span id="i18n-psi-months">개월</span>
         <input type="number" id="psiMonths" min="1" max="12" style="width:48px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></label>
-      <label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--muted)"><span id="i18n-psi-base">재고 기산</span>
+      <label style="display:none;align-items:center;gap:4px;font-size:10px;color:var(--muted)"><span id="i18n-psi-base">재고 기산</span>
         <input type="text" id="psiBaseYm" maxlength="4" style="width:52px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></label>
-      <span id="psiOpenNote" style="font-size:10px;color:var(--muted);white-space:nowrap"></span>
+      <span id="psiOpenNote" style="display:none;font-size:10px;color:var(--muted);white-space:nowrap"></span>
       <label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--muted)" title="보유월 = 그 달 재고 ÷ (다음 달부터 이 개월 수만큼의 출고 합계 ÷ 개월 수)"><span id="i18n-psi-avg">보유월 향후</span>
         <input type="number" id="psiAvgN" min="1" max="24" style="width:48px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></label>
       <button class="dl-btn" onclick="renderPSI()"><span id="i18n-psi-apply">적용</span></button>
