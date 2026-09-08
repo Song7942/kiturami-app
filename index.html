@@ -8584,7 +8584,7 @@ function openShipInvPanel(){
     + '<div style="padding:12px 14px;border-bottom:1px solid var(--border);font-weight:700;font-size:13px">'
       + L('선적차수 — 인보이스 넘버 · 선적일 · 입고일','Партии — инвойс · отгрузка · приход')+'</div>'
     + '<div style="padding:10px 14px 6px;border-bottom:1px solid var(--border)">'
-      + '<input id="siSearch" type="text" placeholder="'+L('인보이스 넘버 · 선적일 · 입고일로 조회…','Поиск: инвойс, дата отгрузки, дата прихода…')+'"'
+      + '<input id="siSearch" type="text" placeholder="'+L('조회: 260704 · 0704 · 2026 · 2609 · 2026-09 · 260915 · 2026-09-15','Поиск: 260704, 0704, 2026, 2609, 2026-09, 260915, 2026-09-15')+'"'
       + ' style="width:100%;box-sizing:border-box;padding:6px 9px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:12px">'
       + '<div id="siCount" style="margin-top:5px;font-size:11px;color:var(--muted)"></div></div>'
     + '<div id="siList" style="padding:8px 14px 12px;overflow:auto"></div>'
@@ -8602,12 +8602,28 @@ function openShipInvPanel(){
   shipInvPanelList();
   search.focus();
 }
+// 조회칸 한 줄로 인보이스 넘버와 선적일·입고일을 같이 건다.
+//   넘버: 260704 · 0704 · RUMOSKRUS260704 (기호는 무시하고 부분 일치)
+//   날짜: 2026 · 26 · 202609 · 2609 · 2026-09 · 20260915 · 260915 · 2026-09-15
+function siDateHit(v, raw, digits){
+  const s=String(v||''); if(!s) return false;
+  if(raw && s.indexOf(raw)>=0) return true;
+  const d=s.replace(/\D/g,''); if(d.length!==8 || !digits) return false;
+  const y=d.slice(0,4), yy=d.slice(2,4), mm=d.slice(4,6), dd=d.slice(6,8);
+  return [y, yy, y+mm, yy+mm, d, yy+mm+dd].indexOf(digits)>=0;
+}
+function siInvHit(v, key){
+  if(!key) return false;
+  return String(v||'').toUpperCase().replace(/[^A-Z0-9]/g,'').indexOf(key)>=0;
+}
 function shipInvPanelList(){
   const box=document.getElementById('shipInvPop'); if(!box) return;
   const ru=(lang==='ru'), L=(ko,rr)=>(ru?rr:ko);
-  const kw=(box.querySelector('#siSearch').value||'').trim().toLowerCase();
+  const raw=(box.querySelector('#siSearch').value||'').trim();
+  const digits=raw.replace(/\D/g,'');
+  const invKey=raw.toUpperCase().replace(/[^A-Z0-9]/g,'');
   let list=shipInvSummary();
-  if(kw) list=list.filter(o=>[o.inv,o.sail,o.arrive].some(v=>String(v||'').toLowerCase().includes(kw)));
+  if(raw) list=list.filter(o=> siInvHit(o.inv,invKey) || siDateHit(o.sail,raw,digits) || siDateHit(o.arrive,raw,digits));
   const inp='padding:4px 7px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:11px';
   const th='padding:6px;text-align:left;font-size:11px;color:var(--muted);border-bottom:1px solid var(--border);white-space:nowrap';
   const td='padding:5px 6px;font-size:11px;border-bottom:1px solid var(--border)';
