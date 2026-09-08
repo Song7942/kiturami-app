@@ -9915,6 +9915,9 @@ function renderPSI(){
   psiFcClear();
   _psiLowN=c.avgN;
   const yms=[]; for(let i=0;i<c.months;i++) yms.push(psiYmAdd(c.from,i));
+  // 발주필요는 '입고월' 보유월을 보고 잡는다. 그 달이 화면 밖일 수 있으니 뒤로 3개월 더 셈해 둔다.
+  const ymsAll=yms.slice();
+  if(psiSimOn) for(let i=1;i<=3;i++) ymsAll.push(psiYmAdd(yms[yms.length-1], i));
   const kwEl=pgEl('Input');
   const kw=(kwEl?kwEl.value:'').trim().toLowerCase();
   const isKo=(lang!=='ru');
@@ -9927,7 +9930,7 @@ function renderPSI(){
 
   // 값을 먼저 계산해 둔다(헤더 정렬이 숫자 열도 다루므로)
   let items=rows.map(r=>{ const key=normPN(r._compat); const rec=psiData[key];
-    return { r, key, d:(rec?rec.data:null), v:psiRowVals(rec?rec.data:null, c, yms) }; });
+    return { r, key, d:(rec?rec.data:null), v:psiRowVals(rec?rec.data:null, c, ymsAll) }; });
 
   _psiAllItems=items;
   const fkeys=Object.keys(_psiFilters);
@@ -10005,11 +10008,11 @@ function renderPSI(){
   const groups=[]; const gmap={};
   items.forEach(it=>{ const rep=String(it.r.rep||'');
     let g=gmap[rep];
-    if(!g){ g=gmap[rep]={rep, first:it.r, rows:[], seen:{}, agg:{}, open:0}; yms.forEach(y=>g.agg[y]={sh:0,i:0,o:0,ms:0,st:0,fut:0}); groups.push(g); }
+    if(!g){ g=gmap[rep]={rep, first:it.r, rows:[], seen:{}, agg:{}, open:0}; ymsAll.forEach(y=>g.agg[y]={sh:0,i:0,o:0,ms:0,st:0,fut:0}); groups.push(g); }
     g.rows.push(it);
     if(g.seen[it.key]) return; g.seen[it.key]=1;
     g.open+=it.v._open||0;
-    yms.forEach(y=>{ const x=it.v[y]||{}; const a=g.agg[y];
+    ymsAll.forEach(y=>{ const x=it.v[y]||{}; const a=g.agg[y];
       a.sh+=x.sh||0; a.i+=x.i||0; a.o+=x.o||0; a.ms+=x.ms||0; a.st+=x.st||0; a.fut+=futOut(it.d,y); });
   });
   if(psiSimOn){
@@ -10052,8 +10055,8 @@ function renderPSI(){
     //   보유월  = 발주 전 기준(지금 흐름 그대로)
     //   발주후 보유월 = 들어온 것까지 반영
     let addSt=0;
-    const arrive=new Array(yms.length).fill(0);
-    const shipped=new Array(yms.length).fill(0);
+    const arrive=new Array(ymsAll.length).fill(0);
+    const shipped=new Array(ymsAll.length).fill(0);
     const gCells=yms.map((y,i)=>{
       const a=g.agg[y]; const b=i===0?' bl':'';
       addSt+=arrive[i];                       // 이 달에 들어오는 발주분
@@ -10063,12 +10066,12 @@ function renderPSI(){
       const man=_simNeed[simNeedKey(g.rep,y)];
       // 이 달 발주분은 ai 달에 들어온다. 그 달 보유월이 N 이 되도록 수량을 잡는다.
       //   그 사이에 들어올 기(旣)선적분·앞선 발주분은 이미 셈에 들어 있다.
-      const ai=yms.indexOf(simArriveYm(y));
+      const ai=ymsAll.indexOf(simArriveYm(y));
       let nd=0;
       if(psiSimOn){
         if(man!=null) nd=man;
         else if(ai>i){
-          const at=g.agg[yms[ai]];
+          const at=g.agg[ymsAll[ai]];
           let got=0; for(let k=0;k<=ai;k++) got+=arrive[k];
           nd=needOf(at.st+got, at.fut);
         }
@@ -10078,7 +10081,7 @@ function renderPSI(){
       stAdd[y]=(stAdd[y]||0)+addSt;
       shipTot[y]=(shipTot[y]||0)+shipped[i];
       inTot[y]=(inTot[y]||0)+arrive[i];
-      const si=yms.indexOf(psiYmAdd(y,1));    // 다음 달 말 선적
+      const si=ymsAll.indexOf(psiYmAdd(y,1));  // 다음 달 말 선적
       if(si>i) shipped[si]+=nd;
       if(ai>i) arrive[ai]+=nd;
       const nAttr=' data-rep="'+escapeHtml(g.rep)+'" data-ym="'+y+'" data-st="'+st
