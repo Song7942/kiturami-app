@@ -565,6 +565,7 @@ input[type="text"]::placeholder{color:var(--muted)}
   <button class="tab-btn" style="display:none" onclick="switchTab('price')"     id="tab-price">💲 가격정보</button>
   <button class="tab-btn" style="display:none" onclick="switchTab('psi')"       id="tab-psi"><span id="i18n-tab-psi">📈 PSI</span></button>
   <button class="tab-btn" style="display:none" onclick="switchTab('po')"        id="tab-po"><span id="i18n-tab-po">📋 발주현황</span></button>
+  <button class="tab-btn" style="display:none" onclick="switchTab('ship')"      id="tab-ship"><span id="i18n-tab-ship">🚢 선적현황</span></button>
   <button class="tab-btn" style="display:none;position:relative" onclick="switchTab('memberManagement')" id="tab-memberManagement"><span id="i18n-tab-membermgmt">👥 회원관리</span><span id="memberMgmtUnreadDot" style="display:none;position:absolute;top:4px;right:2px;width:8px;height:8px;border-radius:50%;background:#ef4444;box-shadow:0 0 0 2px var(--bg)"></span></button>
   <button class="tab-btn" style="display:none" onclick="switchTab('reset')" id="tab-reset"><span id="i18n-tab-reset">🗑️ 초기화</span></button>
   <button class="tab-btn" style="display:none" onclick="switchTab('parts')" id="tab-parts">🔧 부품 검색</button>
@@ -992,6 +993,39 @@ input[type="text"]::placeholder{color:var(--muted)}
 </div>
 
 <!-- ══ 탭: 회원관리 (취소·변경 요청 / 회원관리 및 가입승인) ══ -->
+<!-- 선적현황 (MASTER 전용) -->
+<div class="tab-pane" id="pane-ship">
+  <div class="fixed-top">
+    <div class="search-bar">
+      <div class="search-wrap">
+        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+        <input type="text" id="shipInput" placeholder="인보이스·선적일·품번·품명으로 검색…" oninput="debouncedRenderShip()">
+      </div>
+      <div class="count-badge" id="shipBadge"></div>
+      <button class="dl-btn" onclick="switchTab('psi')" title="PSI 화면으로 돌아가기">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+        <span id="i18n-ship-back">PSI</span>
+      </button>
+      <select id="shipInv" onchange="renderShip()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></select>
+      <select id="shipYm" onchange="renderShip()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></select>
+      <button class="dl-btn" onclick="downloadShip()">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        <span id="i18n-ship-dl">엑셀 다운로드</span>
+      </button>
+    </div>
+  </div>
+  <div class="scroll-body" id="scrollBodySHIP" style="padding:0 12px 72px">
+    <div class="pn-body-wrap">
+      <table id="shipTable" style="width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed">
+        <colgroup id="shipColgroup"></colgroup>
+        <thead id="shipThead"></thead>
+        <tbody id="shipTbody"></tbody>
+      </table>
+    </div>
+    <div id="shipEmpty" class="no-result" style="display:none"></div>
+  </div>
+</div>
+
 <!-- 발주현황 (MASTER 전용) -->
 <div class="tab-pane" id="pane-po">
   <div class="fixed-top">
@@ -1069,6 +1103,10 @@ input[type="text"]::placeholder{color:var(--muted)}
       <button class="dl-btn" onclick="downloadPSI()">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         <span id="i18n-psi-dl">엑셀 다운로드</span>
+      </button>
+      <button class="dl-btn" onclick="switchTab('ship')" title="인보이스별 선적 내역" style="background:#14b8a6;border-color:#14b8a6;color:#fff">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 17l2-6h14l2 6"/><path d="M5 11V7a2 2 0 012-2h10a2 2 0 012 2v4"/><path d="M2 20c2 0 2-1 4-1s2 1 4 1 2-1 4-1 2 1 4 1 2-1 4-1"/></svg>
+        <span id="i18n-ship-tab">선적현황</span>
       </button>
       <button class="dl-btn" onclick="switchTab('po')" title="차수별 수주·공급·미공급 현황" style="background:#f59e0b;border-color:#f59e0b;color:#fff">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h4"/></svg>
@@ -1782,6 +1820,7 @@ function switchTab(tab){
   }
   if(tab==='psi'){ loadPSITab(); }
   if(tab==='po'){ loadPOTab(); }
+  if(tab==='ship'){ loadShipTab(); }
   if(tab==='adminOrders'){ loadAdminOrdersTab(); }
   if(tab==='memberManagement'){ loadMemberManagementTab(); }
 }
@@ -5743,6 +5782,7 @@ function rerenderActiveTab(){
     else if(A('pane-price')) renderPriceActive();
     else if(A('pane-psi')) renderPSI();
     else if(A('pane-po')) renderPO();
+    else if(A('pane-ship')) renderShip();
     else if(A('pane-adminOrders')){ renderAdminOrders(); renderAdminMyOrders(); }
   }catch(e){}
 }
@@ -5808,7 +5848,7 @@ function applyPermTabVisibility(skipSwitch){
   if(!pobj){
     // 권한을 아직 부여하지 않은 회원: 품번조회 하나만 연다.
     // 종전에는 역할 기본값을 그대로 써서 주문·재고관리·가격정보까지 다 보였다.
-    ['tab-order','tab-parts','tab-adminOrders','tab-inventory','tab-shipments','tab-price','tab-psi','tab-po','tab-memberManagement']
+    ['tab-order','tab-parts','tab-adminOrders','tab-inventory','tab-shipments','tab-price','tab-psi','tab-po','tab-ship','tab-memberManagement']
       .forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display='none'; });
     const pnEl=document.getElementById('tab-pn'); if(pnEl) pnEl.style.display='';
     if(!skipSwitch) ensureVisibleTab();
@@ -5818,6 +5858,7 @@ function applyPermTabVisibility(skipSwitch){
   // PSI 는 권한 항목이 따로 없다. 역할(MASTER·KITURAMI)로만 열리므로 권한 회원에게는 닫는다.
   const psiEl=document.getElementById('tab-psi'); if(psiEl) psiEl.style.display='none';
   const poEl=document.getElementById('tab-po'); if(poEl) poEl.style.display='none';
+  const shipEl=document.getElementById('tab-ship'); if(shipEl) shipEl.style.display='none';
   const map={ 'tab-pn':'pn','tab-inventory':'inventory','tab-shipments':'shipments','tab-price':'price','tab-memberManagement':'memberManagement' };
   Object.keys(map).forEach(tabId=>{ const el=document.getElementById(tabId); if(el) el.style.display = pobj[map[tabId]].v ? '' : 'none'; });
   // 주문관리 탭: '주문접수' 또는 '주문' 서브탭 권한이 있으면 노출. 서브탭 버튼도 권한대로.
@@ -7992,6 +8033,204 @@ function refreshInventoryTexts(){
 // 가격정보 (KITURAMI 전용) — 계산식 / 공급가
 // ══════════════════════════════════════════
 // ══════════════════════════════════════════
+// 선적현황 (인보이스별 Parts 내역)
+//   저장은 kt_ship (인보이스+호환품번이 키).
+//   COMMERCIAL INVOICE 의 'Sailing on or about' 날짜를 선적일로 쓰고, 그 달을 선적월로 삼는다.
+//   같은 달에 인보이스를 여러 장 올리면 품번별로 합쳐 PSI 선적(data[ym].v)에 적는다.
+// ══════════════════════════════════════════
+let shipData=[];      // [{inv, sail, ym, pn, name_en, hs, qty, price, amount}]
+let _shipFiltered=[];
+
+async function loadShip(){
+  shipData=[];
+  try{
+    const page=1000;
+    for(let from=0;;from+=page){
+      const { data, error }=await sb.from('kt_ship').select('inv,pn,sail,ym,name_en,hs,qty,price,amount').range(from, from+page-1);
+      if(error) return;
+      (data||[]).forEach(r=>shipData.push({ inv:r.inv||'', pn:r.pn||'', sail:r.sail||'', ym:r.ym||'',
+        name_en:r.name_en||'', hs:r.hs||'', qty:Number(r.qty)||0, price:Number(r.price)||0, amount:Number(r.amount)||0 }));
+      if(!data || data.length<page) break;
+    }
+  }catch(e){}
+}
+function shipInvList(){ const s=new Set(); shipData.forEach(r=>{ if(r.inv) s.add(r.inv); }); return [...s].sort(); }
+function shipYmList(){ const s=new Set(); shipData.forEach(r=>{ if(r.ym) s.add(r.ym); }); return [...s].sort(); }
+function renderShip(){
+  const pane=document.getElementById('pane-ship'); if(!pane) return;
+  _poRepMap=null;
+  const ru=(lang==='ru'), L=(ko,rr)=>(ru?rr:ko);
+  const kw=(document.getElementById('shipInput')?document.getElementById('shipInput').value:'').trim().toLowerCase();
+  const fill=(el,list,allTxt)=>{ if(!el) return '';
+    const cur=el.value;
+    if(el.getAttribute('data-list')!==list.join('|')){
+      el.innerHTML='<option value="">'+allTxt+'</option>'+list.map(v=>'<option>'+escapeHtml(v)+'</option>').join('');
+      el.setAttribute('data-list',list.join('|')); el.value=cur;
+    }
+    return el.value; };
+  const inv=fill(document.getElementById('shipInv'), shipInvList(), L('인보이스 전체','Все инвойсы'));
+  const ymSel=document.getElementById('shipYm');
+  const ymList=shipYmList();
+  if(ymSel && ymSel.getAttribute('data-list')!==ymList.join('|')){
+    const cur=ymSel.value;
+    ymSel.innerHTML='<option value="">'+L('선적월 전체','Все месяцы')+'</option>'
+      +ymList.map(v=>'<option value="'+v+'">'+psiYmLabel(v)+'</option>').join('');
+    ymSel.setAttribute('data-list',ymList.join('|')); ymSel.value=cur;
+  }
+  const ym=ymSel?ymSel.value:'';
+  let rows=shipData.slice();
+  if(inv) rows=rows.filter(r=>r.inv===inv);
+  if(ym) rows=rows.filter(r=>r.ym===ym);
+  if(kw) rows=rows.filter(r=>{
+    const i=poLookup(r.pn);
+    return [r.inv, r.sail, r.pn, i.rep, r.name_en, r.hs].some(v=>String(v||'').toLowerCase().includes(kw));
+  });
+  rows.sort((a,b)=> (a.inv===b.inv) ? String(a.pn).localeCompare(String(b.pn)) : String(a.inv).localeCompare(String(b.inv)));
+  _shipFiltered=rows;
+  const badge=document.getElementById('shipBadge'); if(badge) badge.innerHTML='<b>'+rows.length+'</b>';
+
+  const thS='padding:6px 5px;text-align:center;vertical-align:middle;position:sticky;top:0;z-index:3;'
+    + 'background:var(--surface2);font-size:11px;white-space:nowrap;border-bottom:1px solid var(--border)';
+  const tdS='padding:5px 6px;font-size:11px;border-bottom:1px solid var(--border)';
+  const numS=tdS+';text-align:right;white-space:nowrap';
+  const codeS="font-family:'Courier New',monospace;font-size:9.5px;white-space:nowrap";
+  const heads=[[L('인보이스 넘버','Инвойс'),128],[L('선적일','Дата'),80],[L('대표품번','Осн. артикул'),104],
+               [L('호환품번','Артикул'),104],[L('영문품명','Наименование'),210],[L('HS CODE','HS'),90],
+               [L('수량','Кол-во'),64],[L('단가(RUB)','Цена'),84],[L('금액(RUB)','Сумма'),96]];
+  const cg=document.getElementById('shipColgroup');
+  if(cg) cg.innerHTML=heads.map(h=>'<col style="width:'+h[1]+'px">').join('');
+  let tq=0, ta=0;
+  const body=rows.map(r=>{
+    const i=poLookup(r.pn);
+    tq+=r.qty; ta+=r.amount;
+    return '<tr>'
+      + '<td style="'+tdS+';white-space:nowrap">'+escapeHtml(r.inv)+'</td>'
+      + '<td style="'+tdS+';text-align:center;white-space:nowrap">'+escapeHtml(r.sail||'')+'</td>'
+      + '<td style="'+tdS+'"><span style="'+codeS+'">'+escapeHtml(i.rep||'')+'</span></td>'
+      + '<td style="'+tdS+'"><span style="'+codeS+'">'+escapeHtml(normBadgePN(r.pn))+'</span></td>'
+      + '<td style="'+tdS+';word-break:break-all;font-size:10.5px;line-height:1.25">'+escapeHtml(r.name_en||'')+'</td>'
+      + '<td style="'+tdS+';text-align:center;color:var(--muted)">'+escapeHtml(r.hs||'')+'</td>'
+      + '<td style="'+numS+'">'+(r.qty?r.qty.toLocaleString():'')+'</td>'
+      + '<td style="'+numS+';color:var(--muted)">'+(r.price?Math.round(r.price*100)/100:'').toLocaleString()+'</td>'
+      + '<td style="'+numS+'">'+(r.amount?Math.round(r.amount).toLocaleString():'')+'</td>'
+      + '</tr>';
+  }).join('');
+  const thead=document.getElementById('shipThead');
+  if(thead) thead.innerHTML='<tr>'+heads.map(h=>'<th style="'+thS+'">'+h[0]+'</th>').join('')+'</tr>'
+    + '<tr><th colspan="6" style="'+thS+';font-weight:700;background:var(--surface);top:28px;text-align:right">'
+    + L('합계 '+rows.length+'건','Итого '+rows.length)+'</th>'
+    + '<th style="'+thS+';font-weight:700;background:var(--surface);top:28px;text-align:right">'+tq.toLocaleString()+'</th>'
+    + '<th style="'+thS+';background:var(--surface);top:28px"></th>'
+    + '<th style="'+thS+';font-weight:700;background:var(--surface);top:28px;text-align:right">'+Math.round(ta).toLocaleString()+'</th></tr>';
+  const tbody=document.getElementById('shipTbody'); if(tbody) tbody.innerHTML=body;
+  const empty=document.getElementById('shipEmpty');
+  if(empty){ empty.textContent=L('자료가 없습니다. PSI 화면의 엑셀 업로드로 인보이스를 올려주세요.','Нет данных.');
+             empty.style.display=rows.length?'none':'block'; }
+}
+function debouncedRenderShip(){ clearTimeout(window._shipT); window._shipT=setTimeout(renderShip,200); }
+async function loadShipTab(){ await loadShip(); renderShip(); }
+function downloadShip(){
+  renderShip();
+  const ru=(lang==='ru');
+  const head=[ru?'Инвойс':'인보이스 넘버', ru?'Дата':'선적일', ru?'Осн. артикул':'대표품번', ru?'Артикул':'호환품번',
+              ru?'Наименование':'영문품명','HS CODE', ru?'Кол-во':'수량', ru?'Цена(RUB)':'단가(RUB)', ru?'Сумма(RUB)':'금액(RUB)'];
+  const aoa=[head]; let tq=0, ta=0;
+  (_shipFiltered||[]).forEach(r=>{ const i=poLookup(r.pn); tq+=r.qty; ta+=r.amount;
+    aoa.push([r.inv, r.sail||'', i.rep||'', normBadgePN(r.pn), r.name_en||'', r.hs||'', r.qty, r.price, r.amount]); });
+  aoa.splice(1,0,[(ru?'Итого ':'합계 ')+(_shipFiltered||[]).length+(ru?'':'건'),'','','','','',tq,'',Math.round(ta)]);
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols']=[{wch:18},{wch:12},{wch:14},{wch:14},{wch:34},{wch:12},{wch:9},{wch:12},{wch:14}];
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'SHIP');
+  XLSX.writeFile(wb, xlsxName('선적현황','Отгрузки'));
+}
+
+// ── COMMERCIAL INVOICE 읽기 ─────────────────────────────────────────
+// 'Sailing on or about' 날짜 + 섹션이 Parts 인 줄만 뽑는다.
+function shipParseInvoice(wb){
+  for(const sn of wb.SheetNames){
+    const a=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:'',raw:true});
+    let sail=null, hdr=-1;
+    for(let r=0;r<Math.min(60,a.length);r++){
+      const w=a[r]||[];
+      for(let c=0;c<w.length;c++){
+        const s=String(w[c]==null?'':w[c]);
+        if(sail===null && /sailing\s+on\s+or\s+about/i.test(s)){
+          for(let k=c+1;k<Math.min(c+6,w.length);k++){
+            const v=w[k]; const t=String(v==null?'':v).replace(/^\s*:\s*/,'').trim();
+            if(v instanceof Date){ sail=v; break; }
+            if(/^\d{4}[-.\/]\d{1,2}[-.\/]\d{1,2}$/.test(t)){ sail=t; break; }
+          }
+        }
+        if(hdr<0 && /description\s+of\s+goods/i.test(s)) hdr=r;
+      }
+    }
+    if(sail===null) continue;
+    // 섹션 이름이 들어 있는 열(Parts/Boilers/Burners …) 을 찾는다
+    const items=[]; let secCol=-1;
+    for(let r=(hdr<0?0:hdr+1);r<a.length;r++){
+      const w=a[r]||[];
+      if(secCol<0){ for(let c=0;c<w.length;c++){ if(/^parts$/i.test(String(w[c]||'').trim()) && String(w[0]||'').trim()){ secCol=c; break; } } }
+      if(secCol<0) continue;
+      if(!/^parts$/i.test(String(w[secCol]||'').trim())) continue;
+      const pn=String(w[0]||'').trim(); if(!pn) continue;
+      // 수량·단가·금액은 섹션 열 뒤쪽에서 숫자를 순서대로 집는다
+      const nums=[]; for(let c=secCol+1;c<w.length;c++){ const v=w[c];
+        if(typeof v==='number' && isFinite(v)) nums.push({c, v}); }
+      const qty=nums.length>0?nums[0].v:0;
+      const price=nums.length>1?nums[1].v:0;
+      const amount=nums.length>2?nums[2].v:(qty*price);
+      let hs=''; for(let c=secCol+1;c<w.length;c++){ const t=String(w[c]||'').trim();
+        if(/^\d{6,10}$/.test(t)){ hs=t; break; } }
+      items.push({pn, name_en:String(w[1]||'').trim(), hs, qty, price, amount});
+    }
+    if(!items.length) continue;
+    let d=null;
+    if(sail instanceof Date) d=sail;
+    else { const m=String(sail).match(/^(\d{4})[-.\/](\d{1,2})[-.\/](\d{1,2})/); if(m) d=new Date(+m[1],+m[2]-1,+m[3]); }
+    if(!d) continue;
+    const p=n=>(n<10?'0':'')+n;
+    const iso=d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());
+    const ym=String(d.getFullYear()%100).padStart(2,'0')+p(d.getMonth()+1);
+    const inv=String(sn).replace(/^\s*(CI|PL)\s+/i,'').trim() || sn;
+    return { inv, sail:iso, ym, sheet:sn, items };
+  }
+  return null;
+}
+// 인보이스 반영: kt_ship 저장 → 그 달 선적을 품번별로 합쳐 kt_psi.data[ym].v 로 적는다
+async function shipApplyInvoice(pi){
+  const rows=pi.items.map(it=>({ inv:pi.inv, pn:it.pn, sail:pi.sail, ym:pi.ym, name_en:it.name_en,
+    hs:it.hs, qty:it.qty, price:it.price, amount:it.amount, updated_at:new Date().toISOString() }));
+  for(let i=0;i<rows.length;i+=300){
+    const { error }=await sb.from('kt_ship').upsert(rows.slice(i,i+300),{onConflict:'inv,pn'});
+    if(error) return { ok:false, msg:(error.message||error.code) };
+  }
+  await loadShip();
+  // 그 달의 모든 인보이스를 품번별로 합친다
+  const sum={};
+  shipData.forEach(r=>{ if(r.ym!==pi.ym) return; const k=normPN(r.pn); if(!k) return;
+    sum[k]=(sum[k]||0)+(Number(r.qty)||0); });
+  await loadPSI();
+  const c2r=psiCompatToRep();
+  const touched={}; Object.keys(sum).forEach(k=>touched[k]=1);
+  Object.keys(psiData).forEach(k=>{ const cell=(psiData[k].data||{})[pi.ym]; if(cell && cell.v!=null) touched[k]=1; });
+  const up=[];
+  Object.keys(touched).forEach(k=>{
+    const cur=psiData[k]||{rep:'',data:{}};
+    const data=JSON.parse(JSON.stringify(cur.data||{}));
+    const cell=data[pi.ym]||(data[pi.ym]={});
+    if(sum[k]) cell.v=sum[k]; else delete cell.v;
+    if(!Object.keys(data[pi.ym]).length) delete data[pi.ym];
+    up.push({ pn:k, rep:(cur.rep||c2r[k]||''), data, updated_at:new Date().toISOString() });
+  });
+  for(let i=0;i<up.length;i+=300){
+    const { error }=await sb.from('kt_psi').upsert(up.slice(i,i+300),{onConflict:'pn'});
+    if(error) return { ok:false, msg:(error.message||error.code) };
+  }
+  await loadPSI();
+  return { ok:true, saved:rows.length, month:pi.ym, pns:Object.keys(sum).length,
+           total:Object.keys(sum).reduce((a,k)=>a+sum[k],0) };
+}
+// ══════════════════════════════════════════
 // 발주현황 (차수별 수주 / 공급 / 미공급)
 //   저장은 kt_po (차수+발주코드가 키). 같은 차수·같은 발주코드가 여러 줄이면 수주수량을 합친다.
 //   대표코드·변경코드(공급)·품명은 저장하지 않고 품번조회에서 그때그때 가져온다.
@@ -8311,9 +8550,10 @@ function psiOutOf(d,ym){
   if(typeof psiFcActive==='function' && psiFcActive(ym)) return psiFcOut(d,ym);
   const o=d[ym]; return o?(Number(o.o)||0):0;
 }
-// 선적: 선적 시트(s)가 원본. 그 달에 s 가 없으면 종합 선적(g)으로 메운다.
+// 선적: 인보이스로 올린 값(v)이 있으면 그것을 쓰고, 없으면 선적 시트(s), 그다음 종합 선적(g).
 function psiShipOf(d,ym){
   if(!d) return 0; const o=d[ym]; if(!o) return 0;
+  if(o.v!=null && o.v!=='') return Number(o.v)||0;
   if(o.s!=null && o.s!=='') return Number(o.s)||0;
   return Number(o.g)||0;
 }
@@ -9104,7 +9344,25 @@ function handlePSIUpload(event){
   const reader=new FileReader();
   reader.onload=async function(e){
     try{
-      const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
+      const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array',cellDates:true});
+      // COMMERCIAL INVOICE 면 선적현황으로 보낸다(Sailing on or about + Parts 줄)
+      const pi=(typeof shipParseInvoice==='function') ? shipParseInvoice(wb) : null;
+      if(pi){
+        const q=pi.items.reduce((a,x)=>a+(Number(x.qty)||0),0);
+        if(!confirm((ru?'Инвойс: ':'인보이스를 반영합니다: ')+pi.inv
+            +'\n'+(ru?'Отгрузка: ':'선적일 ')+pi.sail+' → '+psiYmLabel(pi.ym)
+            +'\nParts '+pi.items.length+(ru?'':'건')+' / '+(ru?'кол-во ':'수량 ')+q.toLocaleString()
+            +'\n\n'+(ru?'Продолжить?':'계속하시겠습니까?'))){ event.target.value=''; return; }
+        const r=await shipApplyInvoice(pi);
+        if(!r.ok){ alert((ru?'Ошибка.':'저장 실패 — kt_ship 표가 필요합니다.')
+          +'\nSQL: create table if not exists kt_ship (inv text not null, pn text not null, sail text, ym text, name_en text, hs text, qty numeric default 0, price numeric default 0, amount numeric default 0, updated_at timestamptz default now(), primary key (inv,pn));'
+          +'\n['+r.msg+']'); event.target.value=''; return; }
+        renderPSI();
+        alert((ru?'Готово. ':'반영 완료. ')+pi.inv+' / '+psiYmLabel(r.month)
+          +'\n'+(ru?'Строк: ':'선적현황 ')+r.saved+(ru?'':'건')
+          +'\n'+psiYmLabel(r.month)+(ru?' итого ':' 선적 합계 ')+r.total.toLocaleString()+' ('+r.pns+(ru?'':'품번')+')');
+        event.target.value=''; return;
+      }
       const upd={};   // pn -> {rep, s:{}, g:{}, n:{}, o:{}, k:{}}
       const put=(key,parsed)=>{
         if(!parsed) return 0;
@@ -11175,6 +11433,8 @@ function enterApp(user){
   // 발주현황은 위 탭줄이 아니라 PSI 화면의 단추로 연다(탭 요소는 switchTab 을 위해 남겨 두고 감춘다)
   const tabPo=document.getElementById('tab-po');
   if(tabPo) tabPo.style.display='none';
+  const tabShip=document.getElementById('tab-ship');
+  if(tabShip) tabShip.style.display='none';
   // 출고관리: MASTER 는 출고하지 않으므로 숨긴다.
   // 재고관리: MASTER 는 자기 창고는 없지만 KITURAMI 창고를 감독하므로 보여준다.
   if(tabInv) tabInv.style.display = 'block';
