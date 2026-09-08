@@ -205,6 +205,18 @@ input[type="text"]:focus{border-color:var(--accent)}
 input[type="text"]::placeholder{color:var(--muted)}
 .count-badge{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:5px 9px;font-size:11px;color:var(--muted);white-space:nowrap;flex-shrink:0}
 .count-badge b{color:var(--accent)}
+/* PSI·발주시뮬레이션 표: 셀 모양은 클래스로. 인라인 style 을 쓰면 HTML 이 10배로 부푼다 */
+.pt td{padding:4px 5px;font-size:11px;overflow:hidden;border-bottom:1px solid var(--border)}
+.pt td.n{text-align:right;white-space:nowrap}
+.pt td.bl{border-left:1px solid var(--border)}
+.pt td.nm{word-break:break-all;font-size:10.5px;line-height:1.25}
+.pt td.sp{color:var(--muted);word-break:break-all;font-size:10px;line-height:1.25}
+.pt td.ct{text-align:center;color:var(--muted)}
+.pt td.dim{color:var(--muted)}
+.pt tr.g td{font-weight:700}
+.pt tr.g.band td{background:var(--tag-bg)}
+.pt span.c{font-family:'Courier New',monospace;font-size:9.5px;white-space:nowrap}
+.pt td.low,.pt tr.g td.low{background:#fee2e2;color:#b91c1c;font-weight:700}
 .dl-btn{flex-shrink:0;display:flex;align-items:center;gap:4px;padding:6px 10px;background:linear-gradient(135deg,#166534,#15803d);border:1px solid #166534;border-radius:7px;color:#bbf7d0;font-size:11px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif}
 
 /* ── 품번조회·가격정보 데이터 정렬 ──
@@ -1150,7 +1162,7 @@ input[type="text"]::placeholder{color:var(--muted)}
   </div>
   <div class="scroll-body" id="scrollBodySIM" style="padding:0 12px 72px">
     <div class="pn-body-wrap">
-      <table id="simTable" style="width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed">
+      <table id="simTable" class="pt" style="width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed">
         <colgroup id="simColgroup"></colgroup>
         <thead id="simThead"></thead>
         <tbody id="simTbody"></tbody>
@@ -1217,7 +1229,7 @@ input[type="text"]::placeholder{color:var(--muted)}
   </div>
   <div class="scroll-body" id="scrollBodyPSI" style="padding:0 12px 72px">
     <div class="pn-body-wrap">
-      <table id="psiTable" style="width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed">
+      <table id="psiTable" class="pt" style="width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed">
         <colgroup id="psiColgroup"></colgroup>
         <thead id="psiThead"></thead>
         <tbody id="psiTbody"></tbody>
@@ -9200,6 +9212,9 @@ function psiRowVals(d,c,yms){
   return out;
 }
 function psiYmLabel(ym){ return '20'+String(ym).slice(0,2)+'-'+String(ym).slice(2); }
+// 셀이 수만 개라 Number.toLocaleString() 을 그대로 쓰면 몇 초씩 걸린다. 포매터를 한 번만 만들어 쓴다.
+const _psiNF=(typeof Intl!=='undefined'&&Intl.NumberFormat)?new Intl.NumberFormat('en-US'):null;
+function psiFmt(v){ return _psiNF?_psiNF.format(v):String(v); }
 // ── PSI 보기(열 선택) ────────────────────────────────────────────────
 // 아이디별로 kt_user_prefs.psi_cols 에 저장한다(컬럼이 없으면 이 브라우저에만).
 const PSI_COL_DEFS=[
@@ -9230,8 +9245,15 @@ function psiShowKids(){ return psiColsMap().compat!==false; }
 // 대표품번 열을 끄면 대표품번(묶음) 줄도 감춘다. 둘 다 끄면 묶음 줄만 남긴다.
 function psiShowGroups(){ const m=psiColsMap(); return (m.rep!==false) || (m.compat===false); }
 function psiVisSub(){ const m=psiColsMap();
-  const v=PSI_COL_DEFS.filter(d=>!d.fixed && m[d.k]);
-  return v.length?v:PSI_COL_DEFS.filter(d=>d.k==='st'); }
+  let v=PSI_COL_DEFS.filter(d=>!d.fixed && m[d.k]);
+  if(!v.length) v=PSI_COL_DEFS.filter(d=>d.k==='st');
+  // 발주시뮬레이션에서만 보유월 뒤에 두 열을 더 붙인다
+  if(typeof psiSimOn!=='undefined' && psiSimOn) v=v.concat(PSI_SIM_COL_DEFS);
+  return v; }
+const PSI_SIM_COL_DEFS=[
+  {k:'need', w:64, ko:'발주필요',    ru:'Дозаказ'},
+  {k:'mo2',  w:60, ko:'발주후 보유월', ru:'Мес. после'}
+];
 function _psiColsKey(){ const u=(typeof currentUser!=='undefined'&&currentUser)?(currentUser.id||''):''; return 'kt_psi_cols:'+u; }
 async function loadPsiCols(){
   const uid=(typeof currentUser!=='undefined'&&currentUser)?(currentUser.id||null):null;
@@ -9792,11 +9814,14 @@ function renderPSI(){
   }
   if(empty) empty.style.display='none';
 
-  const n=v=>(v==null||v===''||isNaN(v))?'':Number(v).toLocaleString();
+  const n=v=>(v==null||v===''||isNaN(v))?'':psiFmt(Number(v));
   const tdS='padding:4px 5px;font-size:11px;overflow:hidden;border-bottom:1px solid var(--border)';
   const numS=tdS+';text-align:right;white-space:nowrap';
   const futOut=(d,y)=>{ let s=0; for(let i=1;i<=c.avgN;i++) s+=psiOutOf(d,psiYmAdd(y,i)); return s; };
   const moOf=(st,fut)=>{ const avg=fut/c.avgN; return avg>0 ? Math.round((st/avg)*10)/10 : null; };
+  // 발주필요: 보유월이 N 이 되려면 더 있어야 하는 수량(= N개월치 출고 − 지금 재고)
+  const needOf=(st,fut)=>{ const avg=fut/c.avgN; if(avg<=0) return 0;
+    return Math.max(0, Math.ceil(avg*c.avgN-st)); };
 
   // 대표품번끼리 묶는다(대표품번 줄을 먼저 두고 그 아래 호환품번 줄)
   const groups=[]; const gmap={};
@@ -9810,14 +9835,15 @@ function renderPSI(){
       a.sh+=x.sh||0; a.i+=x.i||0; a.o+=x.o||0; a.ms+=x.ms||0; a.st+=x.st||0; a.fut+=futOut(it.d,y); });
   });
   if(psiSimOn){
-    // 보유월이 '향후 N개월' 미만인 대표품번을 맨 위로. 낮은 것부터, 하위 호환품번도 따라 올라간다.
-    groups.forEach(g=>{ let mn=null;
-      yms.forEach(y=>{ const a=g.agg[y]; const m=moOf(a.st,a.fut);
-        if(m!=null && (mn==null || m<mn)) mn=m; });
-      g._mo=mn; g._low=(mn!=null && mn<psiLowN()); });
-    groups.sort((a,b)=>{ if(a._low!==b._low) return a._low?-1:1;
-      if(!a._low) return 0;
-      return (a._mo==null?1e9:a._mo)-(b._mo==null?1e9:b._mo); });
+    // 시작월 보유월이 낮은 대표품번부터 위로. 하위 호환품번도 따라 올라간다.
+    // 보유월을 낼 수 없는(앞으로 출고가 없는) 묶음은 맨 뒤로 보낸다.
+    const y0=yms[0];
+    groups.forEach(g=>{ const a=g.agg[y0]; g._mo=moOf(a.st,a.fut); });
+    groups.sort((a,b)=>{
+      const ea=(a._mo==null), eb=(b._mo==null);
+      if(ea!==eb) return ea?1:-1;
+      if(ea) return 0;
+      return a._mo-b._mo; });
   }
   _psiGroups=groups;
 
@@ -9829,43 +9855,38 @@ function renderPSI(){
 
   // 대표품번 줄 색(참고 엑셀의 연한 파랑 띠)
   // 하위 호환품번 줄이 없으면(대표품번만 보기) 띠를 칠하지 않는다 — 모든 줄이 같은 색이면 의미가 없다
-  const band=psiShowKids()?';background:var(--tag-bg)':'';
-  const gS=tdS+band+';font-weight:700';
-  const gNum=gS+';text-align:right;white-space:nowrap';
-  const badgeS='font-size:9.5px;padding:1px 3px;white-space:nowrap';
-  // 호환품번은 바탕색 없이 글자만
-  const plainS="font-family:'Courier New',monospace;font-size:9.5px;white-space:nowrap";
+  const band=psiShowKids()?' band':'';
+  const kCls={ rep:'', compat:'', note:'ct', name:'nm', spec:'sp' };   // 하위 줄 고정열
   const body=groups.map(g=>{
     const r0=g.first;
     const fin=String(r0.final||'');
     const finRow=Object.assign({}, r0, {_split:true, _compat:fin});
-    const gTxt={ rep:'<span style="'+plainS+'">'+escapeHtml(g.rep)+'</span>',
-                 compat:(fin?('<span style="'+plainS+'">'+escapeHtml(normBadgePN(fin))+'</span>'):''),
+    const gTxt={ rep:'<span class="c">'+escapeHtml(g.rep)+'</span>',
+                 compat:(fin?('<span class="c">'+escapeHtml(normBadgePN(fin))+'</span>'):''),
                  note:'', name:escapeHtml(pnColText('name',finRow)), spec:escapeHtml(pnColText('spec',finRow)) };
-    const gFix=FX.map(d=>'<td style="'+gS+(d.k==='name'||d.k==='spec'?';word-break:break-all;font-size:10.5px;line-height:1.25':'')+'">'+gTxt[d.k]+'</td>').join('');
+    const gFix=FX.map(d=>'<td class="'+((d.k==='name'||d.k==='spec')?'nm':'')+'">'+gTxt[d.k]+'</td>').join('');
     const gCells=yms.map((y,i)=>{
-      const a=g.agg[y]; const b=i===0?bl:'';
+      const a=g.agg[y]; const b=i===0?' bl':'';
       const mo=moOf(a.st,a.fut);
-      const val={sh:n(a.sh), i:n(a.i), o:n(a.o), ms:n(a.ms), st:n(a.st), mo:(mo==null?'':mo.toFixed(1))};
+      const nd=needOf(a.st,a.fut), m2=moOf(a.st+nd,a.fut);
+      const val={sh:n(a.sh), i:n(a.i), o:n(a.o), ms:n(a.ms), st:n(a.st), mo:(mo==null?'':mo.toFixed(1)),
+                 need:(nd?n(nd):''), mo2:(m2==null?'':m2.toFixed(1))};
       const low=psiLow(mo);
-      return SB.map((d,j)=>'<td style="'+gNum+(j===0?b:'')+((low&&d.k==='mo')?PSI_LOW_STYLE:'')+'">'+val[d.k]+'</td>').join('');
+      return SB.map((d,j)=>'<td class="n'+(j===0?b:'')+((low&&d.k==='mo')?' low':'')+'">'+val[d.k]+'</td>').join('');
     }).join('');
-    const gRow='<tr>'+gFix+gCells+'</tr>';
+    const gRow='<tr class="g'+band+'">'+gFix+gCells+'</tr>';
     const kids=g.rows.map(it=>{
       const r=it.r, v=it.v;
-      const kTxt={ rep:'', compat:'<span style="'+plainS+'">'+escapeHtml(normBadgePN(r._compat))+'</span>',
+      const kTxt={ rep:'', compat:'<span class="c">'+escapeHtml(normBadgePN(r._compat))+'</span>',
                    note:escapeHtml(pnColText('note',r)), name:escapeHtml(pnColText('name',r)), spec:escapeHtml(pnColText('spec',r)) };
-      const kSty={ rep:tdS, compat:tdS, note:tdS+';text-align:center;color:var(--muted)',
-                   name:tdS+';word-break:break-all;font-size:10.5px;line-height:1.25',
-                   spec:tdS+';color:var(--muted);word-break:break-all;font-size:10px;line-height:1.25' };
-      const kFix=FX.map(d=>'<td style="'+kSty[d.k]+'">'+kTxt[d.k]+'</td>').join('');
+      const kFix=FX.map(d=>'<td class="'+kCls[d.k]+'">'+kTxt[d.k]+'</td>').join('');
       const cells=yms.map((y,i)=>{
         const x=v[y]||{sh:0,i:0,o:0,ms:0,st:0};
-        const b=i===0?bl:'';
-        const val={sh:n(x.sh), i:n(x.i), o:n(x.o), ms:n(x.ms), st:n(x.st), mo:''};
+        const b=i===0?' bl':'';
+        const val={sh:n(x.sh), i:n(x.i), o:n(x.o), ms:n(x.ms), st:n(x.st), mo:'', need:'', mo2:''};
         const dim={sh:1, ms:1};
         // 보유월은 대표품번 줄에만 적으므로 하위 줄에는 색을 칠하지 않는다
-        return SB.map((d,j)=>'<td style="'+numS+(j===0?b:'')+(dim[d.k]?';color:var(--muted)':'')+'">'+val[d.k]+'</td>').join('');
+        return SB.map((d,j)=>'<td class="n'+(j===0?b:'')+(dim[d.k]?' dim':'')+'">'+val[d.k]+'</td>').join('');
       }).join('');
       return '<tr>'+kFix+cells+'</tr>';
     }).join('');
@@ -9876,8 +9897,10 @@ function renderPSI(){
   const sumCells=yms.map((y,i)=>{
     const t=tot[y]; const b=i===0?bl:'';
     const mo=moOf(t.st,t.fut);
-    const val={sh:n(t.sh), i:n(t.i), o:n(t.o), ms:n(t.ms), st:n(t.st), mo:(mo==null?'':mo.toFixed(1))};
-    const dim={sh:1, ms:1, mo:1};
+    const tn=needOf(t.st,t.fut), tm2=moOf(t.st+tn,t.fut);
+    const val={sh:n(t.sh), i:n(t.i), o:n(t.o), ms:n(t.ms), st:n(t.st), mo:(mo==null?'':mo.toFixed(1)),
+               need:(tn?n(tn):''), mo2:(tm2==null?'':tm2.toFixed(1))};
+    const dim={sh:1, ms:1, mo:1, mo2:1};
     return SB.map((d,j)=>'<th style="'+sumS+';text-align:right'+(j===0?b:'')+(dim[d.k]?';color:var(--muted)':'')+'">'+val[d.k]+'</th>').join('');
   }).join('');
   head += '<tr>'
@@ -9886,9 +9909,11 @@ function renderPSI(){
         'Осн. '+groups.length+' · Артикулов '+Object.keys(counted).length)+'</th>'
     + sumCells + '</tr>';
 
+  // 머리글 높이는 '빈 표'에서 잰다. 수천 줄을 붙인 뒤에 재면 표 전체가 다시 계산되어 2초씩 걸린다.
+  if(tbody) tbody.innerHTML='';
   if(thead) thead.innerHTML=head;
-  if(tbody) tbody.innerHTML=body;
   psiStickHead();
+  if(tbody) tbody.innerHTML=body;
 }
 function normBadgePN(x){ return (typeof pnUpperLead==='function')?pnUpperLead(x||''):String(x||''); }
 
@@ -9904,6 +9929,7 @@ function downloadPSI(){
                           : ('이월재고 ('+psiYmLabel(psiYmAdd(c.base,-1))+' 재고)'));
   yms.forEach(y=>{ g1.push(psiYmLabel(y)); SB.slice(1).forEach(()=>g1.push('')); SB.forEach(d=>g2.push(ru?d.ru:d.ko)); });
   const moOf=(st,fut)=>{ const avg=fut/c.avgN; return avg>0 ? Math.round((st/avg)*10)/10 : ''; };
+  const needOf=(st,fut)=>{ const avg=fut/c.avgN; if(avg<=0) return 0; return Math.max(0, Math.ceil(avg*c.avgN-st)); };
   const tot={}; yms.forEach(y=>tot[y]={sh:0,i:0,o:0,ms:0,st:0,fut:0});
   let totOpen=0;
   const body=[];
@@ -9916,7 +9942,8 @@ function downloadPSI(){
     gRow.push(g.open||0); totOpen+=g.open||0;
     yms.forEach(y=>{ const a=g.agg[y]||{sh:0,i:0,o:0,ms:0,st:0,fut:0}; const t=tot[y];
       t.sh+=a.sh; t.i+=a.i; t.o+=a.o; t.ms+=a.ms; t.st+=a.st; t.fut+=a.fut;
-      const val={sh:a.sh, i:a.i, o:a.o, ms:a.ms, st:a.st, mo:moOf(a.st,a.fut)};
+      const nd=needOf(a.st,a.fut);
+      const val={sh:a.sh, i:a.i, o:a.o, ms:a.ms, st:a.st, mo:moOf(a.st,a.fut), need:(nd||''), mo2:moOf(a.st+nd,a.fut)};
       SB.forEach(d=>gRow.push(val[d.k])); });
     if(psiShowGroups()) body.push(gRow);
     if(!psiShowKids()) return;
@@ -9927,7 +9954,7 @@ function downloadPSI(){
       const row=FX.map(d=>kTxt[d.k]);
       row.push(v._open||0);
       yms.forEach(y=>{ const x=v[y]||{};
-        const val={sh:x.sh??'', i:x.i??'', o:x.o??'', ms:x.ms??'', st:x.st??'', mo:''};
+        const val={sh:x.sh??'', i:x.i??'', o:x.o??'', ms:x.ms??'', st:x.st??'', mo:'', need:'', mo2:''};
         SB.forEach(d=>row.push(val[d.k])); });
       body.push(row);
     });
@@ -9935,7 +9962,8 @@ function downloadPSI(){
   const sumRow=FX.map((d,i)=>i===0?((ru?'Осн. ':'대표품번 ')+(_psiGroups||[]).length+(ru?'':'개')):'');
   sumRow.push(totOpen);
   yms.forEach(y=>{ const t=tot[y];
-    const val={sh:t.sh, i:t.i, o:t.o, ms:t.ms, st:t.st, mo:moOf(t.st,t.fut)};
+    const tn=needOf(t.st,t.fut);
+    const val={sh:t.sh, i:t.i, o:t.o, ms:t.ms, st:t.st, mo:moOf(t.st,t.fut), need:(tn||''), mo2:moOf(t.st+tn,t.fut)};
     SB.forEach(d=>sumRow.push(val[d.k])); });
   const aoa=[g1,g2,sumRow];
   body.forEach(r=>aoa.push(r));
