@@ -8350,7 +8350,7 @@ function renderMS(){
   const nq=CO.filter(d=>d.k==='qty').length;
   const head='<tr>'+CO.map(d=>'<th style="'+thS+'">'+(ru?d.ru:d.ko)+'</th>').join('')+'</tr>'
     + '<tr><th colspan="'+Math.max(1,CO.length-nq)+'" style="'+thS+';font-weight:700;background:var(--surface);top:28px;text-align:right">'
-    + escapeHtml(L('합계 '+groups.length+'대표품번 · '+nPn+'품번 · '+R.label,
+    + escapeHtml(L('합계 '+groups.length+'개 대표품번 / '+nPn+'개 호환품번 · '+R.label,
                    'Итого '+groups.length+' / '+nPn+' · '+R.label))+'</th>'
     + CO.filter(d=>d.k==='qty').map(d=>'<th style="'+thS+';font-weight:700;background:var(--surface);top:28px;text-align:right">'
         +tot.toLocaleString()+'</th>').join('')
@@ -8419,7 +8419,7 @@ async function downloadMS(){
     }));
   });
   const sum={}; CO.forEach(d=>sum[d.k]='');
-  sum[CO[0].k]=(ru?'Итого ':'합계 ')+(_msGroups||[]).length+(ru?'':'대표품번')+' / '+nPn+(ru?'':'품번')
+  sum[CO[0].k]=(ru?'Итого ':'합계 ')+(_msGroups||[]).length+(ru?'':'개 대표품번')+' / '+nPn+(ru?'':'개 호환품번')
     +' · '+R.label;
   sum.qty=tot;
   aoa.splice(1,0,rowOf(sum));
@@ -9819,11 +9819,11 @@ async function loadSimTab(){
   if(typeof loadPsiCols==='function') await loadPsiCols();
   renderSIM();
 }
-function downloadSIM(){
+async function downloadSIM(){
   simBuild();
   const prevP=PSIP, prevS=psiSimOn;
   PSIP='sim'; psiSimOn=true;
-  try{ downloadPSI(); } finally { PSIP=prevP; psiSimOn=prevS; }
+  try{ await downloadPSI(); } finally { PSIP=prevP; psiSimOn=prevS; }
 }
 function renderPSI(){
   const pane=document.getElementById('pane-'+PSIP); if(!pane) return;
@@ -10006,7 +10006,7 @@ function renderPSI(){
   }).join('');
   head += '<tr>'
     + '<th colspan="'+FX.length+'" style="'+sumS+';text-align:right">'
-    + L('대표품번 '+groups.length+'개 · 호환품번 '+Object.keys(counted).length+'건',
+    + L('합계 '+groups.length+'개 대표품번 / '+Object.keys(counted).length+'개 호환품번',
         'Осн. '+groups.length+' · Артикулов '+Object.keys(counted).length)+'</th>'
     + sumCells + '</tr>';
 
@@ -10019,8 +10019,9 @@ function renderPSI(){
 }
 function normBadgePN(x){ return (typeof pnUpperLead==='function')?pnUpperLead(x||''):String(x||''); }
 
-function downloadPSI(){
+async function downloadPSI(){
   renderPSI();                 // 화면과 같은 묶음(_psiGroups)·같은 열 선택을 쓴다
+  await ensureXlsxStyle();     // 색을 넣는 판(없으면 색 없이 나간다)
   const c=psiCfg();
   const yms=[]; for(let i=0;i<c.months;i++) yms.push(psiYmAdd(c.from,i));
   const isKo=(lang!=='ru'), ru=(lang==='ru');
@@ -10035,6 +10036,7 @@ function downloadPSI(){
   const tot={}; yms.forEach(y=>tot[y]={sh:0,i:0,o:0,ms:0,st:0,fut:0});
   let totOpen=0;
   const body=[];
+  const grpRows=[];            // 색을 칠할 대표품번 줄(본문 기준 번호)
   (_psiGroups||[]).forEach(g=>{
     const r0=g.first, fin=String(r0.final||'');
     const finRow=Object.assign({}, r0, {_split:true, _compat:fin});
@@ -10047,7 +10049,7 @@ function downloadPSI(){
       const nd=needOf(a.st,a.fut);
       const val={sh:a.sh, i:a.i, o:a.o, ms:a.ms, st:a.st, mo:moOf(a.st,a.fut), need:(nd||''), mo2:moOf(a.st+nd,a.fut)};
       SB.forEach(d=>gRow.push(val[d.k])); });
-    if(psiShowGroups()) body.push(gRow);
+    if(psiShowGroups()){ grpRows.push(body.length); body.push(gRow); }
     if(!psiShowKids()) return;
     g.rows.forEach(it=>{
       const r=it.r, v=it.v;
@@ -10061,7 +10063,7 @@ function downloadPSI(){
       body.push(row);
     });
   });
-  const sumRow=FX.map((d,i)=>i===0?((ru?'Осн. ':'대표품번 ')+(_psiGroups||[]).length+(ru?'':'개')):'');
+  const sumRow=FX.map((d,i)=>i===0?((ru?'Осн. ':'합계 ')+(_psiGroups||[]).length+(ru?'':'개 대표품번')):'');
   sumRow.push(totOpen);
   yms.forEach(y=>{ const t=tot[y];
     const tn=needOf(t.st,t.fut);
@@ -10072,6 +10074,12 @@ function downloadPSI(){
   const ws=XLSX.utils.aoa_to_sheet(aoa);
   ws['!cols']=FX.map(()=>({wch:16})).concat([{wch:12}])
     .concat(yms.map(()=>SB.map(d=>({wch:(d.k==='st'?10:(d.k==='mo'?8:9))}))).reduce((a,b)=>a.concat(b),[]));
+  const nc=aoa[0].length;
+  xlPaint(ws, 0, nc, XL_HEAD);
+  xlPaint(ws, 1, nc, XL_HEAD);
+  xlPaint(ws, 2, nc, XL_SUM);
+  grpRows.forEach(r=>xlPaint(ws, r+3, nc, XL_GRP));   // 머리 두 줄 + 합계 줄 다음이 본문
+  ws['!freeze']={xSplit:0, ySplit:3};
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'PSI');
   XLSX.writeFile(wb, xlsxName('PSI','PSI'));
 }
