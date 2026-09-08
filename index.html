@@ -12674,13 +12674,15 @@ async function saveMyInfo(){
   const { callingCode, digits, phone } = readE164FromModal('mi');
 
   // [임시] 국가/지역/휴대폰/이메일 입력란 제거 — 담당자명(과 구매처)만 검증
-  if(!contactName || (!isTopSupplier && !supplierCompany)){ errEl.textContent=t.myInfoErrFill; return; }
+  // MASTER 는 구매처도 담당자도 없는 계정이라 아무것도 요구하지 않는다(비밀번호만 바꾸는 일이 많다).
+  const isMasterAcct=userRole(currentUser).isMaster;
+  if(!isMasterAcct && (!contactName || (!isTopSupplier && !supplierCompany))){ errEl.textContent=t.myInfoErrFill; return; }
 
-  const supplierChanged = !isTopSupplier && supplierCompany.toUpperCase()!==originalSupplier.toUpperCase();
+  const supplierChanged = !isTopSupplier && !isMasterAcct && supplierCompany.toUpperCase()!==originalSupplier.toUpperCase();
   if(supplierChanged && !confirm(t.myInfoSupplierChangeConfirm(supplierCompany))) return;
 
   const payload = { contact_name: contactName, country, region, phone: (digits?phone:''), email };
-  if(!isTopSupplier) payload.supplier_company = supplierCompany;
+  if(!isTopSupplier && !isMasterAcct) payload.supplier_company = supplierCompany;   // MASTER 는 구매처가 없다
   if(supplierChanged) payload.status = 'pending'; // 구매처가 바뀌면, 새 구매처의 승인을 다시 받아야 합니다.
   if(newPw || newPw2){
     if(newPw.length < 4){ errEl.textContent=t.myInfoErrPwShort; return; }
