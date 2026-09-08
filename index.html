@@ -9037,7 +9037,11 @@ let _psiFilters={};                  // {colKey: [선택한 값들]}
 let _psiAllItems=[];                 // 이번 렌더의 행(헤더 필터 적용 전) — 숫자 열 값 목록용
 let _psiSort={key:null, dir:'asc'};
 const PSI_TEXT_COLS={rep:1, compat:1, note:1, name:1, spec:1};
-function psiIsNumCol(key){ return !PSI_TEXT_COLS[key]; }
+function psiIsNumCol(key){ if(String(key).indexOf('clr:')===0) return false; return !PSI_TEXT_COLS[key]; }
+// 재고 셀 색: 보유월이 6개월 미만이면 붉게
+const PSI_LOW_MONTHS=6;
+function psiLow(mo){ return (mo!=null && mo!=='' && Number(mo)<PSI_LOW_MONTHS); }
+const PSI_LOW_STYLE=';background:#fee2e2;color:#b91c1c;font-weight:700';
 function psiColText(key,r){
   switch(key){
     case 'rep': return String(r.rep||'');
@@ -9084,6 +9088,12 @@ function psiFilterIcon(key){
 }
 // 필터·값목록에 쓰는 표준 문자열. 숫자 열은 화면과 같은 값을 문자로 쓴다(천단위 쉼표 없음).
 function psiCellVal(key,it){
+  // 바탕색으로 거르기: 'clr:YYMM' → 'red' / 'none'
+  if(String(key).indexOf('clr:')===0){
+    const ym=String(key).slice(4);
+    const x=it.v[ym];
+    return psiLow(x?x.mo:null) ? 'red' : 'none';
+  }
   if(!psiIsNumCol(key)) return String(psiColText(key,it.r));
   const n=psiNumOf(key,it);
   if(n==null) return '';
@@ -9134,6 +9144,20 @@ function openPSIFilter(key, anchor){
     + sortBtn('asc','▲ '+(ru?'По возрастанию':'오름차순 정렬'))
     + sortBtn('desc','▼ '+(ru?'По убыванию':'내림차순 정렬'))
     + '</div>';
+  // 재고 열은 바탕색(보유월 6개월 미만 = 붉은색)으로도 거를 수 있다
+  const clrYm=(String(key).indexOf('st:')===0)?String(key).slice(3):'';
+  if(clrYm){
+    const cur=(_psiFilters['clr:'+clrYm]||[])[0]||'';
+    const cb=(v,txt,bg)=>'<button class="psifClr" data-v="'+v+'" style="width:100%;text-align:left;padding:6px 8px;margin-top:3px;'
+      + 'border:1px solid '+(cur===v?'var(--accent2)':'var(--border)')+';border-radius:6px;cursor:pointer;font-size:12px;'
+      + 'background:'+(bg||'var(--bg)')+';color:'+(bg?'#b91c1c':'var(--text)')+';font-weight:'+(cur===v?'700':'400')+'">'+txt+'</button>';
+    html+='<div style="padding:8px 8px 6px;border-bottom:1px solid var(--border)">'
+      + '<div style="font-size:11px;color:var(--muted);margin:0 2px 3px">'+(ru?'По цвету фона':'바탕색으로 보기')+'</div>'
+      + cb('red',(ru?'Красные (менее '+PSI_LOW_MONTHS+' мес.)':'붉은색만 (보유월 '+PSI_LOW_MONTHS+'개월 미만)'),'#fee2e2')
+      + cb('none',(ru?'Без цвета':'색 없는 것만'))
+      + cb('',(ru?'Все':'전체'))
+      + '</div>';
+  }
   if(isText){
     const vals=psiDistinctValues(key);
     const cur=_psiFilters[key]?new Set(_psiFilters[key]):null;
@@ -9159,6 +9183,10 @@ function openPSIFilter(key, anchor){
   box.innerHTML=html;
   document.body.appendChild(box);
   box.querySelectorAll('.psif-sort').forEach(b=>{ b.onclick=()=>{ _psiSort={key, dir:b.getAttribute('data-dir')}; closePSIFilter(); renderPSI(); }; });
+  box.querySelectorAll('.psifClr').forEach(b=>{ b.onclick=()=>{
+    const v=b.getAttribute('data-v');
+    if(v) _psiFilters['clr:'+clrYm]=[v]; else delete _psiFilters['clr:'+clrYm];
+    closePSIFilter(); renderPSI(); }; });
   if(isText){
     const listEl=box.querySelector('#psifList');
     const allChk=box.querySelector('#psifAll');
@@ -9257,8 +9285,9 @@ function renderPSI(){
   const grp=yms.map(y=>'<th colspan="'+SB.length+'" style="'+thS+bl+'">'+psiYmLabel(y)+'</th>').join('');
   const sub=yms.map(y=>SB.map((d,i)=>{
       const key=d.k+':'+y;
+      const clr=(d.k==='st' && _psiFilters['clr:'+y]) ? '<span style="color:#b91c1c;margin-left:2px">●</span>' : '';
       return '<th onclick="openPSIFilter(&quot;'+key+'&quot;,this)" title="'+L('정렬','Сортировка')+'" style="'+thS+(i===0?bl:'')+';cursor:pointer">'
-        + L(d.ko,d.ru) + psiSortMark(key) + '</th>';
+        + L(d.ko,d.ru) + psiSortMark(key) + clr + '</th>';
     }).join('')).join('');
   const openYm=psiYmAdd(c.base,-1);
   const noteEl=document.getElementById('psiOpenNote');
@@ -9321,7 +9350,8 @@ function renderPSI(){
       const a=g.agg[y]; const b=i===0?bl:'';
       const mo=moOf(a.st,a.fut);
       const val={sh:n(a.sh), i:n(a.i), o:n(a.o), ms:n(a.ms), st:n(a.st), mo:(mo==null?'':mo.toFixed(1))};
-      return SB.map((d,j)=>'<td style="'+gNum+(j===0?b:'')+'">'+val[d.k]+'</td>').join('');
+      const low=psiLow(mo);
+      return SB.map((d,j)=>'<td style="'+gNum+(j===0?b:'')+((low&&d.k==='st')?PSI_LOW_STYLE:'')+'">'+val[d.k]+'</td>').join('');
     }).join('');
     const gRow='<tr>'+gFix+gCells+'</tr>';
     const kids=g.rows.map(it=>{
@@ -9337,7 +9367,9 @@ function renderPSI(){
         const b=i===0?bl:'';
         const val={sh:n(x.sh), i:n(x.i), o:n(x.o), ms:n(x.ms), st:n(x.st), mo:''};
         const dim={sh:1, ms:1};
-        return SB.map((d,j)=>'<td style="'+numS+(j===0?b:'')+(dim[d.k]?';color:var(--muted)':'')+'">'+val[d.k]+'</td>').join('');
+        const low=psiLow(x.mo);
+        return SB.map((d,j)=>'<td style="'+numS+(j===0?b:'')+(dim[d.k]?';color:var(--muted)':'')
+          +((low&&d.k==='st')?PSI_LOW_STYLE:'')+'">'+val[d.k]+'</td>').join('');
       }).join('');
       return '<tr>'+kFix+cells+'</tr>';
     }).join('');
