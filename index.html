@@ -8547,7 +8547,10 @@ async function poRecalcSupply(){
       const fin=normPN((poLookup(r.pn)||{}).fin||'');
       if(fin && fin===pn) chg.push(r); });
     own.sort(byYm); chg.sort(byYm);
-    own.concat(chg).forEach(r=>{
+    // 발주년월이 있는 줄을 발주코드 → 변경코드 차례로 먼저 채우고,
+    // 차수가 미상이라 발주년월을 못 잡는 줄에는 남은 것만 마지막에 넣는다.
+    const dated=r=>!!poYmOf(r);
+    own.filter(dated).concat(chg.filter(dated), own.filter(r=>!dated(r)), chg.filter(r=>!dated(r))).forEach(r=>{
       if(left<=0) return;
       const room=(Number(r.qty)||0)-r.supplied; if(room<=0) return;
       const take=Math.min(room, left); r.supplied+=take; left-=take; });
@@ -8781,16 +8784,16 @@ function poMonList(){
     return na-nb;
   });
 }
-// 발주년월: kt_po 의 발주월(달 숫자)에 차수(RUS 260301 → 2026-03)의 연도를 붙인다.
-//   발주월이 차수의 달보다 크면 해가 하나 앞선다(예: 차수 2601, 발주월 12 → 2025-12).
+// 발주년월은 차수 번호에서 뽑는다. 차수 260301 → 26년 03월의 한 달 앞, 곧 2026-02.
+//   1월이면 해가 하나 앞선다(차수 260101 → 2025-12). 차수에 숫자가 없으면(미상) 빈칸.
 function poYmOf(r){
-  const mon=parseInt(String(r&&r.mon||'').replace(/\D/g,''),10);
-  if(!mon || mon<1 || mon>12) return '';
-  const d=String(r.cha||'').replace(/\D/g,'');
+  const d=String(r&&r.cha||'').replace(/\D/g,'');
   if(d.length<4) return '';
-  let y=2000+parseInt(d.slice(0,2),10), cm=parseInt(d.slice(2,4),10);
-  if(cm>=1 && cm<=12 && mon>cm) y-=1;
-  return y+'-'+(mon<10?'0':'')+mon;
+  let y=2000+parseInt(d.slice(0,2),10), m=parseInt(d.slice(2,4),10)-1;
+  if(isNaN(y) || isNaN(m)) return '';
+  if(m<1){ m=12; y-=1; }
+  if(m>12) return '';
+  return y+'-'+(m<10?'0':'')+m;
 }
 function poYmList(){
   const s=new Set(); poData.forEach(r=>{ const y=poYmOf(r); if(y) s.add(y); });
