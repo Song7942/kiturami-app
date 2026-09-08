@@ -1008,6 +1008,10 @@ input[type="text"]::placeholder{color:var(--muted)}
       </button>
       <select id="shipInv" onchange="renderShip()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></select>
       <select id="shipYm" onchange="renderShip()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></select>
+      <button class="dl-btn" onclick="openShipInvPanel()" title="인보이스 넘버·선적일·입고일을 고칩니다" style="background:var(--accent2);border-color:var(--accent2);color:#fff">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="8" y1="14" x2="16" y2="14"/></svg>
+        <span id="i18n-ship-inv">선적차수</span>
+      </button>
       <button class="dl-btn" onclick="downloadShip()">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         <span id="i18n-ship-dl">엑셀 다운로드</span>
@@ -1015,7 +1019,7 @@ input[type="text"]::placeholder{color:var(--muted)}
     </div>
   </div>
   <div class="scroll-body" id="scrollBodySHIP" style="padding:0 12px 72px">
-    <div id="shipInvBox" style="margin:0 0 10px"></div>
+
     <div class="pn-body-wrap">
       <table id="shipTable" style="width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed">
         <colgroup id="shipColgroup"></colgroup>
@@ -8100,7 +8104,6 @@ function renderShip(){
   const tdS='padding:5px 6px;font-size:11px;border-bottom:1px solid var(--border)';
   const numS=tdS+';text-align:right;white-space:nowrap';
   const codeS="font-family:'Courier New',monospace;font-size:9.5px;white-space:nowrap";
-  renderShipInvPanel();
   const heads=[[L('인보이스 넘버','Инвойс'),128],[L('선적일','Отгрузка'),80],[L('입고일','Приход'),80],[L('대표품번','Осн. артикул'),104],
                [L('호환품번','Артикул'),104],[L('영문품명','Наименование'),210],[L('HS CODE','HS'),90],
                [L('수량','Кол-во'),64],[L('단가(RUB)','Цена'),84],[L('금액(RUB)','Сумма'),96]];
@@ -8287,31 +8290,64 @@ function shipInvSummary(){
     o.n++; o.qty+=r.qty; if(!o.sail&&r.sail) o.sail=r.sail; if(!o.arrive&&r.arrive) o.arrive=r.arrive; });
   return Object.values(m).sort((a,b)=>String(a.inv).localeCompare(String(b.inv)));
 }
-function renderShipInvPanel(){
-  const box=document.getElementById('shipInvBox'); if(!box) return;
+function closeShipInvPanel(){ const b=document.getElementById('shipInvPop'); if(b) b.remove(); }
+// 인보이스 넘버·선적일·입고일 편집 팝업. 위쪽 조회칸으로 걸러 본다.
+function openShipInvPanel(){
+  closeShipInvPanel();
   const ru=(lang==='ru'), L=(ko,rr)=>(ru?rr:ko);
-  const list=shipInvSummary();
-  const inp='padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:11px';
-  const th='padding:5px 6px;text-align:left;font-size:11px;color:var(--muted);border-bottom:1px solid var(--border);white-space:nowrap';
-  const td='padding:4px 6px;font-size:11px;border-bottom:1px solid var(--border)';
-  if(!list.length){ box.innerHTML=''; return; }
-  box.innerHTML='<div style="margin:6px 0 4px;font-size:11px;color:var(--muted)">'
-    + L('인보이스 넘버 · 선적일 · 입고일 (고치면 PSI 선적·입고에 바로 반영됩니다)',
-        'Инвойс · дата отгрузки · дата прихода')+'</div>'
-    + '<table style="border-collapse:collapse;background:var(--surface2);border:1px solid var(--border);border-radius:8px;overflow:hidden">'
+  const box=document.createElement('div'); box.id='shipInvPop';
+  box.style.cssText='position:fixed;inset:0;z-index:10000;background:#0008;display:flex;align-items:center;justify-content:center';
+  box.innerHTML=
+    '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;width:720px;max-width:95vw;'
+      +'max-height:88vh;display:flex;flex-direction:column;box-shadow:0 16px 44px #000a;font-size:12px;color:var(--text)">'
+    + '<div style="padding:12px 14px;border-bottom:1px solid var(--border);font-weight:700;font-size:13px">'
+      + L('선적차수 — 인보이스 넘버 · 선적일 · 입고일','Партии — инвойс · отгрузка · приход')+'</div>'
+    + '<div style="padding:10px 14px 6px;border-bottom:1px solid var(--border)">'
+      + '<input id="siSearch" type="text" placeholder="'+L('인보이스 넘버 · 선적일 · 입고일로 조회…','Поиск: инвойс, дата отгрузки, дата прихода…')+'"'
+      + ' style="width:100%;box-sizing:border-box;padding:6px 9px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:12px">'
+      + '<div id="siCount" style="margin-top:5px;font-size:11px;color:var(--muted)"></div></div>'
+    + '<div id="siList" style="padding:8px 14px 12px;overflow:auto"></div>'
+    + '<div style="display:flex;gap:7px;padding:11px 14px;border-top:1px solid var(--border)">'
+      + '<div style="flex:1;font-size:11px;color:var(--muted);align-self:center">'
+      + L('입고일을 넣으면 그 달 PSI 입고에 품번별 수량이 들어갑니다.','Дата прихода заполняет приход в PSI.')+'</div>'
+      + '<button id="siClose" style="padding:7px 14px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);cursor:pointer;font-size:12px">'+L('닫기','Закрыть')+'</button>'
+    + '</div></div>';
+  document.body.appendChild(box);
+  box.querySelector('#siClose').onclick=closeShipInvPanel;
+  box.onmousedown=(e)=>{ if(e.target===box) closeShipInvPanel(); };
+  const search=box.querySelector('#siSearch');
+  search.oninput=()=>shipInvPanelList();
+  shipInvPanelList();
+  search.focus();
+}
+function shipInvPanelList(){
+  const box=document.getElementById('shipInvPop'); if(!box) return;
+  const ru=(lang==='ru'), L=(ko,rr)=>(ru?rr:ko);
+  const kw=(box.querySelector('#siSearch').value||'').trim().toLowerCase();
+  let list=shipInvSummary();
+  if(kw) list=list.filter(o=>[o.inv,o.sail,o.arrive].some(v=>String(v||'').toLowerCase().includes(kw)));
+  const inp='padding:4px 7px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:11px';
+  const th='padding:6px;text-align:left;font-size:11px;color:var(--muted);border-bottom:1px solid var(--border);white-space:nowrap';
+  const td='padding:5px 6px;font-size:11px;border-bottom:1px solid var(--border)';
+  const cnt=box.querySelector('#siCount');
+  const tq=list.reduce((a,o)=>a+o.qty,0);
+  if(cnt) cnt.textContent=L(list.length+'차수 · 합계 '+tq.toLocaleString()+'개', list.length+' партий · '+tq.toLocaleString());
+  const el=box.querySelector('#siList');
+  if(!list.length){ el.innerHTML='<div style="padding:14px;color:var(--muted)">'+L('맞는 차수가 없습니다.','Ничего не найдено.')+'</div>'; return; }
+  el.innerHTML='<table style="border-collapse:collapse;width:100%">'
     + '<tr><th style="'+th+'">'+L('인보이스 넘버','Инвойс')+'</th><th style="'+th+'">'+L('선적일','Отгрузка')+'</th>'
-    + '<th style="'+th+'">'+L('입고일','Приход')+'</th><th style="'+th+'">'+L('건수','Строк')+'</th>'
-    + '<th style="'+th+'">'+L('수량','Кол-во')+'</th><th style="'+th+'"></th></tr>'
+    + '<th style="'+th+'">'+L('입고일','Приход')+'</th><th style="'+th+';text-align:right">'+L('건수','Строк')+'</th>'
+    + '<th style="'+th+';text-align:right">'+L('수량','Кол-во')+'</th><th style="'+th+'"></th></tr>'
     + list.map(o=>'<tr data-inv="'+escapeHtml(o.inv)+'">'
-        + '<td style="'+td+'"><input class="siInv" style="'+inp+';width:150px" value="'+escapeHtml(o.inv)+'"></td>'
-        + '<td style="'+td+'"><input class="siSail" placeholder="2026-09-15" style="'+inp+';width:100px" value="'+escapeHtml(o.sail||'')+'"></td>'
-        + '<td style="'+td+'"><input class="siArr" placeholder="2026-10-10" style="'+inp+';width:100px" value="'+escapeHtml(o.arrive||'')+'"></td>'
+        + '<td style="'+td+'"><input class="siInv" style="'+inp+';width:100%;box-sizing:border-box" value="'+escapeHtml(o.inv)+'"></td>'
+        + '<td style="'+td+'"><input class="siSail" placeholder="2026-09-15" style="'+inp+';width:104px" value="'+escapeHtml(o.sail||'')+'"></td>'
+        + '<td style="'+td+'"><input class="siArr" placeholder="2026-10-10" style="'+inp+';width:104px" value="'+escapeHtml(o.arrive||'')+'"></td>'
         + '<td style="'+td+';text-align:right;color:var(--muted)">'+o.n+'</td>'
         + '<td style="'+td+';text-align:right">'+o.qty.toLocaleString()+'</td>'
-        + '<td style="'+td+'"><button class="siSave" style="padding:3px 10px;border:none;border-radius:6px;background:var(--accent2);color:#fff;cursor:pointer;font-size:11px">'+L('저장','ОК')+'</button></td>'
+        + '<td style="'+td+'"><button class="siSave" style="padding:4px 11px;border:none;border-radius:6px;background:var(--accent2);color:#fff;cursor:pointer;font-size:11px">'+L('저장','ОК')+'</button></td>'
         + '</tr>').join('')
     + '</table>';
-  box.querySelectorAll('.siSave').forEach(b=>{ b.onclick=()=>{
+  el.querySelectorAll('.siSave').forEach(b=>{ b.onclick=()=>{
     const tr=b.closest('tr');
     shipSaveInvoice(tr.getAttribute('data-inv'), tr.querySelector('.siInv').value,
                     tr.querySelector('.siSail').value, tr.querySelector('.siArr').value, b);
@@ -8341,6 +8377,7 @@ async function shipSaveInvoice(oldInv, newInv, sail, arrive, btn){
     const ma=new Set([oldArrYm,newArrYm].filter(Boolean));
     for(const m of ma){ const r=await shipSyncMonth(m,'w'); if(!r.ok){ alert('PSI 반영 실패\n['+r.msg+']'); return; } }
     renderShip();
+    if(document.getElementById('shipInvPop')) shipInvPanelList();
     if(typeof renderPSI==='function') renderPSI();
     let msg=(ru?'Сохранено: ':'저장했습니다: ')+newInv;
     if(newSailYm) msg+='\n'+(ru?'Отгрузка ':'선적 ')+psiYmLabel(newSailYm);
