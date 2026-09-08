@@ -1007,6 +1007,10 @@ input[type="text"]::placeholder{color:var(--muted)}
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
         <span id="i18n-ms-back">PSI</span>
       </button>
+      <button class="dl-btn" onclick="openMsColsPanel()" title="표에 보일 열을 고릅니다(아이디별로 저장)">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
+        <span id="i18n-ms-cols">보기</span>
+      </button>
       <select id="msYm" onchange="renderMS()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></select>
       <button class="dl-btn" onclick="downloadMS()">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -8079,14 +8083,101 @@ function refreshInventoryTexts(){
 // ══════════════════════════════════════════
 // 미출현황 (통합문서 미출_Упущенные → data[ym].u)
 //   품번·품명·규격·대표품번은 품번조회에서 가져오고, 수량만 PSI 자료를 본다.
-//   달을 고르면 그 달, '전체'면 전 기간 합계를 보여 준다.
+//   PSI 기본 화면처럼 대표품번으로 묶고(띠), 그 아래에 호환품번·일자·수량을 편다.
+//   달을 고르면 그 달만, '전체 기간'이면 미출이 있는 달을 모두 편다.
 // ══════════════════════════════════════════
-let _msFiltered=[];
+const MS_COL_DEFS=[
+  {k:'rep',    w:112, ko:'대표품번', ru:'Осн. артикул'},
+  {k:'compat', w:112, ko:'호환품번', ru:'Артикул'},
+  {k:'ymd',    w:74,  ko:'일자',     ru:'Дата'},
+  {k:'name',   w:210, ko:'품명',     ru:'Наименование'},
+  {k:'spec',   w:168, ko:'규격',     ru:'Хар-ки', koOnly:1},
+  {k:'qty',    w:86,  ko:'미출수량', ru:'Невыполнено'},
+  {k:'q',      w:74,  ko:'수량',     ru:'Кол-во'}
+];
+function msColsMap(){
+  const src=(psiCols && psiCols.__ms && typeof psiCols.__ms==='object')?psiCols.__ms:null;
+  const m={}; MS_COL_DEFS.forEach(d=>m[d.k]=true);
+  if(src) MS_COL_DEFS.forEach(d=>{ if(src[d.k]===false) m[d.k]=false; });
+  return m;
+}
+function msVisCols(isKo){ const m=msColsMap();
+  const v=MS_COL_DEFS.filter(d=>(!d.koOnly||isKo) && m[d.k]);
+  return v.length?v:MS_COL_DEFS.filter(d=>d.k==='rep'); }   // 전부 끄면 대표품번은 남긴다
+function msShowKids(){ return msColsMap().compat!==false; }   // 호환품번을 끄면 하위 줄을 감춘다
+function msShowDays(){ return msColsMap().ymd!==false; }   // 일자를 끄면 품번당 한 줄로 접는다
+function msShowGroups(){ const m=msColsMap(); return (m.rep!==false) || (m.compat===false); }
+function closeMsColsPanel(){ const b=document.getElementById('msColsPop'); if(b) b.remove(); }
+function openMsColsPanel(){
+  closeMsColsPanel();
+  const ru=(lang==='ru'), isKo=(lang!=='ru');
+  const m=msColsMap();
+  const box=document.createElement('div'); box.id='msColsPop';
+  box.style.cssText='position:fixed;inset:0;z-index:10000;background:#0008;display:flex;align-items:center;justify-content:center';
+  const item=d=>'<label style="display:flex;align-items:center;gap:7px;padding:5px 4px;cursor:pointer">'
+    + '<input type="checkbox" class="mcChk" data-k="'+d.k+'" '+(m[d.k]?'checked':'')+'>'
+    + '<span>'+(ru?d.ru:d.ko)+'</span></label>';
+  box.innerHTML=
+    '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;width:300px;max-width:92vw;'
+      +'box-shadow:0 16px 44px #000a;font-size:12px;color:var(--text)">'
+    + '<div style="padding:12px 14px;border-bottom:1px solid var(--border);font-weight:700;font-size:13px">'+(ru?'Столбцы':'보기 — 열 선택')+'</div>'
+    + '<div style="padding:10px 14px">'
+      + MS_COL_DEFS.filter(d=>(!d.koOnly||isKo)).map(item).join('')
+    + '</div>'
+    + '<div style="padding:0 14px 8px;font-size:11px;color:var(--muted)">'+(ru?'Выбор сохраняется для этого ID при закрытии.':'닫으면 그대로 저장되어 이 아이디에 다음에도 남습니다.')+'</div>'
+    + '<div style="display:flex;gap:7px;padding:11px 14px;border-top:1px solid var(--border)">'
+      + '<button id="mcAll" style="flex:none;padding:7px 12px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);cursor:pointer;font-size:12px">'+(ru?'Все':'전체 선택')+'</button>'
+      + '<button id="mcClose" style="flex:1;padding:7px;border:none;border-radius:7px;background:var(--accent2);color:#fff;cursor:pointer;font-size:12px;font-weight:700">'+(ru?'Закрыть':'닫기')+'</button>'
+    + '</div></div>';
+  document.body.appendChild(box);
+  let done=false;
+  const commit=async()=>{
+    if(done) return; done=true;
+    const v={}; box.querySelectorAll('.mcChk').forEach(c=>{ v[c.getAttribute('data-k')]=c.checked; });
+    if(!psiCols || typeof psiCols!=='object') psiCols={};
+    psiCols.__ms=v; closeMsColsPanel(); renderMS();
+    const ok=await savePsiCols();
+    if(!ok) console.log('ms_cols: 이 브라우저에만 저장');
+  };
+  box.querySelector('#mcAll').onclick=()=>box.querySelectorAll('.mcChk').forEach(c=>c.checked=true);
+  box.querySelector('#mcClose').onclick=commit;
+  box.onmousedown=(e)=>{ if(e.target===box) commit(); };
+}
+let _msGroups=[];
 function msYmList(){
   const s=new Set();
   Object.keys(psiData).forEach(p=>{ const d=psiData[p].data||{};
     Object.keys(d).forEach(ym=>{ if(/^\d{4}$/.test(ym) && Number(d[ym].u)>0) s.add(ym); }); });
   return [...s].sort();
+}
+// 대표품번 → 호환품번 → (일자, 수량) 로 접어 둔다
+function msBuild(ym, kw){
+  const gmap={}, groups=[];
+  pnExpandRows(PN_DATA).forEach(r=>{
+    const k=normPN(r._compat); if(!k) return;
+    const rep=String(r.rep||'');
+    let g=gmap[rep];
+    if(!g){ g=gmap[rep]={rep, first:r, kids:[], seen:{}, total:0}; groups.push(g); }
+    if(g.seen[k]) return; g.seen[k]=1;
+    const d=(psiData[k]||{}).data||{};
+    const days=[];
+    if(ym){ const q=Number((d[ym]||{}).u)||0; if(q>0) days.push({ym, q}); }
+    else Object.keys(d).sort().forEach(y=>{ if(!/^\d{4}$/.test(y)) return;
+      const q=Number(d[y].u)||0; if(q>0) days.push({ym:y, q}); });
+    if(!days.length) return;
+    const sum=days.reduce((a,x)=>a+x.q,0);
+    g.kids.push({r, pn:k, days, sum}); g.total+=sum;
+  });
+  let out=groups.filter(g=>g.kids.length);
+  if(kw) out=out.map(g=>{
+      const kids=g.kids.filter(it=>[g.rep, it.pn, pnColText('name',it.r), pnColText('spec',it.r)]
+        .some(v=>String(v||'').toLowerCase().includes(kw)));
+      if(!kids.length) return null;
+      return {rep:g.rep, first:g.first, kids, seen:g.seen, total:kids.reduce((a,x)=>a+x.sum,0)};
+    }).filter(Boolean);
+  out.forEach(g=>g.kids.sort((a,b)=>b.sum-a.sum));
+  out.sort((a,b)=>b.total-a.total);
+  return out;
 }
 function renderMS(){
   const pane=document.getElementById('pane-ms'); if(!pane) return;
@@ -8103,74 +8194,95 @@ function renderMS(){
     sel.value=cur || (list.length?list[list.length-1]:'');
   }
   const ym=sel?sel.value:'';
-  let rows=pnExpandRows(PN_DATA).filter(r=>normPN(r._compat));
-  const seen={};
-  const items=[];
-  rows.forEach(r=>{
-    const k=normPN(r._compat); if(seen[k]) return; seen[k]=1;
-    const d=(psiData[k]||{}).data||{};
-    let q=0;
-    if(ym) q=Number((d[ym]||{}).u)||0;
-    else Object.keys(d).forEach(y=>{ if(/^\d{4}$/.test(y)) q+=Number(d[y].u)||0; });
-    if(q>0) items.push({r, k, q});
-  });
-  let out=items;
-  if(kw) out=out.filter(it=>[it.r.rep, it.k, pnColText('name',it.r), pnColText('spec',it.r)]
-    .some(v=>String(v||'').toLowerCase().includes(kw)));
-  out.sort((a,b)=>b.q-a.q);
-  _msFiltered=out;
-  const badge=document.getElementById('msBadge'); if(badge) badge.innerHTML='<b>'+out.length+'</b>';
+  const groups=msBuild(ym, kw);
+  _msGroups=groups;
+  const nPn=groups.reduce((a,g)=>a+g.kids.length,0);
+  const tot=groups.reduce((a,g)=>a+g.total,0);
+  const badge=document.getElementById('msBadge'); if(badge) badge.innerHTML='<b>'+nPn+'</b>';
 
+  const CO=msVisCols(isKo);
+  const cg=document.getElementById('msColgroup');
+  if(cg) cg.innerHTML=CO.map(d=>'<col style="width:'+d.w+'px">').join('');
   const thS='padding:6px 5px;text-align:center;vertical-align:middle;position:sticky;top:0;z-index:3;'
     + 'background:var(--surface2);font-size:11px;white-space:nowrap;border-bottom:1px solid var(--border)';
   const tdS='padding:5px 6px;font-size:11px;border-bottom:1px solid var(--border)';
-  const numS=tdS+';text-align:right;white-space:nowrap';
   const codeS="font-family:'Courier New',monospace;font-size:9.5px;white-space:nowrap";
-  const heads=[[L('대표품번','Осн. артикул'),110],[L('호환품번','Артикул'),110],
-               [L('품명','Наименование'),230]];
-  if(isKo) heads.push(['규격',180]);
-  heads.push([L('미출수량','Невыполнено'),86]);
-  const cg=document.getElementById('msColgroup');
-  if(cg) cg.innerHTML=heads.map(h=>'<col style="width:'+h[1]+'px">').join('');
-  let tq=0;
-  const body=out.map(it=>{ tq+=it.q;
-    return '<tr>'
-      + '<td style="'+tdS+'"><span style="'+codeS+'">'+escapeHtml(it.r.rep||'')+'</span></td>'
-      + '<td style="'+tdS+'"><span style="'+codeS+'">'+escapeHtml(normBadgePN(it.r._compat))+'</span></td>'
-      + '<td style="'+tdS+';word-break:break-all;font-size:10.5px;line-height:1.25">'+escapeHtml(pnColText('name',it.r))+'</td>'
-      + (isKo?('<td style="'+tdS+';color:var(--muted);word-break:break-all;font-size:10px;line-height:1.25">'+escapeHtml(pnColText('spec',it.r))+'</td>'):'')
-      + '<td style="'+numS+';font-weight:600;color:#b91c1c">'+it.q.toLocaleString()+'</td>'
-      + '</tr>';
+  const band=msShowKids()?';background:var(--tag-bg)':'';
+  const gS=tdS+band+';font-weight:700';
+  const sty={ rep:tdS, compat:tdS, ymd:tdS+';text-align:center;color:var(--muted);white-space:nowrap',
+              name:tdS+';word-break:break-all;font-size:10.5px;line-height:1.25',
+              spec:tdS+';color:var(--muted);word-break:break-all;font-size:10px;line-height:1.25',
+              qty:tdS+';text-align:right;white-space:nowrap;font-weight:600;color:#b91c1c',
+              q:tdS+';text-align:right;white-space:nowrap' };
+  const gsty={ rep:gS, compat:gS, ymd:gS+';text-align:center',
+               name:gS+';word-break:break-all;font-size:10.5px;line-height:1.25',
+               spec:gS+';word-break:break-all;font-size:10px;line-height:1.25',
+               qty:gS+';text-align:right;white-space:nowrap;color:#b91c1c',
+               q:gS+';text-align:right;white-space:nowrap' };
+  const body=groups.map(g=>{
+    const fin=String(g.first.final||'');
+    const finRow=Object.assign({}, g.first, {_split:true, _compat:fin});
+    const gTxt={ rep:'<span style="'+codeS+'">'+escapeHtml(g.rep||'')+'</span>',
+                 compat:(fin?('<span style="'+codeS+'">'+escapeHtml(normBadgePN(fin))+'</span>'):''),
+                 ymd:'', name:escapeHtml(pnColText('name',finRow)), spec:escapeHtml(pnColText('spec',finRow)),
+                 qty:g.total.toLocaleString(), q:'' };
+    const gRow='<tr>'+CO.map(d=>'<td style="'+gsty[d.k]+'">'+gTxt[d.k]+'</td>').join('')+'</tr>';
+    const kids=g.kids.map(it=>(msShowDays()?it.days:[{ym:'',q:it.sum}]).map((x,i)=>{
+      const txt={ rep:'',
+                  compat:(i===0?('<span style="'+codeS+'">'+escapeHtml(normBadgePN(it.r._compat))+'</span>'):''),
+                  ymd:(x.ym?psiYmLabel(x.ym):''),
+                  name:(i===0?escapeHtml(pnColText('name',it.r)):''),
+                  spec:(i===0?escapeHtml(pnColText('spec',it.r)):''),
+                  qty:(i===0?it.sum.toLocaleString():''),
+                  q:x.q.toLocaleString() };
+      return '<tr>'+CO.map(d=>'<td style="'+sty[d.k]+'">'+txt[d.k]+'</td>').join('')+'</tr>';
+    }).join('')).join('');
+    return (msShowGroups()?gRow:'')+(msShowKids()?kids:'');
   }).join('');
-  const thead=document.getElementById('msThead');
-  if(thead) thead.innerHTML='<tr>'+heads.map(h=>'<th style="'+thS+'">'+h[0]+'</th>').join('')+'</tr>'
-    + '<tr><th colspan="'+(isKo?4:3)+'" style="'+thS+';font-weight:700;background:var(--surface);top:28px;text-align:right">'
-    + L('합계 '+out.length+'품번'+(ym?(' · '+psiYmLabel(ym)):' · 전 기간'),'Итого '+out.length)+'</th>'
-    + '<th style="'+thS+';font-weight:700;background:var(--surface);top:28px;text-align:right">'+tq.toLocaleString()+'</th></tr>';
+
+  const nq=CO.filter(d=>d.k==='qty'||d.k==='q').length;
+  const head='<tr>'+CO.map(d=>'<th style="'+thS+'">'+(ru?d.ru:d.ko)+'</th>').join('')+'</tr>'
+    + '<tr><th colspan="'+Math.max(1,CO.length-nq)+'" style="'+thS+';font-weight:700;background:var(--surface);top:28px;text-align:right">'
+    + escapeHtml(L('합계 '+groups.length+'대표품번 · '+nPn+'품번'+(ym?(' · '+psiYmLabel(ym)):' · 전 기간'),
+                   'Итого '+groups.length+' / '+nPn+(ym?(' · '+psiYmLabel(ym)):'')))+'</th>'
+    + CO.filter(d=>d.k==='qty'||d.k==='q').map(d=>'<th style="'+thS+';font-weight:700;background:var(--surface);top:28px;text-align:right">'
+        +(d.k==='qty'?tot.toLocaleString():'')+'</th>').join('')
+    + '</tr>';
+  const thead=document.getElementById('msThead'); if(thead) thead.innerHTML=head;
   const tbody=document.getElementById('msTbody'); if(tbody) tbody.innerHTML=body;
   const empty=document.getElementById('msEmpty');
-  if(empty){ empty.textContent=L('미출 자료가 없습니다.','Нет данных.'); empty.style.display=out.length?'none':'block'; }
+  if(empty){ empty.textContent=L('미출 자료가 없습니다.','Нет данных.'); empty.style.display=groups.length?'none':'block'; }
 }
 function debouncedRenderMS(){ clearTimeout(window._msT); window._msT=setTimeout(renderMS,200); }
-async function loadMSTab(){ if(!Object.keys(psiData).length) await loadPSI(); renderMS(); }
+async function loadMSTab(){ if(!Object.keys(psiData).length) await loadPSI(); await loadPsiCols(); renderMS(); }
 function downloadMS(){
   renderMS();
   const ru=(lang==='ru'), isKo=(lang!=='ru');
   const sel=document.getElementById('msYm'); const ym=sel?sel.value:'';
-  const head=[ru?'Осн. артикул':'대표품번', ru?'Артикул':'호환품번', ru?'Наименование':'품명'];
-  if(isKo) head.push('규격');
-  head.push(ru?'Невыполнено':'미출수량');
-  const aoa=[head]; let tq=0;
-  (_msFiltered||[]).forEach(it=>{ tq+=it.q;
-    const row=[it.r.rep||'', normBadgePN(it.r._compat), pnColText('name',it.r)];
-    if(isKo) row.push(pnColText('spec',it.r));
-    row.push(it.q); aoa.push(row); });
-  const sum=[(ru?'Итого ':'합계 ')+(_msFiltered||[]).length+(ru?'':'품번')+(ym?(' · '+psiYmLabel(ym)):' · '+(ru?'все':'전 기간')),'',''];
-  if(isKo) sum.push('');
-  sum.push(tq);
-  aoa.splice(1,0,sum);
+  const CO=msVisCols(isKo);
+  const aoa=[CO.map(d=>ru?d.ru:d.ko)];
+  let tot=0, nPn=0;
+  const rowOf=o=>CO.map(d=>o[d.k]);
+  (_msGroups||[]).forEach(g=>{
+    const fin=String(g.first.final||'');
+    const finRow=Object.assign({}, g.first, {_split:true, _compat:fin});
+    tot+=g.total; nPn+=g.kids.length;
+    if(msShowGroups()) aoa.push(rowOf({ rep:g.rep||'', compat:(fin?normBadgePN(fin):''), ymd:'',
+      name:pnColText('name',finRow), spec:pnColText('spec',finRow), qty:g.total, q:'' }));
+    if(!msShowKids()) return;
+    g.kids.forEach(it=>(msShowDays()?it.days:[{ym:'',q:it.sum}]).forEach((x,i)=>{
+      aoa.push(rowOf({ rep:'', compat:(i===0?normBadgePN(it.r._compat):''), ymd:(x.ym?psiYmLabel(x.ym):''),
+        name:(i===0?pnColText('name',it.r):''), spec:(i===0?pnColText('spec',it.r):''),
+        qty:(i===0?it.sum:''), q:x.q }));
+    }));
+  });
+  const sum={}; CO.forEach(d=>sum[d.k]='');
+  sum[CO[0].k]=(ru?'Итого ':'합계 ')+(_msGroups||[]).length+(ru?'':'대표품번')+' / '+nPn+(ru?'':'품번')
+    +(ym?(' · '+psiYmLabel(ym)):(ru?'':' · 전 기간'));
+  sum.qty=tot;
+  aoa.splice(1,0,rowOf(sum));
   const ws=XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols']=[{wch:15},{wch:15},{wch:36}].concat(isKo?[{wch:26}]:[]).concat([{wch:12}]);
+  ws['!cols']=CO.map(d=>({wch:Math.round(d.w/7)+4}));
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'MS');
   XLSX.writeFile(wb, xlsxName('미출현황','Невыполненные'));
 }
@@ -9010,6 +9122,7 @@ function openPsiColsPanel(){
   const commit=async()=>{
     if(done) return; done=true;
     const v={}; box.querySelectorAll('.pcChk').forEach(c=>{ v[c.getAttribute('data-k')]=c.checked; });
+    if(psiCols && psiCols.__ms) v.__ms=psiCols.__ms;      // 미출현황 열 선택은 건드리지 않는다
     psiCols=v; closePsiColsPanel(); renderPSI();
     const ok=await savePsiCols();
     if(!ok) console.log('psi_cols: 이 브라우저에만 저장');
