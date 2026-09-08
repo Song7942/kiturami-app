@@ -1173,6 +1173,10 @@ input[type="text"]::placeholder{color:var(--muted)}
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
         <span id="i18n-sim-reset">필터 초기화</span>
       </button>
+      <button class="dl-btn" id="simResetManualBtn" onclick="simResetManual()" title="손으로 고친 실제선적·발주필요를 원래 셈한 값으로 되돌립니다">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/></svg>
+        <span id="i18n-sim-manual">수기 초기화</span>
+      </button>
       <button class="dl-btn" onclick="downloadSIM()">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         <span id="i18n-sim-dl">엑셀 다운로드</span>
@@ -9918,6 +9922,7 @@ function renderSIM(){
   const prevP=PSIP, prevS=psiSimOn;
   PSIP='sim'; psiSimOn=true;
   try{ renderPSI(); } finally { PSIP=prevP; psiSimOn=prevS; }
+  simManualBtn();
   const note=document.getElementById('simNote');
   if(note && _simInfo){
     const ru=(lang==='ru');
@@ -9926,6 +9931,23 @@ function renderSIM(){
             : ('미공급 '+_simInfo.total.toLocaleString()+'개('+_simInfo.rows+'줄)를 '+_simInfo.sail+' 선적 → '+_simInfo.arrive+' 입고('+psiYmLabel(_simInfo.ym)+')로 얹음'))
       : '';
   }
+}
+// 손으로 고친 값(실제선적·발주필요)을 셈한 값으로 되돌린다
+function simManualCount(){ return Object.keys(_simNeed).length + Object.keys(_simShip).length; }
+function simResetManual(){
+  const ru=(lang==='ru');
+  const c=simManualCount();
+  if(!c){ alert(ru?'Ручных значений нет.':'손으로 고친 값이 없습니다.'); return; }
+  if(!confirm(ru ? ('Сбросить '+c+' ручных значений?')
+                 : ('손으로 고친 '+c+'개를 원래 셈한 값으로 되돌립니다.\n계속할까요?'))) return;
+  _simNeed={}; _simShip={}; renderSIM();
+}
+function simManualBtn(){
+  const b=document.getElementById('simResetManualBtn'); if(!b) return;
+  const c=simManualCount(), t=b.querySelector('span');
+  if(t) t.textContent=(lang==='ru'?'Сброс ручных':'수기 초기화')+(c?(' '+c):'');
+  b.style.opacity=c?'1':'0.45';
+  b.style.background=c?'#f97316':''; b.style.borderColor=c?'#f97316':''; b.style.color=c?'#fff':'';
 }
 function debouncedRenderSIM(){ clearTimeout(window._simT); window._simT=setTimeout(renderSIM,200); }
 async function loadSimTab(){
