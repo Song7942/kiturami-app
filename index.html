@@ -6111,12 +6111,14 @@ function applyPermTabVisibility(skipSwitch){
     ['tab-order','tab-parts','tab-adminOrders','tab-inventory','tab-shipments','tab-price','tab-psi','tab-po','tab-ship','tab-ms','tab-sim','tab-memberManagement']
       .forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display='none'; });
     const pnEl=document.getElementById('tab-pn'); if(pnEl) pnEl.style.display='';
+    // KITURAMI(본사)는 권한 기록이 없어도 PSI 를 본다
+    const psi0=document.getElementById('tab-psi'); if(psi0 && canSeePsi()) psi0.style.display='block';
     if(!skipSwitch) ensureVisibleTab();
     return;
   }
   // 권한이 설정된 회원은 매핑된 탭을 권한값대로 부여/제한한다(체크=보임, 미체크=숨김).
-  // PSI 는 권한 항목이 따로 없다. 역할(MASTER·KITURAMI)로만 열리므로 권한 회원에게는 닫는다.
-  const psiEl=document.getElementById('tab-psi'); if(psiEl) psiEl.style.display='none';
+  // PSI 는 회원관리에서 준 'PSI 보기' 권한을 따른다(역할이 MASTER·KITURAMI 면 늘 열림).
+  const psiEl=document.getElementById('tab-psi'); if(psiEl) psiEl.style.display = canSeePsi() ? 'block' : 'none';
   const poEl=document.getElementById('tab-po'); if(poEl) poEl.style.display='none';
   const shipEl=document.getElementById('tab-ship'); if(shipEl) shipEl.style.display='none';
   const msEl=document.getElementById('tab-ms'); if(msEl) msEl.style.display='none';
