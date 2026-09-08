@@ -8048,9 +8048,9 @@ function psiRowVals(d,c,yms){
   const start=(c.base<=last)?c.base:last;
   for(let k=start;k<=last;k=psiYmAdd(k,1)){
     stock += psiInOf(d,k)-psiOutOf(d,k);
-    if(want[k]) out[k]={ sh:psiShipOf(d,k), i:psiInOf(d,k), o:psiOutOf(d,k), st:stock };
+    if(want[k]) out[k]={ sh:psiShipOf(d,k), i:psiInOf(d,k), o:psiOutOf(d,k), ms:psiMissOf(d,k), st:stock };
   }
-  yms.forEach(y=>{ if(!out[y]) out[y]={ sh:psiShipOf(d,y), i:psiInOf(d,y), o:psiOutOf(d,y), st:stock }; });
+  yms.forEach(y=>{ if(!out[y]) out[y]={ sh:psiShipOf(d,y), i:psiInOf(d,y), o:psiOutOf(d,y), ms:psiMissOf(d,y), st:stock }; });
   // 보유월: 그 달 재고 ÷ (다음 달부터 N개월 출고 합계 ÷ N)
   //   예) 26-01 재고 100, 26-02~26-07 출고 합계 30 → 평균 5 → 20.0
   yms.forEach(y=>{
@@ -8243,7 +8243,7 @@ function psiColLabel(key){
            name:['품명','Наименование'], spec:['규격','Хар-ки'], open:['이월재고','Нач. остаток']};
   if(T[key]) return ru?T[key][1]:T[key][0];
   const p=String(key).split(':');
-  const F={sh:['선적','Отгрузка'], i:['입고','Приход'], o:['출고','Расход'], st:['재고','Остаток'], mo:['보유월','Мес.']};
+  const F={sh:['선적','Отгрузка'], i:['입고','Приход'], o:['출고','Расход'], ms:['미출','Невып.'], st:['재고','Остаток'], mo:['보유월','Мес.']};
   const f=F[p[0]]||['',''];
   return psiYmLabel(p[1])+' '+(ru?f[1]:f[0]);
 }
@@ -8428,7 +8428,7 @@ function renderPSI(){
     const w=['<col style="width:96px">','<col style="width:96px">','<col style="width:38px">','<col style="width:110px">'];
     if(isKo) w.push('<col style="width:110px">');
 
-    yms.forEach(()=>{ w.push('<col style="width:56px">','<col style="width:56px">','<col style="width:56px">','<col style="width:60px">','<col style="width:52px">'); });
+    yms.forEach(()=>{ w.push('<col style="width:56px">','<col style="width:56px">','<col style="width:56px">','<col style="width:52px">','<col style="width:60px">','<col style="width:52px">'); });
     cg.innerHTML=w.join('');
   }
 
@@ -8439,9 +8439,9 @@ function renderPSI(){
   const thS='padding:5px 4px;text-align:center;vertical-align:middle;position:sticky;z-index:3;'
     + 'background:var(--surface2);font-size:11px;white-space:nowrap;border-bottom:1px solid var(--border)';
   const bl=';border-left:1px solid var(--border)';
-  const grp=yms.map(y=>'<th colspan="5" style="'+thS+bl+'">'+psiYmLabel(y)+'</th>').join('');
+  const grp=yms.map(y=>'<th colspan="6" style="'+thS+bl+'">'+psiYmLabel(y)+'</th>').join('');
   // 월별 하위 머리글: 칸이 좁아 아이콘 대신 머리글 자체를 눌러 정렬 팝업을 띄운다
-  const subF=[['sh','선적','Отгрузка'],['i','입고','Приход'],['o','출고','Расход'],['st','재고','Остаток'],['mo','보유월','Мес.']];
+  const subF=[['sh','선적','Отгрузка'],['i','입고','Приход'],['o','출고','Расход'],['ms','미출','Невып.'],['st','재고','Остаток'],['mo','보유월','Мес.']];
   const sub=yms.map(y=>subF.map((h,i)=>{
       const key=h[0]+':'+y;
       return '<th onclick="openPSIFilter(&quot;'+key+'&quot;,this)" title="'+L('정렬','Сортировка')+'" style="'+thS+(i===0?bl:'')+';cursor:pointer">'
@@ -8472,7 +8472,7 @@ function renderPSI(){
   const tdS='padding:4px 5px;font-size:11px;overflow:hidden;border-bottom:1px solid var(--border)';
   const numS=tdS+';text-align:right;white-space:nowrap';
   // 합계: 선적·입고·출고·재고는 더하고, 보유월은 그 달 값들의 평균(값이 있는 품번만)
-  const tot={}; yms.forEach(y=>tot[y]={sh:0,i:0,o:0,st:0,moSum:0,moN:0});
+  const tot={}; yms.forEach(y=>tot[y]={sh:0,i:0,o:0,ms:0,st:0,moSum:0,moN:0});
   let totOpen=0;
   // 같은 호환품번이 두 대표품번 아래에 걸쳐 두 줄로 나오는 경우가 있다.
   // 줄은 그대로 보여 주되, 합계는 호환품번당 한 번만 센다.
@@ -8484,13 +8484,14 @@ function renderPSI(){
     const op=v._open||0;
     if(!dup) totOpen+=op;
     const cells=yms.map((y,i)=>{
-      const x=v[y]||{sh:0,i:0,o:0,st:0,mo:null};
-      if(!dup){ const t=tot[y]; t.sh+=x.sh; t.i+=x.i; t.o+=x.o; t.st+=x.st;
+      const x=v[y]||{sh:0,i:0,o:0,ms:0,st:0,mo:null};
+      if(!dup){ const t=tot[y]; t.sh+=x.sh; t.i+=x.i; t.o+=x.o; t.ms+=(x.ms||0); t.st+=x.st;
         if(x.mo!=null){ t.moSum+=x.mo; t.moN++; } }
       const b=i===0?bl:'';
       return '<td style="'+numS+b+';color:var(--muted)">'+n(x.sh)+'</td>'
            + '<td style="'+numS+'">'+n(x.i)+'</td>'
            + '<td style="'+numS+'">'+n(x.o)+'</td>'
+           + '<td style="'+numS+';color:var(--muted)">'+n(x.ms)+'</td>'
            + '<td style="'+numS+';font-weight:600">'+n(x.st)+'</td>'
            + '<td style="'+numS+';color:var(--muted)">'+(x.mo==null?'':x.mo.toFixed(1))+'</td>';
     }).join('');
@@ -8511,6 +8512,7 @@ function renderPSI(){
     return '<th style="'+sumS+';text-align:right'+b+';color:var(--muted)">'+n(t.sh)+'</th>'
          + '<th style="'+sumS+';text-align:right">'+n(t.i)+'</th>'
          + '<th style="'+sumS+';text-align:right">'+n(t.o)+'</th>'
+         + '<th style="'+sumS+';text-align:right;color:var(--muted)">'+n(t.ms)+'</th>'
          + '<th style="'+sumS+';text-align:right">'+n(t.st)+'</th>'
          + '<th style="'+sumS+';text-align:right;color:var(--muted)">'+(mo==null?'':mo.toFixed(1))+'</th>';
   }).join('');
@@ -8535,12 +8537,12 @@ function downloadPSI(){
   const g1=h1.map(()=>''); const g2=h1.slice();
   g1.push(''); g2.push(lang==='ru' ? ('Нач. остаток ('+psiYmLabel(psiYmAdd(c.base,-1))+')')
                                    : ('이월재고 ('+psiYmLabel(psiYmAdd(c.base,-1))+' 재고)'));
-  yms.forEach(y=>{ g1.push(psiYmLabel(y),'','','',''); g2.push(lang==='ru'?'Отгрузка':'선적', lang==='ru'?'Приход':'입고', lang==='ru'?'Расход':'출고', lang==='ru'?'Остаток':'재고', lang==='ru'?'Мес.':'보유월'); });
+  yms.forEach(y=>{ g1.push(psiYmLabel(y),'','','','',''); g2.push(lang==='ru'?'Отгрузка':'선적', lang==='ru'?'Приход':'입고', lang==='ru'?'Расход':'출고', lang==='ru'?'Невып.':'미출', lang==='ru'?'Остаток':'재고', lang==='ru'?'Мес.':'보유월'); });
   // 합계 줄을 화면과 같은 값으로 셋째 줄에 넣는다.
   // 같은 호환품번이 두 대표품번 아래 두 줄로 나오는 경우가 있어, 합계는 호환품번당 한 번만 센다.
   // (그래서 엑셀 열을 그대로 SUM 하면 이 합계보다 커질 수 있다 — 중복 줄이 두 번 더해지기 때문)
   const counted={}; let totOpen=0;
-  const tot={}; yms.forEach(y=>tot[y]={sh:0,i:0,o:0,st:0,moSum:0,moN:0});
+  const tot={}; yms.forEach(y=>tot[y]={sh:0,i:0,o:0,ms:0,st:0,moSum:0,moN:0});
   const body=[];
   (_psiFiltered||[]).forEach(r=>{
     const key=normPN(r._compat);
@@ -8553,20 +8555,20 @@ function downloadPSI(){
     row.push(v._open||0);
     yms.forEach(y=>{ const x=v[y]||{};
       if(!dup){ const t=tot[y];
-        t.sh+=Number(x.sh)||0; t.i+=Number(x.i)||0; t.o+=Number(x.o)||0; t.st+=Number(x.st)||0;
+        t.sh+=Number(x.sh)||0; t.i+=Number(x.i)||0; t.o+=Number(x.o)||0; t.ms+=Number(x.ms)||0; t.st+=Number(x.st)||0;
         if(x.mo!=null){ t.moSum+=x.mo; t.moN++; } }
-      row.push(x.sh??'', x.i??'', x.o??'', x.st??'', (x.mo==null?'':x.mo)); });
+      row.push(x.sh??'', x.i??'', x.o??'', x.ms??'', x.st??'', (x.mo==null?'':x.mo)); });
     body.push(row);
   });
   const nCnt=Object.keys(counted).length;
   const sumRow=h1.map((v,i)=>i===0?((lang==='ru'?'Итого ':'합계 ')+nCnt+(lang==='ru'?'':'건')):'');
   sumRow.push(totOpen);
   yms.forEach(y=>{ const t=tot[y];
-    sumRow.push(t.sh, t.i, t.o, t.st, (t.moN?Math.round((t.moSum/t.moN)*10)/10:'')); });
+    sumRow.push(t.sh, t.i, t.o, t.ms, t.st, (t.moN?Math.round((t.moSum/t.moN)*10)/10:'')); });
   const aoa=[g1,g2,sumRow];
   body.forEach(r=>aoa.push(r));
   const ws=XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols']=h1.map(()=>({wch:16})).concat([{wch:12}]).concat(yms.map(()=>[{wch:9},{wch:9},{wch:9},{wch:10},{wch:8}]).reduce((a,b)=>a.concat(b),[]));
+  ws['!cols']=h1.map(()=>({wch:16})).concat([{wch:12}]).concat(yms.map(()=>[{wch:9},{wch:9},{wch:9},{wch:9},{wch:10},{wch:8}]).reduce((a,b)=>a.concat(b),[]));
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'PSI');
   XLSX.writeFile(wb, xlsxName('PSI','PSI'));
 }
