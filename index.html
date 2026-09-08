@@ -10141,7 +10141,7 @@ function renderPSI(){
         if(q>0){ const sa=ymsAll.indexOf(simShipArriveYm(y)); if(sa>i) arrive[sa]+=q; }
       }
       const sh=realSh, inq=a.i+arrive[i];
-      const mo=moOf(a.st,a.fut);              // 보유월은 발주 전
+      const mo=moOf(st,a.fut);                // 옆 재고 칸과 같은 기준으로 낸다(선적·발주분 반영)
       const man=_simNeed[simNeedKey(g.rep,y)];
       // 이 달 발주분은 ai 달에 들어온다. 그 달 보유월이 N 이 되도록 수량을 잡는다.
       //   그 사이에 들어올 기(旣)선적분·앞선 발주분은 이미 셈에 들어 있다.
@@ -10201,7 +10201,7 @@ function renderPSI(){
   const sumCells=yms.map((y,i)=>{
     const t=tot[y]; const b=i===0?bl:'';
     const tst=t.st+(stAdd[y]||0);
-    const mo=moOf(t.st,t.fut);                              // 보유월은 발주 전
+    const mo=moOf(tst,t.fut);                               // 옆 재고 칸과 같은 기준
     const tn=psiSimOn ? (needTot[y]||0) : 0;
     const tm2=(psiSimOn && arrFutTot[y]) ? moOf((arrStTot[y]||0)+tn, arrFutTot[y]) : null;
     const val={sh:n(t.sh), plan:(shipTot[y]?n(shipTot[y]):''), i:n(t.i+(inTot[y]||0)), o:n(t.o), ms:n(t.ms),
