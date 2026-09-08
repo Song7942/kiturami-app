@@ -9119,6 +9119,13 @@ function poName(pn){
   if(!p) return '';
   return lang==='ko' ? (p.name_ko||'') : (p.name_ru||p.name_ko||'');
 }
+// 자료에 한글로 적혀 있는 차수 '미상'은 러시아어 화면에서 러시아어로 보여 준다.
+// 걸러내기·저장에 쓰는 값은 '미상' 그대로 둔다.
+function poChaLabel(v){
+  const t=String(v||'').trim();
+  if(t==='미상') return (lang==='ru')?'Не указано':'미상';
+  return t;
+}
 function poChaList(){
   const s=new Set(); poData.forEach(r=>{ if(r.cha) s.add(r.cha); });
   return [...s].sort();
@@ -9185,7 +9192,8 @@ function renderPO(){
   if(chaSel){
     const cur=chaSel.value;
     const list=poChaList();
-    const want='<option value="">'+L('차수 전체','Все партии')+'</option>'+list.map(c=>'<option>'+escapeHtml(c)+'</option>').join('');
+    const want='<option value="">'+L('차수 전체','Все партии')+'</option>'
+      +list.map(c=>'<option value="'+escapeHtml(c)+'">'+escapeHtml(poChaLabel(c))+'</option>').join('');
     if(chaSel.getAttribute('data-list')!==lang+'|'+list.join('|')){ chaSel.innerHTML=want; chaSel.setAttribute('data-list',lang+'|'+list.join('|')); chaSel.value=cur; }
   }
   const R=poFillRange();
@@ -9197,7 +9205,7 @@ function renderPO(){
     return (!R.from || y>=R.from) && (!R.to || y<=R.to); });
   if(kw) rows=rows.filter(r=>{
     const i=poLookup(r.pn);
-    return [r.cha, poYmOf(r), r.pn, i.rep, i.fin, poName(r.pn)].some(v=>String(v||'').toLowerCase().includes(kw));
+    return [r.cha, poChaLabel(r.cha), poYmOf(r), r.pn, i.rep, i.fin, poName(r.pn)].some(v=>String(v||'').toLowerCase().includes(kw));
   });
   rows.sort((a,b)=> (a.cha===b.cha) ? String(a.pn).localeCompare(String(b.pn)) : String(a.cha).localeCompare(String(b.cha)));
   _poFiltered=rows;
@@ -9225,7 +9233,7 @@ function renderPO(){
     // 코드 세 열은 바탕색 없이 글자만(변경코드는 눈에 띄게 붉은 글씨)
     const codeS="font-family:'Courier New',monospace;font-size:9.5px;white-space:nowrap";
     return '<tr>'
-      + '<td style="'+tdS+';white-space:nowrap">'+escapeHtml(r.cha)+'</td>'
+      + '<td style="'+tdS+';white-space:nowrap">'+escapeHtml(poChaLabel(r.cha))+'</td>'
       + '<td style="'+tdS+';text-align:center;color:var(--muted);white-space:nowrap">'+escapeHtml(poYmOf(r))+'</td>'
       + '<td style="'+tdS+'">'+(i.rep?('<span style="'+codeS+'">'+escapeHtml(i.rep)+'</span>'):'')+'</td>'
       + '<td style="'+tdS+'"><span style="'+codeS+'">'+escapeHtml(normBadgePN(r.pn))+'</span></td>'
@@ -9346,7 +9354,7 @@ function downloadPO(){
     const i=poLookup(r.pn);
     const chg=(i.fin && i.fin!==normPN(r.pn)) ? normBadgePN(i.fin) : '';
     tq+=r.qty; ts+=r.supplied;
-    aoa.push([r.cha, poYmOf(r), i.rep||'', normBadgePN(r.pn), chg, poName(r.pn), r.qty, r.supplied, r.qty-r.supplied]);
+    aoa.push([poChaLabel(r.cha), poYmOf(r), i.rep||'', normBadgePN(r.pn), chg, poName(r.pn), r.qty, r.supplied, r.qty-r.supplied]);
   });
   aoa.splice(1,0,[(ru?'Итого ':'합계 ')+(_poFiltered||[]).length+(ru?'':'건'),'','','','','',tq,ts,tq-ts]);
   const ws=XLSX.utils.aoa_to_sheet(aoa);
