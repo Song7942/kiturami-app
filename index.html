@@ -8369,6 +8369,8 @@ function psiVisFixed(isKo){ const m=psiColsMap();
   return v.length?v:PSI_COL_DEFS.filter(d=>d.k==='rep'); }      // 전부 끄면 대표품번은 남긴다
 // 호환품번 열을 끄면 하위 호환품번 줄 자체를 감춘다(대표품번 줄만 본다)
 function psiShowKids(){ return psiColsMap().compat!==false; }
+// 대표품번 열을 끄면 대표품번(묶음) 줄도 감춘다. 둘 다 끄면 묶음 줄만 남긴다.
+function psiShowGroups(){ const m=psiColsMap(); return (m.rep!==false) || (m.compat===false); }
 function psiVisSub(){ const m=psiColsMap();
   const v=PSI_COL_DEFS.filter(d=>!d.fixed && m[d.k]);
   return v.length?v:PSI_COL_DEFS.filter(d=>d.k==='st'); }
@@ -8889,7 +8891,7 @@ function renderPSI(){
       }).join('');
       return '<tr>'+kFix+cells+'</tr>';
     }).join('');
-    return gRow+(psiShowKids()?kids:'');
+    return (psiShowGroups()?gRow:'')+(psiShowKids()?kids:'');
   }).join('');
 
   const sumS=thS+';font-weight:700;background:var(--surface)';
@@ -8938,7 +8940,7 @@ function downloadPSI(){
       t.sh+=a.sh; t.i+=a.i; t.o+=a.o; t.ms+=a.ms; t.st+=a.st; t.fut+=a.fut;
       const val={sh:a.sh, i:a.i, o:a.o, ms:a.ms, st:a.st, mo:moOf(a.st,a.fut)};
       SB.forEach(d=>gRow.push(val[d.k])); });
-    body.push(gRow);
+    if(psiShowGroups()) body.push(gRow);
     if(!psiShowKids()) return;
     g.rows.forEach(it=>{
       const r=it.r, v=it.v;
