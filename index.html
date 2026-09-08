@@ -11433,8 +11433,8 @@ function enterApp(user){
   // 발주현황은 위 탭줄이 아니라 PSI 화면의 단추로 연다(탭 요소는 switchTab 을 위해 남겨 두고 감춘다)
   const tabPo=document.getElementById('tab-po');
   if(tabPo) tabPo.style.display='none';
-  const tabShip=document.getElementById('tab-ship');
-  if(tabShip) tabShip.style.display='none';
+  const tabShipStat=document.getElementById('tab-ship');
+  if(tabShipStat) tabShipStat.style.display='none';
   // 출고관리: MASTER 는 출고하지 않으므로 숨긴다.
   // 재고관리: MASTER 는 자기 창고는 없지만 KITURAMI 창고를 감독하므로 보여준다.
   if(tabInv) tabInv.style.display = 'block';
