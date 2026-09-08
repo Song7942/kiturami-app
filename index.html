@@ -10150,6 +10150,9 @@ function renderPSI(){
       if(psiSimOn && ai>i){
         const at=g.agg[ymsAll[ai]];
         let got=0; for(let k=0;k<=ai;k++) got+=arrive[k];
+        // 다음 달에 나갈 몫(이월분·이미 발주한 것)은 바로 이 입고월에 들어온다.
+        // 이것을 빼먹으면 이미 발주한 물량을 또 발주하라고 나온다.
+        if(i+1<ymsAll.length) got+=shipPlan[i+1];
         arrSt=at.st+got; arrFut=at.fut;
         nd=(man!=null)?man:needOf(arrSt, arrFut);
         m2=moOf(arrSt+nd, arrFut);            // 발주후 보유월 = 그 발주분이 들어오는 달의 보유월
