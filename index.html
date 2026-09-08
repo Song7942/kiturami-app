@@ -206,11 +206,15 @@ input[type="text"]::placeholder{color:var(--muted)}
 .count-badge{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:5px 9px;font-size:11px;color:var(--muted);white-space:nowrap;flex-shrink:0}
 .count-badge b{color:var(--accent)}
 /* PSI·발주시뮬레이션 표: 셀 모양은 클래스로. 인라인 style 을 쓰면 HTML 이 10배로 부푼다 */
+/* 줄 단위 격리 — 가로로 스크롤할 때 다시 그릴 범위를 줄인다 */
+.pt tbody tr{contain:layout paint style}
 .pt td{padding:4px 5px;font-size:11px;overflow:hidden;border-bottom:1px solid var(--border)}
 .pt td.n{text-align:right;white-space:nowrap}
 .pt td.bl{border-left:1px solid var(--border)}
-.pt td.nm{word-break:break-all;font-size:10.5px;line-height:1.25}
-.pt td.sp{color:var(--muted);word-break:break-all;font-size:10px;line-height:1.25}
+/* 품명·규격은 한 줄로 자른다(마우스를 올리면 전체가 보인다).
+   줄 높이가 모두 같아야 화면에 보이는 줄만 그릴 수 있고, 그래야 표가 빨라진다. */
+.pt td.nm{white-space:nowrap;text-overflow:ellipsis;font-size:10.5px;line-height:1.25}
+.pt td.sp{color:var(--muted);white-space:nowrap;text-overflow:ellipsis;font-size:10px;line-height:1.25}
 .pt td.ct{text-align:center;color:var(--muted)}
 .pt td.dim{color:var(--muted)}
 .pt tr.g td{font-weight:700}
@@ -2367,39 +2371,46 @@ function setupHTableScroll(scrollId,headerId,trackId,thumbId){
   const thumb=document.getElementById(thumbId);
   if(!sb||!hw||!track||!thumb) return function(){};
 
+  // 스크롤할 때마다 scrollWidth 를 다시 재면 표가 클수록 한 눈금마다 레이아웃이 다시 돈다.
+  // 잰 값은 담아 두고, 스크롤 중에는 손잡이만 옮긴다(transform 이라 레이아웃이 안 돈다).
+  const syncHdr=(hw!==sb);
+  let M={maxScroll:0,maxThumb:0,on:false};
+  function place(){
+    if(!M.on) return;
+    const x=M.maxScroll>0 ? (sb.scrollLeft/M.maxScroll)*M.maxThumb : 0;
+    thumb.style.transform='translateX('+x+'px)';
+  }
   function update(){
     const contentWidth=sb.scrollWidth;
     const visibleWidth=sb.clientWidth;
     // 가로 스크롤이 필요 없으면 자리까지 없앤다.
     // visibility:hidden 은 공간을 그대로 차지해서 헤더와 데이터 사이에 빈 띠가 남았다.
-    if(contentWidth<=visibleWidth+1){ track.style.display='none'; return; }
+    if(contentWidth<=visibleWidth+1){ track.style.display='none'; M.on=false; return; }
     track.style.display='';
     const trackWidth=track.clientWidth; // 보이게 한 뒤에 측정해야 0 이 아니다
-    if(trackWidth<=0) return;
+    if(trackWidth<=0){ M.on=false; return; }
     const thumbWidth=Math.max(30, trackWidth*(visibleWidth/contentWidth));
-    const maxScrollLeft=contentWidth-visibleWidth;
-    const maxThumbLeft=trackWidth-thumbWidth;
-    const thumbLeft=maxScrollLeft>0 ? (sb.scrollLeft/maxScrollLeft)*maxThumbLeft : 0;
+    M={maxScroll:contentWidth-visibleWidth, maxThumb:trackWidth-thumbWidth, on:true};
     thumb.style.width=thumbWidth+'px';
-    thumb.style.left=thumbLeft+'px';
+    thumb.style.left='0px';
+    place();
   }
 
-  sb.addEventListener('scroll',()=>{ hw.scrollLeft=sb.scrollLeft; update(); });
+  let raf=0;
+  sb.addEventListener('scroll',()=>{
+    if(syncHdr) hw.scrollLeft=sb.scrollLeft;
+    if(raf) return;
+    raf=requestAnimationFrame(()=>{ raf=0; place(); });
+  },{passive:true});
   window.addEventListener('resize',update);
 
   let dragging=false,startX=0,startScrollLeft=0;
   function beginDrag(clientX){ dragging=true; startX=clientX; startScrollLeft=sb.scrollLeft; document.body.style.userSelect='none'; }
   function moveDrag(clientX){
-    if(!dragging) return;
-    const trackWidth=track.clientWidth;
-    const thumbWidth=thumb.offsetWidth;
-    const maxThumbLeft=trackWidth-thumbWidth;
-    const contentWidth=sb.scrollWidth;
-    const visibleWidth=sb.clientWidth;
-    const maxScrollLeft=contentWidth-visibleWidth;
+    if(!dragging || !M.on) return;
     const dx=clientX-startX;
-    const deltaScroll=maxThumbLeft>0 ? (dx/maxThumbLeft)*maxScrollLeft : 0;
-    sb.scrollLeft=Math.max(0,Math.min(maxScrollLeft,startScrollLeft+deltaScroll));
+    const deltaScroll=M.maxThumb>0 ? (dx/M.maxThumb)*M.maxScroll : 0;
+    sb.scrollLeft=Math.max(0,Math.min(M.maxScroll,startScrollLeft+deltaScroll));
   }
   function endDrag(){ dragging=false; document.body.style.userSelect=''; }
   thumb.addEventListener('mousedown',e=>{e.preventDefault();beginDrag(e.clientX);});
@@ -2410,17 +2421,12 @@ function setupHTableScroll(scrollId,headerId,trackId,thumbId){
   document.addEventListener('touchend',endDrag);
 
   track.addEventListener('click',e=>{
-    if(e.target===thumb) return;
+    if(e.target===thumb || !M.on) return;
     const rect=track.getBoundingClientRect();
     const clickX=e.clientX-rect.left;
-    const trackWidth=track.clientWidth;
     const thumbWidth=thumb.offsetWidth;
-    const contentWidth=sb.scrollWidth;
-    const visibleWidth=sb.clientWidth;
-    const maxScrollLeft=contentWidth-visibleWidth;
-    const maxThumbLeft=trackWidth-thumbWidth;
-    const targetThumbLeft=Math.max(0,Math.min(maxThumbLeft,clickX-thumbWidth/2));
-    sb.scrollLeft = maxThumbLeft>0 ? (targetThumbLeft/maxThumbLeft)*maxScrollLeft : 0;
+    const targetThumbLeft=Math.max(0,Math.min(M.maxThumb,clickX-thumbWidth/2));
+    sb.scrollLeft = M.maxThumb>0 ? (targetThumbLeft/M.maxThumb)*M.maxScroll : 0;
   });
 
   return update;
@@ -9175,6 +9181,9 @@ async function loadPSI(){
       if(!data || data.length<page) break;
     }
   }catch(e){}
+  // 품번 수와 월 칸 수로 만든 지문. 이게 그대로면 화면을 다시 그리지 않는다.
+  let fp=0; Object.keys(psiData).forEach(k=>{ fp+=1+Object.keys(psiData[k].data||{}).length; });
+  _psiDataVer=Object.keys(psiData).length+':'+fp;
 }
 // 'YYMM' 에 n 개월 더하기
 function psiYmAdd(ym,n){
@@ -9235,6 +9244,20 @@ function psiMaxYm(){
 let PSIP='psi';
 function pgEl(sfx){ return document.getElementById(PSIP+sfx); }
 // 활성 화면을 다시 그린다(필터·보기·산식 창에서 부른다)
+// 화면을 다시 그릴 만한 것이 바뀌었는지 가리는 표. 탭을 오갈 때 헛되이 다시 그리지 않는다.
+let _psiDataVer=0;
+const _psiPainted={};
+function psiSig(pfx){
+  const g=id=>{ const e=document.getElementById(pfx+id); return e?e.value:''; };
+  return [pfx, lang, g('FromYm'), g('Months'), g('BaseYm'), g('AvgN'), g('Input'),
+          JSON.stringify(_psiFilters), (_psiSort.key||'')+'|'+_psiSort.dir,
+          JSON.stringify(psiCols||{}), _psiDataVer, PN_DATA.length,
+          (pfx==='sim' ? JSON.stringify(_simNeed) : '')].join('\u0001');
+}
+function psiPaneFresh(pfx){
+  const tb=document.getElementById(pfx+'Tbody');
+  return !!(tb && tb.rows.length && _vt[pfx] && _psiPainted[pfx]===psiSig(pfx));
+}
 function psiRepaint(){
   const s=document.getElementById('pane-sim');
   if(s && s.classList.contains('active')) renderSIM(); else renderPSI();
@@ -9324,6 +9347,19 @@ const PSI_SIM_COL_DEFS=[
 // 발주필요를 손으로 고친 값. '대표품번|연월' → 수량. 화면에서만 쓰고 저장하지 않는다.
 let _simNeed={};
 function simNeedKey(rep,ym){ return rep+'|'+ym; }
+// 이 달에 발주하면 언제 들어오나: 다음 달 말에 선적 → 늘 쓰는 대로 선적일 + 49일이 입고일.
+//   예) 2026-09 발주 → 2026-10-31 선적 → 2026-12-19 입고 → 2612
+const _simArrCache={};
+function simArriveYm(ym){
+  if(_simArrCache[ym]!=null) return _simArrCache[ym];
+  const y=2000+parseInt(String(ym).slice(0,2),10), m=parseInt(String(ym).slice(2),10);
+  const sail=new Date(y, m+1, 0);                    // 다음 달 마지막 날
+  const p2=x=>(x<10?'0':'')+x;
+  const sd=sail.getFullYear()+'-'+p2(sail.getMonth()+1)+'-'+p2(sail.getDate());
+  const out=shipYmOf(shipAutoArrive(sd))||'';
+  _simArrCache[ym]=out;
+  return out;
+}
 // 값을 고치면 그 줄의 '발주후 보유월'만 바로 다시 적는다(표 전체를 다시 그리지 않는다)
 function simNeedApply(td, raw){
   const rep=td.getAttribute('data-rep'), ym=td.getAttribute('data-ym');
@@ -9428,8 +9464,19 @@ function psiOutRaw(d,ym){ if(!d) return 0; const o=d[ym]; return o?(Number(o.o)|
 function psiMissOf(d,ym){ if(!d) return 0; const o=d[ym]; return o?(Number(o.u)||0):0; }
 // 예측의 기준 수량 = 출고 + 미출 (통합문서 산식과 같다)
 function psiFcBase(d,ym){ return psiOutRaw(d,ym) + ((psiFc.useMiss===false)?0:psiMissOf(d,ym)); }
+// 같은 품번·같은 달을 한 화면에서 예닐곱 번씩 다시 셈한다. 그릴 때마다 비워 쓰는 쪽지를 둔다.
+let _fcMemo=new WeakMap();
+function psiFcClear(){ _fcMemo=new WeakMap(); }
 function psiFcOut(d,ym){
   if(!d) return 0;
+  let m=_fcMemo.get(d);
+  if(m){ const hit=m[ym]; if(hit!==undefined) return hit; }
+  else { m={}; _fcMemo.set(d,m); }
+  const v=psiFcCalc(d,ym);
+  m[ym]=v;
+  return v;
+}
+function psiFcCalc(d,ym){
   const span=Math.max(0,Math.min(6,parseInt(psiFc.span,10)||0));
   const n=span*2+1;
   let acc=0, wsum=0;
@@ -9746,6 +9793,41 @@ function openPSIFilter(key, anchor){
 }
 function debouncedRenderPSI(){ clearTimeout(window._psiT); window._psiT=setTimeout(renderPSI,200); }
 
+// ── 큰 표는 보이는 만큼만 그린다 ───────────────────────────
+//   수천 줄을 통째로 DOM 에 두면 가로로 한 눈금 밀 때마다 표 전체를 다시 그려 200ms 씩 걸린다.
+//   한 번 다 그려 줄 높이를 재 두고(글자 줄바꿈 때문에 높이가 제각각), 그 뒤로는
+//   보이는 구간 + 위아래 한 화면씩만 남기고 나머지는 높이만 가진 빈 줄로 바꾼다.
+const _vt={};
+function psiSetRows(tbody, rowsHtml, nCol, pfx){
+  const sb=tbody.closest('.scroll-body');
+  const n=rowsHtml.length;
+  // 줄 높이를 재려고 앞쪽 몇 줄만 먼저 넣는다. 전부 넣고 재면 표 전체를 배치하느라 2초씩 걸린다.
+  tbody.innerHTML=rowsHtml.slice(0, Math.min(n,40)).join('');
+  let H=0; const rs=tbody.rows;
+  for(let i=0;i<rs.length;i++){ const y=rs[i].offsetHeight; if(y>H) H=y; }
+  if(!sb || !H){ tbody.innerHTML=rowsHtml.join(''); delete _vt[pfx]; return; }  // 안 보이는 상태
+  _vt[pfx]={tbody, sb, rowsHtml, H, total:n*H, nCol, n, from:-1, to:-1, raf:0};
+  if(!sb._vtPfx){
+    sb._vtPfx=pfx;
+    sb.addEventListener('scroll',()=>{
+      const st=_vt[sb._vtPfx]; if(!st || st.raf) return;
+      st.raf=requestAnimationFrame(()=>{ st.raf=0; psiVtPaint(sb._vtPfx); });
+    },{passive:true});
+  }
+  psiVtPaint(pfx);
+}
+function psiVtPaint(pfx){
+  const st=_vt[pfx]; if(!st) return;
+  const view=st.sb.clientHeight||600, y=st.sb.scrollTop, pad=view;
+  const a=Math.max(0, Math.floor((y-pad)/st.H));
+  const b=Math.min(st.n, Math.ceil((y+view+pad)/st.H)+1);
+  if(a===st.from && b===st.to) return;
+  st.from=a; st.to=b;
+  const before=a*st.H;
+  const after=Math.max(0,(st.n-b)*st.H);
+  const sp=px=>px>0?('<tr style="height:'+px+'px"><td colspan="'+st.nCol+'" style="padding:0;border:none"></td></tr>'):'';
+  st.tbody.innerHTML=sp(before)+st.rowsHtml.slice(a,b).join('')+sp(after);
+}
 // 머리글 세 줄(연월 그룹 · 항목 · 합계)을 스크롤해도 위에 남게 붙인다.
 // 줄마다 top 을 실제 높이로 계산해 넣는다 — 고정 픽셀로 두면 줄이 겹쳐 글자가 깨진다.
 function psiStickHead(){
@@ -9818,6 +9900,7 @@ async function loadSimTab(){
   if(!Object.keys(psiData).length) await loadPSI();
   if(!poData.length) await loadPO();
   if(typeof loadPsiCols==='function') await loadPsiCols();
+  if(psiPaneFresh('sim')){ updatePaneHBar('sim'); return; }   // 바뀐 게 없으면 그대로 둔다
   renderSIM();
 }
 async function downloadSIM(){
@@ -9829,6 +9912,7 @@ async function downloadSIM(){
 function renderPSI(){
   const pane=document.getElementById('pane-'+PSIP); if(!pane) return;
   const c=psiCfg(); psiFillCfgInputs(c);
+  psiFcClear();
   _psiLowN=c.avgN;
   const yms=[]; for(let i=0;i<c.months;i++) yms.push(psiYmAdd(c.from,i));
   const kwEl=pgEl('Input');
@@ -9953,7 +10037,8 @@ function renderPSI(){
   const needTot={};                       // 달마다 발주필요 합계(손으로 고친 값 포함)
   const stAdd={};                         // 달마다 '앞선 달 발주분'이 재고에 더해진 양의 합계
   const kCls={ rep:'', compat:'', note:'ct', name:'nm', spec:'sp' };   // 하위 줄 고정열
-  const body=groups.map(g=>{
+  const bodyRows=[];
+  groups.forEach(g=>{
     const r0=g.first;
     const fin=String(r0.final||'');
     const finRow=Object.assign({}, r0, {_split:true, _compat:fin});
@@ -9961,21 +10046,27 @@ function renderPSI(){
                  compat:(fin?('<span class="c">'+escapeHtml(normBadgePN(fin))+'</span>'):''),
                  note:'', name:escapeHtml(pnColText('name',finRow)), spec:escapeHtml(pnColText('spec',finRow)) };
     const gFix=FX.map(d=>'<td class="'+((d.k==='name'||d.k==='spec')?'nm':'')+'">'+gTxt[d.k]+'</td>').join('');
-    // 어느 달에 발주하면 그 뒤 달 재고에도 그대로 쌓인다 — 재고·보유월·발주필요가 함께 바뀐다
+    // 발주분은 바로가 아니라 '입고월'(다음 달 말 선적 + 49일)부터 재고에 쌓인다.
+    //   보유월  = 발주 전 기준(지금 흐름 그대로)
+    //   재고·발주후 보유월 = 발주분이 들어온 뒤 기준
     let addSt=0;
+    const arrive=new Array(yms.length).fill(0);
     const gCells=yms.map((y,i)=>{
       const a=g.agg[y]; const b=i===0?' bl':'';
+      addSt+=arrive[i];                       // 이 달에 들어오는 발주분
       const st=a.st+addSt;
-      const mo=moOf(st,a.fut);
+      const mo=moOf(a.st,a.fut);              // 보유월은 발주 전
       const man=_simNeed[simNeedKey(g.rep,y)];
       const nd=(man!=null)?man:needOf(st,a.fut);
-      const m2=moOf(st+nd,a.fut);
+      const m2=moOf(st,a.fut);                // 발주후 보유월 = 들어온 것까지만
       needTot[y]=(needTot[y]||0)+nd;
       stAdd[y]=(stAdd[y]||0)+addSt;
-      addSt+=nd;
+      const ai=yms.indexOf(simArriveYm(y));   // 이 달 발주분이 들어올 달
+      if(ai>i) arrive[ai]+=nd;
       const nAttr=' data-rep="'+escapeHtml(g.rep)+'" data-ym="'+y+'" data-st="'+st
         +'" data-avg="'+(a.fut/c.avgN)+'" onclick="simNeedFocus(this)" title="'
-        +L('눌러서 고치면 재고·보유월과 그 뒤 달까지 다시 계산됩니다','Нажмите, чтобы изменить')+'"';
+        +L('눌러서 고치면 '+(simArriveYm(y)?psiYmLabel(simArriveYm(y)):'')+' 입고로 잡혀 그 뒤 달까지 다시 계산됩니다',
+           'Нажмите, чтобы изменить')+'"';
       const val={sh:n(a.sh), i:n(a.i), o:n(a.o), ms:n(a.ms), st:n(st), mo:(mo==null?'':mo.toFixed(1)),
                  need:(nd?n(nd):''), mo2:(m2==null?'':m2.toFixed(1))};
       const low=psiLow(mo);
@@ -9983,7 +10074,7 @@ function renderPSI(){
         +'"'+(d.k==='need'?nAttr:'')+'>'+val[d.k]+'</td>').join('');
     }).join('');
     const gRow='<tr class="g'+band+'">'+gFix+gCells+'</tr>';
-    const kids=g.rows.map(it=>{
+    const kidRows=g.rows.map(it=>{
       const r=it.r, v=it.v;
       const kTxt={ rep:'', compat:'<span class="c">'+escapeHtml(normBadgePN(r._compat))+'</span>',
                    note:escapeHtml(pnColText('note',r)), name:escapeHtml(pnColText('name',r)), spec:escapeHtml(pnColText('spec',r)) };
@@ -9997,16 +10088,17 @@ function renderPSI(){
         return SB.map((d,j)=>'<td class="n'+(j===0?b:'')+(dim[d.k]?' dim':'')+'">'+val[d.k]+'</td>').join('');
       }).join('');
       return '<tr>'+kFix+cells+'</tr>';
-    }).join('');
-    return (psiShowGroups()?gRow:'')+(psiShowKids()?kids:'');
-  }).join('');
+    });
+    if(psiShowGroups()) bodyRows.push(gRow);
+    if(psiShowKids()) kidRows.forEach(r=>bodyRows.push(r));
+  });
 
   const sumS=thS+';font-weight:700;background:var(--surface)';
   const sumCells=yms.map((y,i)=>{
     const t=tot[y]; const b=i===0?bl:'';
     const tst=t.st+(stAdd[y]||0);
-    const mo=moOf(tst,t.fut);
-    const tn=(needTot[y]!=null)?needTot[y]:needOf(tst,t.fut), tm2=moOf(tst+tn,t.fut);
+    const mo=moOf(t.st,t.fut);                              // 보유월은 발주 전
+    const tn=(needTot[y]!=null)?needTot[y]:needOf(tst,t.fut), tm2=moOf(tst,t.fut);
     const val={sh:n(t.sh), i:n(t.i), o:n(t.o), ms:n(t.ms), st:n(tst), mo:(mo==null?'':mo.toFixed(1)),
                need:(tn?n(tn):''), mo2:(tm2==null?'':tm2.toFixed(1))};
     const dim={sh:1, ms:1, mo:1, mo2:1};
@@ -10022,8 +10114,9 @@ function renderPSI(){
   if(tbody) tbody.innerHTML='';
   if(thead) thead.innerHTML=head;
   psiStickHead();
-  if(tbody) tbody.innerHTML=body;
+  if(tbody) psiSetRows(tbody, bodyRows, FX.length+yms.length*SB.length, PSIP);
   updatePaneHBar(PSIP);
+  _psiPainted[PSIP]=psiSig(PSIP);
 }
 function normBadgePN(x){ return (typeof pnUpperLead==='function')?pnUpperLead(x||''):String(x||''); }
 
@@ -10288,6 +10381,7 @@ async function loadPSITab(){
   // 시작월은 자료의 마지막 달을 따라간다. 사용자가 직접 적은 값(dataset.user)은 건드리지 않는다.
   const f=document.getElementById('psiFromYm');
   if(f && !f.dataset.user) f.value='';
+  if(psiPaneFresh('psi')){ updatePaneHBar('psi'); return; }   // 바뀐 게 없으면 그대로 둔다
   renderPSI();
 }
 let priceData={}; // rep -> {price, updated_at}  (주문 탭 RUB 가격 소스)
