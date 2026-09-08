@@ -9175,9 +9175,10 @@ let _psiAllItems=[];                 // 이번 렌더의 행(헤더 필터 적�
 let _psiSort={key:null, dir:'asc'};
 const PSI_TEXT_COLS={rep:1, compat:1, note:1, name:1, spec:1};
 function psiIsNumCol(key){ if(String(key).indexOf('clr:')===0) return false; return !PSI_TEXT_COLS[key]; }
-// 재고 셀 색: 보유월이 6개월 미만이면 붉게
-const PSI_LOW_MONTHS=6;
-function psiLow(mo){ return (mo!=null && mo!=='' && Number(mo)<PSI_LOW_MONTHS); }
+// 보유월 셀 색: 보유월이 향후 N개월 미만이면 붉게 (N은 검색바 향후 칸)
+let _psiLowN=6;
+function psiLowN(){ return _psiLowN; }
+function psiLow(mo){ return (mo!=null && mo!=='' && Number(mo)<psiLowN()); }
 const PSI_LOW_STYLE=';background:#fee2e2;color:#b91c1c;font-weight:700';
 function psiColText(key,r){
   switch(key){
@@ -9281,7 +9282,7 @@ function openPSIFilter(key, anchor){
     + sortBtn('asc','▲ '+(ru?'По возрастанию':'오름차순 정렬'))
     + sortBtn('desc','▼ '+(ru?'По убыванию':'내림차순 정렬'))
     + '</div>';
-  // 재고 열은 바탕색(보유월 6개월 미만 = 붉은색)으로도 거를 수 있다
+  // 보유월 열은 바탕색(향후 N개월 미만 = 붉은색)으로도 거를 수 있다
   const clrYm=(String(key).indexOf('mo:')===0)?String(key).slice(3):'';
   if(clrYm){
     const cur=(_psiFilters['clr:'+clrYm]||[])[0]||'';
@@ -9290,7 +9291,7 @@ function openPSIFilter(key, anchor){
       + 'background:'+(bg||'var(--bg)')+';color:'+(bg?'#b91c1c':'var(--text)')+';font-weight:'+(cur===v?'700':'400')+'">'+txt+'</button>';
     html+='<div style="padding:8px 8px 6px;border-bottom:1px solid var(--border)">'
       + '<div style="font-size:11px;color:var(--muted);margin:0 2px 3px">'+(ru?'По цвету фона':'바탕색으로 보기')+'</div>'
-      + cb('red',(ru?'Красные (менее '+PSI_LOW_MONTHS+' мес.)':'붉은색만 (보유월 '+PSI_LOW_MONTHS+'개월 미만)'),'#fee2e2')
+      + cb('red',(ru?'Красные (менее '+psiLowN()+' мес.)':'붉은색만 (보유월 '+psiLowN()+'개월 미만)'),'#fee2e2')
       + cb('none',(ru?'Без цвета':'색 없는 것만'))
       + cb('',(ru?'Все':'전체'))
       + '</div>';
@@ -9364,6 +9365,7 @@ function psiStickHead(){
 function renderPSI(){
   const pane=document.getElementById('pane-psi'); if(!pane) return;
   const c=psiCfg(); psiFillCfgInputs(c);
+  _psiLowN=c.avgN;
   const yms=[]; for(let i=0;i<c.months;i++) yms.push(psiYmAdd(c.from,i));
   const kwEl=document.getElementById('psiInput');
   const kw=(kwEl?kwEl.value:'').trim().toLowerCase();
