@@ -2045,6 +2045,31 @@ function refreshPsiTexts(){
   set('i18n-ms-cols',COLS[0],COLS[1]);
   set('i18n-ms-all',ALL[0],ALL[1]);
   set('i18n-ms-dl',DL[0],DL[1]);
+  // 마우스를 올렸을 때 나오는 도움말
+  const ttl=(sel,ko,rr)=>{ document.querySelectorAll(sel).forEach(e=>{ e.title=L(ko,rr); }); };
+  ttl('[onclick="switchTab(\'psi\')"]','PSI 화면으로 돌아가기','Вернуться к PSI');
+  ttl('[onclick="openPsiColsPanel()"],[onclick="openMsColsPanel()"]',
+      '표에 보일 열을 고릅니다(아이디별로 저장)','Выбор столбцов (сохраняется для этого ID)');
+  ttl('[onclick="psiResetFilters()"]','헤더 필터·정렬을 기본값으로','Сбросить фильтры и сортировку');
+  ttl('[onclick="msAllPeriod()"]','기간을 전체로 돌리기','Показать весь период');
+  ttl('[onclick="poAllPeriod()"]','발주년월을 전체로 돌리기','Показать весь период');
+  ttl('[onclick="openShipInvPanel()"]','인보이스 넘버·선적일·입고일을 고칩니다',
+      'Изменить инвойс, дату отгрузки и прихода');
+  ttl('#poUploadBtn','차수·발주월·발주코드·수주수량 이 있는 엑셀을 올리면 반영합니다',
+      'Загрузка Excel: партия, месяц заказа, код, количество');
+  ttl('#psiUploadBtn','선적·입고·출고·재고 시트가 든 파일을 올리면 시트 이름으로 가려 반영합니다 (재고 시트는 이월재고용)',
+      'Загрузка Excel с листами отгрузки, прихода, расхода и остатка');
+  ttl('#simResetManualBtn','손으로 고친 실제선적·발주필요를 원래 셈한 값으로 되돌립니다',
+      'Вернуть ручные значения к расчётным');
+  ttl('[onclick="switchTab(\'ship\')"]','인보이스별 선적 내역','Отгрузки по инвойсам');
+  ttl('[onclick="switchTab(\'sim\')"]','발주현황의 미공급수량이 다음 달 선적된다고 보고 재고·보유월을 다시 계산합니다',
+      'Пересчёт остатка и месяцев с учётом недопоставки');
+  ttl('[onclick="switchTab(\'po\')"]','차수별 수주·공급·미공급 현황',
+      'Заказ / поставка / недопоставка по партиям');
+  ttl('[onclick="switchTab(\'ms\')"]','품번별 미출 수량','Невыполненные по артикулам');
+  ttl('#pane-psi label[title],#pane-sim label[title]',
+      '보유월 = 그 달 재고 ÷ (다음 달부터 이 개월 수만큼의 출고 합계 ÷ 개월 수)',
+      'Мес. = остаток ÷ (сумма расхода за эти месяцы ÷ число месяцев)');
   // 보고 있는 화면을 그 자리에서 다시 그린다
   const A=id=>{ const e=document.getElementById(id); return !!(e && e.classList.contains('active')); };
   try{
