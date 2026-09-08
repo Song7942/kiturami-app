@@ -10086,6 +10086,12 @@ function renderPSI(){
   let items=rows.map(r=>{ const key=normPN(r._compat); const rec=psiData[key];
     return { r, key, d:(rec?rec.data:null), v:psiRowVals(rec?rec.data:null, c, ymsAll) }; });
 
+  // 보는 기간에 선적·입고·출고·미출·재고가 모두 0 인 행은 감춘다.
+  // 재고에 숫자가 남아 있으면 움직임이 없어도 보여 준다.
+  const hasVal=v=>yms.some(y=>{ const x=v[y]||{};
+    return (x.sh||0)||(x.i||0)||(x.o||0)||(x.ms||0)||(x.st||0); });
+  items=items.filter(it=>hasVal(it.v));
+
   _psiAllItems=items;
   const fkeys=Object.keys(_psiFilters);
   if(fkeys.length){
@@ -10198,9 +10204,6 @@ function renderPSI(){
   _psiGroups=groups;
 
   const tot={}; yms.forEach(y=>tot[y]={sh:0,i:0,o:0,ms:0,st:0,fut:0});
-  // 합계 줄의 갯수는 '보는 기간에 숫자가 하나라도 있는' 줄만 센다(0 만 늘어선 줄은 빼고)
-  const hasVal=v=>yms.some(y=>{ const x=v[y]||{};
-    return (x.sh||0)||(x.i||0)||(x.o||0)||(x.ms||0)||(x.st||0); });
   const counted={}; let nzRep=0;
   groups.forEach(g=>{
     const seen2={}; let any=false;
