@@ -8094,8 +8094,7 @@ const MS_COL_DEFS=[
   {k:'ymd',    w:74,  ko:'일자',     ru:'Дата'},
   {k:'name',   w:210, ko:'품명',     ru:'Наименование'},
   {k:'spec',   w:168, ko:'규격',     ru:'Хар-ки', koOnly:1},
-  {k:'qty',    w:86,  ko:'미출수량', ru:'Невыполнено'},
-  {k:'q', w:74, off:1, ko:'수량', ru:'Кол-во'}   // 미출수량과 같은 값이라 기본은 숨김
+  {k:'qty',    w:86,  ko:'미출수량', ru:'Невыполнено'}
 ];
 function msColsMap(){
   const src=(psiCols && psiCols.__ms && typeof psiCols.__ms==='object')?psiCols.__ms:null;
@@ -8232,20 +8231,18 @@ function renderMS(){
   const sty={ rep:tdS, compat:tdS, ymd:tdS+';text-align:center;color:var(--muted);white-space:nowrap',
               name:tdS+';word-break:break-all;font-size:10.5px;line-height:1.25',
               spec:tdS+';color:var(--muted);word-break:break-all;font-size:10px;line-height:1.25',
-              qty:tdS+';text-align:right;white-space:nowrap',   // 하위 호환품번은 검은 보통 글자
-              q:tdS+';text-align:right;white-space:nowrap' };
+              qty:tdS+';text-align:right;white-space:nowrap' };   // 하위 호환품번은 검은 보통 글자
   const gsty={ rep:gS, compat:gS, ymd:gS+';text-align:center',
                name:gS+';word-break:break-all;font-size:10.5px;line-height:1.25',
                spec:gS+';word-break:break-all;font-size:10px;line-height:1.25',
-               qty:gS+';text-align:right;white-space:nowrap;color:#b91c1c',
-               q:gS+';text-align:right;white-space:nowrap' };
+               qty:gS+';text-align:right;white-space:nowrap;color:#b91c1c' };
   const body=groups.map(g=>{
     const fin=String(g.first.final||'');
     const finRow=Object.assign({}, g.first, {_split:true, _compat:fin});
     const gTxt={ rep:'<span style="'+codeS+'">'+escapeHtml(g.rep||'')+'</span>',
                  compat:(fin?('<span style="'+codeS+'">'+escapeHtml(normBadgePN(fin))+'</span>'):''),
                  ymd:'', name:escapeHtml(pnColText('name',finRow)), spec:escapeHtml(pnColText('spec',finRow)),
-                 qty:g.total.toLocaleString(), q:'' };
+                 qty:g.total.toLocaleString() };
     const gRow='<tr>'+CO.map(d=>'<td style="'+gsty[d.k]+'">'+gTxt[d.k]+'</td>').join('')+'</tr>';
     const kids=g.kids.map(it=>(msShowDays()?it.days:[{ym:'',q:it.sum}]).map((x,i)=>{
       const txt={ rep:'',
@@ -8253,20 +8250,19 @@ function renderMS(){
                   ymd:(x.ym?psiYmLabel(x.ym):''),
                   name:(i===0?escapeHtml(pnColText('name',it.r)):''),
                   spec:(i===0?escapeHtml(pnColText('spec',it.r)):''),
-                  qty:x.q.toLocaleString(),
-                  q:x.q.toLocaleString() };
+                  qty:x.q.toLocaleString() };
       return '<tr>'+CO.map(d=>'<td style="'+sty[d.k]+'">'+txt[d.k]+'</td>').join('')+'</tr>';
     }).join('')).join('');
     return (msShowGroups()?gRow:'')+(msShowKids()?kids:'');
   }).join('');
 
-  const nq=CO.filter(d=>d.k==='qty'||d.k==='q').length;
+  const nq=CO.filter(d=>d.k==='qty').length;
   const head='<tr>'+CO.map(d=>'<th style="'+thS+'">'+(ru?d.ru:d.ko)+'</th>').join('')+'</tr>'
     + '<tr><th colspan="'+Math.max(1,CO.length-nq)+'" style="'+thS+';font-weight:700;background:var(--surface);top:28px;text-align:right">'
     + escapeHtml(L('합계 '+groups.length+'대표품번 · '+nPn+'품번 · '+R.label,
                    'Итого '+groups.length+' / '+nPn+' · '+R.label))+'</th>'
-    + CO.filter(d=>d.k==='qty'||d.k==='q').map(d=>'<th style="'+thS+';font-weight:700;background:var(--surface);top:28px;text-align:right">'
-        +(d.k==='qty'?tot.toLocaleString():'')+'</th>').join('')
+    + CO.filter(d=>d.k==='qty').map(d=>'<th style="'+thS+';font-weight:700;background:var(--surface);top:28px;text-align:right">'
+        +tot.toLocaleString()+'</th>').join('')
     + '</tr>';
   const thead=document.getElementById('msThead'); if(thead) thead.innerHTML=head;
   const tbody=document.getElementById('msTbody'); if(tbody) tbody.innerHTML=body;
@@ -8288,12 +8284,12 @@ function downloadMS(){
     const finRow=Object.assign({}, g.first, {_split:true, _compat:fin});
     tot+=g.total; nPn+=g.kids.length;
     if(msShowGroups()) aoa.push(rowOf({ rep:g.rep||'', compat:(fin?normBadgePN(fin):''), ymd:'',
-      name:pnColText('name',finRow), spec:pnColText('spec',finRow), qty:g.total, q:'' }));
+      name:pnColText('name',finRow), spec:pnColText('spec',finRow), qty:g.total }));
     if(!msShowKids()) return;
     g.kids.forEach(it=>(msShowDays()?it.days:[{ym:'',q:it.sum}]).forEach((x,i)=>{
       aoa.push(rowOf({ rep:'', compat:(i===0?normBadgePN(it.r._compat):''), ymd:(x.ym?psiYmLabel(x.ym):''),
         name:(i===0?pnColText('name',it.r):''), spec:(i===0?pnColText('spec',it.r):''),
-        qty:x.q, q:x.q }));
+        qty:x.q }));
     }));
   });
   const sum={}; CO.forEach(d=>sum[d.k]='');
