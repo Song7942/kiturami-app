@@ -8366,7 +8366,9 @@ function psiColsMap(){
 }
 function psiVisFixed(isKo){ const m=psiColsMap();
   const v=PSI_COL_DEFS.filter(d=>d.fixed && (!d.koOnly||isKo) && m[d.k]);
-  return v.length?v:PSI_COL_DEFS.filter(d=>d.k==='compat'); }   // 전부 끄면 호환품번은 남긴다
+  return v.length?v:PSI_COL_DEFS.filter(d=>d.k==='rep'); }      // 전부 끄면 대표품번은 남긴다
+// 호환품번 열을 끄면 하위 호환품번 줄 자체를 감춘다(대표품번 줄만 본다)
+function psiShowKids(){ return psiColsMap().compat!==false; }
 function psiVisSub(){ const m=psiColsMap();
   const v=PSI_COL_DEFS.filter(d=>!d.fixed && m[d.k]);
   return v.length?v:PSI_COL_DEFS.filter(d=>d.k==='st'); }
@@ -8887,7 +8889,7 @@ function renderPSI(){
       }).join('');
       return '<tr>'+kFix+cells+'</tr>';
     }).join('');
-    return gRow+kids;
+    return gRow+(psiShowKids()?kids:'');
   }).join('');
 
   const sumS=thS+';font-weight:700;background:var(--surface)';
@@ -8937,6 +8939,7 @@ function downloadPSI(){
       const val={sh:a.sh, i:a.i, o:a.o, ms:a.ms, st:a.st, mo:moOf(a.st,a.fut)};
       SB.forEach(d=>gRow.push(val[d.k])); });
     body.push(gRow);
+    if(!psiShowKids()) return;
     g.rows.forEach(it=>{
       const r=it.r, v=it.v;
       const kTxt={ rep:g.rep||'', compat:normBadgePN(r._compat), note:pnColText('note',r),
