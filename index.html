@@ -9271,7 +9271,8 @@ const PSI_YEAR_COL={ '21y':'2112' };
 const PSI_BASE_DEFAULT='2012';
 let psiData={};        // normPN -> { rep, data:{ '2409':{s,g,n,o}, … } }
 let _psiFiltered=[];
-let _psiGroups=[];      // 대표품번 묶음(화면·엑셀이 같은 것을 쓴다)
+let _psiGroups=[];
+let _psiNz={rep:0, pn:0};      // 보는 기간에 숫자가 있는 대표품번·호환품번 갯수      // 대표품번 묶음(화면·엑셀이 같은 것을 쓴다)
 
 async function loadPSI(){
   psiData={};
@@ -10197,10 +10198,18 @@ function renderPSI(){
   _psiGroups=groups;
 
   const tot={}; yms.forEach(y=>tot[y]={sh:0,i:0,o:0,ms:0,st:0,fut:0});
-  const counted={};
-  groups.forEach(g=>{ Object.keys(g.seen).forEach(k=>counted[k]=1);
+  // 합계 줄의 갯수는 '보는 기간에 숫자가 하나라도 있는' 줄만 센다(0 만 늘어선 줄은 빼고)
+  const hasVal=v=>yms.some(y=>{ const x=v[y]||{};
+    return (x.sh||0)||(x.i||0)||(x.o||0)||(x.ms||0)||(x.st||0); });
+  const counted={}; let nzRep=0;
+  groups.forEach(g=>{
+    const seen2={}; let any=false;
+    g.rows.forEach(it=>{ if(seen2[it.key]) return; seen2[it.key]=1;
+      if(hasVal(it.v)){ counted[it.key]=1; any=true; } });
+    if(any) nzRep++;
     yms.forEach(y=>{ const a=g.agg[y], t=tot[y];
       t.sh+=a.sh; t.i+=a.i; t.o+=a.o; t.ms+=a.ms; t.st+=a.st; t.fut+=a.fut; }); });
+  _psiNz={rep:nzRep, pn:Object.keys(counted).length};
 
   // 대표품번 줄 색(참고 엑셀의 연한 파랑 띠)
   // 하위 호환품번 줄이 없으면(대표품번만 보기) 띠를 칠하지 않는다 — 모든 줄이 같은 색이면 의미가 없다
@@ -10319,8 +10328,8 @@ function renderPSI(){
   }).join('');
   head += '<tr>'
     + '<th colspan="'+FX.length+'" class="fxs fx0 fxend" style="'+sumS+';text-align:right">'
-    + L('합계 '+groups.length+'개 대표품번 / '+Object.keys(counted).length+'개 호환품번',
-        'Итого '+groups.length+' Осн. артикул / '+Object.keys(counted).length+' Артикул')+'</th>'
+    + L('합계 '+nzRep+'개 대표품번 / '+Object.keys(counted).length+'개 호환품번',
+        'Итого '+nzRep+' Осн. артикул / '+Object.keys(counted).length+' Артикул')+'</th>'
     + sumCells + '</tr>';
 
   // 머리글 높이는 '빈 표'에서 잰다. 수천 줄을 붙인 뒤에 재면 표 전체가 다시 계산되어 2초씩 걸린다.
@@ -10377,7 +10386,8 @@ async function downloadPSI(){
       body.push(row);
     });
   });
-  const sumRow=FX.map((d,i)=>i===0?((ru?'Итого ':'합계 ')+(_psiGroups||[]).length+(ru?' Осн. артикул':'개 대표품번')):'');
+  const sumRow=FX.map((d,i)=>i===0?((ru?'Итого ':'합계 ')+_psiNz.rep+(ru?' Осн. артикул':'개 대표품번')
+    +' / '+_psiNz.pn+(ru?' Артикул':'개 호환품번')):'');
   sumRow.push(totOpen);
   yms.forEach(y=>{ const t=tot[y];
     const tn=needOf(t.st,t.fut);
