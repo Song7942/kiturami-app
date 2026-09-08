@@ -9145,7 +9145,7 @@ function openPSIFilter(key, anchor){
     + sortBtn('desc','▼ '+(ru?'По убыванию':'내림차순 정렬'))
     + '</div>';
   // 재고 열은 바탕색(보유월 6개월 미만 = 붉은색)으로도 거를 수 있다
-  const clrYm=(String(key).indexOf('st:')===0)?String(key).slice(3):'';
+  const clrYm=(String(key).indexOf('mo:')===0)?String(key).slice(3):'';
   if(clrYm){
     const cur=(_psiFilters['clr:'+clrYm]||[])[0]||'';
     const cb=(v,txt,bg)=>'<button class="psifClr" data-v="'+v+'" style="width:100%;text-align:left;padding:6px 8px;margin-top:3px;'
@@ -9285,7 +9285,7 @@ function renderPSI(){
   const grp=yms.map(y=>'<th colspan="'+SB.length+'" style="'+thS+bl+'">'+psiYmLabel(y)+'</th>').join('');
   const sub=yms.map(y=>SB.map((d,i)=>{
       const key=d.k+':'+y;
-      const clr=(d.k==='st' && _psiFilters['clr:'+y]) ? '<span style="color:#b91c1c;margin-left:2px">●</span>' : '';
+      const clr=(d.k==='mo' && _psiFilters['clr:'+y]) ? '<span style="color:#b91c1c;margin-left:2px">●</span>' : '';
       return '<th onclick="openPSIFilter(&quot;'+key+'&quot;,this)" title="'+L('정렬','Сортировка')+'" style="'+thS+(i===0?bl:'')+';cursor:pointer">'
         + L(d.ko,d.ru) + psiSortMark(key) + clr + '</th>';
     }).join('')).join('');
@@ -9351,7 +9351,7 @@ function renderPSI(){
       const mo=moOf(a.st,a.fut);
       const val={sh:n(a.sh), i:n(a.i), o:n(a.o), ms:n(a.ms), st:n(a.st), mo:(mo==null?'':mo.toFixed(1))};
       const low=psiLow(mo);
-      return SB.map((d,j)=>'<td style="'+gNum+(j===0?b:'')+((low&&d.k==='st')?PSI_LOW_STYLE:'')+'">'+val[d.k]+'</td>').join('');
+      return SB.map((d,j)=>'<td style="'+gNum+(j===0?b:'')+((low&&d.k==='mo')?PSI_LOW_STYLE:'')+'">'+val[d.k]+'</td>').join('');
     }).join('');
     const gRow='<tr>'+gFix+gCells+'</tr>';
     const kids=g.rows.map(it=>{
@@ -9367,9 +9367,8 @@ function renderPSI(){
         const b=i===0?bl:'';
         const val={sh:n(x.sh), i:n(x.i), o:n(x.o), ms:n(x.ms), st:n(x.st), mo:''};
         const dim={sh:1, ms:1};
-        const low=psiLow(x.mo);
-        return SB.map((d,j)=>'<td style="'+numS+(j===0?b:'')+(dim[d.k]?';color:var(--muted)':'')
-          +((low&&d.k==='st')?PSI_LOW_STYLE:'')+'">'+val[d.k]+'</td>').join('');
+        // 보유월은 대표품번 줄에만 적으므로 하위 줄에는 색을 칠하지 않는다
+        return SB.map((d,j)=>'<td style="'+numS+(j===0?b:'')+(dim[d.k]?';color:var(--muted)':'')+'">'+val[d.k]+'</td>').join('');
       }).join('');
       return '<tr>'+kFix+cells+'</tr>';
     }).join('');
