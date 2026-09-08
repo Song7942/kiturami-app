@@ -8165,6 +8165,14 @@ function shipParseInvoice(wb){
       }
     }
     if(sail===null) continue;
+    // 머리글 줄에서 수량·단가·금액·HS 열 위치를 잡는다(HS 코드가 숫자라 순서로 집으면 안 된다)
+    let cQty=-1, cPrice=-1, cAmt=-1, cHs=-1;
+    if(hdr>=0){ (a[hdr]||[]).forEach((v,c)=>{ const s=String(v==null?'':v);
+      if(cQty<0   && /quantity/i.test(s)) cQty=c;
+      if(cPrice<0 && /unit\s*price/i.test(s)) cPrice=c;
+      if(cAmt<0   && /amount/i.test(s)) cAmt=c;
+      if(cHs<0    && /h\.?\s*s\.?\s*code/i.test(s)) cHs=c; }); }
+    const num=v=>{ const n=Number(String(v==null?'':v).replace(/,/g,'')); return isFinite(n)?n:0; };
     // 섹션 이름이 들어 있는 열(Parts/Boilers/Burners …) 을 찾는다
     const items=[]; let secCol=-1;
     for(let r=(hdr<0?0:hdr+1);r<a.length;r++){
@@ -8173,14 +8181,18 @@ function shipParseInvoice(wb){
       if(secCol<0) continue;
       if(!/^parts$/i.test(String(w[secCol]||'').trim())) continue;
       const pn=String(w[0]||'').trim(); if(!pn) continue;
-      // 수량·단가·금액은 섹션 열 뒤쪽에서 숫자를 순서대로 집는다
-      const nums=[]; for(let c=secCol+1;c<w.length;c++){ const v=w[c];
-        if(typeof v==='number' && isFinite(v)) nums.push({c, v}); }
-      const qty=nums.length>0?nums[0].v:0;
-      const price=nums.length>1?nums[1].v:0;
-      const amount=nums.length>2?nums[2].v:(qty*price);
-      let hs=''; for(let c=secCol+1;c<w.length;c++){ const t=String(w[c]||'').trim();
-        if(/^\d{6,10}$/.test(t)){ hs=t; break; } }
+      let qty=0, price=0, amount=0;
+      if(cQty>=0){ qty=num(w[cQty]); price=(cPrice>=0?num(w[cPrice]):0); amount=(cAmt>=0?num(w[cAmt]):0); }
+      else {  // 머리글을 못 찾으면 HS 열은 빼고 숫자를 순서대로 집는다
+        const nums=[]; for(let c=secCol+1;c<w.length;c++){ const v=w[c];
+          if(typeof v==='number' && isFinite(v) && !/^\d{6,10}$/.test(String(v))) nums.push(v); }
+        qty=nums[0]||0; price=nums[1]||0; amount=nums[2]||(qty*price);
+      }
+      if(!amount) amount=qty*price;
+      let hs='';
+      if(cHs>=0) hs=String(w[cHs]==null?'':w[cHs]).trim();
+      if(!hs){ for(let c=secCol+1;c<w.length;c++){ const t=String(w[c]||'').trim();
+        if(/^\d{6,10}$/.test(t)){ hs=t; break; } } }
       items.push({pn, name_en:String(w[1]||'').trim(), hs, qty, price, amount});
     }
     if(!items.length) continue;
