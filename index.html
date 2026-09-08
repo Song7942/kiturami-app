@@ -1022,6 +1022,10 @@ input[type="text"]::placeholder{color:var(--muted)}
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         <span id="i18n-psi-dl">엑셀 다운로드</span>
       </button>
+      <button class="dl-btn" onclick="openPsiFcPanel()" title="시작월부터의 출고를 지난 해 실적으로 예측하는 산식을 고칩니다" style="background:#0ea5e9;border-color:#0ea5e9;color:#fff">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="14 7 21 7 21 14"/></svg>
+        <span id="i18n-psi-fc">출고예상수량 산식</span>
+      </button>
     </div>
   </div>
   <div class="scroll-body" id="scrollBodyPSI" style="padding:0 12px 72px">
@@ -7996,7 +8000,12 @@ function psiOpenOf(d,base){
 }
 // 입고: 입고 시트의 월별 값(n)만 본다.
 function psiInOf(d,ym){ if(!d) return 0; const o=d[ym]; return o?(Number(o.n)||0):0; }
-function psiOutOf(d,ym){ if(!d) return 0; const o=d[ym]; return o?(Number(o.o)||0):0; }
+// 출고: 예측 시작월부터는 실적 대신 예상수량을 쓴다(psiFc 설정)
+function psiOutOf(d,ym){
+  if(!d) return 0;
+  if(typeof psiFcActive==='function' && psiFcActive(ym)) return psiFcOut(d,ym);
+  const o=d[ym]; return o?(Number(o.o)||0):0;
+}
 // 선적: 선적 시트(s)가 원본. 그 달에 s 가 없으면 종합 선적(g)으로 메운다.
 function psiShipOf(d,ym){
   if(!d) return 0; const o=d[ym]; if(!o) return 0;
@@ -8053,6 +8062,155 @@ function psiRowVals(d,c,yms){
   return out;
 }
 function psiYmLabel(ym){ return '20'+String(ym).slice(0,2)+'-'+String(ym).slice(2); }
+// ── 출고 예상수량 ───────────────────────────────────────────────────────
+// 통합문서 'dispatch forecasting logic' 시트의 산식을 옮긴 것.
+//   해당월 전후 n개월을 전년·전전년에서 각각 뽑아 가중합하고, 개월 수로 나눈 뒤 증가율을 곱한다.
+//   예) 24-03 = ((22년 2~4월 합 × 20%) + (23년 2~4월 합 × 80%)) ÷ 3 × 1.3
+//   시작월(기본: 접속한 달)부터의 출고는 실적 대신 이 값을 쓴다.
+//   기준 수량은 통합문서와 같이 '출고 + 미출' 이다(미출은 재고 시트와 함께 올린 값).
+const PSI_FC_DEFAULT={ on:true, from:'', span:1, growth:1.3, useMiss:true,
+                       years:[{back:2,w:0.2},{back:1,w:0.8}] };
+let psiFc=JSON.parse(JSON.stringify(PSI_FC_DEFAULT));
+function psiFcFrom(){ const f=String(psiFc.from||'').replace(/\D/g,''); return f.length===4?f:psiNowYm(); }
+// 저장된 실적 출고(예측을 끼우지 않은 값) — 예측의 근거는 항상 실적을 본다
+function psiOutRaw(d,ym){ if(!d) return 0; const o=d[ym]; return o?(Number(o.o)||0):0; }
+// 미출(통합문서 미출_Упущенные 시트) → data[ym].u
+function psiMissOf(d,ym){ if(!d) return 0; const o=d[ym]; return o?(Number(o.u)||0):0; }
+// 예측의 기준 수량 = 출고 + 미출 (통합문서 산식과 같다)
+function psiFcBase(d,ym){ return psiOutRaw(d,ym) + ((psiFc.useMiss===false)?0:psiMissOf(d,ym)); }
+function psiFcOut(d,ym){
+  if(!d) return 0;
+  const span=Math.max(0,Math.min(6,parseInt(psiFc.span,10)||0));
+  const n=span*2+1;
+  let acc=0, wsum=0;
+  (psiFc.years||[]).forEach(y=>{
+    const back=Math.max(1,Math.min(5,parseInt(y.back,10)||1));
+    const w=Number(y.w)||0;
+    let s=0; for(let k=-span;k<=span;k++) s+=psiFcBase(d, psiYmAdd(ym, -back*12+k));
+    acc+=s*w; wsum+=w;
+  });
+  if(!wsum) return 0;
+  const g=Number(psiFc.growth);
+  return Math.round(acc/n*((isFinite(g)&&g>0)?g:1));
+}
+function psiFcActive(ym){ return !!psiFc.on && String(ym)>=psiFcFrom(); }
+
+// 설정 저장: kt_psi_cfg 가 있으면 서버에, 없으면 이 브라우저에만 둔다
+let _psiFcServer=false;
+async function loadPsiFc(){
+  let cfg=null;
+  try{
+    const { data, error }=await sb.from('kt_psi_cfg').select('cfg').eq('id',1).maybeSingle();
+    if(!error){ _psiFcServer=true; if(data && data.cfg) cfg=data.cfg; }
+  }catch(e){}
+  if(!cfg){ try{ const s=localStorage.getItem('kt_psi_fc'); if(s) cfg=JSON.parse(s); }catch(e){} }
+  if(cfg && typeof cfg==='object'){
+    psiFc=Object.assign(JSON.parse(JSON.stringify(PSI_FC_DEFAULT)), cfg);
+    if(!Array.isArray(psiFc.years)||!psiFc.years.length) psiFc.years=JSON.parse(JSON.stringify(PSI_FC_DEFAULT.years));
+  }
+}
+async function savePsiFc(){
+  try{ localStorage.setItem('kt_psi_fc', JSON.stringify(psiFc)); }catch(e){}
+  try{
+    const { error }=await sb.from('kt_psi_cfg').upsert({ id:1, cfg:psiFc, updated_at:new Date().toISOString() },{onConflict:'id'});
+    if(!error){ _psiFcServer=true; return true; }
+  }catch(e){}
+  return false;
+}
+
+function closePsiFcPanel(){ const b=document.getElementById('psiFcPop'); if(b) b.remove(); }
+function openPsiFcPanel(){
+  closePsiFcPanel();
+  const ru=(lang==='ru');
+  const box=document.createElement('div'); box.id='psiFcPop';
+  box.style.cssText='position:fixed;inset:0;z-index:10000;background:#0008;display:flex;align-items:center;justify-content:center';
+  const inp='padding:4px 7px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:12px';
+  const yrRow=(i)=>{ const y=psiFc.years[i]||{back:i+1,w:0};
+    return '<tr><td style="padding:3px 6px;white-space:nowrap">'
+      + '<input type="number" class="fcBack" min="1" max="5" value="'+(y.back||1)+'" style="'+inp+';width:46px"> '
+      + (ru?'года назад':'년 전')+'</td>'
+      + '<td style="padding:3px 6px"><input type="number" class="fcW" min="0" max="100" step="1" value="'+Math.round((Number(y.w)||0)*100)+'" style="'+inp+';width:60px"> %</td></tr>'; };
+  box.innerHTML=
+    '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;width:430px;max-width:94vw;'
+      +'max-height:88vh;overflow:auto;box-shadow:0 16px 44px #000a;font-size:12px;color:var(--text)">'
+    + '<div style="padding:12px 14px;border-bottom:1px solid var(--border);font-weight:700;font-size:13px">'
+      + (ru?'Формула прогноза расхода':'출고예상수량 산식')+'</div>'
+    + '<div style="padding:12px 14px;line-height:1.6">'
+      + '<div style="color:var(--muted);font-size:11px;margin-bottom:10px">'
+        + (ru?'Прогноз = (сумма (расход+невыполн.) за ±n мес. прошлых лет × вес) ÷ число месяцев × коэффициент роста'
+             :'예상 출고 = (지난 해들의 해당월 ±n개월 (출고+미출) 합 × 가중치) ÷ 개월 수 × 증가율')
+      + '</div>'
+      + '<label style="display:flex;align-items:center;gap:7px;margin-bottom:9px">'
+        + '<input type="checkbox" id="fcOn" '+(psiFc.on?'checked':'')+'> <b>'+(ru?'Использовать прогноз':'예상수량 사용')+'</b></label>'
+      + '<label style="display:flex;align-items:center;gap:7px;margin-bottom:9px">'
+        + '<input type="checkbox" id="fcMiss" '+(psiFc.useMiss===false?'':'checked')+'> '+(ru?'Учитывать невыполненные (미출)':'미출도 더해서 계산')+'</label>'
+      + '<div style="display:flex;align-items:center;gap:7px;margin-bottom:9px">'
+        + (ru?'Начало':'시작월')+' <input type="text" id="fcFrom" maxlength="4" placeholder="'+psiNowYm()+'" value="'+escapeHtml(psiFc.from||'')+'" style="'+inp+';width:62px">'
+        + '<span style="color:var(--muted);font-size:11px">'+(ru?'пусто = текущий месяц':'비우면 접속한 달')+' ('+psiYmLabel(psiFcFrom())+')</span></div>'
+      + '<div style="display:flex;align-items:center;gap:7px;margin-bottom:9px">'
+        + (ru?'±мес.':'해당월 전후')+' <input type="number" id="fcSpan" min="0" max="6" value="'+psiFc.span+'" style="'+inp+';width:52px">'
+        + '<span style="color:var(--muted);font-size:11px" id="fcSpanNote"></span></div>'
+      + '<div style="margin:10px 0 4px;font-weight:600">'+(ru?'Вес по годам':'연별 가중치')+'</div>'
+      + '<table id="fcYears" style="border-collapse:collapse">'+psiFc.years.map((_,i)=>yrRow(i)).join('')+'</table>'
+      + '<div style="display:flex;align-items:center;gap:7px;margin-top:10px">'
+        + (ru?'Коэф. роста':'증가율')+' <input type="number" id="fcGrowth" min="0" max="10" step="0.05" value="'+psiFc.growth+'" style="'+inp+';width:70px">'
+        + '<span style="color:var(--muted);font-size:11px">'+(ru?'1.3 = +30%':'1.3 = 30% 증가')+'</span></div>'
+      + '<div id="fcPreview" style="margin-top:12px;padding:9px;border:1px dashed var(--border);border-radius:8px;'
+        + 'background:var(--bg);font-size:11px;color:var(--muted);white-space:pre-line"></div>'
+      + '<div style="margin-top:9px;font-size:11px;color:var(--muted)">'
+        + (ru?'Основа расчёта — фактические расход и невыполненные отгрузки прошлых лет (не прогноз).'
+             :'계산 근거는 지난 해들의 실적 출고·미출입니다(예측값을 다시 쓰지 않습니다).')
+      + (_psiFcServer?'':('<br>'+(ru?'Таблица kt_psi_cfg отсутствует — настройка сохранится только в этом браузере.'
+                                  :'kt_psi_cfg 표가 없어 이 브라우저에만 저장됩니다.')))
+      + '</div>'
+    + '</div>'
+    + '<div style="display:flex;gap:7px;padding:11px 14px;border-top:1px solid var(--border)">'
+      + '<button id="fcSave" style="flex:1;padding:7px;border:none;border-radius:7px;background:var(--accent2);color:#fff;cursor:pointer;font-size:12px;font-weight:700">'+(ru?'Сохранить':'저장')+'</button>'
+      + '<button id="fcReset" style="flex:none;padding:7px 12px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);cursor:pointer;font-size:12px">'+(ru?'По умолчанию':'기본값')+'</button>'
+      + '<button id="fcCancel" style="flex:none;padding:7px 12px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);cursor:pointer;font-size:12px">'+(ru?'Отмена':'닫기')+'</button>'
+    + '</div></div>';
+  document.body.appendChild(box);
+  const $=id=>box.querySelector('#'+id);
+  const read=()=>{
+    const years=[...box.querySelectorAll('#fcYears tr')].map(tr=>({
+      back:parseInt(tr.querySelector('.fcBack').value,10)||1,
+      w:(parseFloat(tr.querySelector('.fcW').value)||0)/100 }));
+    return { on:$('fcOn').checked, useMiss:$('fcMiss').checked,
+             from:String($('fcFrom').value||'').replace(/\D/g,'').slice(0,4),
+             span:parseInt($('fcSpan').value,10)||0, growth:parseFloat($('fcGrowth').value)||1, years };
+  };
+  const preview=()=>{
+    const save=JSON.parse(JSON.stringify(psiFc));
+    psiFc=read();
+    const span=Math.max(0,Math.min(6,parseInt(psiFc.span,10)||0));
+    $('fcSpanNote').textContent=(ru?'':'→ ')+(span*2+1)+(ru?' мес.':'개월');
+    const ym=psiFcFrom();
+    let tot=0; const parts=[];
+    psiFc.years.forEach(y=>{
+      let s=0; Object.keys(psiData).forEach(p=>{ const d=psiData[p].data;
+        for(let k=-span;k<=span;k++) s+=psiFcBase(d, psiYmAdd(ym,-y.back*12+k)); });
+      parts.push(psiYmLabel(psiYmAdd(ym,-y.back*12))+(ru?' ±':' 전후 ')+(span*2+1)+(ru?' мес. ':'개월 합 ')+s.toLocaleString()+' × '+Math.round(y.w*100)+'%');
+      tot+=s*y.w;
+    });
+    const per=tot/(span*2+1), fin=Math.round(per*(Number(psiFc.growth)||1));
+    $('fcPreview').textContent=(ru?'Пример (все артикулы), ':'미리보기 (전 품번 합계) ')+psiYmLabel(ym)+'\n'
+      + parts.join('\n') + '\n= ' + Math.round(tot).toLocaleString() + ' ÷ ' + (span*2+1)
+      + ' = ' + Math.round(per).toLocaleString() + ' × ' + (Number(psiFc.growth)||1) + ' = ' + fin.toLocaleString();
+    psiFc=save;
+  };
+  box.querySelectorAll('input').forEach(el=>{ el.oninput=preview; el.onchange=preview; });
+  preview();
+  $('fcReset').onclick=()=>{ psiFc=JSON.parse(JSON.stringify(PSI_FC_DEFAULT)); closePsiFcPanel(); openPsiFcPanel(); };
+  $('fcCancel').onclick=closePsiFcPanel;
+  $('fcSave').onclick=async()=>{
+    psiFc=read();
+    const ok=await savePsiFc();
+    closePsiFcPanel();
+    renderPSI();
+    if(!ok) alert(ru?'Сохранено только в этом браузере.':'이 브라우저에만 저장했습니다.\n모두에게 적용하려면 kt_psi_cfg 표가 필요합니다.');
+  };
+  box.onmousedown=(e)=>{ if(e.target===box) closePsiFcPanel(); };
+}
 // ── PSI 헤더 필터·정렬 (품번조회와 같은 엑셀식) ─────────────────────────
 // 글자 열(대표품번·호환품번·단종·품명·규격)은 값 목록 + 정렬,
 // 숫자 열(이월재고 · 월별 선적/입고/출고/재고/보유월)은 정렬만.
@@ -8583,6 +8741,7 @@ function handlePSIUpload(event){
 async function loadPSITab(){
   const btn=document.getElementById('psiUploadBtn');
   if(btn) btn.style.display = userRole(currentUser).usesMasterView ? '' : 'none';
+  await loadPsiFc();
   await loadPSI();
   // 시작월은 자료의 마지막 달을 따라간다. 사용자가 직접 적은 값(dataset.user)은 건드리지 않는다.
   const f=document.getElementById('psiFromYm');
