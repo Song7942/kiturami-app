@@ -8601,7 +8601,7 @@ function downloadPSI(){
     g.rows.forEach(it=>{
       const r=it.r, v=it.v;
       kidCnt++;
-      const row=['', normBadgePN(r._compat), pnColText('note',r), pnColText('name',r)];
+      const row=[g.rep||'', normBadgePN(r._compat), pnColText('note',r), pnColText('name',r)];
       if(isKo) row.push(pnColText('spec',r));
       row.push(v._open||0);
       yms.forEach(y=>{ const x=v[y]||{};
