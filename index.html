@@ -564,6 +564,7 @@ input[type="text"]::placeholder{color:var(--muted)}
   <button class="tab-btn" style="display:none" onclick="switchTab('shipments')" id="tab-shipments"><span id="i18n-tab-shipments">🚚 출고관리</span></button>
   <button class="tab-btn" style="display:none" onclick="switchTab('price')"     id="tab-price">💲 가격정보</button>
   <button class="tab-btn" style="display:none" onclick="switchTab('psi')"       id="tab-psi"><span id="i18n-tab-psi">📈 PSI</span></button>
+  <button class="tab-btn" style="display:none" onclick="switchTab('po')"        id="tab-po"><span id="i18n-tab-po">📋 발주현황</span></button>
   <button class="tab-btn" style="display:none;position:relative" onclick="switchTab('memberManagement')" id="tab-memberManagement"><span id="i18n-tab-membermgmt">👥 회원관리</span><span id="memberMgmtUnreadDot" style="display:none;position:absolute;top:4px;right:2px;width:8px;height:8px;border-radius:50%;background:#ef4444;box-shadow:0 0 0 2px var(--bg)"></span></button>
   <button class="tab-btn" style="display:none" onclick="switchTab('reset')" id="tab-reset"><span id="i18n-tab-reset">🗑️ 초기화</span></button>
   <button class="tab-btn" style="display:none" onclick="switchTab('parts')" id="tab-parts">🔧 부품 검색</button>
@@ -991,6 +992,48 @@ input[type="text"]::placeholder{color:var(--muted)}
 </div>
 
 <!-- ══ 탭: 회원관리 (취소·변경 요청 / 회원관리 및 가입승인) ══ -->
+<!-- 발주현황 (MASTER 전용) -->
+<div class="tab-pane" id="pane-po">
+  <div class="fixed-top">
+    <div class="search-bar">
+      <div class="search-wrap">
+        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+        <input type="text" id="poInput" placeholder="차수·대표코드·발주코드·품명으로 검색…" oninput="debouncedRenderPO()">
+      </div>
+      <div class="count-badge" id="poBadge"></div>
+      <button class="dl-btn" onclick="switchTab('psi')" title="PSI 화면으로 돌아가기">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+        <span id="i18n-po-back">PSI</span>
+      </button>
+      <select id="poCha" onchange="renderPO()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></select>
+      <button class="dl-btn" id="poUploadBtn" onclick="document.getElementById('poFileInput').click()" title="차수·발주월·발주코드·수주수량 이 있는 엑셀을 올리면 반영합니다" style="display:none;background:var(--accent2);border-color:var(--accent2);color:#fff">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <span id="i18n-po-up">발주 업로드</span>
+      </button>
+      <input type="file" id="poFileInput" accept=".xlsx,.xls" style="display:none" onchange="handlePOUpload(event,'order')">
+      <button class="dl-btn" id="poSupplyBtn" onclick="document.getElementById('poSupplyInput').click()" title="차수·발주코드·공급수량 이 있는 엑셀을 올리면 공급수량만 채웁니다" style="display:none;background:#0ea5e9;border-color:#0ea5e9;color:#fff">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>
+        <span id="i18n-po-sup">공급 업로드</span>
+      </button>
+      <input type="file" id="poSupplyInput" accept=".xlsx,.xls" style="display:none" onchange="handlePOUpload(event,'supply')">
+      <button class="dl-btn" onclick="downloadPO()">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        <span id="i18n-po-dl">엑셀 다운로드</span>
+      </button>
+    </div>
+  </div>
+  <div class="scroll-body" id="scrollBodyPO" style="padding:0 12px 72px">
+    <div class="pn-body-wrap">
+      <table id="poTable" style="width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed">
+        <colgroup id="poColgroup"></colgroup>
+        <thead id="poThead"></thead>
+        <tbody id="poTbody"></tbody>
+      </table>
+    </div>
+    <div id="poEmpty" class="no-result" style="display:none"></div>
+  </div>
+</div>
+
 <div class="tab-pane" id="pane-psi">
   <div class="fixed-top">
     <div class="search-bar">
@@ -1021,6 +1064,10 @@ input[type="text"]::placeholder{color:var(--muted)}
       <button class="dl-btn" onclick="downloadPSI()">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         <span id="i18n-psi-dl">엑셀 다운로드</span>
+      </button>
+      <button class="dl-btn" onclick="switchTab('po')" title="차수별 수주·공급·미공급 현황" style="background:#f59e0b;border-color:#f59e0b;color:#fff">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h4"/></svg>
+        <span id="i18n-po-tab">발주현황</span>
       </button>
       <button class="dl-btn" onclick="openPsiFcPanel()" title="시작월부터의 출고를 지난 해 실적으로 예측하는 산식을 고칩니다" style="background:#0ea5e9;border-color:#0ea5e9;color:#fff">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="14 7 21 7 21 14"/></svg>
@@ -1729,6 +1776,7 @@ function switchTab(tab){
     Promise.all([loadPriceSettings(), loadPriceCalc(), loadPrices(), loadCompanyPrices()]).then(async()=>{ if(priceMode()==='master') await autoUpdateRatesIfNewMonth(); fillParamInputs(); applyPriceTabChrome(); renderPriceActive(); });
   }
   if(tab==='psi'){ loadPSITab(); }
+  if(tab==='po'){ loadPOTab(); }
   if(tab==='adminOrders'){ loadAdminOrdersTab(); }
   if(tab==='memberManagement'){ loadMemberManagementTab(); }
 }
@@ -5689,6 +5737,7 @@ function rerenderActiveTab(){
     else if(A('pane-shipments')) renderShipmentsList();
     else if(A('pane-price')) renderPriceActive();
     else if(A('pane-psi')) renderPSI();
+    else if(A('pane-po')) renderPO();
     else if(A('pane-adminOrders')){ renderAdminOrders(); renderAdminMyOrders(); }
   }catch(e){}
 }
@@ -5754,7 +5803,7 @@ function applyPermTabVisibility(skipSwitch){
   if(!pobj){
     // 권한을 아직 부여하지 않은 회원: 품번조회 하나만 연다.
     // 종전에는 역할 기본값을 그대로 써서 주문·재고관리·가격정보까지 다 보였다.
-    ['tab-order','tab-parts','tab-adminOrders','tab-inventory','tab-shipments','tab-price','tab-psi','tab-memberManagement']
+    ['tab-order','tab-parts','tab-adminOrders','tab-inventory','tab-shipments','tab-price','tab-psi','tab-po','tab-memberManagement']
       .forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display='none'; });
     const pnEl=document.getElementById('tab-pn'); if(pnEl) pnEl.style.display='';
     if(!skipSwitch) ensureVisibleTab();
@@ -5763,6 +5812,7 @@ function applyPermTabVisibility(skipSwitch){
   // 권한이 설정된 회원은 매핑된 탭을 권한값대로 부여/제한한다(체크=보임, 미체크=숨김).
   // PSI 는 권한 항목이 따로 없다. 역할(MASTER·KITURAMI)로만 열리므로 권한 회원에게는 닫는다.
   const psiEl=document.getElementById('tab-psi'); if(psiEl) psiEl.style.display='none';
+  const poEl=document.getElementById('tab-po'); if(poEl) poEl.style.display='none';
   const map={ 'tab-pn':'pn','tab-inventory':'inventory','tab-shipments':'shipments','tab-price':'price','tab-memberManagement':'memberManagement' };
   Object.keys(map).forEach(tabId=>{ const el=document.getElementById(tabId); if(el) el.style.display = pobj[map[tabId]].v ? '' : 'none'; });
   // 주문관리 탭: '주문접수' 또는 '주문' 서브탭 권한이 있으면 노출. 서브탭 버튼도 권한대로.
@@ -7936,6 +7986,231 @@ function refreshInventoryTexts(){
 // ══════════════════════════════════════════
 // 가격정보 (KITURAMI 전용) — 계산식 / 공급가
 // ══════════════════════════════════════════
+// ══════════════════════════════════════════
+// 발주현황 (차수별 수주 / 공급 / 미공급)
+//   저장은 kt_po (차수+발주코드가 키). 같은 차수·같은 발주코드가 여러 줄이면 수주수량을 합친다.
+//   대표코드·변경코드(공급)·품명은 저장하지 않고 품번조회에서 그때그때 가져온다.
+//     · 대표코드      = 그 발주코드를 호환품번으로 가진 대표품번
+//     · 변경코드(공급) = 대표품번의 최종품번. 발주코드와 같으면 빈칸
+//   미공급수량 = 수주수량 − 공급수량
+// ══════════════════════════════════════════
+let poData=[];        // [{cha, pn, mon, qty, supplied}]
+let _poFiltered=[];
+
+async function loadPO(){
+  poData=[];
+  try{
+    const page=1000;
+    for(let from=0;;from+=page){
+      const { data, error }=await sb.from('kt_po').select('cha,pn,mon,qty,supplied').range(from, from+page-1);
+      if(error) return;                       // 표 없음 → 빈 화면(안전)
+      (data||[]).forEach(r=>poData.push({ cha:r.cha||'', pn:r.pn||'', mon:r.mon||'',
+        qty:Number(r.qty)||0, supplied:Number(r.supplied)||0 }));
+      if(!data || data.length<page) break;
+    }
+  }catch(e){}
+}
+// 발주코드 → {대표코드, 최종품번}
+function poLookup(pn){
+  const k=normPN(pn);
+  if(!_poRepMap) poBuildMap();
+  return _poRepMap[k] || {rep:'', fin:''};
+}
+let _poRepMap=null;
+function poBuildMap(){
+  _poRepMap={};
+  (PN_DATA||[]).forEach(p=>{
+    const fin=normPN(p.final||'');
+    (p.compats||[]).forEach(c=>{ const k=normPN(c); if(k && !_poRepMap[k]) _poRepMap[k]={rep:p.rep||'', fin}; });
+  });
+}
+// 발주코드의 품명(호환품번 단위 값 우선)
+function poName(pn){
+  const s=pnSpecOf(pn);
+  if(lang==='ko'){ if(s&&s.name) return s.name; } else if(s&&s.name_ru) return s.name_ru;
+  const info=poLookup(pn);
+  const p=(PN_DATA||[]).find(x=>x.rep===info.rep);
+  if(!p) return '';
+  return lang==='ko' ? (p.name_ko||'') : (p.name_ru||p.name_ko||'');
+}
+function poChaList(){
+  const s=new Set(); poData.forEach(r=>{ if(r.cha) s.add(r.cha); });
+  return [...s].sort();
+}
+function renderPO(){
+  const pane=document.getElementById('pane-po'); if(!pane) return;
+  _poRepMap=null;
+  const ru=(lang==='ru'), L=(ko,rr)=>(ru?rr:ko);
+  const kw=(document.getElementById('poInput')?document.getElementById('poInput').value:'').trim().toLowerCase();
+  const chaSel=document.getElementById('poCha');
+  // 차수 선택 목록 유지
+  if(chaSel){
+    const cur=chaSel.value;
+    const list=poChaList();
+    const want='<option value="">'+L('차수 전체','Все партии')+'</option>'+list.map(c=>'<option>'+escapeHtml(c)+'</option>').join('');
+    if(chaSel.getAttribute('data-list')!==list.join('|')){ chaSel.innerHTML=want; chaSel.setAttribute('data-list',list.join('|')); chaSel.value=cur; }
+  }
+  const cha=chaSel?chaSel.value:'';
+  let rows=poData.slice();
+  if(cha) rows=rows.filter(r=>r.cha===cha);
+  if(kw) rows=rows.filter(r=>{
+    const i=poLookup(r.pn);
+    return [r.cha, r.pn, i.rep, i.fin, poName(r.pn)].some(v=>String(v||'').toLowerCase().includes(kw));
+  });
+  rows.sort((a,b)=> (a.cha===b.cha) ? String(a.pn).localeCompare(String(b.pn)) : String(a.cha).localeCompare(String(b.cha)));
+  _poFiltered=rows;
+  const badge=document.getElementById('poBadge'); if(badge) badge.innerHTML='<b>'+rows.length+'</b>';
+
+  const thS='padding:6px 5px;text-align:center;vertical-align:middle;position:sticky;top:0;z-index:3;'
+    + 'background:var(--surface2);font-size:11px;white-space:nowrap;border-bottom:1px solid var(--border)';
+  const tdS='padding:5px 6px;font-size:11px;border-bottom:1px solid var(--border)';
+  const numS=tdS+';text-align:right;white-space:nowrap';
+  const heads=[[L('차수','Партия'),90],[L('발주월','Мес.'),52],[L('대표코드','Осн. код'),104],
+               [L('발주코드','Код заказа'),104],[L('변경코드(공급)','Код замены'),104],
+               [L('품명','Наименование'),170],[L('수주수량','Заказано'),70],
+               [L('공급수량','Поставлено'),70],[L('미공급수량','Недопоставка'),78]];
+  const cg=document.getElementById('poColgroup');
+  if(cg) cg.innerHTML=heads.map(h=>'<col style="width:'+h[1]+'px">').join('');
+  const thead=document.getElementById('poThead');
+  const tbody=document.getElementById('poTbody');
+  const empty=document.getElementById('poEmpty');
+
+  let tq=0, ts=0;
+  const body=rows.map(r=>{
+    const i=poLookup(r.pn);
+    const chg=(i.fin && i.fin!==normPN(r.pn)) ? i.fin : '';
+    const rest=r.qty-r.supplied;
+    tq+=r.qty; ts+=r.supplied;
+    const badgeS='font-size:9.5px;padding:1px 3px;white-space:nowrap';
+    return '<tr>'
+      + '<td style="'+tdS+';white-space:nowrap">'+escapeHtml(r.cha)+'</td>'
+      + '<td style="'+tdS+';text-align:center;color:var(--muted)">'+escapeHtml(String(r.mon||''))+'</td>'
+      + '<td style="'+tdS+'">'+(i.rep?('<span class="code" style="'+badgeS+'">'+escapeHtml(i.rep)+'</span>'):'')+'</td>'
+      + '<td style="'+tdS+'"><span class="code" style="'+badgeS+'">'+escapeHtml(normBadgePN(r.pn))+'</span></td>'
+      + '<td style="'+tdS+'">'+(chg?('<span class="code" style="'+badgeS+';background:#fee2e2;color:#b91c1c">'+escapeHtml(normBadgePN(chg))+'</span>'):'')+'</td>'
+      + '<td style="'+tdS+';word-break:break-all;font-size:10.5px;line-height:1.25">'+escapeHtml(poName(r.pn))+'</td>'
+      + '<td style="'+numS+'">'+(r.qty?r.qty.toLocaleString():'0')+'</td>'
+      + '<td style="'+numS+'">'+(r.supplied?r.supplied.toLocaleString():'')+'</td>'
+      + '<td style="'+numS+';font-weight:600'+(rest>0?';color:#b91c1c':'')+'">'+(rest?rest.toLocaleString():'0')+'</td>'
+      + '</tr>';
+  }).join('');
+
+  if(thead) thead.innerHTML='<tr>'+heads.map(h=>'<th style="'+thS+'">'+h[0]+'</th>').join('')+'</tr>'
+    + '<tr><th colspan="6" style="'+thS+';font-weight:700;background:var(--surface);top:27px;text-align:right">'
+    + L('합계 '+rows.length+'건','Итого '+rows.length)+'</th>'
+    + '<th style="'+thS+';font-weight:700;background:var(--surface);top:27px;text-align:right">'+tq.toLocaleString()+'</th>'
+    + '<th style="'+thS+';font-weight:700;background:var(--surface);top:27px;text-align:right">'+ts.toLocaleString()+'</th>'
+    + '<th style="'+thS+';font-weight:700;background:var(--surface);top:27px;text-align:right">'+(tq-ts).toLocaleString()+'</th></tr>';
+  if(tbody) tbody.innerHTML=body;
+  if(empty){ empty.textContent=L('자료가 없습니다. 엑셀 업로드로 발주 자료를 올려주세요.','Нет данных.');
+             empty.style.display=rows.length?'none':'block'; }
+}
+function debouncedRenderPO(){ clearTimeout(window._poT); window._poT=setTimeout(renderPO,200); }
+async function loadPOTab(){
+  const m=userRole(currentUser).usesMasterView;
+  ['poUploadBtn','poSupplyBtn'].forEach(id=>{ const b=document.getElementById(id); if(b) b.style.display=m?'':'none'; });
+  await loadPO();
+  renderPO();
+}
+// 헤더 이름으로 열을 찾는다(양식이 조금 달라도 읽히게)
+function poFindCols(row){
+  const C={};
+  (row||[]).forEach((v,i)=>{ const s=String(v==null?'':v).replace(/\s+/g,'');
+    if(!s) return;
+    if(C.cha==null && (s==='차수'||s.indexOf('차수')>=0)) C.cha=i;
+    if(C.mon==null && s.indexOf('발주월')>=0) C.mon=i;
+    if(C.pn==null && (s==='발주코드'||s==='수주코드'||s==='품번'||s.indexOf('발주코드')>=0)) C.pn=i;
+    if(C.qty==null && s.indexOf('수주수량')>=0) C.qty=i;
+    if(C.sup==null && s.indexOf('공급수량')>=0 && s.indexOf('미공급')<0) C.sup=i;
+  });
+  return C;
+}
+function poFindHeader(aoa){
+  for(let r=0;r<Math.min(12,aoa.length);r++){
+    const C=poFindCols(aoa[r]);
+    if(C.pn!=null && (C.qty!=null || C.sup!=null)) return {row:r, C};
+  }
+  return null;
+}
+// mode: 'order' = 수주수량 반영(없던 줄은 새로 만든다), 'supply' = 공급수량만 채운다
+function handlePOUpload(event, mode){
+  if(!userRole(currentUser).usesMasterView){ event.target.value=''; return; }
+  const file=event.target.files[0]; if(!file){ event.target.value=''; return; }
+  const ru=(lang==='ru');
+  const reader=new FileReader();
+  reader.onload=async function(e){
+    try{
+      const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
+      let hit=null, sheet='';
+      for(const sn of wb.SheetNames){
+        const aoa=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:''});
+        const h=poFindHeader(aoa);
+        if(h){ hit={aoa, ...h}; sheet=sn; break; }
+      }
+      if(!hit){ alert(ru?'Подходящий лист не найден.':'읽을 시트를 찾지 못했습니다.\n머리글에 발주코드와 수주수량(또는 공급수량)이 있어야 합니다.'); event.target.value=''; return; }
+      const C=hit.C, aoa=hit.aoa;
+      const agg={};   // 차수|발주코드 -> {cha,pn,mon,qty,sup}
+      for(let r=hit.row+1;r<aoa.length;r++){
+        const w=aoa[r]||[];
+        const pn=String(C.pn!=null?w[C.pn]:'').trim(); if(!pn) continue;
+        const cha=String(C.cha!=null?w[C.cha]:'').trim();
+        const key=cha+'|'+normPN(pn);
+        const o=agg[key]||(agg[key]={cha, pn, mon:String(C.mon!=null?w[C.mon]:'').trim(), qty:0, sup:0});
+        if(C.qty!=null) o.qty+=Number(String(w[C.qty]).replace(/,/g,''))||0;
+        if(C.sup!=null) o.sup+=Number(String(w[C.sup]).replace(/,/g,''))||0;
+      }
+      const keys=Object.keys(agg);
+      if(!keys.length){ alert(ru?'Строк не найдено.':'읽은 줄이 없습니다.'); event.target.value=''; return; }
+      const isOrder=(mode==='order');
+      if(!confirm((isOrder?(ru?'Заказы: ':'발주 자료를 반영합니다: '):(ru?'Поставки: ':'공급수량을 반영합니다: '))
+          +sheet+'\n'+keys.length+(ru?' строк':'줄')+'\n\n'+(ru?'Продолжить?':'계속하시겠습니까?'))){ event.target.value=''; return; }
+      await loadPO();
+      const cur={}; poData.forEach(r=>cur[r.cha+'|'+normPN(r.pn)]=r);
+      const rows=[]; let miss=0;
+      keys.forEach(k=>{
+        const a=agg[k], c=cur[k];
+        if(isOrder){
+          rows.push({ cha:a.cha, pn:a.pn, mon:a.mon||(c?c.mon:''), qty:a.qty,
+                      supplied:(c?c.supplied:0), updated_at:new Date().toISOString() });
+        }else{
+          if(!c){ miss++; return; }
+          rows.push({ cha:c.cha, pn:c.pn, mon:c.mon, qty:c.qty, supplied:a.sup, updated_at:new Date().toISOString() });
+        }
+      });
+      if(!rows.length){ alert(ru?'Совпадений нет.':'맞는 줄이 없습니다. 차수와 발주코드가 기존 자료와 같아야 합니다.'); event.target.value=''; return; }
+      for(let i=0;i<rows.length;i+=300){
+        const { error }=await sb.from('kt_po').upsert(rows.slice(i,i+300),{onConflict:'cha,pn'});
+        if(error){ alert((ru?'Ошибка загрузки.':'업로드 실패 — kt_po 표가 필요합니다.')
+          +'\nSQL: create table if not exists kt_po (cha text not null, pn text not null, mon text, qty numeric default 0, supplied numeric default 0, updated_at timestamptz default now(), primary key (cha,pn));'
+          +'\n['+(error.message||error.code)+']'); event.target.value=''; return; }
+      }
+      await loadPO(); renderPO();
+      alert((ru?'Готово. ':'반영 완료. ')+rows.length+(ru?'':'줄')+(miss?('\n'+(ru?'Не найдено: ':'기존 자료에 없어 건너뜀: ')+miss):''));
+    }catch(err){ console.error(err); alert(ru?'Ошибка загрузки.':'업로드 처리 중 오류가 발생했습니다.'); }
+    event.target.value='';
+  };
+  reader.readAsArrayBuffer(file);
+}
+function downloadPO(){
+  renderPO();
+  const ru=(lang==='ru');
+  const head=[ru?'Партия':'차수', ru?'Мес.':'발주월', ru?'Осн. код':'대표코드', ru?'Код заказа':'발주코드',
+              ru?'Код замены':'변경코드(공급)', ru?'Наименование':'품명',
+              ru?'Заказано':'수주수량', ru?'Поставлено':'공급수량', ru?'Недопоставка':'미공급수량'];
+  const aoa=[head];
+  let tq=0, ts=0;
+  (_poFiltered||[]).forEach(r=>{
+    const i=poLookup(r.pn);
+    const chg=(i.fin && i.fin!==normPN(r.pn)) ? normBadgePN(i.fin) : '';
+    tq+=r.qty; ts+=r.supplied;
+    aoa.push([r.cha, r.mon||'', i.rep||'', normBadgePN(r.pn), chg, poName(r.pn), r.qty, r.supplied, r.qty-r.supplied]);
+  });
+  aoa.splice(1,0,[(ru?'Итого ':'합계 ')+(_poFiltered||[]).length+(ru?'':'건'),'','','','','',tq,ts,tq-ts]);
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols']=[{wch:12},{wch:8},{wch:14},{wch:14},{wch:14},{wch:26},{wch:10},{wch:10},{wch:12}];
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'PO');
+  XLSX.writeFile(wb, xlsxName('발주현황','Заказы'));
+}
 // ══════════════════════════════════════════
 // PSI (입고 · 출고 · 재고 · 보유월)
 //   행은 품번조회와 같은 호환품번 단위. 대표품번·호환품번·단종·품명·규격은 품번조회에서 가져온다.
@@ -10794,6 +11069,9 @@ function enterApp(user){
   // PSI: 수입·출고 실적과 재고를 다루므로 MASTER·KITURAMI(본사)만 본다.
   const tabPsi=document.getElementById('tab-psi');
   if(tabPsi) tabPsi.style.display = role.usesMasterView ? 'block' : 'none';
+  // 발주현황은 위 탭줄이 아니라 PSI 화면의 단추로 연다(탭 요소는 switchTab 을 위해 남겨 두고 감춘다)
+  const tabPo=document.getElementById('tab-po');
+  if(tabPo) tabPo.style.display='none';
   // 출고관리: MASTER 는 출고하지 않으므로 숨긴다.
   // 재고관리: MASTER 는 자기 창고는 없지만 KITURAMI 창고를 감독하므로 보여준다.
   if(tabInv) tabInv.style.display = 'block';
