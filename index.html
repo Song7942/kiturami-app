@@ -7960,6 +7960,7 @@ const PSI_YEAR_COL={ '21y':'2112' };
 const PSI_BASE_DEFAULT='2012';
 let psiData={};        // normPN -> { rep, data:{ '2409':{s,g,n,o}, … } }
 let _psiFiltered=[];
+let _psiGroups=[];      // 대표품번 묶음(화면·엑셀이 같은 것을 쓴다)
 
 async function loadPSI(){
   psiData={};
@@ -8391,7 +8392,7 @@ function renderPSI(){
 
   // 값을 먼저 계산해 둔다(헤더 정렬이 숫자 열도 다루므로)
   let items=rows.map(r=>{ const key=normPN(r._compat); const rec=psiData[key];
-    return { r, key, v:psiRowVals(rec?rec.data:null, c, yms) }; });
+    return { r, key, d:(rec?rec.data:null), v:psiRowVals(rec?rec.data:null, c, yms) }; });
 
   _psiAllItems=items;                  // 숫자 열 값 목록은 이 화면의 계산값에서 모은다
   // 헤더 열 필터(엑셀식: 선택한 값만, 여러 열은 AND)
@@ -8427,7 +8428,6 @@ function renderPSI(){
   if(cg){
     const w=['<col style="width:96px">','<col style="width:96px">','<col style="width:38px">','<col style="width:110px">'];
     if(isKo) w.push('<col style="width:110px">');
-
     yms.forEach(()=>{ w.push('<col style="width:56px">','<col style="width:56px">','<col style="width:56px">','<col style="width:52px">','<col style="width:60px">','<col style="width:52px">'); });
     cg.innerHTML=w.join('');
   }
@@ -8471,44 +8471,87 @@ function renderPSI(){
   const n=v=>(v==null||v===''||isNaN(v))?'':Number(v).toLocaleString();
   const tdS='padding:4px 5px;font-size:11px;overflow:hidden;border-bottom:1px solid var(--border)';
   const numS=tdS+';text-align:right;white-space:nowrap';
-  // 합계: 선적·입고·출고·재고는 더하고, 보유월은 그 달 값들의 평균(값이 있는 품번만)
-  const tot={}; yms.forEach(y=>tot[y]={sh:0,i:0,o:0,ms:0,st:0,moSum:0,moN:0});
-  let totOpen=0;
-  // 같은 호환품번이 두 대표품번 아래에 걸쳐 두 줄로 나오는 경우가 있다.
-  // 줄은 그대로 보여 주되, 합계는 호환품번당 한 번만 센다.
+  // 보유월 분모: 다음 달부터 avgN 개월 출고 합
+  const futOut=(d,y)=>{ let s=0; for(let i=1;i<=c.avgN;i++) s+=psiOutOf(d,psiYmAdd(y,i)); return s; };
+  const moOf=(st,fut)=>{ const avg=fut/c.avgN; return avg>0 ? Math.round((st/avg)*10)/10 : null; };
+
+  // 대표품번끼리 묶는다(엑셀처럼 대표품번 줄을 먼저 두고 그 아래 호환품번 줄)
+  const groups=[]; const gmap={};
+  items.forEach(it=>{ const rep=String(it.r.rep||'');
+    let g=gmap[rep];
+    if(!g){ g=gmap[rep]={rep, first:it.r, rows:[], seen:{}, agg:{}, open:0}; yms.forEach(y=>g.agg[y]={sh:0,i:0,o:0,ms:0,st:0,fut:0}); groups.push(g); }
+    g.rows.push(it);
+    if(g.seen[it.key]) return; g.seen[it.key]=1;
+    g.open+=it.v._open||0;
+    yms.forEach(y=>{ const x=it.v[y]||{}; const a=g.agg[y];
+      a.sh+=x.sh||0; a.i+=x.i||0; a.o+=x.o||0; a.ms+=x.ms||0; a.st+=x.st||0; a.fut+=futOut(it.d,y); });
+  });
+  _psiGroups=groups;
+
+  // 합계: 선적·입고·출고·미출·재고는 더하고, 보유월은 전체 재고 ÷ (전체 향후 출고 ÷ 개월)
+  const tot={}; yms.forEach(y=>tot[y]={sh:0,i:0,o:0,ms:0,st:0,fut:0});
   const counted={};
-  const body=items.map(it=>{
-    const r=it.r, v=it.v, key=it.key;
-    const dup=!!counted[key]; counted[key]=1;
-    const pn=normBadgePN(r._compat);
-    const op=v._open||0;
-    if(!dup) totOpen+=op;
-    const cells=yms.map((y,i)=>{
-      const x=v[y]||{sh:0,i:0,o:0,ms:0,st:0,mo:null};
-      if(!dup){ const t=tot[y]; t.sh+=x.sh; t.i+=x.i; t.o+=x.o; t.ms+=(x.ms||0); t.st+=x.st;
-        if(x.mo!=null){ t.moSum+=x.mo; t.moN++; } }
-      const b=i===0?bl:'';
-      return '<td style="'+numS+b+';color:var(--muted)">'+n(x.sh)+'</td>'
-           + '<td style="'+numS+'">'+n(x.i)+'</td>'
-           + '<td style="'+numS+'">'+n(x.o)+'</td>'
-           + '<td style="'+numS+';color:var(--muted)">'+n(x.ms)+'</td>'
-           + '<td style="'+numS+';font-weight:600">'+n(x.st)+'</td>'
-           + '<td style="'+numS+';color:var(--muted)">'+(x.mo==null?'':x.mo.toFixed(1))+'</td>';
+  groups.forEach(g=>{ Object.keys(g.seen).forEach(k=>counted[k]=1);
+    yms.forEach(y=>{ const a=g.agg[y], t=tot[y];
+      t.sh+=a.sh; t.i+=a.i; t.o+=a.o; t.ms+=a.ms; t.st+=a.st; t.fut+=a.fut; }); });
+
+  // 대표품번 줄 색(참고 엑셀의 연한 파랑 띠)
+  const gS=tdS+';background:var(--tag-bg);font-weight:700';
+  const gNum=gS+';text-align:right;white-space:nowrap';
+  const body=groups.map(g=>{
+    const r0=g.first;
+    // 대표품번 줄의 품명·규격·품번 칸은 그 대표품번의 최종품번을 기준으로 적는다
+    const fin=String(r0.final||'');
+    const finRow=Object.assign({}, r0, {_split:true, _compat:fin});
+    const gName=pnColText('name', finRow);
+    const gSpec=pnColText('spec', finRow);
+    const gCells=yms.map((y,i)=>{
+      const a=g.agg[y]; const b=i===0?bl:'';
+      const mo=moOf(a.st,a.fut);
+      return '<td style="'+gNum+b+'">'+n(a.sh)+'</td>'
+           + '<td style="'+gNum+'">'+n(a.i)+'</td>'
+           + '<td style="'+gNum+'">'+n(a.o)+'</td>'
+           + '<td style="'+gNum+'">'+n(a.ms)+'</td>'
+           + '<td style="'+gNum+'">'+n(a.st)+'</td>'
+           + '<td style="'+gNum+'">'+(mo==null?'':mo.toFixed(1))+'</td>';
     }).join('');
-    return '<tr>'
-      + '<td style="'+tdS+'"><span class="code" style="font-size:9.5px;padding:1px 3px;white-space:nowrap">'+escapeHtml(r.rep||'')+'</span></td>'
-      + '<td style="'+tdS+'"><span class="code" style="font-size:9.5px;padding:1px 3px;white-space:nowrap">'+escapeHtml(pn)+'</span></td>'
-      + '<td style="'+tdS+';text-align:center;color:var(--muted)">'+escapeHtml(pnColText('note',r))+'</td>'
-      + '<td style="'+tdS+';word-break:break-all;font-size:10.5px;line-height:1.25">'+escapeHtml(pnColText('name',r))+'</td>'
-      + (isKo?('<td style="'+tdS+';color:var(--muted);word-break:break-all;font-size:10px;line-height:1.25">'+escapeHtml(pnColText('spec',r))+'</td>'):'')
-      + cells + '</tr>';
+    const gRow='<tr>'
+      + '<td style="'+gS+'"><span class="code" style="font-size:9.5px;padding:1px 3px;white-space:nowrap">'+escapeHtml(g.rep)+'</span></td>'
+      + '<td style="'+gS+'">'+(fin?('<span class="code" style="font-size:9.5px;padding:1px 3px;white-space:nowrap">'+escapeHtml(normBadgePN(fin))+'</span>'):'')+'</td>'
+      + '<td style="'+gS+'"></td>'
+      + '<td style="'+gS+';word-break:break-all;font-size:10.5px;line-height:1.25">'+escapeHtml(gName)+'</td>'
+      + (isKo?('<td style="'+gS+';word-break:break-all;font-size:10px;line-height:1.25">'+escapeHtml(gSpec)+'</td>'):'')
+      + gCells + '</tr>';
+    // 하위 호환품번 줄 (보유월은 대표품번 줄에만 적는다)
+    const kids=g.rows.map(it=>{
+      const r=it.r, v=it.v;
+      const pn=normBadgePN(r._compat);
+      const cells=yms.map((y,i)=>{
+        const x=v[y]||{sh:0,i:0,o:0,ms:0,st:0};
+        const b=i===0?bl:'';
+        return '<td style="'+numS+b+';color:var(--muted)">'+n(x.sh)+'</td>'
+             + '<td style="'+numS+'">'+n(x.i)+'</td>'
+             + '<td style="'+numS+'">'+n(x.o)+'</td>'
+             + '<td style="'+numS+';color:var(--muted)">'+n(x.ms)+'</td>'
+             + '<td style="'+numS+'">'+n(x.st)+'</td>'
+             + '<td style="'+numS+'"></td>';
+      }).join('');
+      return '<tr>'
+        + '<td style="'+tdS+';color:var(--muted)"></td>'
+        + '<td style="'+tdS+'"><span class="code" style="font-size:9.5px;padding:1px 3px;white-space:nowrap">'+escapeHtml(pn)+'</span></td>'
+        + '<td style="'+tdS+';text-align:center;color:var(--muted)">'+escapeHtml(pnColText('note',r))+'</td>'
+        + '<td style="'+tdS+';word-break:break-all;font-size:10.5px;line-height:1.25">'+escapeHtml(pnColText('name',r))+'</td>'
+        + (isKo?('<td style="'+tdS+';color:var(--muted);word-break:break-all;font-size:10px;line-height:1.25">'+escapeHtml(pnColText('spec',r))+'</td>'):'')
+        + cells + '</tr>';
+    }).join('');
+    return gRow+kids;
   }).join('');
 
   // 합계 줄도 머리글에 붙여 스크롤해도 맨 위에 남게 한다
   const sumS=thS+';font-weight:700;background:var(--surface)';
   const sumCells=yms.map((y,i)=>{
     const t=tot[y]; const b=i===0?bl:'';
-    const mo=t.moN?(t.moSum/t.moN):null;
+    const mo=moOf(t.st,t.fut);
     return '<th style="'+sumS+';text-align:right'+b+';color:var(--muted)">'+n(t.sh)+'</th>'
          + '<th style="'+sumS+';text-align:right">'+n(t.i)+'</th>'
          + '<th style="'+sumS+';text-align:right">'+n(t.o)+'</th>'
@@ -8518,7 +8561,8 @@ function renderPSI(){
   }).join('');
   head += '<tr>'
     + '<th colspan="'+(isKo?5:4)+'" style="'+sumS+';text-align:right">'
-    + L('합계 '+Object.keys(counted).length+'건 · 보유월은 평균','Итого '+Object.keys(counted).length+' · Мес. — среднее')+'</th>'
+    + L('대표품번 '+groups.length+'개 · 호환품번 '+Object.keys(counted).length+'건',
+        'Осн. '+groups.length+' · Артикулов '+Object.keys(counted).length)+'</th>'
     + sumCells + '</tr>';
 
   if(thead) thead.innerHTML=head;
@@ -8528,7 +8572,7 @@ function renderPSI(){
 function normBadgePN(x){ return (typeof pnUpperLead==='function')?pnUpperLead(x||''):String(x||''); }
 
 function downloadPSI(){
-  renderPSI();
+  renderPSI();                 // 화면과 같은 묶음(_psiGroups)을 만들어 둔다
   const c=psiCfg();
   const yms=[]; for(let i=0;i<c.months;i++) yms.push(psiYmAdd(c.from,i));
   const isKo=(lang!=='ru');
@@ -8538,33 +8582,36 @@ function downloadPSI(){
   g1.push(''); g2.push(lang==='ru' ? ('Нач. остаток ('+psiYmLabel(psiYmAdd(c.base,-1))+')')
                                    : ('이월재고 ('+psiYmLabel(psiYmAdd(c.base,-1))+' 재고)'));
   yms.forEach(y=>{ g1.push(psiYmLabel(y),'','','','',''); g2.push(lang==='ru'?'Отгрузка':'선적', lang==='ru'?'Приход':'입고', lang==='ru'?'Расход':'출고', lang==='ru'?'Невып.':'미출', lang==='ru'?'Остаток':'재고', lang==='ru'?'Мес.':'보유월'); });
-  // 합계 줄을 화면과 같은 값으로 셋째 줄에 넣는다.
-  // 같은 호환품번이 두 대표품번 아래 두 줄로 나오는 경우가 있어, 합계는 호환품번당 한 번만 센다.
-  // (그래서 엑셀 열을 그대로 SUM 하면 이 합계보다 커질 수 있다 — 중복 줄이 두 번 더해지기 때문)
-  const counted={}; let totOpen=0;
-  const tot={}; yms.forEach(y=>tot[y]={sh:0,i:0,o:0,ms:0,st:0,moSum:0,moN:0});
+  // 화면과 같이 대표품번 줄(합계) + 그 아래 호환품번 줄. 보유월은 대표품번 줄에만 적는다.
+  const moOf=(st,fut)=>{ const avg=fut/c.avgN; return avg>0 ? Math.round((st/avg)*10)/10 : ''; };
+  const tot={}; yms.forEach(y=>tot[y]={sh:0,i:0,o:0,ms:0,st:0,fut:0});
+  let totOpen=0, kidCnt=0;
   const body=[];
-  (_psiFiltered||[]).forEach(r=>{
-    const key=normPN(r._compat);
-    const dup=!!counted[key]; counted[key]=1;
-    const rec=psiData[key];
-    const v=psiRowVals(rec?rec.data:null, c, yms);
-    if(!dup) totOpen+=v._open||0;
-    const row=[r.rep||'', normBadgePN(r._compat), pnColText('note',r), pnColText('name',r)];
-    if(isKo) row.push(pnColText('spec',r));
-    row.push(v._open||0);
-    yms.forEach(y=>{ const x=v[y]||{};
-      if(!dup){ const t=tot[y];
-        t.sh+=Number(x.sh)||0; t.i+=Number(x.i)||0; t.o+=Number(x.o)||0; t.ms+=Number(x.ms)||0; t.st+=Number(x.st)||0;
-        if(x.mo!=null){ t.moSum+=x.mo; t.moN++; } }
-      row.push(x.sh??'', x.i??'', x.o??'', x.ms??'', x.st??'', (x.mo==null?'':x.mo)); });
-    body.push(row);
+  (_psiGroups||[]).forEach(g=>{
+    const r0=g.first, fin=String(r0.final||'');
+    const finRow=Object.assign({}, r0, {_split:true, _compat:fin});
+    const gRow=[g.rep||'', fin?normBadgePN(fin):'', '', pnColText('name',finRow)];
+    if(isKo) gRow.push(pnColText('spec',finRow));
+    gRow.push(g.open||0);
+    totOpen+=g.open||0;
+    yms.forEach(y=>{ const a=g.agg[y]||{sh:0,i:0,o:0,ms:0,st:0,fut:0}; const t=tot[y];
+      t.sh+=a.sh; t.i+=a.i; t.o+=a.o; t.ms+=a.ms; t.st+=a.st; t.fut+=a.fut;
+      gRow.push(a.sh, a.i, a.o, a.ms, a.st, moOf(a.st,a.fut)); });
+    body.push(gRow);
+    g.rows.forEach(it=>{
+      const r=it.r, v=it.v;
+      kidCnt++;
+      const row=['', normBadgePN(r._compat), pnColText('note',r), pnColText('name',r)];
+      if(isKo) row.push(pnColText('spec',r));
+      row.push(v._open||0);
+      yms.forEach(y=>{ const x=v[y]||{};
+        row.push(x.sh??'', x.i??'', x.o??'', x.ms??'', x.st??'', ''); });
+      body.push(row);
+    });
   });
-  const nCnt=Object.keys(counted).length;
-  const sumRow=h1.map((v,i)=>i===0?((lang==='ru'?'Итого ':'합계 ')+nCnt+(lang==='ru'?'':'건')):'');
+  const sumRow=h1.map((v,i)=>i===0?((lang==='ru'?'Осн. ':'대표품번 ')+(_psiGroups||[]).length+(lang==='ru'?'':'개')):'');
   sumRow.push(totOpen);
-  yms.forEach(y=>{ const t=tot[y];
-    sumRow.push(t.sh, t.i, t.o, t.ms, t.st, (t.moN?Math.round((t.moSum/t.moN)*10)/10:'')); });
+  yms.forEach(y=>{ const t=tot[y]; sumRow.push(t.sh, t.i, t.o, t.ms, t.st, moOf(t.st,t.fut)); });
   const aoa=[g1,g2,sumRow];
   body.forEach(r=>aoa.push(r));
   const ws=XLSX.utils.aoa_to_sheet(aoa);
