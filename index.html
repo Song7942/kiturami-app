@@ -10036,6 +10036,7 @@ function renderPSI(){
   const band=psiShowKids()?' band':'';
   const needTot={};                       // 달마다 발주필요 합계(손으로 고친 값 포함)
   const stAdd={};                         // 달마다 '앞선 달 발주분'이 재고에 더해진 양의 합계
+  const shipTot={}, inTot={};             // 달마다 발주분의 선적·입고 합계
   const kCls={ rep:'', compat:'', note:'ct', name:'nm', spec:'sp' };   // 하위 줄 고정열
   const bodyRows=[];
   groups.forEach(g=>{
@@ -10046,28 +10047,35 @@ function renderPSI(){
                  compat:(fin?('<span class="c">'+escapeHtml(normBadgePN(fin))+'</span>'):''),
                  note:'', name:escapeHtml(pnColText('name',finRow)), spec:escapeHtml(pnColText('spec',finRow)) };
     const gFix=FX.map(d=>'<td class="'+((d.k==='name'||d.k==='spec')?'nm':'')+'">'+gTxt[d.k]+'</td>').join('');
-    // 발주분은 바로가 아니라 '입고월'(다음 달 말 선적 + 49일)부터 재고에 쌓인다.
+    // 발주분은 다음 달 말에 선적되고, 그 49일 뒤에 들어온다.
+    //   선적·입고 열에도 그 수량이 잡히고, 들어온 달부터 재고가 늘어난다.
     //   보유월  = 발주 전 기준(지금 흐름 그대로)
-    //   재고·발주후 보유월 = 발주분이 들어온 뒤 기준
+    //   발주후 보유월 = 들어온 것까지 반영
     let addSt=0;
     const arrive=new Array(yms.length).fill(0);
+    const shipped=new Array(yms.length).fill(0);
     const gCells=yms.map((y,i)=>{
       const a=g.agg[y]; const b=i===0?' bl':'';
       addSt+=arrive[i];                       // 이 달에 들어오는 발주분
       const st=a.st+addSt;
+      const sh=a.sh+shipped[i], inq=a.i+arrive[i];
       const mo=moOf(a.st,a.fut);              // 보유월은 발주 전
       const man=_simNeed[simNeedKey(g.rep,y)];
-      const nd=(man!=null)?man:needOf(st,a.fut);
+      const nd=psiSimOn ? ((man!=null)?man:needOf(st,a.fut)) : 0;   // PSI 화면에서는 발주를 넣지 않는다
       const m2=moOf(st,a.fut);                // 발주후 보유월 = 들어온 것까지만
       needTot[y]=(needTot[y]||0)+nd;
       stAdd[y]=(stAdd[y]||0)+addSt;
+      shipTot[y]=(shipTot[y]||0)+shipped[i];
+      inTot[y]=(inTot[y]||0)+arrive[i];
+      const si=yms.indexOf(psiYmAdd(y,1));    // 다음 달 말 선적
+      if(si>i) shipped[si]+=nd;
       const ai=yms.indexOf(simArriveYm(y));   // 이 달 발주분이 들어올 달
       if(ai>i) arrive[ai]+=nd;
       const nAttr=' data-rep="'+escapeHtml(g.rep)+'" data-ym="'+y+'" data-st="'+st
         +'" data-avg="'+(a.fut/c.avgN)+'" onclick="simNeedFocus(this)" title="'
         +L('눌러서 고치면 '+(simArriveYm(y)?psiYmLabel(simArriveYm(y)):'')+' 입고로 잡혀 그 뒤 달까지 다시 계산됩니다',
            'Нажмите, чтобы изменить')+'"';
-      const val={sh:n(a.sh), i:n(a.i), o:n(a.o), ms:n(a.ms), st:n(st), mo:(mo==null?'':mo.toFixed(1)),
+      const val={sh:n(sh), i:n(inq), o:n(a.o), ms:n(a.ms), st:n(st), mo:(mo==null?'':mo.toFixed(1)),
                  need:(nd?n(nd):''), mo2:(m2==null?'':m2.toFixed(1))};
       const low=psiLow(mo);
       return SB.map((d,j)=>'<td class="n'+(j===0?b:'')+((low&&d.k==='mo')?' low':'')+(d.k==='need'?' ed':'')
@@ -10098,9 +10106,9 @@ function renderPSI(){
     const t=tot[y]; const b=i===0?bl:'';
     const tst=t.st+(stAdd[y]||0);
     const mo=moOf(t.st,t.fut);                              // 보유월은 발주 전
-    const tn=(needTot[y]!=null)?needTot[y]:needOf(tst,t.fut), tm2=moOf(tst,t.fut);
-    const val={sh:n(t.sh), i:n(t.i), o:n(t.o), ms:n(t.ms), st:n(tst), mo:(mo==null?'':mo.toFixed(1)),
-               need:(tn?n(tn):''), mo2:(tm2==null?'':tm2.toFixed(1))};
+    const tn=psiSimOn ? ((needTot[y]!=null)?needTot[y]:needOf(tst,t.fut)) : 0, tm2=moOf(tst,t.fut);
+    const val={sh:n(t.sh+(shipTot[y]||0)), i:n(t.i+(inTot[y]||0)), o:n(t.o), ms:n(t.ms), st:n(tst),
+               mo:(mo==null?'':mo.toFixed(1)), need:(tn?n(tn):''), mo2:(tm2==null?'':tm2.toFixed(1))};
     const dim={sh:1, ms:1, mo:1, mo2:1};
     return SB.map((d,j)=>'<th style="'+sumS+';text-align:right'+(j===0?b:'')+(dim[d.k]?';color:var(--muted)':'')+'">'+val[d.k]+'</th>').join('');
   }).join('');
