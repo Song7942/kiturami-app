@@ -9252,7 +9252,7 @@ function psiSig(pfx){
   return [pfx, lang, g('FromYm'), g('Months'), g('BaseYm'), g('AvgN'), g('Input'),
           JSON.stringify(_psiFilters), (_psiSort.key||'')+'|'+_psiSort.dir,
           JSON.stringify(psiCols||{}), _psiDataVer, PN_DATA.length,
-          (pfx==='sim' ? JSON.stringify(_simNeed) : '')].join('\u0001');
+          (pfx==='sim' ? JSON.stringify(_simNeed)+JSON.stringify(_simShip) : '')].join('\u0001');
 }
 function psiPaneFresh(pfx){
   const tb=document.getElementById(pfx+'Tbody');
@@ -9337,9 +9337,14 @@ function psiShowGroups(){ const m=psiColsMap(); return (m.rep!==false) || (m.com
 function psiVisSub(){ const m=psiColsMap();
   let v=PSI_COL_DEFS.filter(d=>!d.fixed && m[d.k]);
   if(!v.length) v=PSI_COL_DEFS.filter(d=>d.k==='st');
-  // 발주시뮬레이션에서만 보유월 뒤에 두 열을 더 붙인다
-  if(typeof psiSimOn!=='undefined' && psiSimOn) v=v.concat(PSI_SIM_COL_DEFS);
+  // 발주시뮬레이션에서만 선적 뒤에 '선적계획'을, 보유월 뒤에 두 열을 더 붙인다
+  if(typeof psiSimOn!=='undefined' && psiSimOn){
+    const k=v.findIndex(d=>d.k==='sh');
+    if(k>=0) v=v.slice(0,k+1).concat(PSI_PLAN_COL, v.slice(k+1));
+    v=v.concat(PSI_SIM_COL_DEFS);
+  }
   return v; }
+const PSI_PLAN_COL=[{k:'plan', w:62, ko:'선적계획', ru:'План<br>отгр.'}];
 const PSI_SIM_COL_DEFS=[
   {k:'need', w:64, ko:'발주필요', ru:'Дозаказ'},
   {k:'mo2',  w:60, ko:'발주후<br>보유월', ru:'Мес.<br>после'}
@@ -9349,16 +9354,43 @@ let _simNeed={};
 function simNeedKey(rep,ym){ return rep+'|'+ym; }
 // 이 달에 발주하면 언제 들어오나: 다음 달 말에 선적 → 늘 쓰는 대로 선적일 + 49일이 입고일.
 //   예) 2026-09 발주 → 2026-10-31 선적 → 2026-12-19 입고 → 2612
-const _simArrCache={};
-function simArriveYm(ym){
-  if(_simArrCache[ym]!=null) return _simArrCache[ym];
+const _simArrCache={}, _simShipArrCache={};
+// 그 달 말에 선적하면 언제 들어오나(선적일 + 49일)
+function simShipArriveYm(ym){
+  if(_simShipArrCache[ym]!=null) return _simShipArrCache[ym];
   const y=2000+parseInt(String(ym).slice(0,2),10), m=parseInt(String(ym).slice(2),10);
-  const sail=new Date(y, m+1, 0);                    // 다음 달 마지막 날
+  const sail=new Date(y, m, 0);                      // 그 달 마지막 날
   const p2=x=>(x<10?'0':'')+x;
   const sd=sail.getFullYear()+'-'+p2(sail.getMonth()+1)+'-'+p2(sail.getDate());
   const out=shipYmOf(shipAutoArrive(sd))||'';
+  _simShipArrCache[ym]=out;
+  return out;
+}
+// 이 달에 발주하면 언제 들어오나: 다음 달 말에 선적 → 선적일 + 49일이 입고일.
+function simArriveYm(ym){
+  if(_simArrCache[ym]!=null) return _simArrCache[ym];
+  const out=simShipArriveYm(psiYmAdd(ym,1));
   _simArrCache[ym]=out;
   return out;
+}
+// 이번 달(YYMM). 이 달까지는 PSI 실적을 실제선적으로 본다.
+function psiNowYm(){ const t=new Date();
+  return String(t.getFullYear()).slice(2)+((t.getMonth()+1)<10?'0':'')+(t.getMonth()+1); }
+// 실제 선적량을 손으로 고쳐 볼 때 쓰는 값. '대표품번|연월' → 수량. 화면에서만 쓴다.
+let _simShip={};
+function simShipFocus(td){
+  if(td.querySelector('input')) return;
+  const cur=td.textContent.trim().replace(/,/g,'');
+  td.innerHTML='<input class="ni" type="text" value="'+escapeHtml(cur)+'">';
+  const el=td.querySelector('input');
+  el.onkeydown=e=>{ if(e.key==='Enter'||e.key==='Escape') el.blur(); };
+  el.onblur=()=>{
+    const rep=td.getAttribute('data-rep'), ym=td.getAttribute('data-ym');
+    const t=String(el.value).replace(/[^0-9]/g,'');
+    if(t==='') delete _simShip[simNeedKey(rep,ym)]; else _simShip[simNeedKey(rep,ym)]=Math.round(Number(t));
+    renderSIM();      // 못 나간 물량이 다음 달로 넘어가므로 표 전체를 다시 셈한다
+  };
+  el.focus(); el.select();
 }
 // 값을 고치면 그 줄의 '발주후 보유월'만 바로 다시 적는다(표 전체를 다시 그리지 않는다)
 function simNeedApply(td, raw){
@@ -9977,6 +10009,7 @@ function renderPSI(){
   const subLab=(d,y)=>{
     if(psiSimOn && d.k==='mo2'){ const av=simArriveYm(y); const t=av?psiYmLabel(av):'';
       return L('발주후<br>'+t+'<br>보유월','После<br>'+t+'<br>мес.'); }
+    if(psiSimOn && d.k==='sh') return L('실제<br>선적','Факт<br>отгр.');
     return L(d.ko,d.ru);
   };
   const sub=yms.map(y=>SB.map((d,i)=>{
@@ -10063,12 +10096,26 @@ function renderPSI(){
     //   발주후 보유월 = 들어온 것까지 반영
     let addSt=0;
     const arrive=new Array(ymsAll.length).fill(0);
-    const shipped=new Array(ymsAll.length).fill(0);
+    const shipPlan=new Array(ymsAll.length).fill(0);
     const gCells=yms.map((y,i)=>{
       const a=g.agg[y]; const b=i===0?' bl':'';
       addSt+=arrive[i];                       // 이 달에 들어오는 발주분
       const st=a.st+addSt;
-      const sh=a.sh+shipped[i], inq=a.i+arrive[i];
+      // 선적계획 = 지난달 발주분 + 지난달에 못 나간 것.
+      // 실제선적은 PSI 자료를 그대로 쓴다(손으로 고칠 수도 있다).
+      // 이미 지난 달은 실적만큼만 나간 것으로 보고, 모자란 만큼은 다음 달 계획으로 넘긴다.
+      // 앞으로 올 달은 계획대로 나가는 것으로 보고 그 49일 뒤 입고를 잡는다.
+      const plan=psiSimOn?shipPlan[i]:0;
+      const manShip=_simShip[simNeedKey(g.rep,y)];
+      const realSh=(manShip!=null)?Math.max(0,manShip):a.sh;
+      // 이미 지났거나 실적을 손으로 적어 둔 달은 '나간 양이 정해진' 달로 본다
+      const known=(y<=psiNowYm()) || (manShip!=null);
+      if(psiSimOn && i+1<ymsAll.length && known) shipPlan[i+1]+=Math.max(0, plan-realSh);
+      if(psiSimOn){
+        const q=known?((y<=psiNowYm())?0:realSh):plan;   // 지난 달 실적의 입고는 자료에 이미 있다
+        if(q>0){ const sa=ymsAll.indexOf(simShipArriveYm(y)); if(sa>i) arrive[sa]+=q; }
+      }
+      const sh=realSh, inq=a.i+arrive[i];
       const mo=moOf(a.st,a.fut);              // 보유월은 발주 전
       const man=_simNeed[simNeedKey(g.rep,y)];
       // 이 달 발주분은 ai 달에 들어온다. 그 달 보유월이 N 이 되도록 수량을 잡는다.
@@ -10085,21 +10132,24 @@ function renderPSI(){
       }else if(psiSimOn && man!=null){ nd=man; }
       needTot[y]=(needTot[y]||0)+nd;
       stAdd[y]=(stAdd[y]||0)+addSt;
-      shipTot[y]=(shipTot[y]||0)+shipped[i];
+      shipTot[y]=(shipTot[y]||0)+plan;    // 합계 줄의 선적계획
       inTot[y]=(inTot[y]||0)+arrive[i];
-      const si=ymsAll.indexOf(psiYmAdd(y,1));  // 다음 달 말 선적
-      if(si>i) shipped[si]+=nd;
-      if(ai>i) arrive[ai]+=nd;
+      if(psiSimOn && i+1<ymsAll.length) shipPlan[i+1]+=nd;   // 이 달 발주분은 다음 달에 나간다
+      const sAttr=' data-rep="'+escapeHtml(g.rep)+'" data-ym="'+y
+        +'" onclick="simShipFocus(this)" title="'
+        +L('실제로 나간 수량을 적으면 못 나간 만큼은 다음 달 선적으로 넘어갑니다','Введите фактическую отгрузку')+'"';
       const nAttr=' data-rep="'+escapeHtml(g.rep)+'" data-ym="'+y+'" data-st="'+arrSt
         +'" data-avg="'+(arrFut/c.avgN)+'" onclick="simNeedFocus(this)" title="'
         +L((simArriveYm(y)?psiYmLabel(simArriveYm(y))+' 입고 기준 수량입니다. ':'')
            +'눌러서 고치면 선적·입고와 그 뒤 달까지 다시 계산됩니다',
            'Нажмите, чтобы изменить')+'"';
-      const val={sh:n(sh), i:n(inq), o:n(a.o), ms:n(a.ms), st:n(st), mo:(mo==null?'':mo.toFixed(1)),
+      const val={sh:n(sh), plan:(plan?n(plan):''), i:n(inq), o:n(a.o), ms:n(a.ms), st:n(st),
+                 mo:(mo==null?'':mo.toFixed(1)),
                  need:(nd?n(nd):''), mo2:(m2==null?'':m2.toFixed(1))};
       const low=psiLow(mo);
-      return SB.map((d,j)=>'<td class="n'+(j===0?b:'')+((low&&d.k==='mo')?' low':'')+(d.k==='need'?' ed':'')
-        +'"'+(d.k==='need'?nAttr:'')+'>'+val[d.k]+'</td>').join('');
+      return SB.map((d,j)=>'<td class="n'+(j===0?b:'')+((low&&d.k==='mo')?' low':'')
+        +((d.k==='need'||(psiSimOn&&d.k==='sh'))?' ed':'')+'"'
+        +(d.k==='need'?nAttr:((psiSimOn&&d.k==='sh')?sAttr:''))+'>'+val[d.k]+'</td>').join('');
     }).join('');
     const gRow='<tr class="g'+band+'">'+gFix+gCells+'</tr>';
     const kidRows=g.rows.map(it=>{
@@ -10110,7 +10160,7 @@ function renderPSI(){
       const cells=yms.map((y,i)=>{
         const x=v[y]||{sh:0,i:0,o:0,ms:0,st:0};
         const b=i===0?' bl':'';
-        const val={sh:n(x.sh), i:n(x.i), o:n(x.o), ms:n(x.ms), st:n(x.st), mo:'', need:'', mo2:''};
+        const val={sh:n(x.sh), plan:'', i:n(x.i), o:n(x.o), ms:n(x.ms), st:n(x.st), mo:'', need:'', mo2:''};
         const dim={sh:1, ms:1};
         // 보유월은 대표품번 줄에만 적으므로 하위 줄에는 색을 칠하지 않는다
         return SB.map((d,j)=>'<td class="n'+(j===0?b:'')+(dim[d.k]?' dim':'')+'">'+val[d.k]+'</td>').join('');
@@ -10128,8 +10178,9 @@ function renderPSI(){
     const mo=moOf(t.st,t.fut);                              // 보유월은 발주 전
     const tn=psiSimOn ? (needTot[y]||0) : 0;
     const tm2=(psiSimOn && arrFutTot[y]) ? moOf((arrStTot[y]||0)+tn, arrFutTot[y]) : null;
-    const val={sh:n(t.sh+(shipTot[y]||0)), i:n(t.i+(inTot[y]||0)), o:n(t.o), ms:n(t.ms), st:n(tst),
-               mo:(mo==null?'':mo.toFixed(1)), need:(tn?n(tn):''), mo2:(tm2==null?'':tm2.toFixed(1))};
+    const val={sh:n(t.sh), plan:(shipTot[y]?n(shipTot[y]):''), i:n(t.i+(inTot[y]||0)), o:n(t.o), ms:n(t.ms),
+               st:n(tst), mo:(mo==null?'':mo.toFixed(1)),
+               need:(tn?n(tn):''), mo2:(tm2==null?'':tm2.toFixed(1))};
     const dim={sh:1, ms:1, mo:1, mo2:1};
     return SB.map((d,j)=>'<th style="'+sumS+';text-align:right'+(j===0?b:'')+(dim[d.k]?';color:var(--muted)':'')+'">'+val[d.k]+'</th>').join('');
   }).join('');
