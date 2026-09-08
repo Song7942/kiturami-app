@@ -221,6 +221,12 @@ input[type="text"]::placeholder{color:var(--muted)}
 .pt tr.g.band td{background:var(--tag-bg)}
 .pt span.c{font-family:'Courier New',monospace;font-size:9.5px;white-space:nowrap}
 .pt td.low,.pt tr.g td.low{background:#fee2e2;color:#b91c1c;font-weight:700}
+/* 대표품번·호환품번·단종·품명·규격은 가로로 밀어도 왼쪽에 붙어 있는다.
+   left 값은 고른 열에 따라 달라져서 그릴 때마다 <style> 로 넣어 준다. */
+.pt td.fxs,.pt th.fxs{position:sticky;z-index:2}
+.pt td.fxs{background:var(--surface)}
+.pt th.fxs{z-index:5}
+.pt .fxend{border-right:1px solid var(--border)}
 /* 손으로 고친 칸 — 셈한 값이 아니라는 표시 */
 .pt td.man,.pt tr.g td.man{background:#ffedd5;color:#9a3412;font-weight:700;
   border-bottom:1px solid #f97316}
@@ -10016,6 +10022,14 @@ function renderPSI(){
   _psiFiltered=items.map(it=>it.r);
   const badge=document.getElementById('psiBadge'); if(badge) badge.innerHTML='<b>'+items.length+'</b>';
 
+  // 고정열의 왼쪽 위치(누적 너비)
+  const fxLeft=[]; { let acc=0; FX.forEach(d=>{ fxLeft.push(acc); acc+=d.w; }); }
+  const fxCls=(k)=>' fxs fx'+k+(k===FX.length-1?' fxend':'');
+  {
+    let el=document.getElementById(PSIP+'FxCss');
+    if(!el){ el=document.createElement('style'); el.id=PSIP+'FxCss'; document.head.appendChild(el); }
+    el.textContent=FX.map((d,k)=>'#'+PSIP+'Table .fx'+k+'{left:'+fxLeft[k]+'px}').join('');
+  }
   const cg=pgEl('Colgroup');
   if(cg){
     const w=FX.map(d=>'<col style="width:'+d.w+'px">');
@@ -10047,7 +10061,7 @@ function renderPSI(){
   const noteEl=pgEl('OpenNote');
   if(noteEl) noteEl.textContent=L('이월재고 = '+psiYmLabel(openYm)+' 재고','Нач. остаток = остаток '+psiYmLabel(openYm));
   let head=['<tr>',
-    FX.map(d=>'<th rowspan="2" style="'+thS+'">'+L(d.ko,d.ru)+psiFilterIcon(d.k)+'</th>').join(''),
+    FX.map((d,k)=>'<th rowspan="2" class="'+fxCls(k).trim()+'" style="'+thS+'">'+L(d.ko,d.ru)+psiFilterIcon(d.k)+'</th>').join(''),
     grp,'</tr><tr>',sub,'</tr>'].join('');
 
   if(!items.length){
@@ -10114,7 +10128,7 @@ function renderPSI(){
     const gTxt={ rep:'<span class="c">'+escapeHtml(g.rep)+'</span>',
                  compat:(fin?('<span class="c">'+escapeHtml(normBadgePN(fin))+'</span>'):''),
                  note:'', name:escapeHtml(pnColText('name',finRow)), spec:escapeHtml(pnColText('spec',finRow)) };
-    const gFix=FX.map(d=>'<td class="'+((d.k==='name'||d.k==='spec')?'nm':'')+'">'+gTxt[d.k]+'</td>').join('');
+    const gFix=FX.map((d,k)=>'<td class="'+((d.k==='name'||d.k==='spec')?'nm':'')+fxCls(k)+'">'+gTxt[d.k]+'</td>').join('');
     // 발주분은 다음 달 말에 선적되고, 그 49일 뒤에 들어온다.
     //   선적·입고 열에도 그 수량이 잡히고, 들어온 달부터 재고가 늘어난다.
     //   보유월  = 발주 전 기준(지금 흐름 그대로)
@@ -10185,7 +10199,7 @@ function renderPSI(){
       const r=it.r, v=it.v;
       const kTxt={ rep:'', compat:'<span class="c">'+escapeHtml(normBadgePN(r._compat))+'</span>',
                    note:escapeHtml(pnColText('note',r)), name:escapeHtml(pnColText('name',r)), spec:escapeHtml(pnColText('spec',r)) };
-      const kFix=FX.map(d=>'<td class="'+kCls[d.k]+'">'+kTxt[d.k]+'</td>').join('');
+      const kFix=FX.map((d,k)=>'<td class="'+kCls[d.k]+fxCls(k)+'">'+kTxt[d.k]+'</td>').join('');
       const cells=yms.map((y,i)=>{
         const x=v[y]||{sh:0,i:0,o:0,ms:0,st:0};
         const b=i===0?' bl':'';
@@ -10214,7 +10228,7 @@ function renderPSI(){
     return SB.map((d,j)=>'<th style="'+sumS+';text-align:right'+(j===0?b:'')+(dim[d.k]?';color:var(--muted)':'')+'">'+val[d.k]+'</th>').join('');
   }).join('');
   head += '<tr>'
-    + '<th colspan="'+FX.length+'" style="'+sumS+';text-align:right">'
+    + '<th colspan="'+FX.length+'" class="fxs fx0 fxend" style="'+sumS+';text-align:right">'
     + L('합계 '+groups.length+'개 대표품번 / '+Object.keys(counted).length+'개 호환품번',
         'Осн. '+groups.length+' · Артикулов '+Object.keys(counted).length)+'</th>'
     + sumCells + '</tr>';
