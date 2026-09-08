@@ -998,7 +998,7 @@ input[type="text"]::placeholder{color:var(--muted)}
     <div class="search-bar">
       <div class="search-wrap">
         <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-        <input type="text" id="poInput" placeholder="차수·대표코드·발주코드·품명으로 검색…" oninput="debouncedRenderPO()">
+        <input type="text" id="poInput" placeholder="차수·발주월·대표코드·발주코드·품명으로 검색…" oninput="debouncedRenderPO()">
       </div>
       <div class="count-badge" id="poBadge"></div>
       <button class="dl-btn" onclick="switchTab('psi')" title="PSI 화면으로 돌아가기">
@@ -1006,6 +1006,7 @@ input[type="text"]::placeholder{color:var(--muted)}
         <span id="i18n-po-back">PSI</span>
       </button>
       <select id="poCha" onchange="renderPO()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></select>
+      <select id="poMon" onchange="renderPO()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></select>
       <button class="dl-btn" id="poUploadBtn" onclick="document.getElementById('poFileInput').click()" title="차수·발주월·발주코드·수주수량 이 있는 엑셀을 올리면 반영합니다" style="display:none;background:var(--accent2);border-color:var(--accent2);color:#fff">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
         <span id="i18n-po-up">발주 업로드</span>
@@ -8041,6 +8042,17 @@ function poChaList(){
   const s=new Set(); poData.forEach(r=>{ if(r.cha) s.add(r.cha); });
   return [...s].sort();
 }
+// 발주월 목록(숫자는 숫자 순, 그 밖의 값은 뒤로)
+function poMonList(){
+  const s=new Set(); poData.forEach(r=>{ const m=String(r.mon||'').trim(); if(m) s.add(m); });
+  return [...s].sort((a,b)=>{
+    const na=parseFloat(a), nb=parseFloat(b);
+    const ea=isNaN(na), eb=isNaN(nb);
+    if(ea&&eb) return a.localeCompare(b,'ko');
+    if(ea) return 1; if(eb) return -1;
+    return na-nb;
+  });
+}
 function renderPO(){
   const pane=document.getElementById('pane-po'); if(!pane) return;
   _poRepMap=null;
@@ -8054,12 +8066,24 @@ function renderPO(){
     const want='<option value="">'+L('차수 전체','Все партии')+'</option>'+list.map(c=>'<option>'+escapeHtml(c)+'</option>').join('');
     if(chaSel.getAttribute('data-list')!==list.join('|')){ chaSel.innerHTML=want; chaSel.setAttribute('data-list',list.join('|')); chaSel.value=cur; }
   }
+  const monSel=document.getElementById('poMon');
+  if(monSel){
+    const cur=monSel.value;
+    const list=poMonList();
+    if(monSel.getAttribute('data-list')!==list.join('|')){
+      monSel.innerHTML='<option value="">'+L('발주월 전체','Все месяцы')+'</option>'
+        +list.map(m=>'<option>'+escapeHtml(m)+'</option>').join('');
+      monSel.setAttribute('data-list',list.join('|')); monSel.value=cur;
+    }
+  }
   const cha=chaSel?chaSel.value:'';
+  const mon=monSel?monSel.value:'';
   let rows=poData.slice();
   if(cha) rows=rows.filter(r=>r.cha===cha);
+  if(mon) rows=rows.filter(r=>String(r.mon||'').trim()===mon);
   if(kw) rows=rows.filter(r=>{
     const i=poLookup(r.pn);
-    return [r.cha, r.pn, i.rep, i.fin, poName(r.pn)].some(v=>String(v||'').toLowerCase().includes(kw));
+    return [r.cha, r.mon, r.pn, i.rep, i.fin, poName(r.pn)].some(v=>String(v||'').toLowerCase().includes(kw));
   });
   rows.sort((a,b)=> (a.cha===b.cha) ? String(a.pn).localeCompare(String(b.pn)) : String(a.cha).localeCompare(String(b.cha)));
   _poFiltered=rows;
@@ -8085,13 +8109,14 @@ function renderPO(){
     const chg=(i.fin && i.fin!==normPN(r.pn)) ? i.fin : '';
     const rest=r.qty-r.supplied;
     tq+=r.qty; ts+=r.supplied;
-    const badgeS='font-size:9.5px;padding:1px 3px;white-space:nowrap';
+    // 코드 세 열은 바탕색 없이 글자만(변경코드는 눈에 띄게 붉은 글씨)
+    const codeS="font-family:'Courier New',monospace;font-size:9.5px;white-space:nowrap";
     return '<tr>'
       + '<td style="'+tdS+';white-space:nowrap">'+escapeHtml(r.cha)+'</td>'
       + '<td style="'+tdS+';text-align:center;color:var(--muted)">'+escapeHtml(String(r.mon||''))+'</td>'
-      + '<td style="'+tdS+'">'+(i.rep?('<span class="code" style="'+badgeS+'">'+escapeHtml(i.rep)+'</span>'):'')+'</td>'
-      + '<td style="'+tdS+'"><span class="code" style="'+badgeS+'">'+escapeHtml(normBadgePN(r.pn))+'</span></td>'
-      + '<td style="'+tdS+'">'+(chg?('<span class="code" style="'+badgeS+';background:#fee2e2;color:#b91c1c">'+escapeHtml(normBadgePN(chg))+'</span>'):'')+'</td>'
+      + '<td style="'+tdS+'">'+(i.rep?('<span style="'+codeS+'">'+escapeHtml(i.rep)+'</span>'):'')+'</td>'
+      + '<td style="'+tdS+'"><span style="'+codeS+'">'+escapeHtml(normBadgePN(r.pn))+'</span></td>'
+      + '<td style="'+tdS+'">'+(chg?('<span style="'+codeS+';color:#b91c1c;font-weight:600">'+escapeHtml(normBadgePN(chg))+'</span>'):'')+'</td>'
       + '<td style="'+tdS+';word-break:break-all;font-size:10.5px;line-height:1.25">'+escapeHtml(poName(r.pn))+'</td>'
       + '<td style="'+numS+'">'+(r.qty?r.qty.toLocaleString():'0')+'</td>'
       + '<td style="'+numS+'">'+(r.supplied?r.supplied.toLocaleString():'')+'</td>'
@@ -8856,15 +8881,19 @@ function renderPSI(){
       t.sh+=a.sh; t.i+=a.i; t.o+=a.o; t.ms+=a.ms; t.st+=a.st; t.fut+=a.fut; }); });
 
   // 대표품번 줄 색(참고 엑셀의 연한 파랑 띠)
-  const gS=tdS+';background:var(--tag-bg);font-weight:700';
+  // 하위 호환품번 줄이 없으면(대표품번만 보기) 띠를 칠하지 않는다 — 모든 줄이 같은 색이면 의미가 없다
+  const band=psiShowKids()?';background:var(--tag-bg)':'';
+  const gS=tdS+band+';font-weight:700';
   const gNum=gS+';text-align:right;white-space:nowrap';
   const badgeS='font-size:9.5px;padding:1px 3px;white-space:nowrap';
+  // 호환품번은 바탕색 없이 글자만
+  const plainS="font-family:'Courier New',monospace;font-size:9.5px;white-space:nowrap";
   const body=groups.map(g=>{
     const r0=g.first;
     const fin=String(r0.final||'');
     const finRow=Object.assign({}, r0, {_split:true, _compat:fin});
     const gTxt={ rep:'<span class="code" style="'+badgeS+'">'+escapeHtml(g.rep)+'</span>',
-                 compat:(fin?('<span class="code" style="'+badgeS+'">'+escapeHtml(normBadgePN(fin))+'</span>'):''),
+                 compat:(fin?('<span style="'+plainS+'">'+escapeHtml(normBadgePN(fin))+'</span>'):''),
                  note:'', name:escapeHtml(pnColText('name',finRow)), spec:escapeHtml(pnColText('spec',finRow)) };
     const gFix=FX.map(d=>'<td style="'+gS+(d.k==='name'||d.k==='spec'?';word-break:break-all;font-size:10.5px;line-height:1.25':'')+'">'+gTxt[d.k]+'</td>').join('');
     const gCells=yms.map((y,i)=>{
@@ -8876,7 +8905,7 @@ function renderPSI(){
     const gRow='<tr>'+gFix+gCells+'</tr>';
     const kids=g.rows.map(it=>{
       const r=it.r, v=it.v;
-      const kTxt={ rep:'', compat:'<span class="code" style="'+badgeS+'">'+escapeHtml(normBadgePN(r._compat))+'</span>',
+      const kTxt={ rep:'', compat:'<span style="'+plainS+'">'+escapeHtml(normBadgePN(r._compat))+'</span>',
                    note:escapeHtml(pnColText('note',r)), name:escapeHtml(pnColText('name',r)), spec:escapeHtml(pnColText('spec',r)) };
       const kSty={ rep:tdS, compat:tdS, note:tdS+';text-align:center;color:var(--muted)',
                    name:tdS+';word-break:break-all;font-size:10.5px;line-height:1.25',
