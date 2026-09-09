@@ -1044,9 +1044,10 @@ input[type="text"]::placeholder{color:var(--muted)}
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
         <span id="i18n-ms-cols">보기</span>
       </button>
-      <select id="msFrom" onchange="renderMS()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></select>
+      <input type="text" id="msFrom" list="ktMsYmOpts" placeholder="2021-12" onchange="renderMS()" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center">
       <span style="font-size:11px;color:var(--muted)">~</span>
-      <select id="msTo" onchange="renderMS()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></select>
+      <input type="text" id="msTo" list="ktMsYmOpts" placeholder="2026-09" onchange="renderMS()" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center">
+      <datalist id="ktMsYmOpts"></datalist>
       <button class="dl-btn" onclick="msAllPeriod()" title="기간을 전체로 돌리기"><span id="i18n-ms-all">전체 기간</span></button>
       <button class="dl-btn" onclick="downloadMS()">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -8420,17 +8421,20 @@ function msFillRange(){
   const ru=(lang==='ru'), L=(ko,rr)=>(ru?rr:ko);
   const list=msYmList();
   const f=document.getElementById('msFrom'), t=document.getElementById('msTo');
-  if(!list.length) return {from:'', to:'', label:L('전 기간','все')};
-  if(f && f.getAttribute('data-list')!==lang+'|'+list.join('|')){
-    const cf=f.value, ct=t?t.value:'';
-    const opts=list.map(v=>'<option value="'+v+'">'+psiYmLabel(v)+'</option>').join('');
-    f.innerHTML=opts; if(t) t.innerHTML=opts;
-    f.setAttribute('data-list',lang+'|'+list.join('|')); if(t) t.setAttribute('data-list',lang+'|'+list.join('|'));
-    f.value=(cf && list.indexOf(cf)>=0)?cf:list[0];
-    if(t) t.value=(ct && list.indexOf(ct)>=0)?ct:list[list.length-1];
+  const dl=document.getElementById('ktMsYmOpts');
+  if(!list.length){ if(dl) dl.innerHTML=''; return {from:'', to:'', label:L('전 기간','все')}; }
+  const key=list.join('|');
+  if(dl && dl.getAttribute('data-list')!==key){
+    dl.innerHTML=list.map(v=>'<option value="'+psiYmLabel(v)+'">').join('');
+    dl.setAttribute('data-list',key);
   }
-  let from=f?f.value:'', to=t?t.value:'';
-  if(from && to && from>to){ const x=from; from=to; to=x; }
+  let from=psiYmParse(f?f.value:''), to=psiYmParse(t?t.value:'');
+  if(!from) from=list[0];
+  if(!to) to=list[list.length-1];
+  if(from>to){ const x=from; from=to; to=x; }
+  // 적어 넣은 글자를 '2026-02' 꼴로 되돌려 준다(적는 중인 칸은 건드리지 않는다)
+  if(f && document.activeElement!==f && f.value!==psiYmLabel(from)) f.value=psiYmLabel(from);
+  if(t && document.activeElement!==t && t.value!==psiYmLabel(to)) t.value=psiYmLabel(to);
   const whole=(from===list[0] && to===list[list.length-1]);
   const label = whole ? L('전 기간','все периоды')
     : (from===to ? psiYmLabel(from) : (psiYmLabel(from)+' ~ '+psiYmLabel(to)));
@@ -8439,7 +8443,8 @@ function msFillRange(){
 function msAllPeriod(){
   const list=msYmList(); if(!list.length) return;
   const f=document.getElementById('msFrom'), t=document.getElementById('msTo');
-  if(f) f.value=list[0]; if(t) t.value=list[list.length-1];
+  if(f) f.value=psiYmLabel(list[0]);
+  if(t) t.value=psiYmLabel(list[list.length-1]);
   renderMS();
 }
 function renderMS(){
