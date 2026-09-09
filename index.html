@@ -3167,6 +3167,25 @@ function pnSpecVal(r, f){   // f: nw|gw|cbm|dan
   return pnSpecAgg(r, f);
 }
 // 분할 보기에서 호환품번(품번) 단위 편집 span
+// 품번 정보(대표·호환·최종품번 / 품명 / 규격 / 러품 / 영문품명 / 단종)는 여러 화면이 같은 자리에서
+// 가져다 쓴다. 어디서 고치든 지금 보고 있는 화면이 바로 따라오게 다시 그린다.
+function ktAfterPnEdit(){
+  _pnLookupMap=null; _pnByRepMap=null; _nameRuByRep=null;
+  const on=id=>{ const e=document.getElementById(id); return !!(e && e.classList.contains('active')); };
+  const go=(id,fn)=>{ try{ if(on(id) && typeof fn==='function') fn(); }catch(e){} };
+  go('pane-pn',    typeof renderPN==='function'?renderPN:null);
+  go('pane-psi',   typeof renderPSI==='function'?renderPSI:null);
+  go('pane-sim',   typeof renderSIM==='function'?renderSIM:null);
+  go('pane-ms',    typeof renderMS==='function'?renderMS:null);
+  go('pane-ship',  typeof renderShip==='function'?renderShip:null);
+  go('pane-po',    typeof renderPO==='function'?renderPO:null);
+  go('pane-price', typeof renderPriceActive==='function'?renderPriceActive:null);
+}
+// 호환품번 한 개를 고치는 칸(품번조회 분할 보기와 같은 방식)
+function pnCompatEdit(rep, raw){
+  const disp=escapeHtml(pnUpperLead(raw||'')), rw=escapeHtml(raw||'');
+  return `<span contenteditable="true" class="pn-edit" data-pnrep="${escapeHtml(rep)}" data-pnfield="compat_one" data-pnorig="${disp}" data-pnrawold="${rw}" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()" onblur="onPNCellBlur(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}" style="display:inline-block;min-width:20px;outline:none;border-bottom:1px dashed var(--accent2);cursor:text;padding:0 2px">${disp}</span>`;
+}
 function cspecEdit(compat, f, val){
   const v=escapeHtml(val||''), raw=escapeHtml(compat||'');
   return `<span contenteditable="true" class="pn-edit" data-pncompat="${raw}" data-pnfield="cspec:${f}" data-pnorig="${v}" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()" onblur="onPNCellBlur(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}" style="display:inline-block;min-width:20px;outline:none;border-bottom:1px dashed var(--accent2);cursor:text;padding:0 2px">${v}</span>`;
@@ -3922,6 +3941,7 @@ async function onPNCellBlur(el){
     if(error){ alert((lang==='ru'?'Ошибка. Нужна таблица kt_pn_specs.':'저장 실패 — kt_pn_specs 테이블이 필요합니다.')+'\n['+(error.message||error.code)+']'); el.textContent=el.getAttribute('data-pnorig')||''; return; }
     _pnSpec.set(key, cur);
     el.setAttribute('data-pnorig', val); el.textContent=val;
+    ktAfterPnEdit();
     return;
   }
   // 분할 보기: 호환품번 한 개(그 행의 품번)만 수정 → 대표품번의 compat 배열에서 해당 값을 교체/삭제.
@@ -3934,13 +3954,13 @@ async function onPNCellBlur(el){
     if(val==='') { if(idx>=0) arr.splice(idx,1); }
     else if(idx>=0) arr[idx]=val; else arr.push(val);
     const res=await savePNCell(rep, 'compat', arr.join(', '));
-    if(res && res.ok){ renderPN(); } else { el.textContent=el.getAttribute('data-pnorig')||''; }
+    if(res && res.ok){ ktAfterPnEdit(); } else { el.textContent=el.getAttribute('data-pnorig')||''; }
     return;
   }
   const r=await savePNCell(rep, field, val);
   if(r && r.ok){
-    if(r.rerender){ renderPN(); }   // 대표품번·호환품번 변경은 표시(뱃지·행 식별)가 달라져 다시 그린다
-    else { el.setAttribute('data-pnorig', val); el.textContent=val; }
+    if(r.rerender){ ktAfterPnEdit(); }   // 대표품번·호환품번 변경은 표시(뱃지·행 식별)가 달라져 다시 그린다
+    else { el.setAttribute('data-pnorig', val); el.textContent=val; ktAfterPnEdit(); }
   } else { el.textContent=el.getAttribute('data-pnorig')||''; }
 }
 async function loadPNOverrides(){
@@ -4049,7 +4069,7 @@ async function handleSpecialPNUpload(wb){
         if(error && withDate){ withDate=false; ({ error }=await sb.from('kt_export_ctrl').upsert(rows(),{onConflict:'pn'})); }
         if(error) return (ru?'Ошибка загрузки.':'업로드 실패.')+'\n['+(error.message||error.code)+']';
       }
-      await loadExportCtrl(); _pnByRepMap=null; renderPN();
+      await loadExportCtrl(); _pnByRepMap=null; ktAfterPnEdit();
       let cO=0,cT=0; PN_DATA.forEach(r=>(r.compats||[]).forEach(c=>{ if(!normPN(c))return; cT++; if(isExportRestricted(c))cO++; }));
       const exTail = (expiredRenew ? (ru?(' Просрочено: '+expiredRenew+'.'):(' · 비해당이지만 갱신 만료일이 지나 제외: '+expiredRenew+'개')) : '')
         + (withDate ? '' : (ru?'\n※ Для авто-истечения выполните в Supabase: alter table kt_export_ctrl add column if not exists valid_until date;'
@@ -11210,11 +11230,15 @@ function renderPSI(){
     const r0=g.first;
     const fin=String(r0.final||'');
     const finRow=Object.assign({}, r0, {_split:true, _compat:fin});
-    const gTxt={ rep:'<span class="c">'+escapeHtml(g.rep)+'</span>',
-                 compat:(fin?('<span class="c">'+escapeHtml(normBadgePN(fin))+'</span>'):''),
-                 note:(fin?escapeHtml(pnColText('note',finRow)):''),
+    // MASTER 는 품번조회에 가지 않고 여기서 바로 고칠 수 있다(저장 자리는 품번조회와 같다).
+    const ED=(typeof pnEditable==='function') && pnEditable();
+    const gTxt={ rep:(ED?pnEditSpan(g.rep,'rep',g.rep):('<span class="c">'+escapeHtml(g.rep)+'</span>')),
+                 compat:(ED?pnEditSpan(g.rep,'final',pnUpperLead(fin||''))
+                           :(fin?('<span class="c">'+escapeHtml(normBadgePN(fin))+'</span>'):'')),
+                 note:((ED&&fin)?cspecEdit(fin,'dan',pnColText('note',finRow)):(fin?escapeHtml(pnColText('note',finRow)):'')),
                  exp:(fin?psiColText('exp',finRow):''),
-                 name:escapeHtml(pnColText('name',finRow)), spec:escapeHtml(pnColText('spec',finRow)) };
+                 name:((ED&&fin)?cspecEdit(fin,'name',pnColText('name',finRow)):escapeHtml(pnColText('name',finRow))),
+                 spec:((ED&&fin)?cspecEdit(fin,'spec',pnColText('spec',finRow)):escapeHtml(pnColText('spec',finRow))) };
     const gCls={ note:'ct', exp:'xc' };
     const gFix=FX.map((d,k)=>'<td class="'+((d.k==='name'||d.k==='spec')?'nm':(gCls[d.k]||''))+fxCls(k)+'">'+gTxt[d.k]+'</td>').join('');
     // 발주분은 다음 달 말에 선적되고, 그 49일 뒤에 들어온다.
@@ -11291,9 +11315,12 @@ function renderPSI(){
     const gRow='<tr class="g'+band+'">'+gFix+(SHOWTOT?gTotCells:'')+gCells+'</tr>';
     const kidRows=g.rows.map(it=>{
       const r=it.r, v=it.v;
-      const kTxt={ rep:'', compat:'<span class="c">'+escapeHtml(normBadgePN(r._compat))+'</span>',
-                   note:escapeHtml(pnColText('note',r)), exp:psiColText('exp',r),
-                   name:escapeHtml(pnColText('name',r)), spec:escapeHtml(pnColText('spec',r)) };
+      const kTxt={ rep:'',
+                   compat:(ED?pnCompatEdit(g.rep, r._compat):('<span class="c">'+escapeHtml(normBadgePN(r._compat))+'</span>')),
+                   note:(ED?cspecEdit(r._compat,'dan',pnColText('note',r)):escapeHtml(pnColText('note',r))),
+                   exp:psiColText('exp',r),
+                   name:(ED?cspecEdit(r._compat,'name',pnColText('name',r)):escapeHtml(pnColText('name',r))),
+                   spec:(ED?cspecEdit(r._compat,'spec',pnColText('spec',r)):escapeHtml(pnColText('spec',r))) };
       const kFix=FX.map((d,k)=>'<td class="'+kCls[d.k]+fxCls(k)+'">'+kTxt[d.k]+'</td>').join('');
       const kEach=yms.map((y,i)=>{
         const x=v[y]||{sh:0,i:0,o:0,ms:0,st:0};
