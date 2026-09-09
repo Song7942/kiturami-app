@@ -8394,6 +8394,7 @@ function msYmList(){
 let _msFilters={};                   // {열: [고른 값들]}
 let _msSort={key:null, dir:'asc'};   // 정렬
 let _msAllRows=[];                   // 거르기 전 낱개 줄 — 값 목록을 만들 때 쓴다
+let _msAllGroups=[];                 // 거르기 전 묶음 — 대표품번 줄 값도 목록에 넣는다
 const MS_ROW_COLS={ymd:1, qty:1};    // 낱개 줄(일자) 단위로 거르는 열
 function msIsNumCol(key){ return key==='qty'; }
 // 한 호환품번 줄의 값
@@ -8405,6 +8406,21 @@ function msKidVal(key, g, it){
     case 'spec':   return String(pnColText('spec',it.r)||'');
     case 'note':   return String(pnColText('note',it.r)||'');
     case 'exp':    return isExportRestricted(it.r._compat)?'O':'';
+  }
+  return '';
+}
+// 대표품번 줄의 값. 이 줄의 호환품번 자리에는 '최종품번'이 적히므로
+// 단종·수출제한·품명·규격도 최종품번의 것을 쓴다(화면에 그리는 것과 같은 값).
+function msFinVal(key, g){
+  const fin=String(g.first.final||'');
+  const finRow=Object.assign({}, g.first, {_split:true, _compat:fin});
+  switch(key){
+    case 'rep':    return String(g.rep||'');
+    case 'compat': return fin?normBadgePN(fin):'';
+    case 'name':   return String(pnColText('name',finRow)||'');
+    case 'spec':   return String(pnColText('spec',finRow)||'');
+    case 'note':   return fin?String(pnColText('note',finRow)||''):'';
+    case 'exp':    return (fin && isExportRestricted(fin))?'O':'';
   }
   return '';
 }
@@ -8445,7 +8461,7 @@ function msBuild(from, to, kw){
       return {rep:g.rep, first:g.first, kids, seen:g.seen, total:kids.reduce((a,x)=>a+x.sum,0)};
     }).filter(Boolean);
   // 값 목록용으로, 거르기 전 낱개 줄을 모아 둔다
-  _msAllRows=[];
+  _msAllRows=[]; _msAllGroups=out;
   out.forEach(g=>g.kids.forEach(it=>it.days.forEach(d=>_msAllRows.push({g, it, d}))));
   out=msApplyFilters(out);
   return msApplySort(out);
@@ -8469,7 +8485,11 @@ function msApplyFilters(groups){
       kids.push({r:it.r, pn:it.pn, days, sum:days.reduce((a,x)=>a+x.q,0)});
     });
     if(!kids.length) return;
-    out.push({rep:g.rep, first:g.first, kids, seen:g.seen, total:kids.reduce((a,x)=>a+x.sum,0)});
+    // 대표품번 줄(최종품번)도 고른 값에 맞지 않으면 그 줄만 감춘다.
+    // 아래 호환품번 줄들은 조건에 맞으니 그대로 두고, 대표품번은 첫 줄에 옮겨 적는다.
+    const hideRow=!kidKeys.every(k=>sets[k].has(msFinVal(k,g)));
+    out.push({rep:g.rep, first:g.first, kids, seen:g.seen, hideRow,
+              total:kids.reduce((a,x)=>a+x.sum,0)});
   });
   return out;
 }
@@ -8515,6 +8535,7 @@ function msFilterIcon(key){
 function msDistinctValues(key){
   const set=new Set();
   (_msAllRows||[]).forEach(x=>set.add(msRowVal(key,x.g,x.it,x.d)));
+  if(!MS_ROW_COLS[key]) (_msAllGroups||[]).forEach(g=>set.add(msFinVal(key,g)));
   const a=[...set];
   if(msIsNumCol(key)) return a.sort((x,y)=>{ if(x==='') return 1; if(y==='') return -1; return parseFloat(x)-parseFloat(y); });
   return a.sort((x,y)=>x.localeCompare(y,'ko'));
@@ -8666,8 +8687,9 @@ function renderMS(){
                  name:escapeHtml(pnColText('name',finRow)), spec:escapeHtml(pnColText('spec',finRow)),
                  qty:g.total.toLocaleString() };
     const gRow='<tr>'+CO.map(d=>'<td style="'+gsty[d.k]+'">'+gTxt[d.k]+'</td>').join('')+'</tr>';
-    const kids=g.kids.map(it=>(msShowDays()?it.days:[{ym:'',q:it.sum}]).map((x,i)=>{
-      const txt={ rep:'',
+    const showRep=!!g.hideRow;      // 대표품번 줄을 감췄으면 첫 줄에 대표품번을 적는다
+    const kids=g.kids.map((it,ki)=>(msShowDays()?it.days:[{ym:'',q:it.sum}]).map((x,i)=>{
+      const txt={ rep:((showRep&&ki===0&&i===0)?('<span style="'+codeS+'">'+escapeHtml(g.rep||'')+'</span>'):''),
                   compat:(i===0?('<span style="'+codeS+'">'+escapeHtml(normBadgePN(it.r._compat))+'</span>'):''),
                   ymd:(x.ym?psiYmLabel(x.ym):''),
                   name:(i===0?escapeHtml(pnColText('name',it.r)):''),
@@ -8677,7 +8699,7 @@ function renderMS(){
                   qty:x.q.toLocaleString() };
       return '<tr>'+CO.map(d=>'<td style="'+sty[d.k]+'">'+txt[d.k]+'</td>').join('')+'</tr>';
     }).join('')).join('');
-    return (msShowGroups()?gRow:'')+(msShowKids()?kids:'');
+    return ((msShowGroups()&&!g.hideRow)?gRow:'')+(msShowKids()?kids:'');
   }).join('');
 
   const nq=CO.filter(d=>d.k==='qty').length;
@@ -8739,7 +8761,7 @@ async function downloadMS(){
     const fin=String(g.first.final||'');
     const finRow=Object.assign({}, g.first, {_split:true, _compat:fin});
     tot+=g.total; nPn+=g.kids.length;
-    if(msShowGroups()){
+    if(msShowGroups() && !g.hideRow){
       grpRows.push(aoa.length);
       aoa.push(rowOf({ rep:g.rep||'', compat:(fin?normBadgePN(fin):''), ymd:'',
         note:(fin?pnColText('note',finRow):''), exp:(fin&&isExportRestricted(fin)?'O':''),
