@@ -9966,9 +9966,25 @@ function psiColText(key,r){
   return '';
 }
 // 숫자 열 값. it = {r, key, v}
+// 지금 화면이 보고 있는 달 목록. '기간합계' 열을 걸러내고 정렬할 때 쓴다.
+let _psiYms=[];
+// 한 품번의 기간합계 값. 더하는 열은 더하고, 재고·보유월은 마지막 달 값을 쓴다.
+function psiTotNumOf(f,it){
+  const ys=_psiYms||[];
+  if(!ys.length) return null;
+  if(f==='st' || f==='mo' || f==='mo2'){
+    const x=it.v[ys[ys.length-1]]; if(!x) return null;
+    const v=x[f]; return (v==null||v==='')?null:Number(v);
+  }
+  let sm=0, any=false;
+  ys.forEach(y=>{ const x=it.v[y]; if(!x) return; const v=x[f];
+    if(v!=null && v!=='' && isFinite(Number(v))){ sm+=Number(v); any=true; } });
+  return any?sm:null;
+}
 function psiNumOf(key,it){
   if(key==='open') return Number(it.v._open)||0;
   const p=String(key).split(':'); const f=p[0], ym=p[1];
+  if(ym==='tot') return psiTotNumOf(f,it);
   const x=it.v[ym]; if(!x) return null;
   if(f==='mo') return (x.mo==null)?null:x.mo;
   const n=x[f]; return (n==null)?null:Number(n)||0;
@@ -9981,6 +9997,7 @@ function psiColLabel(key){
   const p=String(key).split(':');
   const F={sh:['선적','Отгрузка'], i:['입고','Приход'], o:['출고','Расход'], ms:['미출','Невып.'], st:['재고','Остаток'], mo:['보유월','Мес.']};
   const f=F[p[0]]||['',''];
+  if(p[1]==='tot') return (ru?'Итого за период ':'기간합계 ')+(ru?f[1]:f[0]);
   return psiYmLabel(p[1])+' '+(ru?f[1]:f[0]);
 }
 // 정렬 표시(활성일 때만 화살표)
@@ -10004,8 +10021,7 @@ function psiCellVal(key,it){
   // 바탕색으로 거르기: 'clr:YYMM' → 'red' / 'none'
   if(String(key).indexOf('clr:')===0){
     const ym=String(key).slice(4);
-    const x=it.v[ym];
-    const mo=x?x.mo:null;
+    const mo=(ym==='tot') ? psiTotNumOf('mo',it) : ((it.v[ym]||{}).mo);
     return psiLow(mo) ? 'red' : (psiHigh(mo) ? 'blue' : 'none');
   }
   if(!psiIsNumCol(key)) return String(psiColText(key,it.r));
@@ -10262,6 +10278,7 @@ function renderPSI(){
   // 발주필요는 '입고월' 보유월을 보고 잡는다. 그 달이 화면 밖일 수 있으니 뒤로 3개월 더 셈해 둔다.
   const ymsAll=yms.slice();
   if(psiSimOn) for(let i=1;i<=3;i++) ymsAll.push(psiYmAdd(yms[yms.length-1], i));
+  _psiYms=yms;                      // '기간합계' 열을 거르고 정렬할 때 쓴다
   const kwEl=pgEl('Input');
   const kw=(kwEl?kwEl.value:'').trim().toLowerCase();
   const isKo=(lang!=='ru');
@@ -10357,7 +10374,13 @@ function renderPSI(){
     if(psiSimOn && d.k==='sh') return L('실제<br>선적','Факт<br>отгр.');
     return L(d.ko,d.ru);
   };
-  const totSub=SB.map((d,i)=>'<th style="'+thS+(i===0?bl:'')+';background:var(--surface)">'+totLab(d)+'</th>').join('');
+  const totSub=SB.map((d,i)=>{
+      const key=d.k+':tot';
+      const clr=(d.k==='mo' && _psiFilters['clr:tot']) ? '<span style="color:#b91c1c;margin-left:2px">●</span>' : '';
+      return '<th onclick="openPSIFilter(&quot;'+key+'&quot;,this)" title="'+L('정렬','Сортировка')+'" style="'
+        + thS+(i===0?bl:'')+';background:var(--surface);cursor:pointer">'
+        + totLab(d) + psiSortMark(key) + clr + '</th>';
+    }).join('');
   let head=['<tr>',
     FX.map((d,k)=>'<th rowspan="2" class="'+fxCls(k).trim()+'" style="'+thS+'">'+L(d.ko,d.ru)+psiFilterIcon(d.k)+'</th>').join(''),
     totHead,grp,'</tr><tr>',totSub,sub,'</tr>'].join('');
