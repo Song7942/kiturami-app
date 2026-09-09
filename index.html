@@ -8440,7 +8440,7 @@ const MS_COL_DEFS=[
 function msColsMap(){
   const src=(psiCols && psiCols.__ms && typeof psiCols.__ms==='object')?psiCols.__ms:null;
   const m={}; MS_COL_DEFS.forEach(d=>m[d.k]=!d.off);
-  if(src) MS_COL_DEFS.forEach(d=>{ if(src[d.k]===false) m[d.k]=false; });
+  if(src) MS_COL_DEFS.forEach(d=>{ if(typeof src[d.k]==='boolean') m[d.k]=src[d.k]; });
   return m;
 }
 function msVisCols(isKo){ const m=msColsMap();
@@ -8979,7 +8979,7 @@ const SHIP_COL_DEFS=[
 function shipColsMap(){
   const src=(psiCols && psiCols.__ship && typeof psiCols.__ship==='object')?psiCols.__ship:null;
   const m={}; SHIP_COL_DEFS.forEach(d=>m[d.k]=true);
-  if(src) SHIP_COL_DEFS.forEach(d=>{ if(src[d.k]===false) m[d.k]=false; });
+  if(src) SHIP_COL_DEFS.forEach(d=>{ if(typeof src[d.k]==='boolean') m[d.k]=src[d.k]; });
   return m;
 }
 function shipVisCols(){
@@ -10193,12 +10193,12 @@ function psiFmt(v){ return _psiNF?_psiNF.format(v):String(v); }
 // 아이디별로 kt_user_prefs.psi_cols 에 저장한다(컬럼이 없으면 이 브라우저에만).
 const PSI_COL_DEFS=[
   {k:'rep',    fixed:1, w:96,  ko:'대표품번', ru:'Осн. артикул'},
-  {k:'compat', fixed:1, w:96,  ko:'호환품번', ru:'Артикул замены'},
+  {k:'compat', fixed:1, w:96,  ko:'호환품번', ru:'Артикул замены', off:1},
   {k:'note',   fixed:1, w:38,  ko:'단종',     ru:'Снято'},
-  {k:'exp',    fixed:1, w:52,  ko:'수출제한', ru:'Эксп.контроль', hko:'수출<br>제한', hru:'Эксп.<br>контр.', perm:'exp'},
+  {k:'exp',    fixed:1, w:52,  ko:'수출제한', ru:'Эксп.контроль', hko:'수출<br>제한', hru:'Эксп.<br>контр.', perm:'exp', off:1},
   {k:'name',   fixed:1, w:110, ko:'품명',     ru:'Наименование'},
   {k:'spec',   fixed:1, w:110, ko:'규격',     ru:'Хар-ки', koOnly:1},
-  {k:'sh',     w:56, ko:'선적',   ru:'Отгрузка'},
+  {k:'sh',     w:56, ko:'선적',   ru:'Отгрузка', off:1},
   {k:'i',      w:56, ko:'입고',   ru:'Приход'},
   {k:'o',      w:56, ko:'출고',   ru:'Расход'},
   {k:'ms',     w:52, ko:'미출',   ru:'Невып.'},
@@ -10208,8 +10208,8 @@ const PSI_COL_DEFS=[
 let psiCols=null;                 // {key:true/false}. null 이면 전부 보임
 let _psiColsLoadedFor=null;
 function psiColsMap(){
-  const m={}; PSI_COL_DEFS.forEach(d=>m[d.k]=true);
-  if(psiCols) PSI_COL_DEFS.forEach(d=>{ if(psiCols[d.k]===false) m[d.k]=false; });
+  const m={}; PSI_COL_DEFS.forEach(d=>m[d.k]=!d.off);   // off 인 열은 처음엔 감춘다
+  if(psiCols) PSI_COL_DEFS.forEach(d=>{ if(typeof psiCols[d.k]==='boolean') m[d.k]=psiCols[d.k]; });
   return m;
 }
 function psiVisFixed(isKo){ const m=psiColsMap();
@@ -10220,13 +10220,14 @@ function psiShowKids(){ return psiColsMap().compat!==false; }
 // 대표품번 열을 끄면 대표품번(묶음) 줄도 감춘다. 둘 다 끄면 묶음 줄만 남긴다.
 function psiShowGroups(){ const m=psiColsMap(); return (m.rep!==false) || (m.compat===false); }
 // 규격 오른쪽 '기간합계' 묶음을 보일지. 보기 창에서 켜고 끈다(저장은 psiCols.__tot).
-function psiShowTot(){ return !(psiCols && psiCols.__tot===false); }
+function psiShowTot(){ return !!(psiCols && psiCols.__tot); }   // 처음엔 접어 둔다
 function psiVisSub(){ const m=psiColsMap();
   let v=PSI_COL_DEFS.filter(d=>!d.fixed && m[d.k]);
   if(!v.length) v=PSI_COL_DEFS.filter(d=>d.k==='st');
   // 발주시뮬레이션에서만 선적 뒤에 '선적계획'을, 보유월 뒤에 두 열을 더 붙인다
   if(typeof psiSimOn!=='undefined' && psiSimOn){
-    const k=v.findIndex(d=>d.k==='sh');
+    let k=v.findIndex(d=>d.k==='sh');
+    if(k<0){ const sh=PSI_COL_DEFS.find(d=>d.k==='sh'); if(sh){ v=[sh].concat(v); k=0; } }
     if(k>=0) v=v.slice(0,k+1).concat(PSI_PLAN_COL, v.slice(k+1));
     v=v.concat(PSI_SIM_COL_DEFS);
   }
