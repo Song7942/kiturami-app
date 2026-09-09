@@ -323,6 +323,11 @@ input[type="text"]::placeholder{color:var(--muted)}
 .pn-hdr-wrap .pn-sticky2{z-index:3;background:var(--surface2)}
 /* 변경된 셀 강조 + 변경이력 배지 */
 .pn-changed{background:#fbbf2422}
+/* 가격정보 '묶어 보기' 의 대표품번 줄 */
+tr.price-grp td{background:var(--tag-bg)!important;font-weight:700}
+/* 가격정보에서 손으로 고친 칸 — 셈하거나 올린 값이 아니라는 표시 */
+td.price-man{background:#ffedd5!important;border-bottom:1px solid #f97316!important}
+td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-weight:700}
 /* 대표품번이 없어 자동으로 붙인 것 — 눈에 띄게 노란 칸으로 두어 나중에 제대로 채우게 한다 */
 .pn-c.pn-autorep{background:#fde68a!important;color:#78350f}
 /* 폭 좁은 열(품명·규격·러품·영문품명): 글자가 넘치면 셀 안에서 다음 줄로 */
@@ -931,6 +936,14 @@ input[type="text"]::placeholder{color:var(--muted)}
         <button class="dl-btn" onclick="downloadPriceActive()">
           <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           <span id="i18n-pricedl">엑셀 다운로드</span>
+        </button>
+        <button class="dl-btn" id="priceViewWrap" onclick="openPriceViewPanel()" title="대표품번끼리 묶어 볼지 고릅니다">
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
+          <span id="i18n-price-view">보기</span>
+        </button>
+        <button class="dl-btn" id="priceResetManualWrap" onclick="priceResetManual()" title="손으로 고친 원가·공급가·구매가를 고치기 전 값으로 되돌립니다">
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/></svg>
+          <span id="i18n-price-manual">수기 초기화</span>
         </button>
         <button class="dl-btn" id="priceResetWrap" onclick="resetPriceCalcData()" style="background:var(--surface2);border-color:#ef4444;color:#ef4444">
           <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
@@ -1979,7 +1992,7 @@ function switchTab(tab){
     // 표에 그려 둔 값(원가·공급가)도 같은 이유로 읽기 전에 비운다. 둘 다 await 전 동기 실행.
     clearUserScopedViews();
     applyPriceTabChrome();
-    Promise.all([loadPriceSettings(), loadPriceCalc(), loadPrices(), loadCompanyPrices()]).then(async()=>{ if(priceMode()==='master') await autoUpdateRatesIfNewMonth(); fillParamInputs(); applyPriceTabChrome(); renderPriceActive(); });
+    Promise.all([loadPriceSettings(), loadPriceCalc(), loadPrices(), loadCompanyPrices(), loadPriceOrig()]).then(async()=>{ if(priceMode()==='master') await autoUpdateRatesIfNewMonth(); fillParamInputs(); applyPriceTabChrome(); renderPriceActive(); priceManBtn(); });
   }
   if(tab==='psi'){ loadPSITab(); }
   if(tab==='po'){ loadPOTab(); }
@@ -2045,6 +2058,8 @@ function refreshPsiTexts(){
   set('i18n-sim-cols',COLS[0],COLS[1]);
   set('i18n-sim-reset','필터 초기화','Сброс фильтров');
   set('i18n-sim-manual','수기 초기화','Сброс ручных');
+  set('i18n-price-manual','수기 초기화','Сброс ручных');
+  set('i18n-price-view','보기','Вид');
   set('i18n-sim-dl',DL[0],DL[1]);
   // 발주현황
   ph('poInput','차수·발주년월·대표코드·발주코드·품명으로 검색…','Поиск: партия, месяц, код, наименование…');
@@ -2076,6 +2091,9 @@ function refreshPsiTexts(){
       'Загрузка Excel: партия, месяц заказа, код, количество');
   ttl('#psiUploadBtn','선적·입고·출고·재고 시트가 든 파일을 올리면 시트 이름으로 가려 반영합니다 (재고 시트는 이월재고용)',
       'Загрузка Excel с листами отгрузки, прихода, расхода и остатка');
+  ttl('#priceViewWrap','대표품번끼리 묶어 볼지 고릅니다','Выбор: группировать по осн. артикулу');
+  ttl('#priceResetManualWrap','손으로 고친 원가·공급가·구매가를 고치기 전 값으로 되돌립니다',
+      'Вернуть изменённые вручную цены к исходным значениям');
   ttl('#simResetManualBtn','손으로 고친 실제선적·발주필요를 원래 셈한 값으로 되돌립니다',
       'Вернуть ручные значения к расчётным');
   ttl('[onclick="switchTab(\'ship\')"]','인보이스별 선적 내역','Отгрузки по инвойсам');
@@ -11284,6 +11302,129 @@ async function loadPriceCalc(){
 
 // ── 계산 로직 (엑셀 계산식 시트와 동일) ──
 function ceil1(x){ return Math.ceil(x*10)/10; } // 소수 1자리 올림 (ROUNDUP(x,1))
+// ══ 가격정보: 손으로 고친 값 표시와 되돌리기 ═══════════════
+//   고치기 전 값을 kt_psi_cfg(id=91) 에 담아 둔다. 이 표는 jsonb 한 칸짜리 설정 보관소라
+//   새 열을 만들지 않고도 모두가 같은 값을 본다(브라우저마다 따로 놀지 않는다).
+//   · 처음 고칠 때만 그 전 값을 적어 둔다(그 뒤로 몇 번을 고쳐도 '처음 값'이 기준)
+//   · 지금 값이 그 전 값과 같아지면 표시를 지운다
+const PRICE_ORIG_ID=91;
+let _priceOrig={};            // {'calc:<row_no>':{ru_cost,ru_supply_krw,kz_supply_krw}, '<회사>:<rep>':{buy_price}}
+let _priceOrigLoaded=false;
+function priceOrigKey(kind, id){ return kind+':'+id; }
+async function loadPriceOrig(){
+  if(_priceOrigLoaded) return;
+  _priceOrigLoaded=true;
+  try{
+    const { data }=await sb.from('kt_psi_cfg').select('cfg').eq('id',PRICE_ORIG_ID).maybeSingle();
+    if(data && data.cfg && typeof data.cfg==='object') _priceOrig=data.cfg;
+  }catch(e){ /* 표가 없으면 이 브라우저에서만 기억한다 */ }
+}
+let _priceOrigT=null;
+function savePriceOrig(){
+  clearTimeout(_priceOrigT);
+  _priceOrigT=setTimeout(async function(){
+    try{ await sb.from('kt_psi_cfg').upsert({ id:PRICE_ORIG_ID, cfg:_priceOrig, updated_at:new Date().toISOString() },{onConflict:'id'}); }
+    catch(e){ /* 저장 못 해도 화면 표시는 이번 판에서 그대로 살아 있다 */ }
+  }, 500);
+}
+function _priceSame(a,b){
+  const x=(a==null||a==='')?null:Number(a), y=(b==null||b==='')?null:Number(b);
+  if(x==null && y==null) return true;
+  if(x==null || y==null) return false;
+  return x===y;
+}
+// 고치기 전 값을 적어 둔다(이미 있으면 그대로).
+function priceRememberOrig(key, field, before){
+  const o=_priceOrig[key] || (_priceOrig[key]={});
+  if(!(field in o)){ o[field]=(before==null||before==='')?null:Number(before); savePriceOrig(); }
+}
+// 지금 값이 처음 값과 같아졌으면 표시를 지운다.
+function priceForgetIfSame(key, field, now){
+  const o=_priceOrig[key]; if(!o || !(field in o)) return;
+  if(_priceSame(o[field], now)){
+    delete o[field];
+    if(!Object.keys(o).length) delete _priceOrig[key];
+    savePriceOrig();
+  }
+}
+// 이 칸이 손으로 고친 칸인가
+function priceIsMan(key, field, now){
+  const o=_priceOrig[key];
+  return !!(o && (field in o) && !_priceSame(o[field], now));
+}
+// 지금 화면에서 되돌릴 수 있는 칸만 센다(MASTER 는 계산식, 회사 계정은 자기 회사 것).
+function priceManKeys(){
+  const m=priceMode();
+  if(m==='master') return Object.keys(_priceOrig).filter(k=>k.indexOf('calc:')===0);
+  if(m==='company'){ const co=String(userRole(currentUser).company||'')+':'; return Object.keys(_priceOrig).filter(k=>k.indexOf(co)===0); }
+  return [];
+}
+function priceManCount(){
+  let c=0; priceManKeys().forEach(k=>{ c+=Object.keys(_priceOrig[k]||{}).length; });
+  return c;
+}
+// 단추 모양: 고친 칸이 있으면 주황색으로 개수까지 보여 준다(발주시뮬레이션과 같은 방식)
+function priceManBtn(){
+  const b=document.getElementById('priceResetManualWrap'); if(!b) return;
+  const m=priceMode();
+  const usable=(m==='master' && priceView==='calc') || m==='company';
+  b.style.display=usable?'':'none';
+  if(!usable) return;
+  const c=priceManCount(), t=b.querySelector('span');
+  if(t) t.textContent=(lang==='ru'?'Сброс ручных':'수기 초기화')+(c?(' '+c):'');
+  b.style.opacity=c?'1':'0.45';
+  b.style.background=c?'#f97316':''; b.style.borderColor=c?'#f97316':''; b.style.color=c?'#fff':'';
+}
+// 고치기 전 값으로 되돌린다. 화면뿐 아니라 저장된 값도 함께 되돌린다.
+async function priceResetManual(){
+  const ru=(lang==='ru');
+  if(!guardWrite('price')) return;
+  const keys=priceManKeys();
+  const c=priceManCount();
+  if(!c){ alert(ru?'Ручных значений нет.':'손으로 고친 값이 없습니다.'); return; }
+  if(!confirm(ru ? ('Вернуть '+c+' значений к исходным?')
+                 : ('손으로 고친 '+c+'개를 고치기 전 값으로 되돌립니다.\n계속할까요?'))) return;
+  const m=priceMode();
+  if(m==='master'){
+    const rows=[];
+    keys.forEach(k=>{
+      const rowNo=Number(k.slice(5));
+      const r=priceCalcData.find(x=>x.row_no===rowNo); if(!r) return;
+      const o=_priceOrig[k]||{};
+      Object.keys(o).forEach(f=>{ r[f]=o[f]; });
+      r.updated_at=new Date().toISOString();
+      rows.push({ row_no:r.row_no, name_ko:r.name_ko, spec:r.spec, rep:r.rep, compat:r.compat, final:r.final,
+                  ship_qty:r.ship_qty, ru_cost:r.ru_cost, ru_supply_krw:r.ru_supply_krw, kz_supply_krw:r.kz_supply_krw, updated_at:r.updated_at });
+    });
+    for(let i=0;i<rows.length;i+=200){
+      const { error }=await sb.from('kt_price_calc').upsert(rows.slice(i,i+200),{onConflict:'row_no'});
+      if(error){ alert((ru?'Ошибка сохранения':'저장 실패')+'\n['+(error.message||error.code)+']'); return; }
+    }
+    keys.forEach(k=>{ delete _priceOrig[k]; });
+    savePriceOrig();
+    priceManBtn(); renderPriceActive();
+    if(typeof syncKtPricesFromCalc==='function') syncKtPricesFromCalc();
+  }else if(m==='company'){
+    const role=userRole(currentUser);
+    const rows=[];
+    keys.forEach(k=>{
+      const rp=k.slice(String(role.company||'').length+1);
+      const cur=companyPriceData[rp]||{ buy_price:null, supply_price:null };
+      const o=_priceOrig[k]||{};
+      Object.keys(o).forEach(f=>{ cur[f]=o[f]; });
+      companyPriceData[rp]=cur;
+      rows.push({ company:role.company, rep:rp, buy_price:cur.buy_price, supply_price:cur.supply_price, updated_at:new Date().toISOString() });
+    });
+    for(let i=0;i<rows.length;i+=200){
+      const { error }=await sb.from('kt_company_prices').upsert(rows.slice(i,i+200),{onConflict:'company,rep'});
+      if(error){ alert((ru?'Ошибка сохранения':'저장 실패')+'\n['+(error.message||error.code)+']'); return; }
+    }
+    keys.forEach(k=>{ delete _priceOrig[k]; });
+    savePriceOrig();
+    priceManBtn(); renderPriceActive();
+  }
+  alert(ru?('Возвращено: '+c):(c+'개를 고치기 전 값으로 되돌렸습니다.'));
+}
 function calcPriceRow(r){
   const ruGp=priceSettings.ru_gp, kzGp=priceSettings.kz_gp;
   // 원가는 원 단위로만 다룬다. 엑셀·수기로 소수가 들어와도 올림해서 쓴다.
@@ -11496,6 +11637,72 @@ function switchPriceView(v){
   document.getElementById('priceUploadWrap').style.display = v==='calc'?'':'none';
   renderPriceActive();
 }
+// ══ 가격정보 '보기' — 대표품번끼리 묶어 보기 ═══════════════
+//   가격 자료는 호환품번 한 개가 한 줄이라 대표품번이 줄마다 되풀이된다.
+//   묶어 보기를 켜면 같은 대표품번을 한데 모으고, 그 위에 대표품번 줄을 한 줄 얹는다
+//   (PSI·미출현황과 같은 모양). 대표품번 줄에는 최종품번 쪽 값을 적고, 가격 칸은 비운다.
+function priceGroupOn(){
+  try{ return localStorage.getItem('kt_price_group')==='1'; }catch(e){ return false; }
+}
+function setPriceGroup(on){
+  try{ localStorage.setItem('kt_price_group', on?'1':'0'); }catch(e){}
+  renderPriceActive();
+}
+// 대표품번 열의 자리. 품명 · (규격) · (영문품명) 다음이 대표품번이다.
+function priceRepColIdx(){ return 1 + ((lang==='ko')?1:0) + (canViewEngName()?1:0); }
+function priceGroupRows(tbodyId){
+  const tbody=document.getElementById(tbodyId); if(!tbody) return;
+  if(!priceGroupOn()) return;
+  const rows=[...tbody.children].filter(tr=>!tr.classList.contains('price-grp'));
+  if(!rows.length) return;
+  const ri=priceRepColIdx(), ci=ri+1, fi=ri+2, pi=ri+5;   // 대표·호환·최종품번, 가격 시작
+  const txt=(tr,i)=>{ const td=tr.children[i]; return td?String(td.innerText||'').trim():''; };
+  const order=[], byRep=new Map();
+  rows.forEach(tr=>{ const k=txt(tr,ri);
+    if(!byRep.has(k)){ byRep.set(k,[]); order.push(k); }
+    byRep.get(k).push(tr); });
+  const frag=document.createDocumentFragment();
+  order.forEach(k=>{
+    const kids=byRep.get(k);
+    const head=kids.find(tr=>txt(tr,ci) && txt(tr,ci)===txt(tr,fi)) || kids[0];
+    const band=head.cloneNode(true);
+    band.className='price-grp';
+    band.removeAttribute('style');
+    band.setAttribute('style','border-bottom:1px solid var(--border);font-size:11px');
+    [...band.children].forEach((td,i)=>{
+      if(i===ci || i>=pi) td.innerHTML='';                 // 호환품번과 가격 칸은 비운다
+      td.className=String(td.className||'').replace(/\bprice-man\b/g,'').trim();
+    });
+    frag.appendChild(band);
+    kids.forEach(tr=>{ const c=tr.children[ri]; if(c) c.innerHTML=''; frag.appendChild(tr); });
+  });
+  tbody.innerHTML='';
+  tbody.appendChild(frag);
+}
+function openPriceViewPanel(){
+  const ru=(lang==='ru');
+  const old=document.getElementById('priceViewPop'); if(old) old.remove();
+  const box=document.createElement('div'); box.id='priceViewPop';
+  box.style.cssText='position:fixed;inset:0;z-index:10000;background:#0008;display:flex;align-items:center;justify-content:center';
+  box.innerHTML='<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;width:330px;max-width:92vw;'
+    +'box-shadow:0 16px 44px #000a;font-size:12px;color:var(--text)">'
+    +'<div style="padding:12px 14px;border-bottom:1px solid var(--border);font-weight:700;font-size:13px">'+(ru?'Вид':'보기')+'</div>'
+    +'<div style="padding:12px 14px">'
+    +'<label style="display:flex;align-items:center;gap:8px;cursor:pointer">'
+    +'<input type="checkbox" id="pvGroup" '+(priceGroupOn()?'checked':'')+' style="cursor:pointer;flex:none">'
+    +'<span>'+(ru?'Группировать по осн. артикулу':'대표품번끼리 묶어 보기')+'</span></label>'
+    +'<div style="font-size:11px;color:var(--muted);margin-top:6px;line-height:1.5">'
+    +(ru?'Строки одного осн. артикула собираются вместе, сверху — строка осн. артикула. При группировке сортировка по заголовку отключена.'
+        :'같은 대표품번끼리 모으고 그 위에 대표품번 줄을 얹습니다. 묶어 보는 동안에는 머리글 정렬을 쓸 수 없습니다.')
+    +'</div></div>'
+    +'<div style="display:flex;gap:7px;padding:11px 14px;border-top:1px solid var(--border)">'
+    +'<button id="pvClose" style="flex:1;padding:7px;border:none;border-radius:7px;background:var(--accent2);color:#fff;cursor:pointer;font-size:12px;font-weight:700">'+(ru?'Закрыть':'닫기')+'</button>'
+    +'</div></div>';
+  document.body.appendChild(box);
+  const done=()=>{ const on=box.querySelector('#pvGroup').checked; box.remove(); setPriceGroup(on); };
+  box.querySelector('#pvClose').onclick=done;
+  box.onmousedown=e=>{ if(e.target===box) done(); };
+}
 // ══ 가격정보 머리글 거르개·정렬 ═══════════════════════════
 //   가격정보는 보는 사람(MASTER·지역·회사)과 탭(계산식·공급가)에 따라 열이 달라진다.
 //   그래서 열 이름을 미리 정해 두지 않고, 이미 그려 놓은 표를 그대로 보고 거른다.
@@ -11557,7 +11764,8 @@ function priceHookFilters(theadId, tbodyId){
 function priceApplyFilters(){
   if(!_prCtx) return;
   const tbody=_prCtx.tbody;
-  const trs=[...tbody.children];
+  const all=[...tbody.children];
+  const trs=all.filter(tr=>!tr.classList.contains('price-grp'));
   const keys=Object.keys(_prFilters);
   let vis=0;
   trs.forEach(tr=>{
@@ -11565,7 +11773,17 @@ function priceApplyFilters(){
     tr.style.display=ok?'':'none';
     if(ok) vis++;
   });
-  if(_prSort.i!=null){
+  // 묶어 보기: 대표품번 줄은 아래 호환품번 줄이 하나라도 남아 있을 때만 보인다
+  if(trs.length!==all.length){
+    let band=null, any=false;
+    const close=()=>{ if(band) band.style.display=any?'':'none'; };
+    all.forEach(tr=>{
+      if(tr.classList.contains('price-grp')){ close(); band=tr; any=false; }
+      else if(tr.style.display!=='none') any=true;
+    });
+    close();
+  }
+  if(_prSort.i!=null && trs.length===all.length){
     const i=_prSort.i, dir=(_prSort.dir==='desc')?-1:1;
     const nums=trs.map(tr=>_prNum(priceCellVal(tr,i)));
     const allNum=nums.every(x=>x==null||typeof x==='number') && nums.some(x=>x!=null);
@@ -11612,9 +11830,11 @@ function openPRFilter(i, anchor){
   box.style.cssText='position:fixed;top:'+(rect.bottom+4)+'px;left:'+Math.max(6,Math.min(rect.left, window.innerWidth-W-6))+'px;'
     + 'z-index:9999;background:var(--surface2);border:1px solid var(--border);border-radius:10px;box-shadow:0 10px 30px #0009;'
     + 'width:'+W+'px;font-size:12px;color:var(--text);overflow:hidden';
-  const sortBtn=(dir,txt)=>'<button class="prf-sort" data-dir="'+dir+'" style="width:100%;text-align:left;padding:6px 8px;border:none;'
-    + 'background:'+((_prSort.i===i&&_prSort.dir===dir)?'var(--accent2)':'none')+';'
-    + 'color:'+((_prSort.i===i&&_prSort.dir===dir)?'#fff':'var(--text)')+';cursor:pointer;border-radius:6px;font-size:12px">'+txt+'</button>';
+  const grouped=priceGroupOn();
+  const sortBtn=(dir,txt)=>'<button class="prf-sort" data-dir="'+dir+'"'+(grouped?' disabled':'')+' style="width:100%;text-align:left;padding:6px 8px;border:none;'
+    + 'background:'+((!grouped&&_prSort.i===i&&_prSort.dir===dir)?'var(--accent2)':'none')+';'
+    + 'color:'+(grouped?'var(--muted)':((_prSort.i===i&&_prSort.dir===dir)?'#fff':'var(--text)'))+';'
+    + 'cursor:'+(grouped?'default':'pointer')+';border-radius:6px;font-size:12px">'+txt+'</button>';
   const itemsHtml=vals.map(v=>'<label class="prf-item" data-v="'+escapeHtml(v)+'" style="display:flex;align-items:center;gap:6px;padding:4px 8px;cursor:pointer;line-height:1.3">'
     + '<input type="checkbox" class="prf-chk" '+((!cur||cur.has(v))?'checked':'')+' style="cursor:pointer;flex:none">'
     + '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(v===''?blank:escapeHtml(v))+'</span></label>').join('');
@@ -11764,10 +11984,10 @@ function renderPriceCalc(){
       <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(pnUpperLead(r.final))}</span></td>
       ${priceMarkTd(r.compat)}
       <td class="center" style="padding:3px 2px;color:var(--muted)">${fmtN(r.ship_qty)}</td>
-      <td class="center" style="padding:3px 2px;border-left:1px solid var(--border)"><input type="text" inputmode="decimal" style="${inputStyle}" value="${c.ruCost!=null?fmtN(c.ruCost):''}" onchange="onPriceCellEdit(${r.row_no},'ru_cost',this.value)"></td>
+      <td class="center${priceIsMan(priceOrigKey('calc',r.row_no),'ru_cost',r.ru_cost)?' price-man':''}" style="padding:3px 2px;border-left:1px solid var(--border)"><input type="text" inputmode="decimal" style="${inputStyle}" value="${c.ruCost!=null?fmtN(c.ruCost):''}" onchange="onPriceCellEdit(${r.row_no},'ru_cost',this.value)"></td>
       <td style="text-align:right;padding:3px 4px;color:var(--muted)">${fmtN(c.costRub)}</td>
       <td style="text-align:right;padding:3px 4px;color:var(--muted)">${fmtN(c.costUsd)}</td>
-      <td class="center" style="padding:3px 2px;border-left:1px solid var(--border)"><input type="text" inputmode="decimal" style="${inputStyle}" value="${r.ru_supply_krw!=null&&r.ru_supply_krw!==''?fmtN(Number(r.ru_supply_krw)):''}" placeholder="${c.ruSupply!=null?fmtN(c.ruSupply):''}" onchange="onPriceCellEdit(${r.row_no},'ru_supply_krw',this.value)"></td>
+      <td class="center${priceIsMan(priceOrigKey('calc',r.row_no),'ru_supply_krw',r.ru_supply_krw)?' price-man':''}" style="padding:3px 2px;border-left:1px solid var(--border)"><input type="text" inputmode="decimal" style="${inputStyle}" value="${r.ru_supply_krw!=null&&r.ru_supply_krw!==''?fmtN(Number(r.ru_supply_krw)):''}" placeholder="${c.ruSupply!=null?fmtN(c.ruSupply):''}" onchange="onPriceCellEdit(${r.row_no},'ru_supply_krw',this.value)"></td>
       <td style="text-align:right;padding:3px 4px">${fmtN(c.ruRub)}</td>
       <td class="center" style="padding:3px 2px;color:var(--muted)">${fmtGp(c.ruGpVal)}</td>
     </tr>`;   /* [임시] 카자흐스탄 공급가KRW/USD/GP 열 제거 */
@@ -11781,6 +12001,7 @@ function renderPriceCalc(){
        {label:t.priceThRu+' '+t.priceThSupply+' KRW',val:fmtN(c.ruSupply)},{label:t.priceThRu+' '+t.priceThSupply+' RUB',val:fmtN(c.ruRub)},{label:t.priceThRu+' '+t.priceThGp,val:fmtGp(c.ruGpVal)}], r.rep
     );
   }).join(''));
+  priceGroupRows('priceCalcTbody');
   priceHookFilters('priceCalcThead','priceCalcTbody');
   scheduleSplitTableResync('pricecalc-hdr-col','pricecalc-body-col','priceCalcTbody','fixed');
 }
@@ -11823,6 +12044,7 @@ function renderPriceSupply(){
     [{label:t.pnH1,val:m.rep},{label:t.pnH2,val:(m.compats||[]).map(pnUpperLead).join(', ')},{label:t.pnH3,val:pnUpperLead(m.final)}],
     [{label:t.priceThSupply+' (RUB)',val:fmtN(m.rub)},{label:t.priceThSupply+' (USD)',val:fmtN(m.usd)}]
   , m.rep)).join(''));
+  priceGroupRows('priceSupplyTbody');
   priceHookFilters('priceSupplyThead','priceSupplyTbody');
   scheduleSplitTableResync('pricesupply-hdr-col','pricesupply-body-col','priceSupplyTbody','fixed');
 }
@@ -11975,6 +12197,8 @@ function applyPriceTabChrome(){
   show('shipQtyUploadWrap', isMaster && priceView==='calc');
   // 초기화: MASTER·KITURAMI 만. 계산식·공급가 어느 쪽에서도 같은 데이터를 지운다.
   show('priceResetWrap', isMaster);
+  // 수기 초기화: 손으로 고칠 수 있는 화면(MASTER 계산식·회사 계정)에서만
+  priceManBtn();
   // 지역/회사 뷰는 계산식 슬롯을 재사용한다
   if(!isMaster){
     show('priceCalcHdrWrap', true); show('priceCalcBodyWrap', true);
@@ -12030,6 +12254,7 @@ function renderPriceRegion(region){
     [{label:t.pnH1,val:m.rep},{label:t.pnH2,val:(m.compats||[]).map(pnUpperLead).join(', ')},{label:t.pnH3,val:pnUpperLead(m.final)}],
     [{label:t.priceThCost+' KRW',val:fmtN(m.cost)},{label:t.priceThCost+' '+cur,val:fmtN(isKz?m.costUsd:m.costRub)},{label:t.priceThSupply+' '+cur,val:fmtN(isKz?m.usd:m.rub)},{label:t.priceThGp,val:fmtGp(isKz?m.kzGp:m.ruGp)}]
   , m.rep)).join(''));
+  priceGroupRows('priceCalcTbody');
   priceHookFilters('priceCalcThead','priceCalcTbody');
   scheduleSplitTableResync('pricecalc-hdr-col','pricecalc-body-col','priceCalcTbody','fixed');
 }
@@ -12088,7 +12313,7 @@ function renderPriceCompany(){
       <td style="padding:3px 4px">${m.compats.map(c=>`<span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(pnUpperLead(c))}</span>`).join('<br>')}</td>
       <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(pnUpperLead(m.final))}</span></td>
       ${priceMarkTd(m.compats)}
-      <td class="center" style="padding:3px 2px;border-left:1px solid var(--border)"><input type="text" inputmode="decimal" style="${inputStyle}" value="${m.buyRaw!=null&&m.buyRaw!==''?fmtN(Number(m.buyRaw)):''}" placeholder="${m.autoBuy!=null?fmtN(m.autoBuy):''}" onchange="onCompanyPriceEdit('${repEsc}','buy_price',this.value)"></td>
+      <td class="center${priceIsMan(priceOrigKey(String(userRole(currentUser).company||''),m.rep),'buy_price',m.buyRaw)?' price-man':''}" style="padding:3px 2px;border-left:1px solid var(--border)"><input type="text" inputmode="decimal" style="${inputStyle}" value="${m.buyRaw!=null&&m.buyRaw!==''?fmtN(Number(m.buyRaw)):''}" placeholder="${m.autoBuy!=null?fmtN(m.autoBuy):''}" onchange="onCompanyPriceEdit('${repEsc}','buy_price',this.value)"></td>
       <td style="border-left:1px solid var(--border);text-align:right;padding:3px 6px;font-weight:600">${fmtN(m.supplyA)}</td>
       ${supplyTd(m.supplyB)}${supplyTd(m.supplyC)}${supplyTd(m.supplyD)}
     </tr>`;
@@ -12097,6 +12322,7 @@ function renderPriceCompany(){
     [{label:t.pnH1,val:m.rep},{label:t.pnH2,val:(m.compats||[]).map(pnUpperLead).join(', ')},{label:t.pnH3,val:pnUpperLead(m.final)}],
     [{label:t.priceThBuy,val:fmtN(m.buy)},{label:t.priceThSupplyA,val:fmtN(m.supplyA)},{label:t.priceThSupplyB,val:fmtN(m.supplyB)},{label:t.priceThSupplyC,val:fmtN(m.supplyC)},{label:t.priceThSupplyD,val:fmtN(m.supplyD)}]
   , m.rep)).join(''));
+  priceGroupRows('priceCalcTbody');
   priceHookFilters('priceCalcThead','priceCalcTbody');
   scheduleSplitTableResync('pricecalc-hdr-col','pricecalc-body-col','priceCalcTbody','fixed');
 }
@@ -12109,12 +12335,16 @@ async function onCompanyPriceEdit(rep, field, value){
   const num=raw===''?null:Number(raw);
   if(raw!=='' && isNaN(num)){ alert('숫자를 입력해 주세요.'); renderPriceCompany(); return; }
   const cur=companyPriceData[rep]||{ buy_price:null, supply_price:null };
+  const _ck=priceOrigKey(String(role.company||''), rep);
+  priceRememberOrig(_ck, field, cur[field]);
   cur[field]=num;
+  priceForgetIfSame(_ck, field, num);
   companyPriceData[rep]=cur;
   const { error } = await sb.from('kt_company_prices').upsert(
     { company:role.company, rep, buy_price:cur.buy_price, supply_price:cur.supply_price, updated_at:new Date().toISOString() },
     { onConflict:'company,rep' });
   if(error){ alert('저장 실패\n['+(error.message||error.code)+']'); return; }
+  priceManBtn();
   renderPriceCompany();
 }
 // ── 회사 가격정보 엑셀 업로드 (다운로드 양식 그대로) ──
@@ -12236,15 +12466,22 @@ async function onPriceCellEdit(rowNo, field, value){
   // 원가는 원 단위 — 소수로 입력해도 올림해서 저장한다.
   // (공급가 자동계산도 올림한 원가를 기준으로 하도록 여기서 먼저 처리)
   if(field==='ru_cost' && num!=null) num=Math.ceil(num);
+  // 처음 고치는 것이면 고치기 전 값을 적어 둔다(되돌리기·표시에 쓴다)
+  const _ok=priceOrigKey('calc', r.row_no);
+  priceRememberOrig(_ok, field, r[field]);
+  if(field==='ru_cost') priceRememberOrig(_ok, 'kz_supply_krw', r.kz_supply_krw);
   r[field]=num;
   // 새 원가 입력 시 공급가가 비어있으면 자동 채움 (원가/(1-기준GP) 올림)
   if(field==='ru_cost' && num!=null && num>0 && (r.ru_supply_krw==null||r.ru_supply_krw===''||Number(r.ru_supply_krw)===0)){
     r.ru_supply_krw=Math.ceil(num/(1-priceSettings.ru_gp));
     if(r.kz_supply_krw==null||r.kz_supply_krw===''||Number(r.kz_supply_krw)===0) r.kz_supply_krw=Math.ceil(num/(1-priceSettings.kz_gp));
   }
+  priceForgetIfSame(_ok, field, r[field]);
+  if(field==='ru_cost') priceForgetIfSame(_ok, 'kz_supply_krw', r.kz_supply_krw);
   r.updated_at=new Date().toISOString();
   const { error } = await sb.from('kt_price_calc').upsert({ row_no:r.row_no, name_ko:r.name_ko, spec:r.spec, rep:r.rep, compat:r.compat, final:r.final, ship_qty:r.ship_qty, ru_cost:r.ru_cost, ru_supply_krw:r.ru_supply_krw, kz_supply_krw:r.kz_supply_krw, updated_at:r.updated_at },{onConflict:'row_no'});
   if(error){ alert('저장 실패\n['+(error.message||error.code)+']'); return; }
+  priceManBtn();
   renderPriceCalc();
   syncKtPricesFromCalc();
 }
