@@ -323,6 +323,8 @@ input[type="text"]::placeholder{color:var(--muted)}
 .pn-hdr-wrap .pn-sticky2{z-index:3;background:var(--surface2)}
 /* 변경된 셀 강조 + 변경이력 배지 */
 .pn-changed{background:#fbbf2422}
+/* 대표품번이 없어 자동으로 붙인 것 — 눈에 띄게 노란 칸으로 두어 나중에 제대로 채우게 한다 */
+.pn-c.pn-autorep{background:#fde68a!important;color:#78350f}
 /* 폭 좁은 열(품명·규격·러품·영문품명): 글자가 넘치면 셀 안에서 다음 줄로 */
 .pn-body-wrap td.pn-wrap{word-break:break-all;white-space:normal;line-height:1.3}
 .pn-body-wrap td.pn-wrap .pn-edit{display:inline-block;max-width:100%;white-space:normal;word-break:break-all}
@@ -3250,7 +3252,10 @@ function pnCellHtml(col, r, ctx){
     case 'name_en': { const en=engNameText(r.rep); const h=H('name_en'); const inner=(isMaster?ed(r.rep,'name_en',en):escapeHtml(en))+h.badge;
       return _pnTd(col, inner, (h.cls+' pn-wrap').trim(), 'font-size:11px;color:var(--accent2);font-weight:600'); }
     case 'rep': { const h=H('rep'); const inner=(isMaster?ed(r.rep,'rep',r.rep):`<span class="pn-badge pn-rep">${hlPN(r.rep,kw)}</span>`)+h.badge;
-      return _pnTd(col, inner, h.cls.trim(), 'white-space:nowrap'); }
+      const auto=pnRepIsAuto(r.rep);                          // 자동으로 붙인 대표품번
+      const tip=lang==='ru'?'Осн. артикул проставлен автоматически — проверьте':'대표품번이 없어 자동으로 붙인 값입니다. 확인 후 바꿔 주세요.';
+      const cell=auto?`<span title="${escapeHtml(tip)}" style="display:inline-block">${inner}</span>`:inner;
+      return _pnTd(col, cell, (h.cls+(auto?' pn-autorep':'')).trim(), 'white-space:nowrap'); }
     case 'compat': { const h=H('compat');
       let inner;
       if(r._split){
@@ -3650,6 +3655,13 @@ function applyPNOverrideRow(o){
 }
 // 변경 셀 강조/이력 배지. field 에 변경이력이 있으면 강조 클래스와 배지를 돌려준다.
 // 각 계정은 자기가 보는 열에서만 렌더되므로, 보이는 항목의 이력만 노출된다.
+// 대표품번이 없던 품번을 품번조회에 올리면서 자동으로 붙인 대표품번인지.
+// kt_pn_overrides.history 에 {f:'_autorep'} 자국을 남겨 두고, 그 칸을 노랗게 칠한다.
+// 사람이 제대로 된 대표품번으로 고치면 그 자국을 지워 색도 사라진다.
+function pnRepIsAuto(rep){
+  const p=getPNInfo(rep);
+  return !!(p && Array.isArray(p.history) && p.history.some(h=>h && h.f==='_autorep'));
+}
 const PN_HIST_SINCE='2026-08-04T23:26:00.000Z';   // 이 시각 이후의 변경만 이력으로 표시(이전 이력은 숨김, 데이터는 보존)
 function pnCellHist(rep, field){
   const p=getPNInfo(rep);
