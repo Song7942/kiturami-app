@@ -8478,14 +8478,16 @@ function renderMS(){
                name:gS+';word-break:break-all;font-size:10.5px;line-height:1.25',
                spec:gS+';word-break:break-all;font-size:10px;line-height:1.25',
                note:gS+';text-align:center;white-space:nowrap',
-               exp:gS+';text-align:center;white-space:nowrap',
+               exp:gS+';text-align:center;white-space:nowrap;color:#ef4444',
                qty:gS+';text-align:right;white-space:nowrap;color:#b91c1c' };
   const body=groups.map(g=>{
     const fin=String(g.first.final||'');
     const finRow=Object.assign({}, g.first, {_split:true, _compat:fin});
     const gTxt={ rep:'<span style="'+codeS+'">'+escapeHtml(g.rep||'')+'</span>',
                  compat:(fin?('<span style="'+codeS+'">'+escapeHtml(normBadgePN(fin))+'</span>'):''),
-                 ymd:'', note:'', exp:'',
+                 ymd:'',
+                 note:(fin?escapeHtml(pnColText('note',finRow)):''),
+                 exp:(fin&&isExportRestricted(fin)?'O':''),
                  name:escapeHtml(pnColText('name',finRow)), spec:escapeHtml(pnColText('spec',finRow)),
                  qty:g.total.toLocaleString() };
     const gRow='<tr>'+CO.map(d=>'<td style="'+gsty[d.k]+'">'+gTxt[d.k]+'</td>').join('')+'</tr>';
@@ -8564,7 +8566,8 @@ async function downloadMS(){
     tot+=g.total; nPn+=g.kids.length;
     if(msShowGroups()){
       grpRows.push(aoa.length);
-      aoa.push(rowOf({ rep:g.rep||'', compat:(fin?normBadgePN(fin):''), ymd:'', note:'', exp:'',
+      aoa.push(rowOf({ rep:g.rep||'', compat:(fin?normBadgePN(fin):''), ymd:'',
+        note:(fin?pnColText('note',finRow):''), exp:(fin&&isExportRestricted(fin)?'O':''),
         name:pnColText('name',finRow), spec:pnColText('spec',finRow), qty:g.total }));
     }
     if(!msShowKids()) return;
@@ -10488,8 +10491,11 @@ function renderPSI(){
     const finRow=Object.assign({}, r0, {_split:true, _compat:fin});
     const gTxt={ rep:'<span class="c">'+escapeHtml(g.rep)+'</span>',
                  compat:(fin?('<span class="c">'+escapeHtml(normBadgePN(fin))+'</span>'):''),
-                 note:'', exp:'', name:escapeHtml(pnColText('name',finRow)), spec:escapeHtml(pnColText('spec',finRow)) };
-    const gFix=FX.map((d,k)=>'<td class="'+((d.k==='name'||d.k==='spec')?'nm':'')+fxCls(k)+'">'+gTxt[d.k]+'</td>').join('');
+                 note:(fin?escapeHtml(pnColText('note',finRow)):''),
+                 exp:(fin?psiColText('exp',finRow):''),
+                 name:escapeHtml(pnColText('name',finRow)), spec:escapeHtml(pnColText('spec',finRow)) };
+    const gCls={ note:'ct', exp:'xc' };
+    const gFix=FX.map((d,k)=>'<td class="'+((d.k==='name'||d.k==='spec')?'nm':(gCls[d.k]||''))+fxCls(k)+'">'+gTxt[d.k]+'</td>').join('');
     // 발주분은 다음 달 말에 선적되고, 그 49일 뒤에 들어온다.
     //   선적·입고 열에도 그 수량이 잡히고, 들어온 달부터 재고가 늘어난다.
     //   보유월  = 발주 전 기준(지금 흐름 그대로)
@@ -10657,7 +10663,8 @@ async function downloadPSI(){
   (_psiGroups||[]).forEach(g=>{
     const r0=g.first, fin=String(r0.final||'');
     const finRow=Object.assign({}, r0, {_split:true, _compat:fin});
-    const gTxt={ rep:g.rep||'', compat:(fin?normBadgePN(fin):''), note:'', exp:'',
+    const gTxt={ rep:g.rep||'', compat:(fin?normBadgePN(fin):''),
+                 note:(fin?pnColText('note',finRow):''), exp:(fin?psiColText('exp',finRow):''),
                  name:pnColText('name',finRow), spec:pnColText('spec',finRow) };
     const gRow=FX.map(d=>gTxt[d.k]);
     gRow.push(g.open||0); totOpen+=g.open||0;
