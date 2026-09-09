@@ -216,6 +216,8 @@ input[type="text"]::placeholder{color:var(--muted)}
 .pt td.nm{white-space:nowrap;text-overflow:ellipsis;font-size:10.5px;line-height:1.25}
 .pt td.sp{color:var(--muted);white-space:nowrap;text-overflow:ellipsis;font-size:10px;line-height:1.25}
 .pt td.ct{text-align:center;color:var(--muted)}
+/* 수출제한 O — 눈에 띄어야 하는 표시 */
+.pt td.xc{text-align:center;color:#ef4444;font-weight:700}
 .pt td.dim{color:var(--muted)}
 .pt tr.g td{font-weight:700}
 .pt tr.g.band td{background:var(--tag-bg)}
@@ -5521,7 +5523,9 @@ async function updateMemberGrade(buyerCompany, supplierCompany, grade){
 // 그 탭을 열면 새 데이터가 오기 전까지 앞 계정 화면(예: MASTER 의 원가·공급가)이
 // 잠깐 그대로 보였다. 가격은 특히 노출되면 안 되는 값이라 로그아웃 시점에 지운다.
 function clearUserScopedViews(){
-  const html=(...ids)=>ids.forEach(id=>{ const e=document.getElementById(id); if(e) e.innerHTML=''; });
+  const html=(...ids)=>ids.forEach(id=>{ const e=document.getElementById(id); if(!e) return;
+    const keep=e.querySelector('.no-result');      // '결과 없음' 안내는 화면 뼈대라 지우지 않는다
+    e.innerHTML=''; if(keep) e.appendChild(keep); });
   // 가격정보 — 계산식·공급가 표와 모바일 카드, 열 정의, 안내 문구
   priceCalcData=[]; priceData={};
   companyPriceData={}; supplierPriceData={}; companySupplyByRep={}; supplierSupplyByRep={};
@@ -8323,6 +8327,8 @@ const MS_COL_DEFS=[
   {k:'ymd',    w:74,  ko:'일자',     ru:'Дата'},
   {k:'name',   w:210, ko:'품명',     ru:'Наименование'},
   {k:'spec',   w:168, ko:'규격',     ru:'Хар-ки', koOnly:1},
+  {k:'note',   w:44,  ko:'단종',     ru:'Снято'},
+  {k:'exp',    w:56,  ko:'수출제한', ru:'Эксп.контроль', hko:'수출<br>제한', hru:'Эксп.<br>контр.'},
   {k:'qty',    w:86,  ko:'미출수량', ru:'Невыполнено'}
 ];
 function msColsMap(){
@@ -8460,17 +8466,22 @@ function renderMS(){
   const sty={ rep:tdS, compat:tdS, ymd:tdS+';text-align:center;color:var(--muted);white-space:nowrap',
               name:tdS+';word-break:break-all;font-size:10.5px;line-height:1.25',
               spec:tdS+';color:var(--muted);word-break:break-all;font-size:10px;line-height:1.25',
+              note:tdS+';text-align:center;white-space:nowrap;color:var(--muted)',
+              exp:tdS+';text-align:center;white-space:nowrap;color:#ef4444;font-weight:700',
               qty:tdS+';text-align:right;white-space:nowrap' };   // 하위 호환품번은 검은 보통 글자
   const gsty={ rep:gS, compat:gS, ymd:gS+';text-align:center',
                name:gS+';word-break:break-all;font-size:10.5px;line-height:1.25',
                spec:gS+';word-break:break-all;font-size:10px;line-height:1.25',
+               note:gS+';text-align:center;white-space:nowrap',
+               exp:gS+';text-align:center;white-space:nowrap',
                qty:gS+';text-align:right;white-space:nowrap;color:#b91c1c' };
   const body=groups.map(g=>{
     const fin=String(g.first.final||'');
     const finRow=Object.assign({}, g.first, {_split:true, _compat:fin});
     const gTxt={ rep:'<span style="'+codeS+'">'+escapeHtml(g.rep||'')+'</span>',
                  compat:(fin?('<span style="'+codeS+'">'+escapeHtml(normBadgePN(fin))+'</span>'):''),
-                 ymd:'', name:escapeHtml(pnColText('name',finRow)), spec:escapeHtml(pnColText('spec',finRow)),
+                 ymd:'', note:'', exp:'',
+                 name:escapeHtml(pnColText('name',finRow)), spec:escapeHtml(pnColText('spec',finRow)),
                  qty:g.total.toLocaleString() };
     const gRow='<tr>'+CO.map(d=>'<td style="'+gsty[d.k]+'">'+gTxt[d.k]+'</td>').join('')+'</tr>';
     const kids=g.kids.map(it=>(msShowDays()?it.days:[{ym:'',q:it.sum}]).map((x,i)=>{
@@ -8479,6 +8490,8 @@ function renderMS(){
                   ymd:(x.ym?psiYmLabel(x.ym):''),
                   name:(i===0?escapeHtml(pnColText('name',it.r)):''),
                   spec:(i===0?escapeHtml(pnColText('spec',it.r)):''),
+                  note:(i===0?escapeHtml(pnColText('note',it.r)):''),
+                  exp:(i===0?(isExportRestricted(it.r._compat)?'O':''):''),
                   qty:x.q.toLocaleString() };
       return '<tr>'+CO.map(d=>'<td style="'+sty[d.k]+'">'+txt[d.k]+'</td>').join('')+'</tr>';
     }).join('')).join('');
@@ -8486,7 +8499,7 @@ function renderMS(){
   }).join('');
 
   const nq=CO.filter(d=>d.k==='qty').length;
-  const head='<tr>'+CO.map(d=>'<th style="'+thS+'">'+(ru?d.ru:d.ko)+'</th>').join('')+'</tr>'
+  const head='<tr>'+CO.map(d=>'<th style="'+thS+'">'+(ru?(d.hru||d.ru):(d.hko||d.ko))+'</th>').join('')+'</tr>'
     + '<tr><th colspan="'+Math.max(1,CO.length-nq)+'" style="'+thS+';font-weight:700;background:var(--surface);top:28px;text-align:right">'
     + escapeHtml(L('합계 '+groups.length+'개 대표품번 / '+nPn+'개 호환품번 · '+R.label,
                    'Итого '+groups.length+' Осн. артикул / '+nPn+' Артикул · '+R.label))+'</th>'
@@ -8546,13 +8559,14 @@ async function downloadMS(){
     tot+=g.total; nPn+=g.kids.length;
     if(msShowGroups()){
       grpRows.push(aoa.length);
-      aoa.push(rowOf({ rep:g.rep||'', compat:(fin?normBadgePN(fin):''), ymd:'',
+      aoa.push(rowOf({ rep:g.rep||'', compat:(fin?normBadgePN(fin):''), ymd:'', note:'', exp:'',
         name:pnColText('name',finRow), spec:pnColText('spec',finRow), qty:g.total }));
     }
     if(!msShowKids()) return;
     // 엑셀에서는 걸러 보기 쉽도록 대표품번·호환품번·품명·규격을 줄마다 모두 적는다
     g.kids.forEach(it=>(msShowDays()?it.days:[{ym:'',q:it.sum}]).forEach(x=>{
       aoa.push(rowOf({ rep:g.rep||'', compat:normBadgePN(it.r._compat), ymd:(x.ym?psiYmLabel(x.ym):''),
+        note:pnColText('note',it.r), exp:(isExportRestricted(it.r._compat)?'O':''),
         name:pnColText('name',it.r), spec:pnColText('spec',it.r), qty:x.q }));
     }));
   });
@@ -9611,6 +9625,7 @@ const PSI_COL_DEFS=[
   {k:'rep',    fixed:1, w:96,  ko:'대표품번', ru:'Осн. артикул'},
   {k:'compat', fixed:1, w:96,  ko:'호환품번', ru:'Артикул замены'},
   {k:'note',   fixed:1, w:38,  ko:'단종',     ru:'Снято'},
+  {k:'exp',    fixed:1, w:52,  ko:'수출제한', ru:'Эксп.контроль', hko:'수출<br>제한', hru:'Эксп.<br>контр.'},
   {k:'name',   fixed:1, w:110, ko:'품명',     ru:'Наименование'},
   {k:'spec',   fixed:1, w:110, ko:'규격',     ru:'Хар-ки', koOnly:1},
   {k:'sh',     w:56, ko:'선적',   ru:'Отгрузка'},
@@ -9946,7 +9961,7 @@ function openPsiFcPanel(){
 let _psiFilters={};                  // {colKey: [선택한 값들]}
 let _psiAllItems=[];                 // 이번 렌더의 행(헤더 필터 적용 전) — 숫자 열 값 목록용
 let _psiSort={key:null, dir:'asc'};
-const PSI_TEXT_COLS={rep:1, compat:1, note:1, name:1, spec:1};
+const PSI_TEXT_COLS={rep:1, compat:1, note:1, exp:1, name:1, spec:1};
 function psiIsNumCol(key){ if(String(key).indexOf('clr:')===0) return false; return !PSI_TEXT_COLS[key]; }
 // 보유월 셀 색: 보유월이 향후 N개월 미만이면 붉게 (N은 검색바 향후 칸)
 let _psiLowN=6;
@@ -9960,6 +9975,7 @@ function psiColText(key,r){
     case 'rep': return String(r.rep||'');
     case 'compat': return normBadgePN(r._compat);
     case 'note': return pnColText('note',r);
+    case 'exp': return isExportRestricted(r._compat)?'O':'';
     case 'name': return pnColText('name',r);
     case 'spec': return pnColText('spec',r);
   }
@@ -9992,6 +10008,7 @@ function psiNumOf(key,it){
 function psiColLabel(key){
   const ru=(lang==='ru');
   const T={rep:[ '대표품번','Осн. артикул'], compat:['호환품번','Артикул замены'], note:['단종','Снято'],
+           exp:['수출제한','Эксп.контроль'],
            name:['품명','Наименование'], spec:['규격','Хар-ки'], open:['이월재고','Нач. остаток']};
   if(T[key]) return ru?T[key][1]:T[key][0];
   const p=String(key).split(':');
@@ -10382,7 +10399,7 @@ function renderPSI(){
         + totLab(d) + psiSortMark(key) + clr + '</th>';
     }).join('');
   let head=['<tr>',
-    FX.map((d,k)=>'<th rowspan="2" class="'+fxCls(k).trim()+'" style="'+thS+'">'+L(d.ko,d.ru)+psiFilterIcon(d.k)+'</th>').join(''),
+    FX.map((d,k)=>'<th rowspan="2" class="'+fxCls(k).trim()+'" style="'+thS+'">'+L(d.hko||d.ko,d.hru||d.ru)+psiFilterIcon(d.k)+'</th>').join(''),
     totHead,grp,'</tr><tr>',totSub,sub,'</tr>'].join('');
 
   if(!items.length){
@@ -10458,7 +10475,7 @@ function renderPSI(){
   const stAdd={};                         // 달마다 '앞선 달 발주분'이 재고에 더해진 양의 합계
   const shipTot={}, inTot={};             // 달마다 발주분의 선적·입고 합계
   const arrStTot={}, arrFutTot={};        // 달마다 '그 발주분이 들어오는 달'의 재고·앞으로 출고 합계
-  const kCls={ rep:'', compat:'', note:'ct', name:'nm', spec:'sp' };   // 하위 줄 고정열
+  const kCls={ rep:'', compat:'', note:'ct', exp:'xc', name:'nm', spec:'sp' };   // 하위 줄 고정열
   const bodyRows=[];
   groups.forEach(g=>{
     const r0=g.first;
@@ -10466,7 +10483,7 @@ function renderPSI(){
     const finRow=Object.assign({}, r0, {_split:true, _compat:fin});
     const gTxt={ rep:'<span class="c">'+escapeHtml(g.rep)+'</span>',
                  compat:(fin?('<span class="c">'+escapeHtml(normBadgePN(fin))+'</span>'):''),
-                 note:'', name:escapeHtml(pnColText('name',finRow)), spec:escapeHtml(pnColText('spec',finRow)) };
+                 note:'', exp:'', name:escapeHtml(pnColText('name',finRow)), spec:escapeHtml(pnColText('spec',finRow)) };
     const gFix=FX.map((d,k)=>'<td class="'+((d.k==='name'||d.k==='spec')?'nm':'')+fxCls(k)+'">'+gTxt[d.k]+'</td>').join('');
     // 발주분은 다음 달 말에 선적되고, 그 49일 뒤에 들어온다.
     //   선적·입고 열에도 그 수량이 잡히고, 들어온 달부터 재고가 늘어난다.
@@ -10543,7 +10560,8 @@ function renderPSI(){
     const kidRows=g.rows.map(it=>{
       const r=it.r, v=it.v;
       const kTxt={ rep:'', compat:'<span class="c">'+escapeHtml(normBadgePN(r._compat))+'</span>',
-                   note:escapeHtml(pnColText('note',r)), name:escapeHtml(pnColText('name',r)), spec:escapeHtml(pnColText('spec',r)) };
+                   note:escapeHtml(pnColText('note',r)), exp:psiColText('exp',r),
+                   name:escapeHtml(pnColText('name',r)), spec:escapeHtml(pnColText('spec',r)) };
       const kFix=FX.map((d,k)=>'<td class="'+kCls[d.k]+fxCls(k)+'">'+kTxt[d.k]+'</td>').join('');
       const kEach=yms.map((y,i)=>{
         const x=v[y]||{sh:0,i:0,o:0,ms:0,st:0};
@@ -10634,7 +10652,7 @@ async function downloadPSI(){
   (_psiGroups||[]).forEach(g=>{
     const r0=g.first, fin=String(r0.final||'');
     const finRow=Object.assign({}, r0, {_split:true, _compat:fin});
-    const gTxt={ rep:g.rep||'', compat:(fin?normBadgePN(fin):''), note:'',
+    const gTxt={ rep:g.rep||'', compat:(fin?normBadgePN(fin):''), note:'', exp:'',
                  name:pnColText('name',finRow), spec:pnColText('spec',finRow) };
     const gRow=FX.map(d=>gTxt[d.k]);
     gRow.push(g.open||0); totOpen+=g.open||0;
@@ -10651,6 +10669,7 @@ async function downloadPSI(){
     g.rows.forEach(it=>{
       const r=it.r, v=it.v;
       const kTxt={ rep:g.rep||'', compat:normBadgePN(r._compat), note:pnColText('note',r),
+                   exp:psiColText('exp',r),
                    name:pnColText('name',r), spec:pnColText('spec',r) };
       const row=FX.map(d=>kTxt[d.k]);
       row.push(v._open||0);
