@@ -606,6 +606,7 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
   <button class="tab-btn active" onclick="switchTab('order')" id="tab-order">📦 주문</button>
   <button class="tab-btn" style="display:none;position:relative" onclick="switchTab('adminOrders')" id="tab-adminOrders"><span id="i18n-tab-adminorders">🗂️ 주문관리</span><span id="adminOrdersIncompleteTri" title="출고 미완료" style="display:none;margin-left:4px;vertical-align:middle;color:#f59e0b;font-size:11px;line-height:1">▲</span><span id="adminOrdersUnreadDot" style="display:none;position:absolute;top:4px;right:2px;width:8px;height:8px;border-radius:50%;background:#ef4444;box-shadow:0 0 0 2px var(--bg)"></span></button>
   <button class="tab-btn"        onclick="switchTab('pn')"    id="tab-pn">🔄 품번 조회</button>
+  <button class="tab-btn"        onclick="switchTab('prod')"  id="tab-prod"><span id="i18n-tab-prod">🏷️ 제품목록</span></button>
   <button class="tab-btn" style="display:none" onclick="switchTab('inventory')" id="tab-inventory">📊 재고관리</button>
   <button class="tab-btn" style="display:none" onclick="switchTab('shipments')" id="tab-shipments"><span id="i18n-tab-shipments">🚚 출고관리</span></button>
   <button class="tab-btn" style="display:none" onclick="switchTab('price')"     id="tab-price">💲 가격정보</button>
@@ -762,6 +763,36 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
       <div class="tbl-footer" id="orderTblFooter" style="display:none;margin:0 12px 8px">
         <span id="orderFooterLeft"></span><span>KITURAMI ALPHA PLUS / NEO</span>
       </div>
+    </div>
+  </div>
+
+  <!-- ══ 제품목록 ══ -->
+  <div class="tab-pane" id="pane-prod">
+    <div class="fixed-top">
+      <div class="search-bar">
+        <div class="search-wrap">
+          <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+          <input type="text" id="prodInput" placeholder="품번·품명으로 검색…" oninput="debouncedRenderProd()">
+        </div>
+        <button class="dl-btn" id="prodUploadBtn" onclick="document.getElementById('prodFileInput').click()" title="품번·품명 두 열이 있는 엑셀을 올리면 제품목록을 갈아 끼웁니다" style="display:none;background:var(--accent2);border-color:var(--accent2);color:#fff">
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <span id="i18n-prod-up">엑셀 업로드</span>
+        </button>
+        <input type="file" id="prodFileInput" accept=".xlsx,.xls" style="display:none" onchange="handleProdUpload(event)">
+        <button class="dl-btn" onclick="downloadProd()">
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span id="i18n-prod-dl">엑셀 다운로드</span>
+        </button>
+      </div>
+      <div class="tbl-header-wrap">
+        <table><colgroup id="prodColgroup"></colgroup><thead id="prodThead"></thead></table>
+      </div>
+    </div>
+    <div class="scroll-body" id="scrollBodyProd">
+      <div class="tbl-body-wrap" style="margin:0 12px">
+        <table><colgroup id="prodColgroup2"></colgroup><tbody id="prodTbody"></tbody></table>
+      </div>
+      <div class="no-result" id="prodEmpty" style="display:none"></div>
     </div>
   </div>
 
@@ -1990,6 +2021,7 @@ function switchTab(tab){
   // 탭을 옮길 때마다 주문 알림 점을 가볍게 새로고침 — 로그인 중 새 주문/배분도 바로 보이게.
   if(currentUser){ loadOrderFeedStamps().then(updateOrderUnreadDots); refreshSignupDot(); }
   if(tab==='pn') renderPN();
+  if(tab==='prod') loadProdTab();
   // KAZAK 은 주문탭 공급가로 카자흐스탄 USD 를 쓰므로 계산식 데이터도 함께 읽는다.
   if(tab==='order'){ mountModelDiag('order'); syncDiagram(); refreshCurrentUser().then(()=>Promise.all([loadMyOrderTotals(), loadInventory(), loadGlobalSuppliedTotals(), loadReceivedOrderTotals(), loadPrices(), loadCompanyPrices(), (userRole(currentUser).region==='kz'?Promise.all([loadPriceSettings(),loadPriceCalc()]):Promise.resolve())])).then(renderOrderTable); renderOrderTable(); }
   if(tab==='parts'){ mountModelDiag('parts'); syncDiagram(); renderTable(); }
@@ -2073,6 +2105,11 @@ function refreshPsiTexts(){
   set('i18n-sim-dl',DL[0],DL[1]);
   // 발주현황
   ph('poInput','차수·발주년월·대표코드·발주코드·품명으로 검색…','Поиск: партия, месяц, код, наименование…');
+  set('i18n-tab-prod','🏷️ 제품목록','🏷️ Изделия');
+  set('i18n-prod-up','엑셀 업로드','Загрузить Excel');
+  set('i18n-prod-dl',DL[0],DL[1]);
+  ph('prodInput','품번·품명으로 검색…','Поиск: артикул, наименование…');
+  if(document.getElementById('pane-prod') && document.getElementById('pane-prod').classList.contains('active')) renderProd();
   set('i18n-po-all',ALL[0],ALL[1]);
   set('i18n-po-view','보기','Вид');
   set('i18n-po-up','발주 업로드','Загрузить заказы');
@@ -9868,6 +9905,120 @@ function openPoViewPanel(){
     box.remove(); try{ localStorage.setItem('kt_po_group', on?'1':'0'); }catch(e){} renderPO(); };
   box.querySelector('#povClose').onclick=done;
   box.onmousedown=e=>{ if(e.target===box) done(); };
+}
+// ══ 제품목록 ═══════════════════════════════════════════════
+//   완제품(보일러) 품번과 이름 목록. 부품이 아니라 제품이라 품번조회와는 따로 둔다.
+//   줄 수가 몇백이라 표를 새로 만들지 않고 설정 보관소(kt_psi_cfg id=93)에 담는다.
+const PROD_CFG_ID=93;
+let prodData=[];            // [{pn, name}]
+let _prodLoaded=false;
+async function loadProd(){
+  try{
+    const { data }=await sb.from('kt_psi_cfg').select('cfg').eq('id',PROD_CFG_ID).maybeSingle();
+    const rows=(data && data.cfg && Array.isArray(data.cfg.rows))?data.cfg.rows:[];
+    prodData=rows.map(r=>({ pn:String(r.pn||'').trim(), name:String(r.name||'').trim() })).filter(r=>r.pn||r.name);
+  }catch(e){ prodData=[]; }
+  _prodLoaded=true;
+}
+async function saveProd(){
+  const { error }=await sb.from('kt_psi_cfg').upsert(
+    { id:PROD_CFG_ID, cfg:{ rows:prodData, updated_at:new Date().toISOString() }, updated_at:new Date().toISOString() },
+    {onConflict:'id'});
+  return error?(error.message||error.code):'';
+}
+async function loadProdTab(){
+  const m=userRole(currentUser).isMaster;
+  const b=document.getElementById('prodUploadBtn'); if(b) b.style.display=m?'':'none';
+  if(!_prodLoaded) await loadProd();
+  renderProd();
+}
+function debouncedRenderProd(){ clearTimeout(window._prodT); window._prodT=setTimeout(renderProd,180); }
+function renderProd(){
+  const pane=document.getElementById('pane-prod'); if(!pane) return;
+  const ru=(lang==='ru'), L=(ko,rr)=>(ru?rr:ko);
+  const kw=(document.getElementById('prodInput')?document.getElementById('prodInput').value:'').trim().toLowerCase();
+  let rows=prodData.slice();
+  if(kw) rows=rows.filter(r=>(r.pn+' '+r.name).toLowerCase().includes(kw));
+  const heads=[['No.',56],[L('품번','Артикул'),150],[L('품명','Наименование'),420]];
+  const cols=heads.map(h=>'<col style="width:'+h[1]+'px">').join('');
+  const cg=document.getElementById('prodColgroup'); if(cg) cg.innerHTML=cols;
+  const cg2=document.getElementById('prodColgroup2'); if(cg2) cg2.innerHTML=cols;
+  const thS='padding:7px 6px;text-align:center;vertical-align:middle;background:var(--surface2);font-size:11px;'
+    + 'white-space:nowrap;border-bottom:1px solid var(--border);color:var(--muted)';
+  const tdS='padding:6px 8px;font-size:12px;border-bottom:1px solid var(--border)';
+  const codeS="font-family:'Courier New',monospace;font-size:11px;white-space:nowrap";
+  const thead=document.getElementById('prodThead');
+  if(thead) thead.innerHTML='<tr>'+heads.map(h=>'<th style="'+thS+'">'+escapeHtml(h[0])+'</th>').join('')+'</tr>'
+    + '<tr><th colspan="3" style="'+thS+';font-weight:700;background:var(--surface);text-align:right">'
+    + escapeHtml(L('합계 '+rows.length+'개 제품','Итого '+rows.length))+'</th></tr>';
+  const tbody=document.getElementById('prodTbody');
+  if(tbody) tbody.innerHTML=rows.map((r,i)=>'<tr>'
+    + '<td style="'+tdS+';text-align:center;color:var(--muted);font-size:11px">'+(i+1)+'</td>'
+    + '<td style="'+tdS+'"><span style="'+codeS+'">'+escapeHtml(r.pn)+'</span></td>'
+    + '<td style="'+tdS+';word-break:break-all">'+escapeHtml(r.name)+'</td>'
+    + '</tr>').join('');
+  const empty=document.getElementById('prodEmpty');
+  if(empty){
+    empty.textContent=prodData.length
+      ? L('맞는 제품이 없습니다.','Ничего не найдено.')
+      : L('제품목록이 비어 있습니다. 엑셀 업로드로 올려주세요.','Список пуст. Загрузите Excel.');
+    empty.style.display=rows.length?'none':'block';
+  }
+}
+function downloadProd(){
+  const ru=(lang==='ru');
+  const kw=(document.getElementById('prodInput')?document.getElementById('prodInput').value:'').trim().toLowerCase();
+  let rows=prodData.slice();
+  if(kw) rows=rows.filter(r=>(r.pn+' '+r.name).toLowerCase().includes(kw));
+  const aoa=[[ru?'Артикул':'품번', ru?'Наименование':'품명']].concat(rows.map(r=>[r.pn, r.name]));
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols']=[{wch:18},{wch:44}];
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'PRODUCTS');
+  XLSX.writeFile(wb, xlsxName('제품목록','Список изделий'));
+}
+// 엑셀 업로드: 품번·품명 두 열을 읽어 목록을 통째로 갈아 끼운다(MASTER 만).
+function handleProdUpload(event){
+  const ru=(lang==='ru');
+  if(!userRole(currentUser).isMaster){ event.target.value=''; return; }
+  const file=event.target.files[0]; if(!file){ event.target.value=''; return; }
+  const reader=new FileReader();
+  reader.onload=async function(e){
+    try{
+      const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
+      const a=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:''});
+      // 머리글 줄('품번'·'품명')을 찾고, 없으면 첫 줄부터 두 열을 그대로 읽는다
+      let h=-1, cPn=0, cNm=1;
+      for(let r=0;r<Math.min(10,a.length) && h<0;r++){
+        const w=a[r]||[];
+        for(let c=0;c<w.length;c++){
+          const t=String(w[c]==null?'':w[c]).replace(/\s/g,'');
+          if(t==='품번'||/^артикул$/i.test(t)||t==='품목코드'){ cPn=c; h=r; }
+          if(t==='품명'||/^наименование$/i.test(t)||t==='제품명'){ cNm=c; if(h<0) h=r; }
+        }
+      }
+      const out=[]; const seen={};
+      for(let r=(h<0?0:h+1);r<a.length;r++){
+        const w=a[r]||[];
+        const pn=String(w[cPn]==null?'':w[cPn]).trim();
+        const nm=String(w[cNm]==null?'':w[cNm]).trim();
+        if(!pn && !nm) continue;
+        const k=pn.toUpperCase(); if(k && seen[k]) continue; if(k) seen[k]=1;
+        out.push({pn, name:nm});
+      }
+      if(!out.length){ alert(ru?'Не найдено строк.':'읽을 줄이 없습니다. 품번·품명 두 열이 있는지 확인해 주세요.'); event.target.value=''; return; }
+      if(!confirm((ru?'Заменить список изделий: ':'제품목록을 이 파일로 갈아 끼웁니다: ')+out.length+(ru?'':'개')
+        +'\n'+(ru?'Текущие: ':'지금 ')+prodData.length+(ru?'':'개가 지워집니다.')
+        +'\n\n'+(ru?'Продолжить?':'계속할까요?'))){ event.target.value=''; return; }
+      const old=prodData;
+      prodData=out;
+      const msg=await saveProd();
+      if(msg){ prodData=old; alert((ru?'Ошибка сохранения':'저장 실패')+'\n['+msg+']'); event.target.value=''; return; }
+      renderProd();
+      alert((ru?'Готово: ':'반영 완료: ')+out.length+(ru?'':'개'));
+    }catch(err){ console.error(err); alert(ru?'Ошибка чтения файла.':'파일을 읽지 못했습니다.'); }
+    event.target.value='';
+  };
+  reader.readAsArrayBuffer(file);
 }
 function debouncedRenderPO(){ clearTimeout(window._poT); window._poT=setTimeout(renderPO,200); }
 async function loadPOTab(){
