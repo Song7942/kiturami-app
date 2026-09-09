@@ -8917,6 +8917,32 @@ async function loadShip(){
 }
 function shipInvList(){ const s=new Set(); shipData.forEach(r=>{ if(r.inv) s.add(r.inv); }); return [...s].sort(); }
 function shipYmList(){ const s=new Set(); shipData.forEach(r=>{ if(r.ym) s.add(r.ym); }); return [...s].sort(); }
+// ── 인보이스 한 장마다 딸린 값 ─────────────────────────────
+//   컨테이너 넘버와 '무상(NON-COMMERCIAL) 인보이스' 여부는 품번마다가 아니라
+//   인보이스 한 장에 하나씩 붙는 값이다. kt_ship 에 열을 새로 만들지 않아도 되게
+//   설정 보관소(kt_psi_cfg id=92, jsonb 한 칸)에 인보이스 번호를 열쇠로 담아 둔다.
+const SHIP_META_ID=92;
+let _shipMeta={};             // { '인보이스': { c:'CBHU9460040'|'AIR', nc:0|1 } }
+let _shipMetaLoaded=false;
+async function loadShipMeta(){
+  if(_shipMetaLoaded) return;
+  _shipMetaLoaded=true;
+  try{
+    const { data }=await sb.from('kt_psi_cfg').select('cfg').eq('id',SHIP_META_ID).maybeSingle();
+    if(data && data.cfg && typeof data.cfg==='object') _shipMeta=data.cfg;
+  }catch(e){ /* 표가 없으면 이 브라우저에서만 기억한다 */ }
+}
+let _shipMetaT=null;
+function saveShipMeta(){
+  clearTimeout(_shipMetaT);
+  _shipMetaT=setTimeout(async function(){
+    try{ await sb.from('kt_psi_cfg').upsert({ id:SHIP_META_ID, cfg:_shipMeta, updated_at:new Date().toISOString() },{onConflict:'id'}); }catch(e){}
+  }, 400);
+}
+function shipMetaOf(inv){ return _shipMeta[String(inv||'')] || {}; }
+// 컨테이너 넘버. 인보이스에 없거나 AIR 라고 적혀 있으면 AIR 로 본다.
+function shipContOf(inv){ const c=String(shipMetaOf(inv).c||'').trim(); return c || 'AIR'; }
+function shipIsNC(inv){ return !!shipMetaOf(inv).nc; }
 // ── 선적/입고현황 열 고르기 ────────────────────────────────
 //   한글 화면에서는 한글품명·규격을, 러시아어 화면에서는 러시아어품명을 보여 준다.
 //   영문품명은 인보이스에 적힌 그대로, 나머지 이름은 품번조회에서 가져온다.
@@ -8924,6 +8950,7 @@ const SHIP_COL_DEFS=[
   {k:'inv',    w:128, ko:'인보이스 넘버', ru:'Инвойс'},
   {k:'sail',   w:80,  ko:'선적일',        ru:'Отгрузка'},
   {k:'arr',    w:80,  ko:'입고일',        ru:'Приход'},
+  {k:'cont',   w:112, ko:'컨테이너 넘버', ru:'Контейнер'},
   {k:'rep',    w:104, ko:'대표품번',      ru:'Осн. артикул'},
   {k:'pn',     w:104, ko:'호환품번',      ru:'Артикул'},
   {k:'nameKo', w:180, ko:'한글품명',      ru:'Наим. (KO)', koOnly:1},
@@ -8933,7 +8960,7 @@ const SHIP_COL_DEFS=[
   {k:'hs',     w:90,  ko:'HS CODE',       ru:'HS'},
   {k:'qty',    w:64,  ko:'수량',          ru:'Кол-во'},
   {k:'price',  w:84,  ko:'단가(RUB)',     ru:'Цена'},
-  {k:'amt',    w:96,  ko:'금액(RUB)',     ru:'Сумма'}
+  {k:'amt',    w:126, ko:'금액(RUB)',     ru:'Сумма'}
 ];
 function shipColsMap(){
   const src=(psiCols && psiCols.__ship && typeof psiCols.__ship==='object')?psiCols.__ship:null;
@@ -9034,6 +9061,7 @@ function openShipColsPanel(){
   const nameS=tdS+';word-break:break-all;font-size:10.5px;line-height:1.25';
   const sty={ inv:tdS+';white-space:nowrap', sail:tdS+';text-align:center;white-space:nowrap',
               arr:tdS+';text-align:center;white-space:nowrap;color:var(--muted)',
+              cont:tdS+';font-family:\'Courier New\',monospace;font-size:10px;white-space:nowrap',
               rep:tdS, pn:tdS, nameKo:nameS, spec:nameS+';color:var(--muted);font-size:10px',
               nameRu:nameS, nameEn:nameS+';color:var(--accent2)',
               hs:tdS+';text-align:center;color:var(--muted)',
@@ -9046,10 +9074,13 @@ function openShipColsPanel(){
       rep:'<span style="'+codeS+'">'+escapeHtml(i.rep||'')+'</span>',
       pn:'<span style="'+codeS+'">'+escapeHtml(normBadgePN(r.pn))+'</span>',
       nameKo:escapeHtml(nm.ko), spec:escapeHtml(nm.spec), nameRu:escapeHtml(nm.ru),
+      cont:escapeHtml(shipContOf(r.inv)),
       nameEn:escapeHtml(r.name_en||''), hs:escapeHtml(r.hs||''),
       qty:(r.qty?r.qty.toLocaleString():''),
-      price:(r.price?Math.round(r.price*100)/100:'').toLocaleString(),
-      amt:(r.amount?Math.round(r.amount).toLocaleString():'') };
+      price:(shipIsNC(r.inv)?'':(r.price?Math.round(r.price*100)/100:'').toLocaleString()),
+      amt:(shipIsNC(r.inv)
+            ? '<span style="color:#b91c1c;font-weight:700;font-size:9.5px;line-height:1.2;white-space:normal;display:inline-block">NON-COMMERCIAL INVOICE</span>'
+            : (r.amount?Math.round(r.amount).toLocaleString():'')) };
     return '<tr>'+CO.map(d=>'<td style="'+sty[d.k]+'">'+val[d.k]+'</td>').join('')+'</tr>';
   }).join('');
   const thead=document.getElementById('shipThead');
@@ -9101,7 +9132,7 @@ function shipAllPeriod(){
   renderShip();
 }
 function debouncedRenderShip(){ clearTimeout(window._shipT); window._shipT=setTimeout(renderShip,200); }
-async function loadShipTab(){ await loadShip(); renderShip(); }
+async function loadShipTab(){ await Promise.all([loadShip(), loadShipMeta()]); renderShip(); }
 function downloadShip(){
   renderShip();
   const ru=(lang==='ru');
@@ -9111,9 +9142,11 @@ function downloadShip(){
   (_shipFiltered||[]).forEach(r=>{
     const i=poLookup(r.pn), nm=shipPnInfo(r.pn);
     tq+=r.qty; ta+=r.amount;
-    const val={ inv:r.inv, sail:r.sail||'', arr:r.arrive||'', rep:i.rep||'', pn:normBadgePN(r.pn),
+    const nc=shipIsNC(r.inv);
+    const val={ inv:r.inv, sail:r.sail||'', arr:r.arrive||'', cont:shipContOf(r.inv),
+      rep:i.rep||'', pn:normBadgePN(r.pn),
       nameKo:nm.ko, spec:nm.spec, nameRu:nm.ru, nameEn:r.name_en||'', hs:r.hs||'',
-      qty:r.qty, price:r.price, amt:r.amount };
+      qty:r.qty, price:(nc?'':r.price), amt:(nc?'NON-COMMERCIAL INVOICE':r.amount) };
     aoa.push(CO.map(d=>val[d.k]));
   });
   const sum={}; CO.forEach(d=>sum[d.k]='');
@@ -9203,7 +9236,38 @@ function shipParseInvoice(wb){
       }
     }
     const inv=invNo || String(sn).replace(/^\s*(CI|PL)\s+/i,'').trim() || sn;
-    return { inv, sail:iso, ym, sheet:sn, items };
+    // 컨테이너 넘버: 'CONTAINER NO. : CBHU9460040' 처럼 적힌다.
+    //   같은 칸의 ':' 다음 → 오른쪽 칸 → 바로 아랫칸 차례로 본다.
+    //   못 찾거나 AIR 라고 적혀 있으면 AIR.
+    let cont='';
+    for(let r=0;r<Math.min(80,a.length) && !cont;r++){
+      const w=a[r]||[];
+      for(let c=0;c<w.length && !cont;c++){
+        const s0=String(w[c]==null?'':w[c]);
+        if(!/container\s*no/i.test(s0)) continue;
+        const cand=[];
+        const after=s0.indexOf(':')>=0 ? s0.slice(s0.indexOf(':')+1) : '';
+        cand.push(after);
+        for(let k=c+1;k<Math.min(c+6,w.length);k++) cand.push(String(w[k]==null?'':w[k]));
+        const nx=a[r+1]||[];
+        cand.push(String(nx[c]==null?'':nx[c]));
+        for(const t0 of cand){
+          const t=String(t0).replace(/^\s*:\s*/,'').replace(/\s+/g,' ').trim();
+          if(t){ cont=t; break; }
+        }
+      }
+    }
+    if(!cont || /\bair\b/i.test(cont)) cont='AIR';
+    // 값 없이 보내는 인보이스(무상·비상업)
+    let nc=false;
+    for(let r=0;r<a.length && !nc;r++){
+      const w=a[r]||[];
+      for(let c=0;c<w.length;c++){
+        const s0=String(w[c]==null?'':w[c]);
+        if(/free\s*of\s*charge/i.test(s0) || /non[\s\-]*commercial\s*invoice/i.test(s0)){ nc=true; break; }
+      }
+    }
+    return { inv, sail:iso, ym, sheet:sn, items, cont, nc };
   }
   return null;
 }
@@ -9275,6 +9339,10 @@ async function poRecalcSupply(){
   return {ok:true, rows:dirty.length, total};
 }
 async function shipApplyInvoice(pi){
+  await loadShipMeta();
+  // 컨테이너 넘버·무상 여부는 인보이스 한 장에 하나
+  _shipMeta[String(pi.inv)]={ c:String(pi.cont||'AIR'), nc:(pi.nc?1:0) };
+  saveShipMeta();
   const arrive=shipAutoArrive(pi.sail);         // 기본 입고일 = 선적일 + 49일
   const arrYm=shipYmOf(arrive);
   const rows=pi.items.map(it=>({ inv:pi.inv, pn:it.pn, sail:pi.sail, ym:pi.ym,
@@ -9413,7 +9481,10 @@ async function shipSaveInvoice(oldInv, newInv, sail, arrive, btn){
   try{
     const patch={ sail:sail||null, ym:newSailYm||null, arrive:arrive||null, arr_ym:newArrYm||null,
                   updated_at:new Date().toISOString() };
-    if(newInv!==oldInv) patch.inv=newInv;
+    if(newInv!==oldInv){
+      patch.inv=newInv;
+      if(_shipMeta[oldInv]){ _shipMeta[newInv]=_shipMeta[oldInv]; delete _shipMeta[oldInv]; saveShipMeta(); }
+    }
     const { error }=await sb.from('kt_ship').update(patch).eq('inv',oldInv);
     if(error){ alert((ru?'Ошибка.':'저장 실패')+'\n['+(error.message||error.code)+']'); return; }
     await loadShip();
