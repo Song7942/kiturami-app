@@ -3721,6 +3721,45 @@ function openPNHistoryModal(rep, field){
 // ── 품번조회 셀 인라인 수정 (MASTER 전용) ──
 // 품번조회를 이름의 단일 기준으로 삼는다. 여기서 고치면 모든 화면이 getPNInfo/engNameText 로 가져간다.
 // field: name_ko | name_ru | spec  → kt_pn_overrides,  name_en → kt_names_en
+// 화면 아래에 잠깐 떴다 사라지는 쪽지. 조용히 바뀌면 모르니 무엇이 바뀌었는지 알려 준다.
+function pnToast(msg){
+  let b=document.getElementById('pnToast');
+  if(!b){
+    b=document.createElement('div'); b.id='pnToast';
+    b.style.cssText='position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:99999;'
+      +'background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:9px 14px;'
+      +'font-size:12px;color:var(--text);box-shadow:0 10px 30px #0009;max-width:80vw;line-height:1.45';
+    document.body.appendChild(b);
+  }
+  b.textContent=msg; b.style.display='block';
+  clearTimeout(b._t); b._t=setTimeout(function(){ b.style.display='none'; }, 4000);
+}
+// 최종품번을 새로 적으면, 같은 묶음의 나머지 호환품번은 더 쓰지 않는 품번이 된다.
+// 그래서 단종 칸이 비어 있는 것에만 자동으로 'O' 를 넣는다.
+//   · 이미 무언가 적어 둔 칸(△ 같은 것)은 손대지 않는다
+//   · 최종품번 자신과, 최종품번이 비어 있는 묶음은 건드리지 않는다
+// 돌려주는 값은 실제로 표시를 넣은 품번 목록.
+async function pnAutoDan(reps){
+  const list=[...new Set((Array.isArray(reps)?reps:[reps]).map(r=>String(r||'').trim()).filter(Boolean))];
+  const targets=[];
+  list.forEach(r=>{
+    const p=getPNInfo(r); if(!p) return;
+    const fin=normPN(p.final); if(!fin) return;
+    (p.compats||[]).forEach(c=>{
+      const k=normPN(c); if(!k || k===fin) return;
+      if(String((pnSpecOf(k)||{}).dan||'').trim()) return;
+      targets.push(k);
+    });
+  });
+  const uniq=[...new Set(targets)];
+  if(!uniq.length) return [];
+  for(let i=0;i<uniq.length;i+=200){
+    const { error }=await sb.from('kt_pn_specs').upsert(uniq.slice(i,i+200).map(pn=>({pn, dan:'O'})),{onConflict:'pn'});
+    if(error){ console.error('자동 단종 저장 실패:', error.message||error.code); return []; }
+  }
+  uniq.forEach(k=>{ const cur=Object.assign({nw:'',gw:'',cbm:'',dan:''}, _pnSpec.get(k)||{}); cur.dan='O'; _pnSpec.set(k,cur); });
+  return uniq;
+}
 async function savePNCell(rep, field, value){
   if(!userRole(currentUser).isMaster) return { ok:false };
   rep=String(rep||'').trim(); if(!rep) return { ok:false };
@@ -3764,6 +3803,12 @@ async function savePNCell(rep, field, value){
   const { error } = await sb.from('kt_pn_overrides').upsert(row,{onConflict:'rep'});
   if(error){ alert('저장 실패\n['+(error.message||error.code)+']'); return { ok:false }; }
   await recordPNHistory(rep, field, oldVal, newVal);
+  if(field==='final'){
+    const marked=await pnAutoDan(rep);
+    if(marked.length) pnToast(lang==='ru'
+      ? ('Снято с пр-ва отмечено: '+marked.length+' арт. ('+marked.slice(0,3).join(', ')+(marked.length>3?'…':'')+')')
+      : ('최종품번이 아닌 호환품번 '+marked.length+'개에 단종 O 를 넣었습니다 — '+marked.slice(0,3).join(', ')+(marked.length>3?' 외':'')));
+  }
   return { ok:true, rerender:true };   // 변경 강조 배지 갱신을 위해 다시 그린다
 }
 // 대표품번 변경: 옛 rep 은 톰스톤으로 지우고 새 rep 으로 오버라이드를 다시 만든다.
@@ -4067,6 +4112,8 @@ async function handlePNUpload(event){
       }
       const items=[...byRep.values()];
       if(!items.length){ alert(t.pnUploadFail); return; }
+      // 이 파일로 최종품번이 바뀌는 묶음을 미리 적어 둔다(바뀐 것만 자동 단종을 건다)
+      const finBefore=new Map(items.map(o=>[o.rep, normPN((PN_DATA.find(p=>p.rep===o.rep)||{}).final)]));
 
       const isKo=lang==='ko';
       const now=new Date().toISOString();
@@ -4101,8 +4148,16 @@ async function handlePNUpload(event){
 
       payload.forEach(applyPNOverrideRow);
       _pnLookupMap=null; _pnByRepMap=null;
+      // 최종품번이 바뀐 묶음은 나머지 호환품번에 단종 O 를 자동으로 넣는다
+      const danReps=items.map(o=>o.rep).filter(r=>{
+        const q=getPNInfo(r); const f=q?normPN(q.final):'';
+        return f && f!==(finBefore.get(r)||'');
+      });
+      const danMarked=danReps.length ? await pnAutoDan(danReps) : [];
       renderPN();
-      alert(t.pnUploadOk(items.length));
+      alert(t.pnUploadOk(items.length) + (danMarked.length ? ('\n\n'+(lang==='ru'
+        ? ('Автоматически отмечено «снято с пр-ва»: '+danMarked.length+' арт.')
+        : ('최종품번이 바뀐 묶음의 나머지 호환품번 '+danMarked.length+'개에 단종 O 를 자동으로 넣었습니다.'))) : ''));
     }catch(err){
       console.error(err);
       alert(t.pnUploadFail);
