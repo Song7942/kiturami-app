@@ -11678,27 +11678,33 @@ function priceGroupRows(tbodyId){
   const rows=[...tbody.children].filter(tr=>!tr.classList.contains('price-grp'));
   if(!rows.length) return;
   const ri=priceRepColIdx(), ci=ri+1, fi=ri+2, pi=ri+5;   // 대표·호환·최종품번, 가격 시작
-  const txt=(tr,i)=>{ const td=tr.children[i]; return td?String(td.innerText||'').trim():''; };
+  // 값을 읽을 때 innerText 를 쓰면 칸마다 화면 배치를 다시 셈해(강제 리플로우) 몇 초씩 걸린다.
+  // textContent 는 배치를 건드리지 않는다.
+  const txt=(tr,i)=>{ const td=tr.children[i]; return td?String(td.textContent||'').trim():''; };
   const order=[], byRep=new Map();
-  rows.forEach(tr=>{ const k=txt(tr,ri);
-    if(!byRep.has(k)){ byRep.set(k,[]); order.push(k); }
-    byRep.get(k).push(tr); });
+  for(let x=0;x<rows.length;x++){
+    const k=txt(rows[x],ri);
+    let a=byRep.get(k); if(!a){ a=[]; byRep.set(k,a); order.push(k); }
+    a.push(rows[x]);
+  }
   const frag=document.createDocumentFragment();
-  order.forEach(k=>{
-    const kids=byRep.get(k);
-    const head=kids.find(tr=>txt(tr,ci) && txt(tr,ci)===txt(tr,fi)) || kids[0];
+  for(let x=0;x<order.length;x++){
+    const kids=byRep.get(order[x]);
+    let head=kids[0];
+    for(let j=0;j<kids.length;j++){ const c=txt(kids[j],ci); if(c && c===txt(kids[j],fi)){ head=kids[j]; break; } }
     const band=head.cloneNode(true);
     band.className='price-grp';
-    band.removeAttribute('style');
     band.setAttribute('style','border-bottom:1px solid var(--border);font-size:11px');
-    [...band.children].forEach((td,i)=>{
-      if(i===ci || i>=pi) td.innerHTML='';                 // 호환품번과 가격 칸은 비운다
-      td.className=String(td.className||'').replace(/\bprice-man\b/g,'').trim();
-    });
+    const bc=band.children;
+    for(let i=0;i<bc.length;i++){
+      if(i===ci || i>=pi) bc[i].textContent='';            // 호환품번과 가격 칸은 비운다
+      const cn=bc[i].className;
+      if(cn && cn.indexOf('price-man')>=0) bc[i].className=cn.replace(/\bprice-man\b/g,'').trim();
+    }
     frag.appendChild(band);
-    kids.forEach(tr=>{ const c=tr.children[ri]; if(c) c.innerHTML=''; frag.appendChild(tr); });
-  });
-  tbody.innerHTML='';
+    for(let j=0;j<kids.length;j++){ const c=kids[j].children[ri]; if(c) c.textContent=''; frag.appendChild(kids[j]); }
+  }
+  tbody.textContent='';
   tbody.appendChild(frag);
 }
 function openPriceViewPanel(){
@@ -11749,11 +11755,32 @@ function priceLeafThs(thead){
   return out;
 }
 // 칸의 값. 적는 칸(원가·구매가)은 적힌 값을, 여러 줄이면 ' / ' 로 이어 붙인다.
+let _prDecEl=null;
+function _prDecode(x){
+  if(x.indexOf('&')<0) return x;
+  if(!_prDecEl) _prDecEl=document.createElement('textarea');
+  _prDecEl.innerHTML=x; return _prDecEl.value;
+}
 function priceCellVal(tr, i){
-  const td=tr.children[i]; if(!td) return '';
-  const inp=td.querySelector('input');
-  if(inp) return String(inp.value||inp.placeholder||'').trim();
-  return String(td.innerText||'').replace(/\s*\n\s*/g,' / ').trim();
+  let c=tr._pv; if(!c) c=tr._pv={};
+  if(i in c) return c[i];
+  const td=tr.children[i];
+  let v='';
+  if(td){
+    const inp=td.querySelector('input');
+    if(inp) v=String(inp.value||inp.placeholder||'').trim();
+    else{
+      const h=td.innerHTML;
+      if(h.indexOf('<br')>=0){
+        // 한 칸에 여러 줄(호환품번 여럿)이면 ' / ' 로 이어 붙인다
+        v=_prDecode(h.replace(/<br\s*\/?>/gi,'\u0001').replace(/<[^>]*>/g,''))
+            .split('\u0001').map(x=>x.trim()).filter(Boolean).join(' / ');
+      }else{
+        v=String(td.textContent||'').trim();
+      }
+    }
+  }
+  c[i]=v; return v;
 }
 function priceColLabel(i){
   const th=_prCtx?priceLeafThs(_prCtx.thead)[i]:null;
@@ -11789,6 +11816,11 @@ function priceApplyFilters(){
   const all=[...tbody.children];
   const trs=all.filter(tr=>!tr.classList.contains('price-grp'));
   const keys=Object.keys(_prFilters);
+  if(!keys.length && _prSort.i==null){
+    // 걸어 둔 것도 정렬도 없다 — 줄마다 손댈 까닭이 없다
+    for(let x=0;x<all.length;x++) if(all[x].style.display==='none') all[x].style.display='';
+    return;
+  }
   let vis=0;
   trs.forEach(tr=>{
     const ok=keys.every(k=>_prFilters[k].indexOf(priceCellVal(tr, Number(k)))>=0);
