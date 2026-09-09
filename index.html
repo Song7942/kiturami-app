@@ -1079,9 +1079,10 @@ input[type="text"]::placeholder{color:var(--muted)}
         <span id="i18n-ship-back">PSI</span>
       </button>
       <select id="shipInv" onchange="renderShip()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></select>
-      <select id="shipFrom" onchange="renderShip()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></select>
+      <input type="text" id="shipFrom" list="ktShipYmOpts" placeholder="2026-05" onchange="renderShip()" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center">
       <span style="font-size:11px;color:var(--muted)">~</span>
-      <select id="shipTo" onchange="renderShip()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></select>
+      <input type="text" id="shipTo" list="ktShipYmOpts" placeholder="2026-09" onchange="renderShip()" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center">
+      <datalist id="ktShipYmOpts"></datalist>
       <button class="dl-btn" onclick="shipAllPeriod()" title="선적월을 전체로 돌리기"><span id="i18n-ship-all">전체 기간</span></button>
       <button class="dl-btn" onclick="openShipColsPanel()" title="표에 보일 열을 고릅니다(아이디별로 저장)">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="9" y1="4" x2="9" y2="20"/><line x1="15" y1="4" x2="15" y2="20"/></svg>
@@ -1170,9 +1171,9 @@ input[type="text"]::placeholder{color:var(--muted)}
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
         <span id="i18n-sim-back">PSI</span>
       </button>
-      <select id="simFromYm" onchange="renderSIM()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></select>
+      <input type="text" id="simFromYm" list="ktYmOpts" placeholder="2026-09" onchange="renderSIM()" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center">
       <span style="font-size:11px;color:var(--muted)">~</span>
-      <select id="simToYm" onchange="renderSIM()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></select>
+      <input type="text" id="simToYm" list="ktYmOpts" placeholder="2027-02" onchange="renderSIM()" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center">
       <label style="display:none;align-items:center;gap:4px;font-size:10px;color:var(--muted)"><span id="i18n-sim-base">재고 기산</span>
         <input type="text" id="simBaseYm" maxlength="4" style="width:52px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></label>
       <span id="simOpenNote" style="display:none;font-size:10px;color:var(--muted);white-space:nowrap"></span>
@@ -1220,9 +1221,10 @@ input[type="text"]::placeholder{color:var(--muted)}
         <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
         <input type="text" id="psiInput" placeholder="품명·규격·대표/호환품번으로 검색…" oninput="debouncedRenderPSI()">
       </div>
-      <select id="psiFromYm" onchange="renderPSI()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></select>
+      <input type="text" id="psiFromYm" list="ktYmOpts" placeholder="2026-08" onchange="renderPSI()" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center">
       <span style="font-size:11px;color:var(--muted)">~</span>
-      <select id="psiToYm" onchange="renderPSI()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></select>
+      <input type="text" id="psiToYm" list="ktYmOpts" placeholder="2026-09" onchange="renderPSI()" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center">
+      <datalist id="ktYmOpts"></datalist>
       <label style="display:none;align-items:center;gap:4px;font-size:10px;color:var(--muted)"><span id="i18n-psi-base">재고 기산</span>
         <input type="text" id="psiBaseYm" maxlength="4" style="width:52px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></label>
       <span id="psiOpenNote" style="display:none;font-size:10px;color:var(--muted);white-space:nowrap"></span>
@@ -8744,24 +8746,26 @@ function openShipColsPanel(){
 function shipFillRange(){
   const list=shipYmList();
   const f=document.getElementById('shipFrom'), t=document.getElementById('shipTo');
-  if(!list.length){ if(f) f.innerHTML=''; if(t) t.innerHTML=''; return {from:'',to:''}; }
+  const dl=document.getElementById('ktShipYmOpts');
+  if(!list.length){ if(dl) dl.innerHTML=''; return {from:'',to:''}; }
   const key=list.join('|');
-  if(f && f.getAttribute('data-list')!==key){
-    const cf=f.value, ct=t?t.value:'';
-    const opts=list.map(v=>'<option value="'+v+'">'+psiYmLabel(v)+'</option>').join('');
-    f.innerHTML=opts; if(t) t.innerHTML=opts;
-    f.setAttribute('data-list',key); if(t) t.setAttribute('data-list',key);
-    f.value=(cf && list.indexOf(cf)>=0)?cf:list[0];
-    if(t) t.value=(ct && list.indexOf(ct)>=0)?ct:list[list.length-1];
+  if(dl && dl.getAttribute('data-list')!==key){
+    dl.innerHTML=list.map(v=>'<option value="'+psiYmLabel(v)+'">').join('');
+    dl.setAttribute('data-list',key);
   }
-  let from=f?f.value:'', to=t?t.value:'';
-  if(from && to && from>to){ const x=from; from=to; to=x; }
+  let from=psiYmParse(f?f.value:''), to=psiYmParse(t?t.value:'');
+  if(!from) from=list[0];
+  if(!to) to=list[list.length-1];
+  if(from>to){ const x=from; from=to; to=x; }
+  if(f && document.activeElement!==f && f.value!==psiYmLabel(from)) f.value=psiYmLabel(from);
+  if(t && document.activeElement!==t && t.value!==psiYmLabel(to)) t.value=psiYmLabel(to);
   return {from, to};
 }
 function shipAllPeriod(){
   const list=shipYmList(); if(!list.length) return;
   const f=document.getElementById('shipFrom'), t=document.getElementById('shipTo');
-  if(f) f.value=list[0]; if(t) t.value=list[list.length-1];
+  if(f) f.value=psiYmLabel(list[0]);
+  if(t) t.value=psiYmLabel(list[list.length-1]);
   renderShip();
 }
 function debouncedRenderShip(){ clearTimeout(window._shipT); window._shipT=setTimeout(renderShip,200); }
@@ -9504,6 +9508,20 @@ function psiRepaint(){
   const s=document.getElementById('pane-sim');
   if(s && s.classList.contains('active')) renderSIM(); else renderPSI();
 }
+// 기간 칸에 적은 글자를 'YYMM' 으로 읽는다.
+//   '2026-02' · '202602' · '2602' · '2026.2' 어느 쪽으로 적어도 같게 본다.
+function psiYmParse(t){
+  const d=String(t||'').replace(/\D/g,'');
+  let ym='';
+  if(d.length===6) ym=d.slice(2);        // YYYYMM
+  else if(d.length===5) ym=d.slice(2,4)+'0'+d.slice(4);                  // YYYYM
+  else if(d.length===4) ym=d;            // YYMM
+  else if(d.length===3) ym=d.slice(0,2)+'0'+d.slice(2);   // YYM
+  if(!/^\d{4}$/.test(ym)) return '';
+  const m=parseInt(ym.slice(2),10);
+  if(!(m>=1 && m<=12)) return '';
+  return ym;
+}
 // 기간 고르개에 넣을 달 목록: 자료가 있는 달 전체 + 앞으로 12개월(예측·시뮬레이션용)
 function psiMonthList(){
   const s=new Set();
@@ -9518,8 +9536,8 @@ function psiMonthList(){
 function psiCfg(){
   const g=sfx=>pgEl(sfx);
   const clean=v=>String(v||'').replace(/\D/g,'').slice(0,4);
-  let from=clean(g('FromYm')?g('FromYm').value:'');
-  let to=clean(g('ToYm')?g('ToYm').value:'');
+  let from=psiYmParse(g('FromYm')?g('FromYm').value:'');
+  let to=psiYmParse(g('ToYm')?g('ToYm').value:'');
   // 아직 안 골랐으면: PSI 는 자료의 마지막 두 달, 발주시뮬레이션은 이번 달부터 6개월
   if(from.length!==4 || to.length!==4){
     if(PSIP==='sim'){
@@ -9545,13 +9563,15 @@ function psiFillCfgInputs(c){
   const set=new Set(psiMonthList()); set.add(c.from); set.add(to);
   const list=[...set].sort();
   const key=list.join('|');
+  const dl=document.getElementById('ktYmOpts');
+  if(dl && dl.getAttribute('data-list')!==key){
+    dl.innerHTML=list.map(m=>'<option value="'+psiYmLabel(m)+'">').join('');
+    dl.setAttribute('data-list',key);
+  }
   [['FromYm',c.from],['ToYm',to]].forEach(function(x){
     const e=g(x[0]); if(!e) return;
-    if(e.getAttribute('data-list')!==key){
-      e.innerHTML=list.map(m=>'<option value="'+m+'">'+psiYmLabel(m)+'</option>').join('');
-      e.setAttribute('data-list',key);
-    }
-    if(document.activeElement!==e && e.value!==x[1]) e.value=x[1];
+    const want=psiYmLabel(x[1]);
+    if(document.activeElement!==e && e.value!==want) e.value=want;
   });
   const put=(sfx,v)=>{ const e=g(sfx);
     if(e && document.activeElement!==e && String(e.value)!==String(v)) e.value=v; };
