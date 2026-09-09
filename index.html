@@ -9046,7 +9046,12 @@ function openShipColsPanel(){
   const R=shipFillRange();
   let rows=shipData.slice();
   if(inv) rows=rows.filter(r=>r.inv===inv);
-  if(R.from || R.to) rows=rows.filter(r=>{ const y=String(r.ym||'');
+  // 인보이스 넘버로 찾을 때는 고른 기간 밖이라도 보여 준다.
+  // (몇 월 것인지 모르는 채로 인보이스 번호만 들고 찾는 일이 잦다)
+  const invHit=r=>!!(kw && String(r.inv||'').toLowerCase().includes(kw));
+  if(R.from || R.to) rows=rows.filter(r=>{
+    if(invHit(r)) return true;
+    const y=String(r.ym||'');
     return (!R.from || y>=R.from) && (!R.to || y<=R.to); });
   if(kw) rows=rows.filter(r=>{
     const i=poLookup(r.pn);
@@ -9065,7 +9070,7 @@ function openShipColsPanel(){
   const cg=document.getElementById('shipColgroup');
   if(cg) cg.innerHTML=CO.map(d=>'<col style="width:'+d.w+'px">').join('');
   const nameS=tdS+';word-break:break-all;font-size:10.5px;line-height:1.25';
-  const sty={ inv:tdS+';white-space:nowrap', sail:tdS+';text-align:center;white-space:nowrap',
+  const sty={ inv:tdS+';word-break:break-all;line-height:1.25', sail:tdS+';text-align:center;white-space:nowrap',
               arr:tdS+';text-align:center;white-space:nowrap;color:var(--muted)',
               cont:tdS+';font-family:\'Courier New\',monospace;font-size:10px;white-space:nowrap',
               rep:tdS, pn:tdS, nameKo:nameS, spec:nameS+';color:var(--muted);font-size:10px',
