@@ -9569,7 +9569,8 @@ function shipInvPanelList(){
         + '<td style="'+td+'"><input class="siArr" placeholder="'+escapeHtml(shipAutoArrive(o.sail)||'2026-10-10')+'" style="'+inp+';width:104px" value="'+escapeHtml(o.arrive||'')+'"></td>'
         + '<td style="'+td+';text-align:right;color:var(--muted)">'+o.n+'</td>'
         + '<td style="'+td+';text-align:right">'+o.qty.toLocaleString()+'</td>'
-        + '<td style="'+td+'"><button class="siSave" style="padding:4px 11px;border:none;border-radius:6px;background:var(--accent2);color:#fff;cursor:pointer;font-size:11px">'+L('저장','ОК')+'</button></td>'
+        + '<td style="'+td+';white-space:nowrap"><button class="siSave" style="padding:4px 11px;border:none;border-radius:6px;background:var(--accent2);color:#fff;cursor:pointer;font-size:11px">'+L('저장','ОК')+'</button>'
+        + '<button class="siDel" style="margin-left:5px;padding:4px 10px;border:1px solid #ef4444;border-radius:6px;background:var(--surface2);color:#ef4444;cursor:pointer;font-size:11px">'+L('삭제','Удалить')+'</button></td>'
         + '</tr>').join('')
     + '</table>';
   el.querySelectorAll('.siSave').forEach(b=>{ b.onclick=()=>{
@@ -9577,6 +9578,45 @@ function shipInvPanelList(){
     shipSaveInvoice(tr.getAttribute('data-inv'), tr.querySelector('.siInv').value,
                     tr.querySelector('.siSail').value, tr.querySelector('.siArr').value, b);
   }; });
+  el.querySelectorAll('.siDel').forEach(b=>{ b.onclick=()=>{
+    shipDeleteInvoice(b.closest('tr').getAttribute('data-inv'), b);
+  }; });
+}
+// 인보이스 한 장을 통째로 지운다.
+//   지운 뒤 그 인보이스가 걸려 있던 선적월·입고월을 남은 인보이스로 다시 셈하고,
+//   발주현황 공급수량도 다시 맞춘다(올릴 때와 똑같은 길을 되밟는다).
+async function shipDeleteInvoice(inv, btn){
+  const ru=(lang==='ru');
+  if(!canEditPsi()){ alert(ru?'Нет прав на изменение.':'지울 권한이 없습니다.'); return; }
+  const rows=(shipData||[]).filter(r=>r.inv===inv);
+  if(!rows.length){ alert(ru?'Инвойс не найден.':'그 인보이스를 찾지 못했습니다.'); return; }
+  const q=rows.reduce((a,r)=>a+(Number(r.qty)||0),0);
+  const sailYms=[...new Set(rows.map(r=>r.ym).filter(Boolean))];
+  const arrYms=[...new Set(rows.map(r=>r.arr_ym).filter(Boolean))];
+  const lbl=a=>a.map(psiYmLabel).join(', ');
+  if(!confirm(ru
+      ? ('Удалить инвойс '+inv+'?\n'+rows.length+' строк / '+q.toLocaleString()
+         +'\nОтгрузка '+lbl(sailYms)+' и приход '+lbl(arrYms)+' в PSI будут пересчитаны.')
+      : (inv+' 인보이스를 지웁니다.\n'+rows.length+'건 / 수량 '+q.toLocaleString()
+         +'\nPSI 선적('+lbl(sailYms)+')·입고('+lbl(arrYms)+')와 발주현황 공급수량도 다시 셈합니다.'
+         +'\n\n계속할까요?'))) return;
+  const t0=btn?btn.textContent:'';
+  if(btn){ btn.disabled=true; btn.textContent='…'; }
+  try{
+    const { error }=await sb.from('kt_ship').delete().eq('inv',inv);
+    if(error){ alert((ru?'Ошибка удаления':'삭제 실패')+'\n['+(error.message||error.code)+']'); return; }
+    if(_shipMeta[inv]){ delete _shipMeta[inv]; saveShipMeta(); }
+    await loadShip();
+    for(const m of sailYms){ const r=await shipSyncMonth(m,'v'); if(!r.ok){ alert('PSI 반영 실패\n['+r.msg+']'); return; } }
+    for(const m of arrYms){ const r=await shipSyncMonth(m,'w'); if(!r.ok){ alert('PSI 반영 실패\n['+r.msg+']'); return; } }
+    const sup=await poRecalcSupply();
+    renderShip();
+    if(document.getElementById('shipInvPop')) shipInvPanelList();
+    if(typeof renderPSI==='function') renderPSI();
+    alert((ru?'Удалено: ':'지웠습니다: ')+inv+' / '+rows.length+(ru?' строк':'건')
+      + '\n' + (ru?'Отгрузка ':'선적 ')+lbl(sailYms)+(ru?', приход ':', 입고 ')+lbl(arrYms)+(ru?' пересчитано.':' 다시 셈했습니다.')
+      + ((sup&&sup.ok)?('\n'+(ru?'Поставлено: ':'발주현황 공급수량 ')+sup.total.toLocaleString()):''));
+  } finally { if(btn){ btn.disabled=false; btn.textContent=t0||(ru?'Удалить':'삭제'); } }
 }
 async function shipSaveInvoice(oldInv, newInv, sail, arrive, btn){
   const ru=(lang==='ru');
