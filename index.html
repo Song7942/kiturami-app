@@ -9533,7 +9533,7 @@ function psiCfg(){
   }
   if(from>to){ const t=from; from=to; to=t; }
   let months=1, y=from;
-  while(y<to && months<24){ y=psiYmAdd(y,1); months++; }
+  while(y<to && months<600){ y=psiYmAdd(y,1); months++; }   // 사실상 제한 없음(무한루프만 막는다)
   let base=clean(g('BaseYm')?g('BaseYm').value:''); if(base.length!==4) base=PSI_BASE_DEFAULT;
   const avgN=Math.max(1,Math.min(24,parseInt(g('AvgN')?g('AvgN').value:'',10)||6));
   return { from, months, base, avgN };
@@ -10294,6 +10294,7 @@ function renderPSI(){
   const cg=pgEl('Colgroup');
   if(cg){
     const w=FX.map(d=>'<col style="width:'+d.w+'px">');
+    SB.forEach(d=>w.push('<col style="width:'+d.w+'px">'));            // 기간합계
     yms.forEach(()=>SB.forEach(d=>w.push('<col style="width:'+d.w+'px">')));
     cg.innerHTML=w.join('');
   }
@@ -10321,9 +10322,19 @@ function renderPSI(){
   const openYm=psiYmAdd(c.base,-1);
   const noteEl=pgEl('OpenNote');
   if(noteEl) noteEl.textContent=L('이월재고 = '+psiYmLabel(openYm)+' 재고','Нач. остаток = остаток '+psiYmLabel(openYm));
+  // 규격 오른쪽에 '기간합계' 묶음. 고른 기간을 한 칸에 모아 본다.
+  const totHead='<th colspan="'+SB.length+'" style="'+thS+bl+';background:var(--surface)">'
+    + L('기간합계 ('+psiYmLabel(c.from)+' ~ '+psiYmLabel(yms[yms.length-1])+')',
+        'Итого за период ('+psiYmLabel(c.from)+' ~ '+psiYmLabel(yms[yms.length-1])+')')+'</th>';
+  const totLab=d=>{
+    if(psiSimOn && d.k==='mo2') return L('발주후<br>보유월','После<br>мес.');
+    if(psiSimOn && d.k==='sh') return L('실제<br>선적','Факт<br>отгр.');
+    return L(d.ko,d.ru);
+  };
+  const totSub=SB.map((d,i)=>'<th style="'+thS+(i===0?bl:'')+';background:var(--surface)">'+totLab(d)+'</th>').join('');
   let head=['<tr>',
     FX.map((d,k)=>'<th rowspan="2" class="'+fxCls(k).trim()+'" style="'+thS+'">'+L(d.ko,d.ru)+psiFilterIcon(d.k)+'</th>').join(''),
-    grp,'</tr><tr>',sub,'</tr>'].join('');
+    totHead,grp,'</tr><tr>',totSub,sub,'</tr>'].join('');
 
   if(!items.length){
     if(thead) thead.innerHTML=head;
@@ -10337,6 +10348,19 @@ function renderPSI(){
   const n=v=>(v==null||v===''||isNaN(v))?'':psiFmt(Number(v));
   const tdS='padding:4px 5px;font-size:11px;overflow:hidden;border-bottom:1px solid var(--border)';
   const numS=tdS+';text-align:right;white-space:nowrap';
+  // 기간합계: 선적·선적계획·입고·출고·미출·발주필요는 더하고, 재고·보유월은 마지막 달 값을 쓴다
+  const TOT_SUM={sh:1,plan:1,i:1,o:1,ms:1,need:1}, TOT_LAST={st:1,mo:1,mo2:1};
+  const totOf=raws=>{ const t={}, last=raws[raws.length-1]||{};
+    SB.forEach(d=>{ const k=d.k;
+      if(TOT_SUM[k]){ let sm=0; raws.forEach(r=>{ const v=Number(r[k]); if(isFinite(v)) sm+=v; }); t[k]=sm; }
+      else if(TOT_LAST[k]) t[k]=last[k];
+      else t[k]=null; });
+    return t; };
+  const totTxt=(k,t)=>{ const v=t[k];
+    if(v==null||v==='') return '';
+    if(k==='mo'||k==='mo2') return Number(v).toFixed(1);
+    if((k==='plan'||k==='need') && !Number(v)) return '';
+    return n(v); };
   const futOut=(d,y)=>{ let s=0; for(let i=1;i<=c.avgN;i++) s+=psiOutOf(d,psiYmAdd(y,i)); return s; };
   const moOf=(st,fut)=>{ const avg=fut/c.avgN; return avg>0 ? Math.round((st/avg)*10)/10 : null; };
   // 발주필요: 보유월이 N 이 되려면 더 있어야 하는 수량(= N개월치 출고 − 지금 재고)
@@ -10402,7 +10426,7 @@ function renderPSI(){
     let addSt=0;
     const arrive=new Array(ymsAll.length).fill(0);
     const shipPlan=new Array(ymsAll.length).fill(0);
-    const gCells=yms.map((y,i)=>{
+    const gEach=yms.map((y,i)=>{
       const a=g.agg[y]; const b=i===0?' bl':'';
       addSt+=arrive[i];                       // 이 달에 들어오는 발주분
       const st=a.st+addSt;
@@ -10456,31 +10480,51 @@ function renderPSI(){
                  need:(nd?n(nd):''), mo2:(m2==null?'':m2.toFixed(1))};
       const low=psiLow(mo);
       const manMark=d=>(psiSimOn && ((d.k==='sh' && manShip!=null) || (d.k==='need' && man!=null)))?' man':'';
-      return SB.map((d,j)=>'<td class="n'+(j===0?b:'')+((low&&d.k==='mo')?' low':'')
+      const html=SB.map((d,j)=>'<td class="n'+(j===0?b:'')+((low&&d.k==='mo')?' low':'')
         +((d.k==='need'||(psiSimOn&&d.k==='sh'))?' ed':'')+manMark(d)+'"'
         +(d.k==='need'?nAttr:((psiSimOn&&d.k==='sh')?sAttr:''))+'>'+val[d.k]+'</td>').join('');
-    }).join('');
-    const gRow='<tr class="g'+band+'">'+gFix+gCells+'</tr>';
+      return {html, raw:{sh:sh, plan:plan, i:inq, o:a.o, ms:a.ms, st:st, mo:mo, need:nd, mo2:m2}};
+    });
+    const gCells=gEach.map(x=>x.html).join('');
+    const gTot=totOf(gEach.map(x=>x.raw));
+    const gLow=psiLow(gTot.mo);
+    const gTotCells=SB.map((d,j)=>'<td class="n'+(j===0?' bl':'')+((gLow&&d.k==='mo')?' low':'')+'">'
+      +totTxt(d.k,gTot)+'</td>').join('');
+    const gRow='<tr class="g'+band+'">'+gFix+gTotCells+gCells+'</tr>';
     const kidRows=g.rows.map(it=>{
       const r=it.r, v=it.v;
       const kTxt={ rep:'', compat:'<span class="c">'+escapeHtml(normBadgePN(r._compat))+'</span>',
                    note:escapeHtml(pnColText('note',r)), name:escapeHtml(pnColText('name',r)), spec:escapeHtml(pnColText('spec',r)) };
       const kFix=FX.map((d,k)=>'<td class="'+kCls[d.k]+fxCls(k)+'">'+kTxt[d.k]+'</td>').join('');
-      const cells=yms.map((y,i)=>{
+      const kEach=yms.map((y,i)=>{
         const x=v[y]||{sh:0,i:0,o:0,ms:0,st:0};
         const b=i===0?' bl':'';
         const val={sh:n(x.sh), plan:'', i:n(x.i), o:n(x.o), ms:n(x.ms), st:n(x.st), mo:'', need:'', mo2:''};
         const dim={sh:1, ms:1};
         // 보유월은 대표품번 줄에만 적으므로 하위 줄에는 색을 칠하지 않는다
-        return SB.map((d,j)=>'<td class="n'+(j===0?b:'')+(dim[d.k]?' dim':'')+'">'+val[d.k]+'</td>').join('');
-      }).join('');
-      return '<tr>'+kFix+cells+'</tr>';
+        const html=SB.map((d,j)=>'<td class="n'+(j===0?b:'')+(dim[d.k]?' dim':'')+'">'+val[d.k]+'</td>').join('');
+        return {html, raw:{sh:x.sh, plan:null, i:x.i, o:x.o, ms:x.ms, st:x.st, mo:null, need:null, mo2:null}};
+      });
+      const cells=kEach.map(z=>z.html).join('');
+      const kTot=totOf(kEach.map(z=>z.raw));
+      const kDim={sh:1, ms:1};
+      const kTotCells=SB.map((d,j)=>'<td class="n'+(j===0?' bl':'')+(kDim[d.k]?' dim':'')+'">'
+        +totTxt(d.k,kTot)+'</td>').join('');
+      return '<tr>'+kFix+kTotCells+cells+'</tr>';
     });
     if(psiShowGroups()) bodyRows.push(gRow);
     if(psiShowKids()) kidRows.forEach(r=>bodyRows.push(r));
   });
 
   const sumS=thS+';font-weight:700;background:var(--surface)';
+  const sumRaws=yms.map(y=>{ const t=tot[y]; const tst=t.st+(stAdd[y]||0);
+    const tn=psiSimOn ? (needTot[y]||0) : 0;
+    return { sh:t.sh, plan:(shipTot[y]||0), i:t.i+(inTot[y]||0), o:t.o, ms:t.ms, st:tst,
+             mo:moOf(tst,t.fut), need:tn,
+             mo2:((psiSimOn && arrFutTot[y]) ? moOf((arrStTot[y]||0)+tn, arrFutTot[y]) : null) }; });
+  const sumTot=totOf(sumRaws);
+  const sumTotCells=SB.map((d,j)=>'<th style="'+sumS+';text-align:right'+(j===0?bl:'')+'">'
+    +totTxt(d.k,sumTot)+'</th>').join('');
   const sumCells=yms.map((y,i)=>{
     const t=tot[y]; const b=i===0?bl:'';
     const tst=t.st+(stAdd[y]||0);
@@ -10497,13 +10541,13 @@ function renderPSI(){
     + '<th colspan="'+FX.length+'" class="fxs fx0 fxend" style="'+sumS+';text-align:right">'
     + L('합계 '+nzRep+'개 대표품번 / '+Object.keys(counted).length+'개 호환품번',
         'Итого '+nzRep+' Осн. артикул / '+Object.keys(counted).length+' Артикул')+'</th>'
-    + sumCells + '</tr>';
+    + sumTotCells + sumCells + '</tr>';
 
   // 머리글 높이는 '빈 표'에서 잰다. 수천 줄을 붙인 뒤에 재면 표 전체가 다시 계산되어 2초씩 걸린다.
   if(tbody) tbody.innerHTML='';
   if(thead) thead.innerHTML=head;
   psiStickHead();
-  if(tbody) psiSetRows(tbody, bodyRows, FX.length+yms.length*SB.length, PSIP);
+  if(tbody) psiSetRows(tbody, bodyRows, FX.length+(yms.length+1)*SB.length, PSIP);
   updatePaneHBar(PSIP);
   _psiPainted[PSIP]=psiSig(PSIP);
 }
@@ -10520,8 +10564,19 @@ async function downloadPSI(){
   const g1=h1.map(()=>''); const g2=h1.slice();
   g1.push(''); g2.push(ru ? ('Нач. остаток ('+psiYmLabel(psiYmAdd(c.base,-1))+')')
                           : ('이월재고 ('+psiYmLabel(psiYmAdd(c.base,-1))+' 재고)'));
+  g1.push((ru?'Итого за период (':'기간합계 (')+psiYmLabel(c.from)+' ~ '+psiYmLabel(yms[yms.length-1])+')');
+  SB.slice(1).forEach(()=>g1.push(''));
+  SB.forEach(d=>g2.push(String(ru?d.ru:d.ko).replace(/<br>/g,' ')));
   yms.forEach(y=>{ g1.push(psiYmLabel(y)); SB.slice(1).forEach(()=>g1.push('')); SB.forEach(d=>g2.push(String(ru?d.ru:d.ko).replace(/<br>/g,' '))); });
   const moOf=(st,fut)=>{ const avg=fut/c.avgN; return avg>0 ? Math.round((st/avg)*10)/10 : ''; };
+  // 기간합계: 더할 열과 마지막 달 값을 쓰는 열(화면과 같은 규칙)
+  const TOT_SUM={sh:1,plan:1,i:1,o:1,ms:1,need:1}, TOT_LAST={st:1,mo:1,mo2:1};
+  const totOf=raws=>{ const t={}, last=raws[raws.length-1]||{};
+    SB.forEach(d=>{ const k=d.k;
+      if(TOT_SUM[k]){ let sm=0; raws.forEach(r=>{ const v=Number(r[k]); if(isFinite(v)) sm+=v; }); t[k]=sm; }
+      else if(TOT_LAST[k]) t[k]=(last[k]===''||last[k]==null)?'':last[k];
+      else t[k]=''; });
+    return t; };
   const needOf=(st,fut)=>{ const avg=fut/c.avgN; if(avg<=0) return 0; return Math.max(0, Math.ceil(avg*c.avgN-st)); };
   const tot={}; yms.forEach(y=>tot[y]={sh:0,i:0,o:0,ms:0,st:0,fut:0});
   let totOpen=0;
@@ -10534,11 +10589,14 @@ async function downloadPSI(){
                  name:pnColText('name',finRow), spec:pnColText('spec',finRow) };
     const gRow=FX.map(d=>gTxt[d.k]);
     gRow.push(g.open||0); totOpen+=g.open||0;
+    const gRaw=[];
     yms.forEach(y=>{ const a=g.agg[y]||{sh:0,i:0,o:0,ms:0,st:0,fut:0}; const t=tot[y];
       t.sh+=a.sh; t.i+=a.i; t.o+=a.o; t.ms+=a.ms; t.st+=a.st; t.fut+=a.fut;
       const nd=needOf(a.st,a.fut);
       const val={sh:a.sh, i:a.i, o:a.o, ms:a.ms, st:a.st, mo:moOf(a.st,a.fut), need:(nd||''), mo2:moOf(a.st+nd,a.fut)};
-      SB.forEach(d=>gRow.push(val[d.k])); });
+      gRaw.push(val); });
+    { const tv=totOf(gRaw); SB.forEach(d=>gRow.push(tv[d.k])); }
+    gRaw.forEach(val=>SB.forEach(d=>gRow.push(val[d.k])));
     if(psiShowGroups()){ grpRows.push(body.length); body.push(gRow); }
     if(!psiShowKids()) return;
     g.rows.forEach(it=>{
@@ -10547,23 +10605,30 @@ async function downloadPSI(){
                    name:pnColText('name',r), spec:pnColText('spec',r) };
       const row=FX.map(d=>kTxt[d.k]);
       row.push(v._open||0);
+      const kRaw=[];
       yms.forEach(y=>{ const x=v[y]||{};
         const val={sh:x.sh??'', i:x.i??'', o:x.o??'', ms:x.ms??'', st:x.st??'', mo:'', need:'', mo2:''};
-        SB.forEach(d=>row.push(val[d.k])); });
+        kRaw.push(val); });
+      { const tv=totOf(kRaw); SB.forEach(d=>row.push(tv[d.k])); }
+      kRaw.forEach(val=>SB.forEach(d=>row.push(val[d.k])));
       body.push(row);
     });
   });
   const sumRow=FX.map((d,i)=>i===0?((ru?'Итого ':'합계 ')+_psiNz.rep+(ru?' Осн. артикул':'개 대표품번')
     +' / '+_psiNz.pn+(ru?' Артикул':'개 호환품번')):'');
   sumRow.push(totOpen);
+  const sRaw=[];
   yms.forEach(y=>{ const t=tot[y];
     const tn=needOf(t.st,t.fut);
     const val={sh:t.sh, i:t.i, o:t.o, ms:t.ms, st:t.st, mo:moOf(t.st,t.fut), need:(tn||''), mo2:moOf(t.st+tn,t.fut)};
-    SB.forEach(d=>sumRow.push(val[d.k])); });
+    sRaw.push(val); });
+  { const tv=totOf(sRaw); SB.forEach(d=>sumRow.push(tv[d.k])); }
+  sRaw.forEach(val=>SB.forEach(d=>sumRow.push(val[d.k])));
   const aoa=[g1,g2,sumRow];
   body.forEach(r=>aoa.push(r));
   const ws=XLSX.utils.aoa_to_sheet(aoa);
   ws['!cols']=FX.map(()=>({wch:16})).concat([{wch:12}])
+    .concat(SB.map(d=>({wch:(d.k==='st'?11:(d.k==='mo'?9:10))})))
     .concat(yms.map(()=>SB.map(d=>({wch:(d.k==='st'?10:(d.k==='mo'?8:9))}))).reduce((a,b)=>a.concat(b),[]));
   const nc=aoa[0].length;
   xlPaint(ws, 0, nc, XL_HEAD);
