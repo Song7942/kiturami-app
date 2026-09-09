@@ -8949,6 +8949,14 @@ function shipMetaOf(inv){ return _shipMeta[String(inv||'')] || {}; }
 // 컨테이너 넘버. 인보이스에 없거나 AIR 라고 적혀 있으면 AIR 로 본다.
 function shipContOf(inv){ const c=String(shipMetaOf(inv).c||'').trim(); return c || 'AIR'; }
 function shipIsNC(inv){ return !!shipMetaOf(inv).nc; }
+// 이 줄(인보이스+품번)이 무상인가. 인보이스 전체가 무상이거나, 그 줄만 무상이거나.
+function shipIsFoc(inv, pn){
+  const m=shipMetaOf(inv);
+  if(m.nc) return true;
+  const fx=m.fx;
+  if(!fx || !fx.length) return false;
+  return fx.indexOf(normPN(pn))>=0;
+}
 // ── 선적/입고현황 열 고르기 ────────────────────────────────
 //   한글 화면에서는 한글품명·규격을, 러시아어 화면에서는 러시아어품명을 보여 준다.
 //   영문품명은 인보이스에 적힌 그대로, 나머지 이름은 품번조회에서 가져온다.
@@ -9049,7 +9057,7 @@ function openShipColsPanel(){
   // 인보이스 넘버로 찾을 때는 고른 기간 밖이라도 보여 준다.
   // (몇 월 것인지 모르는 채로 인보이스 번호만 들고 찾는 일이 잦다)
   const invHit=r=>!!(kw && String(r.inv||'').toLowerCase().includes(kw));
-  if(R.from || R.to) rows=rows.filter(r=>{
+  if((R.from || R.to) && !inv) rows=rows.filter(r=>{
     if(invHit(r)) return true;
     const y=String(r.ym||'');
     return (!R.from || y>=R.from) && (!R.to || y<=R.to); });
@@ -9088,8 +9096,8 @@ function openShipColsPanel(){
       cont:escapeHtml(shipContOf(r.inv)),
       nameEn:escapeHtml(r.name_en||''), hs:escapeHtml(r.hs||''),
       qty:(r.qty?r.qty.toLocaleString():''),
-      price:(shipIsNC(r.inv)?'':(r.price?Math.round(r.price*100)/100:'').toLocaleString()),
-      amt:(shipIsNC(r.inv)
+      price:(r.price?Math.round(r.price*100)/100:'').toLocaleString(),
+      amt:(shipIsFoc(r.inv, r.pn)
             ? '<span style="color:#b91c1c;font-weight:700;font-size:9.5px;line-height:1.2;white-space:normal;display:inline-block">NON-COMMERCIAL INVOICE</span>'
             : (r.amount?Math.round(r.amount).toLocaleString():'')) };
     return '<tr>'+CO.map(d=>'<td style="'+sty[d.k]+'">'+val[d.k]+'</td>').join('')+'</tr>';
@@ -9237,11 +9245,11 @@ function downloadShip(){
   (_shipFiltered||[]).forEach(r=>{
     const i=poLookup(r.pn), nm=shipPnInfo(r.pn);
     tq+=r.qty; ta+=r.amount;
-    const nc=shipIsNC(r.inv);
+    const nc=shipIsFoc(r.inv, r.pn);
     const val={ inv:r.inv, sail:r.sail||'', arr:r.arrive||'', cont:shipContOf(r.inv),
       rep:i.rep||'', pn:normBadgePN(r.pn),
       nameKo:nm.ko, spec:nm.spec, nameRu:nm.ru, nameEn:r.name_en||'', hs:r.hs||'',
-      qty:r.qty, price:(nc?'':r.price), amt:(nc?'NON-COMMERCIAL INVOICE':r.amount) };
+      qty:r.qty, price:r.price, amt:(nc?'NON-COMMERCIAL INVOICE':r.amount) };
     aoa.push(CO.map(d=>val[d.k]));
   });
   const sum={}; CO.forEach(d=>sum[d.k]='');
@@ -9255,6 +9263,9 @@ function downloadShip(){
 }
 
 // ── COMMERCIAL INVOICE 읽기 ─────────────────────────────────────────
+// 무상 표시. 'FREE OF CHARGE' 는 줄마다(금액 칸), 'NON-COMMERCIAL INVOICE' 는 문서 전체에 붙는다.
+const SHIP_FOC_RE=/free\s*of\s*charge/i;
+const SHIP_NC_RE=/non[\s\-]*commercial\s*invoice/i;
 // 'Sailing on or about' 날짜 + 섹션이 Parts 인 줄만 뽑는다.
 function shipParseInvoice(wb){
   for(const sn of wb.SheetNames){
@@ -9298,12 +9309,20 @@ function shipParseInvoice(wb){
           if(typeof v==='number' && isFinite(v) && !/^\d{6,10}$/.test(String(v))) nums.push(v); }
         qty=nums[0]||0; price=nums[1]||0; amount=nums[2]||(qty*price);
       }
-      if(!amount) amount=qty*price;
+      // 금액 칸에 'FREE OF CHARGE' 라고 적힌 줄만 무상으로 본다.
+      //   한 인보이스에 유상·무상 줄이 섞여 있으므로 줄마다 따로 봐야 한다.
+      //   머리글을 못 찾은 파일에서만 줄 전체를 훑는다.
+      let foc=false;
+      if(cAmt>=0 && SHIP_FOC_RE.test(String(w[cAmt]==null?'':w[cAmt]))) foc=true;
+      if(!foc && cPrice>=0 && SHIP_FOC_RE.test(String(w[cPrice]==null?'':w[cPrice]))) foc=true;
+      if(!foc && cAmt<0){ for(let c=secCol+1;c<w.length;c++){ if(SHIP_FOC_RE.test(String(w[c]||''))){ foc=true; break; } } }
+      if(foc) amount=0;
+      else if(!amount) amount=qty*price;
       let hs='';
       if(cHs>=0) hs=String(w[cHs]==null?'':w[cHs]).trim();
       if(!hs){ for(let c=secCol+1;c<w.length;c++){ const t=String(w[c]||'').trim();
         if(/^\d{6,10}$/.test(t)){ hs=t; break; } } }
-      items.push({pn, name_en:String(w[1]||'').trim(), hs, qty, price, amount});
+      items.push({pn, name_en:String(w[1]||'').trim(), hs, qty, price, amount, foc});
     }
     if(!items.length) continue;
     let d=null;
@@ -9353,16 +9372,16 @@ function shipParseInvoice(wb){
       }
     }
     if(!cont || /\bair\b/i.test(cont)) cont='AIR';
-    // 값 없이 보내는 인보이스(무상·비상업)
+    // 'NON-COMMERCIAL INVOICE' 는 문서 머리에 찍히는 표시라 인보이스 전체가 무상이다.
+    // (줄마다 붙는 'FREE OF CHARGE' 는 위에서 줄 단위로 이미 봤다)
     let nc=false;
     for(let r=0;r<a.length && !nc;r++){
       const w=a[r]||[];
-      for(let c=0;c<w.length;c++){
-        const s0=String(w[c]==null?'':w[c]);
-        if(/free\s*of\s*charge/i.test(s0) || /non[\s\-]*commercial\s*invoice/i.test(s0)){ nc=true; break; }
-      }
+      for(let c=0;c<w.length;c++){ if(SHIP_NC_RE.test(String(w[c]==null?'':w[c]))){ nc=true; break; } }
     }
-    return { inv, sail:iso, ym, sheet:sn, items, cont, nc };
+    if(nc) items.forEach(it=>{ it.foc=true; it.amount=0; });
+    const fx=items.filter(it=>it.foc).map(it=>normPN(it.pn));
+    return { inv, sail:iso, ym, sheet:sn, items, cont, nc, fx };
   }
   return null;
 }
@@ -9436,7 +9455,7 @@ async function poRecalcSupply(){
 async function shipApplyInvoice(pi){
   await loadShipMeta();
   // 컨테이너 넘버·무상 여부는 인보이스 한 장에 하나
-  _shipMeta[String(pi.inv)]={ c:String(pi.cont||'AIR'), nc:(pi.nc?1:0) };
+  _shipMeta[String(pi.inv)]={ c:String(pi.cont||'AIR'), nc:(pi.nc?1:0), fx:(pi.fx||[]) };
   saveShipMeta();
   const arrive=shipAutoArrive(pi.sail);         // 기본 입고일 = 선적일 + 49일
   const arrYm=shipYmOf(arrive);
