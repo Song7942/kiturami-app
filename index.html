@@ -9107,7 +9107,8 @@ function openShipColsPanel(){
       sum:['qty','amt'].map(ix).filter(i=>i>=0) });
   }
   const empty=document.getElementById('shipEmpty');
-  if(empty){ empty.textContent=L('자료가 없습니다. PSI 화면의 엑셀 업로드로 인보이스를 올려주세요.','Нет данных.');
+  if(empty){ empty.textContent=L('자료가 없습니다. PSI 화면의 엑셀 업로드 또는 이 화면에 인보이스를 올려주세요.',
+                                 'Нет данных. Загрузите инвойс через «Excel» на экране PSI или перетащите его на этот экран.');
              empty.style.display=rows.length?'none':'block'; }
   updatePaneHBar('ship');
 }
