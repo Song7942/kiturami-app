@@ -221,6 +221,8 @@ input[type="text"]::placeholder{color:var(--muted)}
 .pt tr.g.band td{background:var(--tag-bg)}
 .pt span.c{font-family:'Courier New',monospace;font-size:9.5px;white-space:nowrap}
 .pt td.low,.pt tr.g td.low{background:#fee2e2;color:#b91c1c;font-weight:700}
+/* 정해 둔 개월 수를 넘어선 보유월 — 엷은 파랑 */
+.pt td.hi,.pt tr.g td.hi{background:#dbeafe;color:#1d4ed8;font-weight:700}
 /* 대표품번·호환품번·단종·품명·규격은 가로로 밀어도 왼쪽에 붙어 있는다.
    left 값은 고른 열에 따라 달라져서 그릴 때마다 <style> 로 넣어 준다. */
 .pt td.fxs,.pt th.fxs{position:sticky;z-index:2}
@@ -9950,6 +9952,8 @@ function psiIsNumCol(key){ if(String(key).indexOf('clr:')===0) return false; ret
 let _psiLowN=6;
 function psiLowN(){ return _psiLowN; }
 function psiLow(mo){ return (mo!=null && mo!=='' && Number(mo)<psiLowN()); }
+// 정해 둔 '향후 N개월'을 넘어선 달(재고가 넉넉한 달)
+function psiHigh(mo){ return (mo!=null && mo!=='' && Number(mo)>psiLowN()); }
 const PSI_LOW_STYLE=';background:#fee2e2;color:#b91c1c;font-weight:700';
 function psiColText(key,r){
   switch(key){
@@ -10001,7 +10005,8 @@ function psiCellVal(key,it){
   if(String(key).indexOf('clr:')===0){
     const ym=String(key).slice(4);
     const x=it.v[ym];
-    return psiLow(x?x.mo:null) ? 'red' : 'none';
+    const mo=x?x.mo:null;
+    return psiLow(mo) ? 'red' : (psiHigh(mo) ? 'blue' : 'none');
   }
   if(!psiIsNumCol(key)) return String(psiColText(key,it.r));
   const n=psiNumOf(key,it);
@@ -10063,6 +10068,7 @@ function openPSIFilter(key, anchor){
     html+='<div style="padding:8px 8px 6px;border-bottom:1px solid var(--border)">'
       + '<div style="font-size:11px;color:var(--muted);margin:0 2px 3px">'+(ru?'По цвету фона':'바탕색으로 보기')+'</div>'
       + cb('red',(ru?'Красные (менее '+psiLowN()+' мес.)':'붉은색만 (보유월 '+psiLowN()+'개월 미만)'),'#fee2e2')
+      + cb('blue',(ru?'Синие (более '+psiLowN()+' мес.)':'파란색만 (보유월 '+psiLowN()+'개월 초과)'),'#dbeafe')
       + cb('none',(ru?'Без цвета':'색 없는 것만'))
       + cb('',(ru?'Все':'전체'))
       + '</div>';
@@ -10498,18 +10504,18 @@ function renderPSI(){
       const val={sh:n(sh), plan:(plan?n(plan):''), i:n(inq), o:n(a.o), ms:n(a.ms), st:n(st),
                  mo:(mo==null?'':mo.toFixed(1)),
                  need:(nd?n(nd):''), mo2:(m2==null?'':m2.toFixed(1))};
-      const low=psiLow(mo);
+      const low=psiLow(mo), high=psiHigh(mo);
       const manMark=d=>(psiSimOn && ((d.k==='sh' && manShip!=null) || (d.k==='need' && man!=null)))?' man':'';
-      const html=SB.map((d,j)=>'<td class="n'+(j===0?b:'')+((low&&d.k==='mo')?' low':'')
+      const html=SB.map((d,j)=>'<td class="n'+(j===0?b:'')+((low&&d.k==='mo')?' low':'')+((high&&d.k==='mo')?' hi':'')
         +((d.k==='need'||(psiSimOn&&d.k==='sh'))?' ed':'')+manMark(d)+'"'
         +(d.k==='need'?nAttr:((psiSimOn&&d.k==='sh')?sAttr:''))+'>'+val[d.k]+'</td>').join('');
       return {html, raw:{sh:sh, plan:plan, i:inq, o:a.o, ms:a.ms, st:st, mo:mo, need:nd, mo2:m2}};
     });
     const gCells=gEach.map(x=>x.html).join('');
     const gTot=totOf(gEach.map(x=>x.raw));
-    const gLow=psiLow(gTot.mo);
-    const gTotCells=SB.map((d,j)=>'<td class="n'+(j===0?' bl':'')+((gLow&&d.k==='mo')?' low':'')+'">'
-      +totTxt(d.k,gTot)+'</td>').join('');
+    const gLow=psiLow(gTot.mo), gHigh=psiHigh(gTot.mo);
+    const gTotCells=SB.map((d,j)=>'<td class="n'+(j===0?' bl':'')+((gLow&&d.k==='mo')?' low':'')
+      +((gHigh&&d.k==='mo')?' hi':'')+'">'+totTxt(d.k,gTot)+'</td>').join('');
     const gRow='<tr class="g'+band+'">'+gFix+gTotCells+gCells+'</tr>';
     const kidRows=g.rows.map(it=>{
       const r=it.r, v=it.v;
