@@ -323,6 +323,8 @@ input[type="text"]::placeholder{color:var(--muted)}
 .pn-hdr-wrap .pn-sticky2{z-index:3;background:var(--surface2)}
 /* 변경된 셀 강조 + 변경이력 배지 */
 .pn-changed{background:#fbbf2422}
+/* 발주현황·선적입고현황 '묶어 보기' 의 대표품번 줄 */
+tr.kt-grp td{background:var(--tag-bg)!important;font-weight:700}
 /* 가격정보 '묶어 보기' 의 대표품번 줄 */
 tr.price-grp td{background:var(--tag-bg)!important;font-weight:700}
 /* 가격정보에서 손으로 고친 칸 — 셈하거나 올린 값이 아니라는 표시 */
@@ -1152,6 +1154,10 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
       <span style="font-size:11px;color:var(--muted)">~</span>
       <select id="poTo" onchange="renderPO()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></select>
       <button class="dl-btn" onclick="poAllPeriod()" title="발주년월을 전체로 돌리기"><span id="i18n-po-all">전체 기간</span></button>
+      <button class="dl-btn" onclick="openPoViewPanel()" title="대표품번끼리 묶어 볼지 고릅니다">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
+        <span id="i18n-po-view">보기</span>
+      </button>
       <button class="dl-btn" id="poUploadBtn" onclick="document.getElementById('poFileInput').click()" title="차수·발주월·발주코드·수주수량 이 있는 엑셀을 올리면 반영합니다" style="display:none;background:var(--accent2);border-color:var(--accent2);color:#fff">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
         <span id="i18n-po-up">발주 업로드</span>
@@ -2064,6 +2070,7 @@ function refreshPsiTexts(){
   // 발주현황
   ph('poInput','차수·발주년월·대표코드·발주코드·품명으로 검색…','Поиск: партия, месяц, код, наименование…');
   set('i18n-po-all',ALL[0],ALL[1]);
+  set('i18n-po-view','보기','Вид');
   set('i18n-po-up','발주 업로드','Загрузить заказы');
   set('i18n-po-dl',DL[0],DL[1]);
   // 선적/입고현황
@@ -8941,6 +8948,8 @@ function shipPnInfo(pn){
            ru: sp.name_ru || (p?p.name_ru:'') || '',
            spec: sp.spec || (p?p.spec:'') || '' };
 }
+// 선적/입고현황을 대표품번끼리 묶어 볼지(보기 창에서 켜고 끈다)
+function shipGroupOn(){ return !!(psiCols && psiCols.__ship && psiCols.__ship.__grp); }
 function closeShipColsPanel(){ const b=document.getElementById('shipColsPop'); if(b) b.remove(); }
 function openShipColsPanel(){
   closeShipColsPanel();
@@ -8957,6 +8966,10 @@ function openShipColsPanel(){
     + '<div style="padding:12px 14px;border-bottom:1px solid var(--border);font-weight:700;font-size:13px">'+(ru?'Столбцы':'보기 — 열 선택')+'</div>'
     + '<div style="padding:10px 14px;max-height:60vh;overflow:auto">'
       + SHIP_COL_DEFS.filter(d=>(!d.koOnly||isKo) && (!d.ruOnly||!isKo)).map(item).join('')
+      + '<div style="border-top:1px solid var(--border);margin:6px 0 2px"></div>'
+      + '<label style="display:flex;align-items:center;gap:7px;padding:5px 4px;cursor:pointer">'
+      + '<input type="checkbox" class="scChk" data-k="__grp" '+(shipGroupOn()?'checked':'')+'>'
+      + '<span>'+(ru?'Группировать по осн. артикулу':'대표품번끼리 묶어 보기')+'</span></label>'
     + '</div>'
     + '<div style="padding:0 14px 8px;font-size:11px;color:var(--muted)">'+(ru?'Выбор сохраняется для этого ID при закрытии.':'닫으면 그대로 저장되어 이 아이디에 다음에도 남습니다.')+'</div>'
     + '<div style="display:flex;gap:7px;padding:11px 14px;border-top:1px solid var(--border)">'
@@ -9043,6 +9056,12 @@ function openShipColsPanel(){
     + '<tr><th colspan="'+Math.max(1,lead)+'" style="'+sumS+'">'
     + L('합계 '+rows.length+'건','Итого '+rows.length)+'</th>'+tail+'</tr>';
   const tbody=document.getElementById('shipTbody'); if(tbody) tbody.innerHTML=body;
+  if(shipGroupOn()){
+    const ix=k=>CO.findIndex(d=>d.k===k);
+    if(ix('rep')>=0) ktGroupByRep('shipTbody',{ rep:ix('rep'),
+      keep:['nameKo','spec','nameRu','nameEn','hs'].map(ix).filter(i=>i>=0),
+      sum:['qty','amt'].map(ix).filter(i=>i>=0) });
+  }
   const empty=document.getElementById('shipEmpty');
   if(empty){ empty.textContent=L('자료가 없습니다. PSI 화면의 엑셀 업로드로 인보이스를 올려주세요.','Нет данных.');
              empty.style.display=rows.length?'none':'block'; }
@@ -9585,9 +9604,38 @@ function renderPO(){
     + '<th style="'+thS+';font-weight:700;background:var(--surface);top:27px;text-align:right">'+ts.toLocaleString()+'</th>'
     + '<th style="'+thS+';font-weight:700;background:var(--surface);top:27px;text-align:right">'+(tq-ts).toLocaleString()+'</th></tr>';
   if(tbody) tbody.innerHTML=body;
+  // 대표코드끼리 묶어 보기: 수주·공급·미공급 수량은 묶음 줄에서 합해 보여 준다
+  if(poGroupOn()) ktGroupByRep('poTbody',{ rep:2, keep:[5], sum:[6,7,8] });
   if(empty){ empty.textContent=L('자료가 없습니다. 엑셀 업로드로 발주 자료를 올려주세요.','Нет данных.');
              empty.style.display=rows.length?'none':'block'; }
   updatePaneHBar('po');
+}
+// 발주현황을 대표품번끼리 묶어 볼지
+function poGroupOn(){ try{ return localStorage.getItem('kt_po_group')==='1'; }catch(e){ return false; } }
+function openPoViewPanel(){
+  const ru=(lang==='ru');
+  const old=document.getElementById('poViewPop'); if(old) old.remove();
+  const box=document.createElement('div'); box.id='poViewPop';
+  box.style.cssText='position:fixed;inset:0;z-index:10000;background:#0008;display:flex;align-items:center;justify-content:center';
+  box.innerHTML='<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;width:330px;max-width:92vw;'
+    +'box-shadow:0 16px 44px #000a;font-size:12px;color:var(--text)">'
+    +'<div style="padding:12px 14px;border-bottom:1px solid var(--border);font-weight:700;font-size:13px">'+(ru?'Вид':'보기')+'</div>'
+    +'<div style="padding:12px 14px">'
+    +'<label style="display:flex;align-items:center;gap:8px;cursor:pointer">'
+    +'<input type="checkbox" id="povGroup" '+(poGroupOn()?'checked':'')+' style="cursor:pointer;flex:none">'
+    +'<span>'+(ru?'Группировать по осн. артикулу':'대표품번끼리 묶어 보기')+'</span></label>'
+    +'<div style="font-size:11px;color:var(--muted);margin-top:6px;line-height:1.5">'
+    +(ru?'Строки одного осн. кода собираются вместе; сверху — строка с суммой.'
+        :'같은 대표코드끼리 모으고, 그 위에 수주·공급·미공급 수량을 합한 줄을 얹습니다.')
+    +'</div></div>'
+    +'<div style="display:flex;gap:7px;padding:11px 14px;border-top:1px solid var(--border)">'
+    +'<button id="povClose" style="flex:1;padding:7px;border:none;border-radius:7px;background:var(--accent2);color:#fff;cursor:pointer;font-size:12px;font-weight:700">'+(ru?'Закрыть':'닫기')+'</button>'
+    +'</div></div>';
+  document.body.appendChild(box);
+  const done=()=>{ const on=box.querySelector('#povGroup').checked;
+    box.remove(); try{ localStorage.setItem('kt_po_group', on?'1':'0'); }catch(e){} renderPO(); };
+  box.querySelector('#povClose').onclick=done;
+  box.onmousedown=e=>{ if(e.target===box) done(); };
 }
 function debouncedRenderPO(){ clearTimeout(window._poT); window._poT=setTimeout(renderPO,200); }
 async function loadPOTab(){
@@ -9939,6 +9987,8 @@ function psiVisFixed(isKo){ const m=psiColsMap();
 function psiShowKids(){ return psiColsMap().compat!==false; }
 // 대표품번 열을 끄면 대표품번(묶음) 줄도 감춘다. 둘 다 끄면 묶음 줄만 남긴다.
 function psiShowGroups(){ const m=psiColsMap(); return (m.rep!==false) || (m.compat===false); }
+// 규격 오른쪽 '기간합계' 묶음을 보일지. 보기 창에서 켜고 끈다(저장은 psiCols.__tot).
+function psiShowTot(){ return !(psiCols && psiCols.__tot===false); }
 function psiVisSub(){ const m=psiColsMap();
   let v=PSI_COL_DEFS.filter(d=>!d.fixed && m[d.k]);
   if(!v.length) v=PSI_COL_DEFS.filter(d=>d.k==='st');
@@ -10050,6 +10100,7 @@ function openPsiColsPanel(){
   closePsiColsPanel();
   const ru=(lang==='ru'), isKo=(lang!=='ru');
   const m=psiColsMap();
+  m.__tot=psiShowTot();
   const box=document.createElement('div'); box.id='psiColsPop';
   box.style.cssText='position:fixed;inset:0;z-index:10000;background:#0008;display:flex;align-items:center;justify-content:center';
   const item=d=>'<label style="display:flex;align-items:center;gap:7px;padding:5px 4px;cursor:pointer">'
@@ -10063,6 +10114,8 @@ function openPsiColsPanel(){
       + '<div style="flex:1"><div style="font-size:11px;color:var(--muted);margin-bottom:3px">'+(ru?'Артикул':'품번 정보')+'</div>'
         + PSI_COL_DEFS.filter(d=>d.fixed&&(!d.koOnly||isKo)).map(item).join('')+'</div>'
       + '<div style="flex:1"><div style="font-size:11px;color:var(--muted);margin-bottom:3px">'+(ru?'По месяцам':'월별 수치')+'</div>'
+        + item({k:'__tot', ko:'기간합계', ru:'Итого за период'})
+        + '<div style="border-top:1px solid var(--border);margin:4px 0"></div>'
         + PSI_COL_DEFS.filter(d=>!d.fixed).map(item).join('')+'</div>'
     + '</div>'
     + '<div style="padding:0 14px 8px;font-size:11px;color:var(--muted)">'+(ru?'Выбор сохраняется для этого ID при закрытии.':'닫으면 그대로 저장되어 이 아이디에 다음에도 남습니다.')+'</div>'
@@ -10077,6 +10130,7 @@ function openPsiColsPanel(){
     if(done) return; done=true;
     const v={}; box.querySelectorAll('.pcChk').forEach(c=>{ v[c.getAttribute('data-k')]=c.checked; });
     if(psiCols && psiCols.__ms) v.__ms=psiCols.__ms;      // 미출현황 열 선택은 건드리지 않는다
+    if(psiCols && psiCols.__ship) v.__ship=psiCols.__ship;  // 선적/입고현황 열 선택도 그대로 둔다
     psiCols=v; closePsiColsPanel(); psiRepaint();
     const ok=await savePsiCols();
     if(!ok) console.log('psi_cols: 이 브라우저에만 저장');
@@ -10591,6 +10645,7 @@ function renderPSI(){
   const isKo=(lang!=='ru');
   const L=(ko,ru)=>(lang==='ru'?ru:ko);
   const FX=psiVisFixed(isKo), SB=psiVisSub();     // 보기에서 고른 열
+  const SHOWTOT=psiShowTot();                     // 규격 오른쪽 '기간합계' 묶음
   const has=k=>SB.some(d=>d.k===k);
   // 행: 품번조회와 같은 호환품번 단위
   let rows=pnExpandRows(kw?PN_DATA.filter(r=>searchRow(r.rep,kw,[r.name_ko,r.name_ru,r.spec,r.final].concat(r.compats||[]))):PN_DATA);
@@ -10644,7 +10699,7 @@ function renderPSI(){
   const cg=pgEl('Colgroup');
   if(cg){
     const w=FX.map(d=>'<col style="width:'+d.w+'px">');
-    SB.forEach(d=>w.push('<col style="width:'+d.w+'px">'));            // 기간합계
+    if(SHOWTOT) SB.forEach(d=>w.push('<col style="width:'+d.w+'px">'));   // 기간합계
     yms.forEach(()=>SB.forEach(d=>w.push('<col style="width:'+d.w+'px">')));
     cg.innerHTML=w.join('');
   }
@@ -10690,7 +10745,7 @@ function renderPSI(){
     }).join('');
   let head=['<tr>',
     FX.map((d,k)=>'<th rowspan="2" class="'+fxCls(k).trim()+'" style="'+thS+'">'+L(d.hko||d.ko,d.hru||d.ru)+psiFilterIcon(d.k)+'</th>').join(''),
-    totHead,grp,'</tr><tr>',totSub,sub,'</tr>'].join('');
+    (SHOWTOT?totHead:''),grp,'</tr><tr>',(SHOWTOT?totSub:''),sub,'</tr>'].join('');
 
   if(!items.length){
     if(thead) thead.innerHTML=head;
@@ -10849,7 +10904,7 @@ function renderPSI(){
     const gLow=psiLow(gTot.mo), gHigh=psiHigh(gTot.mo);
     const gTotCells=SB.map((d,j)=>'<td class="n'+(j===0?' bl':'')+((gLow&&d.k==='mo')?' low':'')
       +((gHigh&&d.k==='mo')?' hi':'')+'">'+totTxt(d.k,gTot)+'</td>').join('');
-    const gRow='<tr class="g'+band+'">'+gFix+gTotCells+gCells+'</tr>';
+    const gRow='<tr class="g'+band+'">'+gFix+(SHOWTOT?gTotCells:'')+gCells+'</tr>';
     const kidRows=g.rows.map(it=>{
       const r=it.r, v=it.v;
       const kTxt={ rep:'', compat:'<span class="c">'+escapeHtml(normBadgePN(r._compat))+'</span>',
@@ -10870,7 +10925,7 @@ function renderPSI(){
       const kDim={sh:1, ms:1};
       const kTotCells=SB.map((d,j)=>'<td class="n'+(j===0?' bl':'')+(kDim[d.k]?' dim':'')+'">'
         +totTxt(d.k,kTot)+'</td>').join('');
-      return '<tr>'+kFix+kTotCells+cells+'</tr>';
+      return '<tr>'+kFix+(SHOWTOT?kTotCells:'')+cells+'</tr>';
     });
     if(psiShowGroups()) bodyRows.push(gRow);
     if(psiShowKids()) kidRows.forEach(r=>bodyRows.push(r));
@@ -10901,13 +10956,13 @@ function renderPSI(){
     + '<th colspan="'+FX.length+'" class="fxs fx0 fxend" style="'+sumS+';text-align:right">'
     + L('합계 '+nzRep+'개 대표품번 / '+Object.keys(counted).length+'개 호환품번',
         'Итого '+nzRep+' Осн. артикул / '+Object.keys(counted).length+' Артикул')+'</th>'
-    + sumTotCells + sumCells + '</tr>';
+    + (SHOWTOT?sumTotCells:'') + sumCells + '</tr>';
 
   // 머리글 높이는 '빈 표'에서 잰다. 수천 줄을 붙인 뒤에 재면 표 전체가 다시 계산되어 2초씩 걸린다.
   if(tbody) tbody.innerHTML='';
   if(thead) thead.innerHTML=head;
   psiStickHead();
-  if(tbody) psiSetRows(tbody, bodyRows, FX.length+(yms.length+1)*SB.length, PSIP);
+  if(tbody) psiSetRows(tbody, bodyRows, FX.length+(yms.length+(SHOWTOT?1:0))*SB.length, PSIP);
   updatePaneHBar(PSIP);
   _psiPainted[PSIP]=psiSig(PSIP);
 }
@@ -10924,9 +10979,12 @@ async function downloadPSI(){
   const g1=h1.map(()=>''); const g2=h1.slice();
   g1.push(''); g2.push(ru ? ('Нач. остаток ('+psiYmLabel(psiYmAdd(c.base,-1))+')')
                           : ('이월재고 ('+psiYmLabel(psiYmAdd(c.base,-1))+' 재고)'));
-  g1.push((ru?'Итого за период (':'기간합계 (')+psiYmLabel(c.from)+' ~ '+psiYmLabel(yms[yms.length-1])+')');
-  SB.slice(1).forEach(()=>g1.push(''));
-  SB.forEach(d=>g2.push(String(ru?d.ru:d.ko).replace(/<br>/g,' ')));
+  const SHOWTOT=psiShowTot();
+  if(SHOWTOT){
+    g1.push((ru?'Итого за период (':'기간합계 (')+psiYmLabel(c.from)+' ~ '+psiYmLabel(yms[yms.length-1])+')');
+    SB.slice(1).forEach(()=>g1.push(''));
+    SB.forEach(d=>g2.push(String(ru?d.ru:d.ko).replace(/<br>/g,' ')));
+  }
   yms.forEach(y=>{ g1.push(psiYmLabel(y)); SB.slice(1).forEach(()=>g1.push('')); SB.forEach(d=>g2.push(String(ru?d.ru:d.ko).replace(/<br>/g,' '))); });
   const moOf=(st,fut)=>{ const avg=fut/c.avgN; return avg>0 ? Math.round((st/avg)*10)/10 : ''; };
   // 기간합계: 더할 열과 마지막 달 값을 쓰는 열(화면과 같은 규칙)
@@ -10956,7 +11014,7 @@ async function downloadPSI(){
       const nd=needOf(a.st,a.fut);
       const val={sh:a.sh, i:a.i, o:a.o, ms:a.ms, st:a.st, mo:moOf(a.st,a.fut), need:(nd||''), mo2:moOf(a.st+nd,a.fut)};
       gRaw.push(val); });
-    { const tv=totOf(gRaw); SB.forEach(d=>gRow.push(tv[d.k])); }
+    if(SHOWTOT){ const tv=totOf(gRaw); SB.forEach(d=>gRow.push(tv[d.k])); }
     gRaw.forEach(val=>SB.forEach(d=>gRow.push(val[d.k])));
     if(psiShowGroups()){ grpRows.push(body.length); body.push(gRow); }
     if(!psiShowKids()) return;
@@ -10971,7 +11029,7 @@ async function downloadPSI(){
       yms.forEach(y=>{ const x=v[y]||{};
         const val={sh:x.sh??'', i:x.i??'', o:x.o??'', ms:x.ms??'', st:x.st??'', mo:'', need:'', mo2:''};
         kRaw.push(val); });
-      { const tv=totOf(kRaw); SB.forEach(d=>row.push(tv[d.k])); }
+      if(SHOWTOT){ const tv=totOf(kRaw); SB.forEach(d=>row.push(tv[d.k])); }
       kRaw.forEach(val=>SB.forEach(d=>row.push(val[d.k])));
       body.push(row);
     });
@@ -10984,13 +11042,13 @@ async function downloadPSI(){
     const tn=needOf(t.st,t.fut);
     const val={sh:t.sh, i:t.i, o:t.o, ms:t.ms, st:t.st, mo:moOf(t.st,t.fut), need:(tn||''), mo2:moOf(t.st+tn,t.fut)};
     sRaw.push(val); });
-  { const tv=totOf(sRaw); SB.forEach(d=>sumRow.push(tv[d.k])); }
+  if(SHOWTOT){ const tv=totOf(sRaw); SB.forEach(d=>sumRow.push(tv[d.k])); }
   sRaw.forEach(val=>SB.forEach(d=>sumRow.push(val[d.k])));
   const aoa=[g1,g2,sumRow];
   body.forEach(r=>aoa.push(r));
   const ws=XLSX.utils.aoa_to_sheet(aoa);
   ws['!cols']=FX.map(()=>({wch:16})).concat([{wch:12}])
-    .concat(SB.map(d=>({wch:(d.k==='st'?11:(d.k==='mo'?9:10))})))
+    .concat(SHOWTOT?SB.map(d=>({wch:(d.k==='st'?11:(d.k==='mo'?9:10))})):[])
     .concat(yms.map(()=>SB.map(d=>({wch:(d.k==='st'?10:(d.k==='mo'?8:9))}))).reduce((a,b)=>a.concat(b),[]));
   const nc=aoa[0].length;
   xlPaint(ws, 0, nc, XL_HEAD);
@@ -11658,6 +11716,46 @@ function switchPriceView(v){
   document.getElementById('priceParamsBar').style.display = v==='calc'?'flex':'none';
   document.getElementById('priceUploadWrap').style.display = v==='calc'?'':'none';
   renderPriceActive();
+}
+// ══ 대표품번끼리 묶어 보기 (어느 표에나) ═══════════════════
+//   이미 그려 놓은 표를 손보는 방식이라 화면마다 그리는 코드를 고치지 않아도 된다.
+//     o.rep  : 대표품번 열 자리
+//     o.keep : 대표품번 줄에 그대로 남길 열(품명·규격처럼 묶음 전체에 같은 값)
+//     o.sum  : 대표품번 줄에서 더해 보여 줄 숫자 열
+//   값은 textContent 로만 읽는다(innerText 는 읽을 때마다 화면 배치를 다시 셈해 느리다).
+function ktGroupByRep(tbodyId, o){
+  const tbody=document.getElementById(tbodyId); if(!tbody) return;
+  const cls='kt-grp';
+  const rows=[];
+  for(let i=0;i<tbody.children.length;i++){ const tr=tbody.children[i]; if(!tr.classList.contains(cls)) rows.push(tr); }
+  if(!rows.length) return;
+  const ri=o.rep, keep=new Set(o.keep||[]), sum=(o.sum||[]);
+  const txt=(tr,i)=>{ const td=tr.children[i]; return td?String(td.textContent||'').trim():''; };
+  const num=v=>{ const x=String(v).replace(/[,\s]/g,''); return (x && isFinite(Number(x)))?Number(x):0; };
+  const order=[], map=new Map();
+  for(let i=0;i<rows.length;i++){
+    const k=txt(rows[i],ri);
+    let a=map.get(k); if(!a){ a=[]; map.set(k,a); order.push(k); }
+    a.push(rows[i]);
+  }
+  const frag=document.createDocumentFragment();
+  for(let x=0;x<order.length;x++){
+    const kids=map.get(order[x]);
+    const band=kids[0].cloneNode(true);
+    band.className=cls;
+    const bc=band.children;
+    const tot={};
+    for(let z=0;z<sum.length;z++){ let t=0; for(let j=0;j<kids.length;j++) t+=num(txt(kids[j],sum[z])); tot[sum[z]]=t; }
+    for(let i=0;i<bc.length;i++){
+      if(i===ri || keep.has(i)) continue;
+      if(sum.indexOf(i)>=0) bc[i].textContent=tot[i]?tot[i].toLocaleString():'';
+      else bc[i].textContent='';
+    }
+    frag.appendChild(band);
+    for(let j=0;j<kids.length;j++){ const c=kids[j].children[ri]; if(c) c.textContent=''; frag.appendChild(kids[j]); }
+  }
+  tbody.textContent='';
+  tbody.appendChild(frag);
 }
 // ══ 가격정보 '보기' — 대표품번끼리 묶어 보기 ═══════════════
 //   가격 자료는 호환품번 한 개가 한 줄이라 대표품번이 줄마다 되풀이된다.
