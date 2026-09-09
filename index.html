@@ -1079,7 +1079,10 @@ input[type="text"]::placeholder{color:var(--muted)}
         <span id="i18n-ship-back">PSI</span>
       </button>
       <select id="shipInv" onchange="renderShip()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></select>
-      <select id="shipYm" onchange="renderShip()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></select>
+      <select id="shipFrom" onchange="renderShip()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></select>
+      <span style="font-size:11px;color:var(--muted)">~</span>
+      <select id="shipTo" onchange="renderShip()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></select>
+      <button class="dl-btn" onclick="shipAllPeriod()" title="선적월을 전체로 돌리기"><span id="i18n-ship-all">전체 기간</span></button>
       <button class="dl-btn" onclick="openShipColsPanel()" title="표에 보일 열을 고릅니다(아이디별로 저장)">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="9" y1="4" x2="9" y2="20"/><line x1="15" y1="4" x2="15" y2="20"/></svg>
         <span id="i18n-ship-cols">보기</span>
@@ -1167,15 +1170,14 @@ input[type="text"]::placeholder{color:var(--muted)}
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
         <span id="i18n-sim-back">PSI</span>
       </button>
-      <label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--muted)"><span id="i18n-sim-from">시작월</span>
-        <input type="text" id="simFromYm" maxlength="4" placeholder="2609" oninput="this.dataset.user='1'" style="width:52px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></label>
-      <label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--muted)"><span id="i18n-sim-months">개월</span>
-        <input type="number" id="simMonths" min="1" max="12" style="width:48px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></label>
+      <select id="simFromYm" onchange="renderSIM()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></select>
+      <span style="font-size:11px;color:var(--muted)">~</span>
+      <select id="simToYm" onchange="renderSIM()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></select>
       <label style="display:none;align-items:center;gap:4px;font-size:10px;color:var(--muted)"><span id="i18n-sim-base">재고 기산</span>
         <input type="text" id="simBaseYm" maxlength="4" style="width:52px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></label>
       <span id="simOpenNote" style="display:none;font-size:10px;color:var(--muted);white-space:nowrap"></span>
       <label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--muted)" title="보유월 = 그 달 재고 ÷ (다음 달부터 이 개월 수만큼의 출고 합계 ÷ 개월 수)"><span id="i18n-sim-avg">보유월 향후</span>
-        <input type="number" id="simAvgN" min="1" max="24" style="width:48px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></label>
+        <input type="number" id="simAvgN" min="1" max="24" style="width:48px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"><span id="i18n-sim-avgunit">개월</span></label>
       <button class="dl-btn" onclick="renderSIM()"><span id="i18n-sim-apply">적용</span></button>
       <button class="dl-btn" onclick="openPsiColsPanel()" title="표에 보일 열을 고릅니다(아이디별로 저장)">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="9" y1="4" x2="9" y2="20"/><line x1="15" y1="4" x2="15" y2="20"/></svg>
@@ -1218,15 +1220,14 @@ input[type="text"]::placeholder{color:var(--muted)}
         <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
         <input type="text" id="psiInput" placeholder="품명·규격·대표/호환품번으로 검색…" oninput="debouncedRenderPSI()">
       </div>
-      <label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--muted)"><span id="i18n-psi-from">시작월</span>
-        <input type="text" id="psiFromYm" maxlength="4" placeholder="2609" oninput="this.dataset.user='1'" style="width:52px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></label>
-      <label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--muted)"><span id="i18n-psi-months">개월</span>
-        <input type="number" id="psiMonths" min="1" max="12" style="width:48px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></label>
+      <select id="psiFromYm" onchange="renderPSI()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></select>
+      <span style="font-size:11px;color:var(--muted)">~</span>
+      <select id="psiToYm" onchange="renderPSI()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></select>
       <label style="display:none;align-items:center;gap:4px;font-size:10px;color:var(--muted)"><span id="i18n-psi-base">재고 기산</span>
         <input type="text" id="psiBaseYm" maxlength="4" style="width:52px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></label>
       <span id="psiOpenNote" style="display:none;font-size:10px;color:var(--muted);white-space:nowrap"></span>
       <label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--muted)" title="보유월 = 그 달 재고 ÷ (다음 달부터 이 개월 수만큼의 출고 합계 ÷ 개월 수)"><span id="i18n-psi-avg">보유월 향후</span>
-        <input type="number" id="psiAvgN" min="1" max="24" style="width:48px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></label>
+        <input type="number" id="psiAvgN" min="1" max="24" style="width:48px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"><span id="i18n-psi-avgunit">개월</span></label>
       <button class="dl-btn" onclick="renderPSI()"><span id="i18n-psi-apply">적용</span></button>
       <button class="dl-btn" onclick="openPsiColsPanel()" title="표에 보일 열을 고릅니다(아이디별로 저장)">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="9" y1="4" x2="9" y2="20"/><line x1="15" y1="4" x2="15" y2="20"/></svg>
@@ -2013,6 +2014,7 @@ function refreshPsiTexts(){
   set('i18n-psi-months','개월','Мес.');
   set('i18n-psi-base','재고 기산','База остатка');
   set('i18n-psi-avg','보유월 향후','Мес. вперёд');
+  set('i18n-psi-avgunit','개월','мес.');
   set('i18n-psi-apply','적용','Применить');
   set('i18n-psi-cols',COLS[0],COLS[1]);
   set('i18n-psi-reset','필터 초기화','Сброс фильтров');
@@ -2029,6 +2031,7 @@ function refreshPsiTexts(){
   set('i18n-sim-months','개월','Мес.');
   set('i18n-sim-base','재고 기산','База остатка');
   set('i18n-sim-avg','보유월 향후','Мес. вперёд');
+  set('i18n-sim-avgunit','개월','мес.');
   set('i18n-sim-apply','적용','Применить');
   set('i18n-sim-cols',COLS[0],COLS[1]);
   set('i18n-sim-reset','필터 초기화','Сброс фильтров');
@@ -2042,6 +2045,7 @@ function refreshPsiTexts(){
   // 선적/입고현황
   ph('shipInput','인보이스·선적일·품번·품명으로 검색…','Поиск: инвойс, дата, артикул, наименование…');
   set('i18n-ship-cols',COLS[0],COLS[1]);
+  set('i18n-ship-all',ALL[0],ALL[1]);
   set('i18n-ship-inv','선적차수','Партии');
   set('i18n-ship-dl',DL[0],DL[1]);
   // 미출현황
@@ -8678,18 +8682,11 @@ function openShipColsPanel(){
     }
     return el.value; };
   const inv=fill(document.getElementById('shipInv'), shipInvList(), L('인보이스 전체','Все инвойсы'));
-  const ymSel=document.getElementById('shipYm');
-  const ymList=shipYmList();
-  if(ymSel && ymSel.getAttribute('data-list')!==lang+'|'+ymList.join('|')){
-    const cur=ymSel.value;
-    ymSel.innerHTML='<option value="">'+L('선적월 전체','Все месяцы')+'</option>'
-      +ymList.map(v=>'<option value="'+v+'">'+psiYmLabel(v)+'</option>').join('');
-    ymSel.setAttribute('data-list',lang+'|'+ymList.join('|')); ymSel.value=cur;
-  }
-  const ym=ymSel?ymSel.value:'';
+  const R=shipFillRange();
   let rows=shipData.slice();
   if(inv) rows=rows.filter(r=>r.inv===inv);
-  if(ym) rows=rows.filter(r=>r.ym===ym);
+  if(R.from || R.to) rows=rows.filter(r=>{ const y=String(r.ym||'');
+    return (!R.from || y>=R.from) && (!R.to || y<=R.to); });
   if(kw) rows=rows.filter(r=>{
     const i=poLookup(r.pn);
     return [r.inv, r.sail, r.pn, i.rep, r.name_en, r.hs].some(v=>String(v||'').toLowerCase().includes(kw));
@@ -8742,6 +8739,30 @@ function openShipColsPanel(){
   if(empty){ empty.textContent=L('자료가 없습니다. PSI 화면의 엑셀 업로드로 인보이스를 올려주세요.','Нет данных.');
              empty.style.display=rows.length?'none':'block'; }
   updatePaneHBar('ship');
+}
+// 선적월 고르개 두 개를 채우고 고른 구간을 돌려준다(거꾸로 고르면 서로 바꾸어 쓴다)
+function shipFillRange(){
+  const list=shipYmList();
+  const f=document.getElementById('shipFrom'), t=document.getElementById('shipTo');
+  if(!list.length){ if(f) f.innerHTML=''; if(t) t.innerHTML=''; return {from:'',to:''}; }
+  const key=list.join('|');
+  if(f && f.getAttribute('data-list')!==key){
+    const cf=f.value, ct=t?t.value:'';
+    const opts=list.map(v=>'<option value="'+v+'">'+psiYmLabel(v)+'</option>').join('');
+    f.innerHTML=opts; if(t) t.innerHTML=opts;
+    f.setAttribute('data-list',key); if(t) t.setAttribute('data-list',key);
+    f.value=(cf && list.indexOf(cf)>=0)?cf:list[0];
+    if(t) t.value=(ct && list.indexOf(ct)>=0)?ct:list[list.length-1];
+  }
+  let from=f?f.value:'', to=t?t.value:'';
+  if(from && to && from>to){ const x=from; from=to; to=x; }
+  return {from, to};
+}
+function shipAllPeriod(){
+  const list=shipYmList(); if(!list.length) return;
+  const f=document.getElementById('shipFrom'), t=document.getElementById('shipTo');
+  if(f) f.value=list[0]; if(t) t.value=list[list.length-1];
+  renderShip();
 }
 function debouncedRenderShip(){ clearTimeout(window._shipT); window._shipT=setTimeout(renderShip,200); }
 async function loadShipTab(){ await loadShip(); renderShip(); }
@@ -9470,7 +9491,7 @@ let _psiDataVer=0;
 const _psiPainted={};
 function psiSig(pfx){
   const g=id=>{ const e=document.getElementById(pfx+id); return e?e.value:''; };
-  return [pfx, lang, g('FromYm'), g('Months'), g('BaseYm'), g('AvgN'), g('Input'),
+  return [pfx, lang, g('FromYm'), g('ToYm'), g('BaseYm'), g('AvgN'), g('Input'),
           JSON.stringify(_psiFilters), (_psiSort.key||'')+'|'+_psiSort.dir,
           JSON.stringify(psiCols||{}), _psiDataVer, PN_DATA.length,
           (pfx==='sim' ? JSON.stringify(_simNeed)+JSON.stringify(_simShip) : '')].join('\u0001');
@@ -9483,22 +9504,58 @@ function psiRepaint(){
   const s=document.getElementById('pane-sim');
   if(s && s.classList.contains('active')) renderSIM(); else renderPSI();
 }
+// 기간 고르개에 넣을 달 목록: 자료가 있는 달 전체 + 앞으로 12개월(예측·시뮬레이션용)
+function psiMonthList(){
+  const s=new Set();
+  Object.keys(psiData||{}).forEach(p=>{ const d=(psiData[p]||{}).data||{};
+    Object.keys(d).forEach(y=>{ if(/^\d{4}$/.test(y)) s.add(y); }); });
+  let list=[...s].sort();
+  if(!list.length) list=[psiMaxYm()||'2601'];
+  let last=list[list.length-1];
+  for(let i=0;i<12;i++){ last=psiYmAdd(last,1); list.push(last); }
+  return list;
+}
 function psiCfg(){
   const g=sfx=>pgEl(sfx);
   const clean=v=>String(v||'').replace(/\D/g,'').slice(0,4);
-  const months=Math.max(1,Math.min(12,parseInt(g('Months')?g('Months').value:'',10)||2));
   let from=clean(g('FromYm')?g('FromYm').value:'');
-  if(from.length!==4){ const mx=psiMaxYm(); from=mx?psiYmAdd(mx,-(months-1)):'2601'; }
+  let to=clean(g('ToYm')?g('ToYm').value:'');
+  // 아직 안 골랐으면: PSI 는 자료의 마지막 두 달, 발주시뮬레이션은 이번 달부터 6개월
+  if(from.length!==4 || to.length!==4){
+    if(PSIP==='sim'){
+      if(from.length!==4) from=psiNowYm();
+      if(to.length!==4) to=psiYmAdd(from,5);
+    }else{
+      const mx=psiMaxYm()||'2601';
+      if(to.length!==4) to=mx;
+      if(from.length!==4) from=psiYmAdd(to,-1);
+    }
+  }
+  if(from>to){ const t=from; from=to; to=t; }
+  let months=1, y=from;
+  while(y<to && months<24){ y=psiYmAdd(y,1); months++; }
   let base=clean(g('BaseYm')?g('BaseYm').value:''); if(base.length!==4) base=PSI_BASE_DEFAULT;
   const avgN=Math.max(1,Math.min(24,parseInt(g('AvgN')?g('AvgN').value:'',10)||6));
   return { from, months, base, avgN };
 }
-// 칸에는 지금 화면에 쓰이고 있는 값을 그대로 보여 준다(적고 있는 칸은 건드리지 않는다).
+// 칸에는 지금 화면에 쓰이고 있는 값을 그대로 보여 준다(고르는 중인 칸은 건드리지 않는다).
 function psiFillCfgInputs(c){
   const g=sfx=>pgEl(sfx);
+  const to=psiYmAdd(c.from, c.months-1);
+  const set=new Set(psiMonthList()); set.add(c.from); set.add(to);
+  const list=[...set].sort();
+  const key=list.join('|');
+  [['FromYm',c.from],['ToYm',to]].forEach(function(x){
+    const e=g(x[0]); if(!e) return;
+    if(e.getAttribute('data-list')!==key){
+      e.innerHTML=list.map(m=>'<option value="'+m+'">'+psiYmLabel(m)+'</option>').join('');
+      e.setAttribute('data-list',key);
+    }
+    if(document.activeElement!==e && e.value!==x[1]) e.value=x[1];
+  });
   const put=(sfx,v)=>{ const e=g(sfx);
     if(e && document.activeElement!==e && String(e.value)!==String(v)) e.value=v; };
-  put('FromYm', c.from); put('Months', c.months); put('BaseYm', c.base); put('AvgN', c.avgN);
+  put('BaseYm', c.base); put('AvgN', c.avgN);
 }
 // 한 품번의 표시 구간 값. 재고는 기산월부터 한 번만 훑어 누적한다.
 function psiRowVals(d,c,yms){
@@ -10125,17 +10182,7 @@ function simBuild(){
 function renderSIM(){
   if(!document.getElementById('pane-sim')) return;
   simBuild();
-  // 처음 열 때는 이번 달부터, 얹은 입고달이 보일 만큼 넉넉히 잡는다
-  const fEl=document.getElementById('simFromYm'), mEl=document.getElementById('simMonths');
-  if(fEl && !fEl.value){ const t=new Date();
-    fEl.value=String(t.getFullYear()).slice(2)+((t.getMonth()+1)<10?'0':'')+(t.getMonth()+1); }
-  if(mEl && !mEl.value){
-    let k=6;
-    if(_simInfo && _simInfo.ym && fEl && fEl.value){
-      let c=1; for(let y=fEl.value; c<=12; c++){ if(y===_simInfo.ym) break; y=psiYmAdd(y,1); }
-      k=Math.min(12, Math.max(6, c+1));
-    }
-    mEl.value=k; }
+  // 기간을 아직 안 골랐으면 psiCfg 가 '이번 달부터 6개월'로 잡는다
   const prevP=PSIP, prevS=psiSimOn;
   PSIP='sim'; psiSimOn=true;
   try{ renderPSI(); } finally { PSIP=prevP; psiSimOn=prevS; }
@@ -10793,9 +10840,7 @@ async function loadPSITab(){
   await loadPsiFc();
   await loadPsiCols();
   await loadPSI();
-  // 시작월은 자료의 마지막 달을 따라간다. 사용자가 직접 적은 값(dataset.user)은 건드리지 않는다.
-  const f=document.getElementById('psiFromYm');
-  if(f && !f.dataset.user) f.value='';
+  // 기간은 고른 값을 그대로 둔다(처음 열 때만 psiCfg 가 자료의 마지막 두 달로 잡는다)
   if(psiPaneFresh('psi')){ updatePaneHBar('psi'); return; }   // 바뀐 게 없으면 그대로 둔다
   renderPSI();
 }
