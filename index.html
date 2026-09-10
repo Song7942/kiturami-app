@@ -9442,6 +9442,41 @@ function openShipColsPanel(){
              empty.style.display=rows.length?'none':'block'; }
   updatePaneHBar('ship');
 }
+// ── 손으로 적어 둔 기간을 기억한다 ────────────────────────
+//   아이디별로 kt_user_prefs.ship_range 에 담고, 그 열이 없으면 이 브라우저에만 담는다
+//   (열 순서·PSI 보기 설정과 같은 방식).
+let _shipRange=null;              // {from:'2010', to:'2608'}
+let _shipRangeLoadedFor=null;
+let _shipRangeApplied=false;      // 화면을 열 때 한 번만 되살린다
+function _shipRangeKey(){ const u=(typeof currentUser!=='undefined'&&currentUser)?(currentUser.id||''):''; return 'kt_ship_range:'+u; }
+async function loadShipRange(){
+  const uid=(typeof currentUser!=='undefined'&&currentUser)?(currentUser.id||null):null;
+  _shipRangeApplied=false;                       // 다시 들어올 때마다 적어 둔 기간으로
+  if(_shipRangeLoadedFor===uid) return;
+  _shipRangeLoadedFor=uid;
+  let v=null;
+  if(uid){
+    try{
+      const { data, error }=await sb.from('kt_user_prefs').select('ship_range').eq('user_id',uid).limit(1);
+      if(!error && data && data[0] && data[0].ship_range) v=data[0].ship_range;
+    }catch(e){}
+  }
+  if(!v){ try{ const s=localStorage.getItem(_shipRangeKey()); if(s) v=JSON.parse(s); }catch(e){} }
+  _shipRange=(v&&typeof v==='object'&&v.from&&v.to)?{from:String(v.from),to:String(v.to)}:null;
+}
+let _shipRangeSaveT=null;
+function shipRangeRemember(from, to){
+  if(!from || !to) return;
+  if(_shipRange && _shipRange.from===from && _shipRange.to===to) return;
+  _shipRange={from, to};
+  try{ localStorage.setItem(_shipRangeKey(), JSON.stringify(_shipRange)); }catch(e){}
+  const uid=(typeof currentUser!=='undefined'&&currentUser)?(currentUser.id||null):null;
+  if(!uid) return;
+  clearTimeout(_shipRangeSaveT);
+  _shipRangeSaveT=setTimeout(async()=>{                 // 타자 칠 때마다 보내지 않게 잠깐 모은다
+    try{ await sb.from('kt_user_prefs').upsert({ user_id:uid, ship_range:_shipRange, updated_at:new Date().toISOString() },{ onConflict:'user_id' }); }catch(e){}
+  }, 600);
+}
 // 선적월 고르개 두 개를 채우고 고른 구간을 돌려준다(거꾸로 고르면 서로 바꾸어 쓴다)
 function shipFillRange(){
   const list=shipYmList();
@@ -9454,11 +9489,17 @@ function shipFillRange(){
     dl.setAttribute('data-list',key);
   }
   let from=psiYmParse(f?f.value:''), to=psiYmParse(t?t.value:'');
+  // 화면을 처음 열 때는 지난번에 적어 둔 기간을 되살린다(칸을 지우면 그때부터는 전체)
+  if(!_shipRangeApplied){
+    _shipRangeApplied=true;
+    if(_shipRange){ if(!from) from=_shipRange.from; if(!to) to=_shipRange.to; }
+  }
   if(!from) from=list[0];
   if(!to) to=list[list.length-1];
   if(from>to){ const x=from; from=to; to=x; }
   if(f && document.activeElement!==f && f.value!==psiYmLabel(from)) f.value=psiYmLabel(from);
   if(t && document.activeElement!==t && t.value!==psiYmLabel(to)) t.value=psiYmLabel(to);
+  shipRangeRemember(from, to);
   return {from, to};
 }
 function shipAllPeriod(){
@@ -9469,7 +9510,7 @@ function shipAllPeriod(){
   renderShip();
 }
 function debouncedRenderShip(){ clearTimeout(window._shipT); window._shipT=setTimeout(renderShip,200); }
-async function loadShipTab(){ await Promise.all([loadShip(), loadShipMeta()]); renderShip(); shipDropInit(); }
+async function loadShipTab(){ await Promise.all([loadShip(), loadShipMeta(), loadShipRange()]); renderShip(); shipDropInit(); }
 // ── 인보이스 파일을 화면에 끌어다 놓아 올리기 ──────────────
 //   선적/입고현황 화면 아무 데나 엑셀을 떨어뜨리면 바로 반영한다.
 //   여러 장을 한꺼번에 놓아도 되고, 인보이스 양식이 아니면 아무것도 하지 않는다.
