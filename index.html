@@ -11536,14 +11536,24 @@ function simBuild(){
   const ym=(typeof shipYmOf==='function')?shipYmOf(arrive):'';
   let rows=0, total=0;
   if(ym){
+    // 같은 품번이 여러 차수에 걸쳐 있고, 취소 줄(수주수량이 음수)도 섞여 있다.
+    // 줄마다 따로 보면 음수 줄이 빠져 발주현황 미공급 합계와 어긋난다.
+    // 품번마다 먼저 상계하고, 그러고도 남는 양만 다음 달 선적으로 얹는다.
+    const net=new Map();                       // 품번 → {rest, rep}
     (poData||[]).forEach(r=>{
-      const rest=(Number(r.qty)||0)-(Number(r.supplied)||0); if(rest<=0) return;
+      const rest=(Number(r.qty)||0)-(Number(r.supplied)||0); if(!rest) return;
       const info=poLookup(r.pn)||{};
       const pn=normPN(info.fin||'')||normPN(r.pn); if(!pn) return;
-      const rec=psiData[pn]||(psiData[pn]={rep:info.rep||'', data:{}});
+      const a=net.get(pn)||{rest:0, rep:info.rep||''};
+      a.rest+=rest; if(!a.rep && info.rep) a.rep=info.rep;
+      net.set(pn, a);
+    });
+    net.forEach((a, pn)=>{
+      if(a.rest<=0) return;
+      const rec=psiData[pn]||(psiData[pn]={rep:a.rep, data:{}});
       const dat=rec.data||(rec.data={});
-      const z=_simZ.get(dat)||{}; z[ym]=(z[ym]||0)+rest; _simZ.set(dat, z);
-      rows++; total+=rest;
+      const z=_simZ.get(dat)||{}; z[ym]=(z[ym]||0)+a.rest; _simZ.set(dat, z);
+      rows++; total+=a.rest;
     });
   }
   _simInfo={sail, arrive, ym, rows, total};
@@ -11562,7 +11572,7 @@ function renderSIM(){
     const ru=(lang==='ru');
     note.textContent = _simInfo.ym
       ? (ru ? ('Недопоставка '+_simInfo.total.toLocaleString()+' → отгрузка '+_simInfo.sail+', приход '+_simInfo.arrive)
-            : ('미공급 '+_simInfo.total.toLocaleString()+'개('+_simInfo.rows+'줄)를 '+_simInfo.sail+' 선적 → '+_simInfo.arrive+' 입고('+psiYmLabel(_simInfo.ym)+')로 얹음'))
+            : ('미공급 '+_simInfo.total.toLocaleString()+'개('+_simInfo.rows+'개 품번)를 '+_simInfo.sail+' 선적 → '+_simInfo.arrive+' 입고('+psiYmLabel(_simInfo.ym)+')로 얹음'))
       : '';
   }
 }
