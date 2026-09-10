@@ -8710,7 +8710,8 @@ function msFilterIcon(key){
     + ' style="display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:16px;margin-left:4px;'
     + 'border-radius:4px;border:1px solid '+(on?'var(--accent2)':'var(--border)')+';'
     + 'background:'+(on?'var(--accent2)':'var(--bg)')+';color:'+(on?'#fff':'var(--muted)')+';'
-    + 'font-size:10px;line-height:1;cursor:pointer;vertical-align:middle">'+glyph+'</span>';
+    + 'font-size:10px;line-height:1;cursor:pointer;vertical-align:middle">'+glyph+'</span>'
+    + ((_msFilters[key]!=null)?PSI_DOT:'');
 }
 function msDistinctValues(key){
   const set=new Set();
@@ -10944,6 +10945,9 @@ function psiSortMark(key){
   return '<span style="margin-left:3px;color:var(--accent2);font-size:10px">'+(_psiSort.dir==='desc'?'▼':'▲')+'</span>';
 }
 // 글자 열 머리글에 붙이는 필터 버튼
+// 값으로 걸어 둔 열에는 머리글에 붉은 점을 찍는다(보유월 바탕색 거르개와 같은 표시).
+const PSI_DOT='<span title="필터 적용됨" style="color:#b91c1c;margin-left:2px;font-size:9px;vertical-align:middle">●</span>';
+function psiFilterDot(key){ return (_psiFilters[key]!=null) ? PSI_DOT : ''; }
 function psiFilterIcon(key){
   const on=(_psiFilters[key]!=null)||(_psiSort.key===key);
   const glyph=(_psiSort.key===key)?(_psiSort.dir==='desc'?'▼':'▲'):'▾';
@@ -10952,7 +10956,8 @@ function psiFilterIcon(key){
     + ' style="display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:16px;margin-left:4px;'
     + 'border-radius:4px;border:1px solid '+(on?'var(--accent2)':'var(--border)')+';'
     + 'background:'+(on?'var(--accent2)':'var(--bg)')+';color:'+(on?'#fff':'var(--muted)')+';'
-    + 'font-size:10px;line-height:1;cursor:pointer;vertical-align:middle">'+glyph+'</span>';
+    + 'font-size:10px;line-height:1;cursor:pointer;vertical-align:middle">'+glyph+'</span>'
+    + psiFilterDot(key);
 }
 // 필터·값목록에 쓰는 표준 문자열. 숫자 열은 화면과 같은 값을 문자로 쓴다(천단위 쉼표 없음).
 function psiCellVal(key,it){
@@ -11298,8 +11303,10 @@ function renderPSI(){
   const sub=yms.map(y=>SB.map((d,i)=>{
       const key=d.k+':'+y;
       const clr=(d.k==='mo' && _psiFilters['clr:'+y]) ? '<span style="color:#b91c1c;margin-left:2px">●</span>' : '';
-      return '<th onclick="openPSIFilter(&quot;'+key+'&quot;,this)" title="'+L('정렬','Сортировка')+'" style="'+thS+(i===0?bl:'')+';cursor:pointer">'
-        + subLab(d,y) + psiSortMark(key) + clr + '</th>';
+      const on=(_psiFilters[key]!=null)||(d.k==='mo'&&_psiFilters['clr:'+y]);
+      return '<th onclick="openPSIFilter(&quot;'+key+'&quot;,this)" title="'+L('정렬·필터','Сортировка и фильтр')+'" style="'+thS+(i===0?bl:'')
+        + ';cursor:pointer'+(on?';background:var(--tag-bg)':'')+'">'
+        + subLab(d,y) + psiSortMark(key) + psiFilterDot(key) + clr + '</th>';
     }).join('')).join('');
   const openYm=psiYmAdd(c.base,-1);
   const noteEl=pgEl('OpenNote');
@@ -11316,9 +11323,10 @@ function renderPSI(){
   const totSub=SB.map((d,i)=>{
       const key=d.k+':tot';
       const clr=(d.k==='mo' && _psiFilters['clr:tot']) ? '<span style="color:#b91c1c;margin-left:2px">●</span>' : '';
-      return '<th onclick="openPSIFilter(&quot;'+key+'&quot;,this)" title="'+L('정렬','Сортировка')+'" style="'
-        + thS+(i===0?bl:'')+';background:var(--surface);cursor:pointer">'
-        + totLab(d) + psiSortMark(key) + clr + '</th>';
+      const on=(_psiFilters[key]!=null)||(d.k==='mo'&&_psiFilters['clr:tot']);
+      return '<th onclick="openPSIFilter(&quot;'+key+'&quot;,this)" title="'+L('정렬·필터','Сортировка и фильтр')+'" style="'
+        + thS+(i===0?bl:'')+';background:'+(on?'var(--tag-bg)':'var(--surface)')+';cursor:pointer">'
+        + totLab(d) + psiSortMark(key) + psiFilterDot(key) + clr + '</th>';
     }).join('');
   let head=['<tr>',
     FX.map((d,k)=>'<th rowspan="2" class="'+fxCls(k).trim()+'" style="'+thS+'">'+L(d.hko||d.ko,d.hru||d.ru)+psiFilterIcon(d.k)+'</th>').join(''),
@@ -12493,7 +12501,8 @@ function priceIconHtml(i){
     + ' style="display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:14px;margin-left:3px;'
     + 'border-radius:4px;border:1px solid '+(on?'var(--accent2)':'var(--border)')+';'
     + 'background:'+(on?'var(--accent2)':'var(--bg)')+';color:'+(on?'#fff':'var(--muted)')+';'
-    + 'font-size:9px;line-height:1;cursor:pointer;vertical-align:middle">'+glyph+'</span>';
+    + 'font-size:9px;line-height:1;cursor:pointer;vertical-align:middle">'+glyph+'</span>'
+    + ((_prFilters[i]!=null)?PSI_DOT:'');
 }
 // 숫자로 볼 수 있는 값인지(천단위 쉼표·% 는 떼고 본다)
 function _prNum(v){ const x=String(v).replace(/[,\s%]/g,''); return (x!=='' && isFinite(Number(x)))?Number(x):null; }
