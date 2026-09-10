@@ -1088,10 +1088,7 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
         <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
         <input type="text" id="msInput" placeholder="대표품번·호환품번·품명·규격으로 검색…" oninput="debouncedRenderMS()">
       </div>
-      <button class="dl-btn" onclick="switchTab('psi')" title="PSI 화면으로 돌아가기">
-        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
-        <span id="i18n-ms-back">PSI</span>
-      </button>
+
       <button class="dl-btn" onclick="openMsColsPanel()" title="표에 보일 열을 고릅니다(아이디별로 저장)">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
         <span id="i18n-ms-cols">보기</span>
@@ -1131,10 +1128,7 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
         <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
         <input type="text" id="shipInput" placeholder="인보이스·선적일·품번·품명으로 검색…" oninput="debouncedRenderShip()">
       </div>
-      <button class="dl-btn" onclick="switchTab('psi')" title="PSI 화면으로 돌아가기">
-        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
-        <span id="i18n-ship-back">PSI</span>
-      </button>
+
       <select id="shipInv" onchange="renderShip()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></select>
       <input type="text" id="shipFrom" list="ktShipYmOpts" placeholder="2026-05" onchange="renderShip()" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center">
       <span style="font-size:11px;color:var(--muted)">~</span>
@@ -1180,10 +1174,7 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
         <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
         <input type="text" id="poInput" placeholder="차수·발주년월·대표코드·발주코드·품명으로 검색…" oninput="debouncedRenderPO()">
       </div>
-      <button class="dl-btn" onclick="switchTab('psi')" title="PSI 화면으로 돌아가기">
-        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
-        <span id="i18n-po-back">PSI</span>
-      </button>
+
       <select id="poCha" onchange="renderPO()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></select>
       <select id="poFrom" onchange="renderPO()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></select>
       <span style="font-size:11px;color:var(--muted)">~</span>
