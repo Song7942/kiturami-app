@@ -11838,7 +11838,17 @@ function renderPSI(){
   const thS='padding:5px 4px;text-align:center;vertical-align:middle;position:sticky;z-index:3;'
     + 'background:var(--surface2);font-size:11px;white-space:nowrap;border-bottom:1px solid var(--border)';
   const bl=';border-left:1px solid var(--border)';
-  const grp=yms.map(y=>'<th colspan="'+SB.length+'" style="'+thS+bl+'">'+psiYmLabel(y)+'</th>').join('');
+  // 미공급이 나가는 달은 거기서 다시 시작하는 달이라, 달 이름 옆에 그 뜻을 적어 둔다
+  const grpLab=y=>{
+    const t=psiYmLabel(y);
+    if(psiSimOn && _simPlanYm===y){
+      return t+'<span style="font-weight:400;font-size:10px;color:var(--muted);margin-left:3px">'
+        + L('(미선적분+추가발주 정리, 선적(실제,계획)에 반영)',
+            '(Сведение недопоставки и дозаказа — в отгрузке: факт и план)')+'</span>';
+    }
+    return t;
+  };
+  const grp=yms.map(y=>'<th colspan="'+SB.length+'" style="'+thS+bl+'">'+grpLab(y)+'</th>').join('');
   // 발주후 보유월은 '그 달 발주분이 들어오는 달'의 보유월이라 머리글에 그 달을 적는다
   const subLab=(d,y)=>{
     if(psiSimOn && (d.k==='mo2'||d.k==='st2')){ const av=simArriveYm(y); const t=av?psiYmLabel(av):'';
