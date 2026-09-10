@@ -8605,7 +8605,12 @@ function msVisCols(isKo){ const m=msColsMap();
   return v.length?v:MS_COL_DEFS.filter(d=>d.k==='rep'); }   // 전부 끄면 대표품번은 남긴다
 function msShowKids(){ return msColsMap().compat!==false; }   // 호환품번을 끄면 하위 줄을 감춘다
 function msShowDays(){ return msColsMap().ymd!==false; }   // 일자를 끄면 품번당 한 줄로 접는다
-function msShowGroups(){ const m=msColsMap(); return (m.rep!==false) || (m.compat===false); }
+// 대표품번끼리 묶어 보기(보기 창에서 켜고 끈다). 끄면 묶음 줄 없이 호환품번 줄만 죽 나온다.
+function msGrpOn(){ const s=(psiCols && psiCols.__ms && typeof psiCols.__ms==='object')?psiCols.__ms:null;
+  return !(s && s.__grp===false); }                    // 처음엔 묶어 본다
+function msShowGroups(){ const m=msColsMap();
+  if(m.compat===false) return true;                    // 호환품번 줄이 없으면 묶음 줄만 남는다
+  return msGrpOn() && (m.rep!==false); }
 function closeMsColsPanel(){ const b=document.getElementById('msColsPop'); if(b) b.remove(); }
 function openMsColsPanel(){
   closeMsColsPanel();
@@ -8622,6 +8627,10 @@ function openMsColsPanel(){
     + '<div style="padding:12px 14px;border-bottom:1px solid var(--border);font-weight:700;font-size:13px">'+(ru?'Столбцы':'보기 — 열 선택')+'</div>'
     + '<div style="padding:10px 14px">'
       + MS_COL_DEFS.filter(d=>(!d.koOnly||isKo)&&(!d.perm||canViewExportCtrl())).map(item).join('')
+      + '<div style="border-top:1px solid var(--border);margin:6px 0 2px"></div>'
+      + '<label style="display:flex;align-items:center;gap:7px;padding:5px 4px;cursor:pointer">'
+      + '<input type="checkbox" class="mcChk" data-k="__grp" '+(msGrpOn()?'checked':'')+'>'
+      + '<span>'+(ru?'Группировать по осн. артикулу':'대표품번끼리 묶어 보기')+'</span></label>'
     + '</div>'
     + '<div style="padding:0 14px 8px;font-size:11px;color:var(--muted)">'+(ru?'Выбор сохраняется для этого ID при закрытии.':'닫으면 그대로 저장되어 이 아이디에 다음에도 남습니다.')+'</div>'
     + '<div style="display:flex;gap:7px;padding:11px 14px;border-top:1px solid var(--border)">'
@@ -10079,6 +10088,14 @@ function poName(pn){
   if(!p) return '';
   return lang==='ko' ? (p.name_ko||'') : (p.name_ru||p.name_ko||'');
 }
+// 규격도 품명과 같은 자리에서 가져온다. 호환품번 단위 값(kt_pn_specs)이 먼저.
+function poSpec(pn){
+  const s=pnSpecOf(pn);
+  if(s && s.spec) return s.spec;
+  const info=poLookup(pn);
+  const p=(PN_DATA||[]).find(x=>x.rep===info.rep);
+  return p ? (p.spec||'') : '';
+}
 // 자료에 한글로 적혀 있는 차수 '미상'은 러시아어 화면에서 러시아어로 보여 준다.
 // 걸러내기·저장에 쓰는 값은 '미상' 그대로 둔다.
 function poChaLabel(v){
@@ -10165,7 +10182,7 @@ function renderPO(){
     return (!R.from || y>=R.from) && (!R.to || y<=R.to); });
   if(kw) rows=rows.filter(r=>{
     const i=poLookup(r.pn);
-    return [r.cha, poChaLabel(r.cha), poYmOf(r), r.pn, i.rep, i.fin, poName(r.pn)].some(v=>String(v||'').toLowerCase().includes(kw));
+    return [r.cha, poChaLabel(r.cha), poYmOf(r), r.pn, i.rep, i.fin, poName(r.pn), poSpec(r.pn)].some(v=>String(v||'').toLowerCase().includes(kw));
   });
   rows.sort((a,b)=> (a.cha===b.cha) ? String(a.pn).localeCompare(String(b.pn)) : String(a.cha).localeCompare(String(b.cha)));
   _poFiltered=rows;
@@ -10174,12 +10191,18 @@ function renderPO(){
     + 'background:var(--surface2);font-size:11px;white-space:nowrap;border-bottom:1px solid var(--border)';
   const tdS='padding:5px 6px;font-size:11px;border-bottom:1px solid var(--border)';
   const numS=tdS+';text-align:right;white-space:nowrap';
-  const heads=[[L('차수','Партия'),90],[L('발주년월','Мес. заказа'),68],[L('대표코드','Осн. код'),104],
-               [L('발주코드','Код заказа'),104],[L('변경코드(공급)','Код замены'),104],
-               [L('품명','Наименование'),170],[L('수주수량','Заказано'),70],
-               [L('공급수량','Поставлено'),70],[L('미공급수량','Недопоставка'),78]];
+  // 열은 열쇠(k)를 달아 둔다. 규격은 한글 화면에만 붙어 자리가 밀리므로,
+  // 묶어 보기·합계 줄이 자리를 열쇠로 찾게 한다.
+  const isKoPO=(lang!=='ru');
+  const heads=[['cha',L('차수','Партия'),90],['mon',L('발주년월','Мес. заказа'),68],
+               ['rep',L('대표코드','Осн. код'),104],['pn',L('발주코드','Код заказа'),104],
+               ['chg',L('변경코드(공급)','Код замены'),104],['name',L('품명','Наименование'),170]]
+    .concat(isKoPO?[['spec','규격',150]]:[])
+    .concat([['qty',L('수주수량','Заказано'),70],['sup',L('공급수량','Поставлено'),70],
+             ['rest',L('미공급수량','Недопоставка'),78]]);
+  const ixPO=k=>heads.findIndex(h=>h[0]===k);
   const cg=document.getElementById('poColgroup');
-  if(cg) cg.innerHTML=heads.map(h=>'<col style="width:'+h[1]+'px">').join('');
+  if(cg) cg.innerHTML=heads.map(h=>'<col style="width:'+h[2]+'px">').join('');
   const thead=document.getElementById('poThead');
   const tbody=document.getElementById('poTbody');
   const empty=document.getElementById('poEmpty');
@@ -10202,6 +10225,7 @@ function renderPO(){
           ? poChgEdit(r.pn, chg)
           : (chg?('<span style="'+codeS+';color:#b91c1c;font-weight:600">'+escapeHtml(normBadgePN(chg))+'</span>'):''))+'</td>'
       + '<td style="'+tdS+';word-break:break-all;font-size:10.5px;line-height:1.25">'+escapeHtml(poName(r.pn))+'</td>'
+      + (isKoPO?('<td style="'+tdS+';word-break:break-all;font-size:10.5px;line-height:1.25;color:var(--muted)">'+escapeHtml(poSpec(r.pn))+'</td>'):'')
       + '<td style="'+numS+'">'+(EDPO?poNumEdit(r.cha,r.pn,'qty',r.qty):(r.qty?r.qty.toLocaleString():'0'))+'</td>'
       + '<td class="'+(poIsMan(r.cha,r.pn)?'po-man':'')+'" style="'+numS+'">'
         +(EDPO?poNumEdit(r.cha,r.pn,'supplied',r.supplied):(r.supplied?r.supplied.toLocaleString():''))+'</td>'
@@ -10209,15 +10233,17 @@ function renderPO(){
       + '</tr>';
   }).join('');
 
-  if(thead) thead.innerHTML='<tr>'+heads.map(h=>'<th style="'+thS+'">'+h[0]+'</th>').join('')+'</tr>'
-    + '<tr><th colspan="6" style="'+thS+';font-weight:700;background:var(--surface);top:27px;text-align:right">'
+  if(thead) thead.innerHTML='<tr>'+heads.map(h=>'<th style="'+thS+'">'+h[1]+'</th>').join('')+'</tr>'
+    + '<tr><th colspan="'+ixPO('qty')+'" style="'+thS+';font-weight:700;background:var(--surface);top:27px;text-align:right">'
     + escapeHtml(L('합계 '+rows.length+'건 · '+R.label,'Итого '+rows.length+' · '+R.label))+'</th>'
     + '<th style="'+thS+';font-weight:700;background:var(--surface);top:27px;text-align:right">'+tq.toLocaleString()+'</th>'
     + '<th style="'+thS+';font-weight:700;background:var(--surface);top:27px;text-align:right">'+ts.toLocaleString()+'</th>'
     + '<th style="'+thS+';font-weight:700;background:var(--surface);top:27px;text-align:right">'+(tq-ts).toLocaleString()+'</th></tr>';
   if(tbody) tbody.innerHTML=body;
   // 대표코드끼리 묶어 보기: 수주·공급·미공급 수량은 묶음 줄에서 합해 보여 준다
-  if(poGroupOn()) ktGroupByRep('poTbody',{ rep:2, keep:[5], sum:[6,7,8] });
+  if(poGroupOn()) ktGroupByRep('poTbody',{ rep:ixPO('rep'),
+    keep:[ixPO('name'), ixPO('spec')].filter(i=>i>=0),
+    sum:[ixPO('qty'), ixPO('sup'), ixPO('rest')] });
   if(empty){ empty.textContent=L('자료가 없습니다. 엑셀 업로드로 발주 자료를 올려주세요.','Нет данных.');
              empty.style.display=rows.length?'none':'block'; }
   updatePaneHBar('po');
@@ -10621,19 +10647,26 @@ function downloadPO(){
   renderPO();
   const ru=(lang==='ru');
   const head=[ru?'Партия':'차수', ru?'Мес. заказа':'발주년월', ru?'Осн. код':'대표코드', ru?'Код заказа':'발주코드',
-              ru?'Код замены':'변경코드(공급)', ru?'Наименование':'품명',
-              ru?'Заказано':'수주수량', ru?'Поставлено':'공급수량', ru?'Недопоставка':'미공급수량'];
+              ru?'Код замены':'변경코드(공급)', ru?'Наименование':'품명']
+    .concat(ru?[]:['규격'])
+    .concat([ru?'Заказано':'수주수량', ru?'Поставлено':'공급수량', ru?'Недопоставка':'미공급수량']);
   const aoa=[head];
   let tq=0, ts=0;
   (_poFiltered||[]).forEach(r=>{
     const i=poLookup(r.pn);
     const chg=(i.fin && i.fin!==normPN(r.pn)) ? normBadgePN(i.fin) : '';
     tq+=r.qty; ts+=r.supplied;
-    aoa.push([poChaLabel(r.cha), poYmOf(r), i.rep||'', normBadgePN(r.pn), chg, poName(r.pn), r.qty, r.supplied, r.qty-r.supplied]);
+    aoa.push([poChaLabel(r.cha), poYmOf(r), i.rep||'', normBadgePN(r.pn), chg, poName(r.pn)]
+      .concat(ru?[]:[poSpec(r.pn)])
+      .concat([r.qty, r.supplied, r.qty-r.supplied]));
   });
-  aoa.splice(1,0,[(ru?'Итого ':'합계 ')+(_poFiltered||[]).length+(ru?'':'건'),'','','','','',tq,ts,tq-ts]);
+  aoa.splice(1,0,[(ru?'Итого ':'합계 ')+(_poFiltered||[]).length+(ru?'':'건'),'','','','','']
+    .concat(ru?[]:[''])
+    .concat([tq,ts,tq-ts]));
   const ws=XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols']=[{wch:12},{wch:8},{wch:14},{wch:14},{wch:14},{wch:26},{wch:10},{wch:10},{wch:12}];
+  ws['!cols']=[{wch:12},{wch:8},{wch:14},{wch:14},{wch:14},{wch:26}]
+    .concat(ru?[]:[{wch:22}])
+    .concat([{wch:10},{wch:10},{wch:12}]);
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'PO');
   XLSX.writeFile(wb, xlsxName('발주현황','Заказы'));
 }
@@ -10903,8 +10936,12 @@ function psiVisFixed(isKo){ const m=psiColsMap();
   return v.length?v:PSI_COL_DEFS.filter(d=>d.k==='rep'); }      // 전부 끄면 대표품번은 남긴다
 // 호환품번 열을 끄면 하위 호환품번 줄 자체를 감춘다(대표품번 줄만 본다)
 function psiShowKids(){ return psiColsMap().compat!==false; }
+// 대표품번끼리 묶어 보기(보기 창에서 켜고 끈다). 끄면 묶음 줄 없이 호환품번 줄만 죽 나온다.
+function psiGrpOn(){ return !(psiCols && psiCols.__grp===false); }   // 처음엔 묶어 본다
 // 대표품번 열을 끄면 대표품번(묶음) 줄도 감춘다. 둘 다 끄면 묶음 줄만 남긴다.
-function psiShowGroups(){ const m=psiColsMap(); return (m.rep!==false) || (m.compat===false); }
+function psiShowGroups(){ const m=psiColsMap();
+  if(m.compat===false) return true;                    // 호환품번 줄이 없으면 묶음 줄만 남는다
+  return psiGrpOn() && (m.rep!==false); }
 // 규격 오른쪽 '기간합계' 묶음을 보일지. 보기 창에서 켜고 끈다(저장은 psiCols.__tot).
 function psiShowTot(){ return !!(psiCols && psiCols.__tot); }   // 처음엔 접어 둔다
 // 고른 기간에 아무 값도 없는 품번까지 보일지. 꺼 두면 전부 0 인 줄은 감춘다.
@@ -11023,6 +11060,7 @@ function openPsiColsPanel(){
   const m=psiColsMap();
   m.__tot=psiShowTot();
   m.__zero=psiShowZero();
+  m.__grp=psiGrpOn();
   const box=document.createElement('div'); box.id='psiColsPop';
   box.style.cssText='position:fixed;inset:0;z-index:10000;background:#0008;display:flex;align-items:center;justify-content:center';
   const item=d=>'<label style="display:flex;align-items:center;gap:7px;padding:5px 4px;cursor:pointer">'
@@ -11034,7 +11072,9 @@ function openPsiColsPanel(){
     + '<div style="padding:12px 14px;border-bottom:1px solid var(--border);font-weight:700;font-size:13px">'+(ru?'Столбцы':'보기 — 열 선택')+'</div>'
     + '<div style="padding:10px 14px;display:flex;gap:18px">'
       + '<div style="flex:1"><div style="font-size:11px;color:var(--muted);margin-bottom:3px">'+(ru?'Артикул':'품번 정보')+'</div>'
-        + PSI_COL_DEFS.filter(d=>d.fixed&&(!d.koOnly||isKo)&&(!d.perm||canViewExportCtrl())).map(item).join('')+'</div>'
+        + PSI_COL_DEFS.filter(d=>d.fixed&&(!d.koOnly||isKo)&&(!d.perm||canViewExportCtrl())).map(item).join('')
+        + '<div style="border-top:1px solid var(--border);margin:4px 0"></div>'
+        + item({k:'__grp', ko:'대표품번끼리 묶어 보기', ru:'Группировать по осн. артикулу'})+'</div>'
       + '<div style="flex:1"><div style="font-size:11px;color:var(--muted);margin-bottom:3px">'+(ru?'По месяцам':'월별 수치')+'</div>'
         + item({k:'__tot', ko:'기간합계', ru:'Итого за период'})
         + item({k:'__zero', ko:'값 없는 품번도 보기', ru:'Показывать артикулы без данных'})
