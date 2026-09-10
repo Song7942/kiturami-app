@@ -1155,6 +1155,10 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="9" y1="4" x2="9" y2="20"/><line x1="15" y1="4" x2="15" y2="20"/></svg>
         <span id="i18n-ship-cols">보기</span>
       </button>
+      <button class="dl-btn" onclick="shipResetFilters()" title="헤더 필터·정렬을 기본값으로">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+        <span id="i18n-ship-reset">필터 초기화</span>
+      </button>
       <button class="dl-btn" onclick="openShipInvPanel()" title="인보이스 넘버·선적일·입고일을 고칩니다" style="background:var(--accent2);border-color:var(--accent2);color:#fff">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="8" y1="14" x2="16" y2="14"/></svg>
         <span id="i18n-ship-inv">선적차수</span>
@@ -2132,6 +2136,7 @@ function refreshPsiTexts(){
   { const d=document.getElementById('shipDropHint');
     if(d) d.textContent=(lang==='ru')?'Отпустите файл инвойса (.xlsx) здесь':'여기에 인보이스 파일(.xlsx)을 놓으세요'; }
   set('i18n-ship-cols',COLS[0],COLS[1]);
+  set('i18n-ship-reset','필터 초기화','Сброс фильтров');
   set('i18n-ship-all',ALL[0],ALL[1]);
   set('i18n-ship-inv','선적차수','Партии');
   set('i18n-ship-dl',DL[0],DL[1]);
@@ -9328,6 +9333,139 @@ function openShipAddRow(){
     alert(ru?'Добавлено.':'넣었습니다.');
   };
 }
+// ── 선적/입고현황 머리글 거르개·정렬 (다른 화면과 같은 엑셀식) ──
+function shipColLabel(key){ const d=SHIP_COL_DEFS.find(x=>x.k===key); return d?(lang==='ru'?d.ru:d.ko):key; }
+function shipIsNumCol(key){ return key==='qty'||key==='price'||key==='amt'; }
+// 한 줄에서 그 열의 값(거르개·정렬 기준). 화면에 찍히는 글자와 같게 맞춘다.
+function shipCellVal(key, r){
+  const i=poLookup(r.pn)||{}, nm=shipPnInfo(r.pn);
+  switch(key){
+    case 'inv':    return String(r.inv||'');
+    case 'sail':   return String(r.sail||'');
+    case 'arr':    return String(r.arrive||'');
+    case 'cont':   return shipContOf(r.inv);
+    case 'rep':    return String(i.rep||'');
+    case 'pn':     return normBadgePN(r.pn);
+    case 'nameKo': return nm.ko||'';
+    case 'spec':   return nm.spec||'';
+    case 'nameRu': return nm.ru||'';
+    case 'nameEn': return String(r.name_en||'');
+    case 'hs':     return String(r.hs||'');
+    case 'qty':    return String(Number(r.qty)||0);
+    case 'price':  return String(Math.round((Number(r.price)||0)*100)/100);
+    case 'amt':    return shipIsFoc(r.inv, r.pn) ? 'NON-COMMERCIAL INVOICE' : String(Math.round(Number(r.amount)||0));
+  }
+  return '';
+}
+let _shipFilters={};                    // {열: [고른 값들]}
+let _shipSort={key:null, dir:'asc'};    // 정렬
+let _shipAllRows=[];                    // 거르개 창에 보일 값의 바탕(다른 조건까지 거른 뒤)
+function shipApplyFilters(rows){
+  const keys=Object.keys(_shipFilters);
+  if(!keys.length) return rows;
+  const sets=keys.map(k=>({k, set:new Set((_shipFilters[k]||[]).map(String))}));
+  return rows.filter(r=> sets.every(a=> a.set.has(shipCellVal(a.k, r))));
+}
+function shipApplySort(rows){
+  const K=_shipSort.key; if(!K) return rows;
+  const dir=(_shipSort.dir==='desc')?-1:1, num=shipIsNumCol(K);
+  return rows.slice().sort((a,b)=>{
+    const va=shipCellVal(K,a), vb=shipCellVal(K,b);
+    const ea=va==='', eb=vb==='';
+    if(ea&&eb) return 0; if(ea) return 1; if(eb) return -1;   // 빈 값은 늘 뒤로
+    return (num ? ((parseFloat(va)||0)-(parseFloat(vb)||0)) : va.localeCompare(vb,'ko'))*dir;
+  });
+}
+function shipFilterIcon(key){
+  const on=(_shipFilters[key]!=null)||(_shipSort.key===key);
+  const glyph=(_shipSort.key===key)?(_shipSort.dir==='desc'?'▼':'▲'):'▾';
+  return '<span onclick="event.stopPropagation();openSHIPFilter(&quot;'+key+'&quot;,this)"'
+    + ' title="'+(lang==='ru'?'Фильтр и сортировка':'필터·정렬')+'"'
+    + ' style="display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:16px;margin-left:4px;'
+    + 'border-radius:4px;border:1px solid '+(on?'var(--accent2)':'var(--border)')+';'
+    + 'background:'+(on?'var(--accent2)':'var(--bg)')+';color:'+(on?'#fff':'var(--muted)')+';'
+    + 'font-size:10px;line-height:1;cursor:pointer;vertical-align:middle">'+glyph+'</span>'
+    + ((_shipFilters[key]!=null)?PSI_DOT:'');
+}
+function shipDistinctValues(key){
+  const set=new Set();
+  (_shipAllRows||[]).forEach(r=>set.add(shipCellVal(key, r)));
+  const a=[...set];
+  if(shipIsNumCol(key)) return a.sort((x,y)=>{ if(x==='') return 1; if(y==='') return -1; return parseFloat(x)-parseFloat(y); });
+  return a.sort((x,y)=>x.localeCompare(y,'ko'));
+}
+function shipValLabel(key,v){
+  if(v==='') return '';
+  if(!shipIsNumCol(key)) return v;
+  const num=parseFloat(v); return isNaN(num)?v:num.toLocaleString();
+}
+function _shipFilterEsc(e){ if(e.key==='Escape') closeSHIPFilter(); }
+function _shipFilterOutside(e){ const b=document.getElementById('shipFilterPop'); if(b && !b.contains(e.target)) closeSHIPFilter(); }
+function closeSHIPFilter(){ const b=document.getElementById('shipFilterPop'); if(b) b.remove();
+  document.removeEventListener('mousedown', _shipFilterOutside); document.removeEventListener('keydown', _shipFilterEsc); }
+function shipResetFilters(){ _shipFilters={}; _shipSort={key:null,dir:'asc'}; closeSHIPFilter(); renderShip(); }
+function openSHIPFilter(key, anchor){
+  closeSHIPFilter();
+  const ru=(lang==='ru');
+  const rect=anchor.getBoundingClientRect();
+  const box=document.createElement('div'); box.id='shipFilterPop';
+  const W=258;
+  box.style.cssText='position:fixed;top:'+(rect.bottom+4)+'px;left:'+Math.max(6,Math.min(rect.left, window.innerWidth-W-6))+'px;'
+    + 'z-index:9999;background:var(--surface2);border:1px solid var(--border);border-radius:10px;box-shadow:0 10px 30px #0009;'
+    + 'width:'+W+'px;font-size:12px;color:var(--text);overflow:hidden';
+  const sortBtn=(dir,txt)=>'<button class="shf-sort" data-dir="'+dir+'" style="width:100%;text-align:left;padding:6px 8px;border:none;'
+    + 'background:'+((_shipSort.key===key&&_shipSort.dir===dir)?'var(--accent2)':'none')+';'
+    + 'color:'+((_shipSort.key===key&&_shipSort.dir===dir)?'#fff':'var(--text)')+';cursor:pointer;border-radius:6px;font-size:12px">'+txt+'</button>';
+  const vals=shipDistinctValues(key);
+  const cur=_shipFilters[key]?new Set(_shipFilters[key]):null;
+  const blank=ru?'(пусто)':'(비어 있음)';
+  const itemsHtml=vals.map(v=>{
+    const checked=(!cur||cur.has(v))?'checked':'';
+    const label=v===''?blank:escapeHtml(shipValLabel(key,v));
+    return '<label class="shf-item" data-v="'+escapeHtml(v)+'" style="display:flex;align-items:center;gap:6px;padding:4px 8px;cursor:pointer;line-height:1.3">'
+      + '<input type="checkbox" class="shf-chk" '+checked+' style="cursor:pointer;flex:none">'
+      + '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+label+'</span></label>';
+  }).join('');
+  box.innerHTML='<div style="padding:8px 8px 6px;border-bottom:1px solid var(--border)">'
+    + '<div style="font-size:11px;color:var(--muted);margin:0 2px 5px">'+escapeHtml(shipColLabel(key))+'</div>'
+    + sortBtn('asc','▲ '+(ru?'По возрастанию':'오름차순 정렬'))
+    + sortBtn('desc','▼ '+(ru?'По убыванию':'내림차순 정렬'))
+    + '</div>'
+    + '<div style="padding:8px">'
+    + '<input id="shfSearch" type="text" placeholder="'+(ru?'Поиск значений…':'값 검색…')+'" style="width:100%;box-sizing:border-box;padding:5px 8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:12px">'
+    + '<label style="display:flex;align-items:center;gap:6px;padding:5px 4px 4px;cursor:pointer;font-weight:600;border-bottom:1px solid var(--border);margin-top:4px">'
+    + '<input type="checkbox" id="shfAll" checked style="cursor:pointer;flex:none"><span>'+(ru?'(Выбрать все)':'(모두 선택)')+'</span></label>'
+    + '<div id="shfList" style="max-height:230px;overflow:auto;margin-top:2px">'+itemsHtml+'</div></div>'
+    + '<div style="display:flex;gap:6px;padding:8px;border-top:1px solid var(--border)">'
+    + '<button id="shfApply" style="flex:1;padding:6px;border:none;border-radius:7px;background:var(--accent2);color:#fff;cursor:pointer;font-size:12px;font-weight:600">'+(ru?'ОК':'적용')+'</button>'
+    + '<button id="shfClear" style="flex:1;padding:6px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);cursor:pointer;font-size:12px">'+(ru?'Сброс':'해제')+'</button>'
+    + '<button id="shfCancel" style="flex:none;padding:6px 10px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);cursor:pointer;font-size:12px">'+(ru?'✕':'취소')+'</button>'
+    + '</div>';
+  document.body.appendChild(box);
+  box.querySelectorAll('.shf-sort').forEach(b=>{ b.onclick=()=>{ _shipSort={key, dir:b.getAttribute('data-dir')}; closeSHIPFilter(); renderShip(); }; });
+  const listEl=box.querySelector('#shfList');
+  const allChk=box.querySelector('#shfAll');
+  const search=box.querySelector('#shfSearch');
+  const items=()=>[...listEl.querySelectorAll('.shf-item')];
+  const visItems=()=>items().filter(it=>it.style.display!=='none');
+  const syncAll=()=>{ const vis=visItems(); const chk=vis.filter(it=>it.querySelector('.shf-chk').checked);
+    allChk.checked=vis.length>0&&chk.length===vis.length; allChk.indeterminate=chk.length>0&&chk.length<vis.length; };
+  search.oninput=()=>{ const q=search.value.trim().toLowerCase();
+    items().forEach(it=>{ const v=(it.getAttribute('data-v')||'').toLowerCase(); it.style.display=(!q||v.includes(q))?'':'none'; }); syncAll(); };
+  allChk.onchange=()=>{ visItems().forEach(it=> it.querySelector('.shf-chk').checked=allChk.checked); };
+  listEl.addEventListener('change', syncAll);
+  syncAll(); search.focus();
+  box.querySelector('#shfApply').onclick=()=>{
+    const all=items();
+    const checked=all.filter(it=>it.querySelector('.shf-chk').checked).map(it=>it.getAttribute('data-v'));
+    if(checked.length===all.length) delete _shipFilters[key]; else _shipFilters[key]=checked;
+    closeSHIPFilter(); renderShip();
+  };
+  box.querySelector('#shfClear').onclick=()=>{ delete _shipFilters[key]; if(_shipSort.key===key) _shipSort={key:null,dir:'asc'}; closeSHIPFilter(); renderShip(); };
+  box.querySelector('#shfCancel').onclick=()=> closeSHIPFilter();
+  document.addEventListener('keydown', _shipFilterEsc);
+  setTimeout(()=>document.addEventListener('mousedown', _shipFilterOutside), 0);
+}
 // 선적/입고현황을 대표품번끼리 묶어 볼지(보기 창에서 켜고 끈다)
 function shipGroupOn(){ return !!(psiCols && psiCols.__ship && psiCols.__ship.__grp); }
 function closeShipColsPanel(){ const b=document.getElementById('shipColsPop'); if(b) b.remove(); }
@@ -9397,7 +9535,10 @@ function openShipColsPanel(){
     const i=poLookup(r.pn);
     return [r.inv, r.sail, r.pn, i.rep, r.name_en, r.hs].some(v=>String(v||'').toLowerCase().includes(kw));
   });
+  _shipAllRows=rows;                     // 머리글 거르개 창에 보일 값의 바탕
+  rows=shipApplyFilters(rows);           // 머리글 거르개(엑셀식: 고른 값만, 여러 열은 AND)
   rows.sort((a,b)=> (a.inv===b.inv) ? String(a.pn).localeCompare(String(b.pn)) : String(a.inv).localeCompare(String(b.inv)));
+  rows=shipApplySort(rows);              // 머리글 정렬을 골랐으면 그 차례로
   _shipFiltered=rows;
   const badge=document.getElementById('shipBadge'); if(badge) badge.innerHTML='<b>'+rows.length+'</b>';
 
@@ -9453,7 +9594,7 @@ function openShipColsPanel(){
     const v=(d.k==='qty')?tq.toLocaleString():((d.k==='amt')?Math.round(ta).toLocaleString():'');
     return '<th style="'+sumS+'">'+v+'</th>'; }).join('');
   const edCol=shipEditable()?'<th style="'+thS+';width:26px"></th>':'';
-  if(thead) thead.innerHTML='<tr>'+CO.map(d=>'<th style="'+thS+'">'+(ru?d.ru:d.ko)+'</th>').join('')+edCol+'</tr>'
+  if(thead) thead.innerHTML='<tr>'+CO.map(d=>'<th style="'+thS+'">'+(ru?d.ru:d.ko)+shipFilterIcon(d.k)+'</th>').join('')+edCol+'</tr>'
     + '<tr><th colspan="'+Math.max(1,lead)+'" style="'+sumS+'">'
     + L('합계 '+rows.length+'건','Итого '+rows.length)+'</th>'+tail+edCol+'</tr>';
   const tbody=document.getElementById('shipTbody'); if(tbody) tbody.innerHTML=body;
