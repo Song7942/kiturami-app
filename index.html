@@ -1204,6 +1204,10 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
         <span id="i18n-po-view">보기</span>
       </button>
+      <button class="dl-btn" onclick="poResetFilters()" title="헤더 필터·정렬을 기본값으로">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+        <span id="i18n-po-reset">필터 초기화</span>
+      </button>
       <button class="dl-btn" id="poUploadBtn" onclick="document.getElementById('poFileInput').click()" title="차수·발주월·발주코드·수주수량 이 있는 엑셀을 올리면 반영합니다" style="display:none;background:var(--accent2);border-color:var(--accent2);color:#fff">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
         <span id="i18n-po-up">발주 업로드</span>
@@ -2119,6 +2123,7 @@ function refreshPsiTexts(){
   set('i18n-po-all',ALL[0],ALL[1]);
   set('i18n-po-view','보기','Вид');
   set('i18n-po-manual','수기 초기화','Сброс ручных');
+  set('i18n-po-reset','필터 초기화','Сброс фильтров');
   set('i18n-po-up','발주 업로드','Загрузить заказы');
   set('i18n-po-dl',DL[0],DL[1]);
   // 선적/입고현황
@@ -2157,6 +2162,7 @@ function refreshPsiTexts(){
   ttl('[onclick="switchTab(\'ship\')"]','인보이스별 선적 내역','Отгрузки по инвойсам');
   ttl('[onclick="switchTab(\'sim\')"]','발주현황의 미공급수량이 다음 달 선적된다고 보고 재고·보유월을 다시 계산합니다',
       'Пересчёт остатка и месяцев с учётом недопоставки');
+  ttl('[onclick="poResetFilters()"]','헤더 필터·정렬을 기본값으로','Сбросить фильтры и сортировку');
   ttl('[onclick="switchTab(\'po\')"]','차수별 수주·공급·미공급 현황',
       'Заказ / поставка / недопоставка по партиям');
   ttl('[onclick="switchTab(\'ms\')"]','품번별 미출 수량','Невыполненные по артикулам');
@@ -10159,6 +10165,145 @@ function poAllPeriod(){
   if(f) f.value=list[0]; if(t) t.value=list[list.length-1];
   renderPO();
 }
+// ── 발주현황 머리글 거르개·정렬 (다른 화면과 같은 엑셀식) ─────
+//   규격은 한글 화면에만 붙으므로 열 목록을 한 군데서 만들어 쓴다.
+function poColDefs(){
+  const ru=(lang==='ru'), L=(ko,rr)=>(ru?rr:ko);
+  return [['cha',L('차수','Партия'),90],['mon',L('발주년월','Мес. заказа'),68],
+          ['rep',L('대표코드','Осн. код'),104],['pn',L('발주코드','Код заказа'),104],
+          ['chg',L('변경코드(공급)','Код замены'),104],['name',L('품명','Наименование'),170]]
+    .concat(ru?[]:[['spec','규격',150]])
+    .concat([['qty',L('수주수량','Заказано'),70],['sup',L('공급수량','Поставлено'),70],
+             ['rest',L('미공급수량','Недопоставка'),78]]);
+}
+function poColLabel(key){ const d=poColDefs().find(x=>x[0]===key); return d?d[1]:key; }
+function poIsNumCol(key){ return key==='qty'||key==='sup'||key==='rest'; }
+// 한 줄에서 그 열의 값(거르개·정렬이 쓰는 기준값). 화면에 찍히는 글자와 같게 맞춘다.
+function poCellVal(key, r){
+  const i=poLookup(r.pn)||{};
+  switch(key){
+    case 'cha':  return poChaLabel(r.cha)||'';
+    case 'mon':  return poYmOf(r)||'';
+    case 'rep':  return i.rep||'';
+    case 'pn':   return normBadgePN(r.pn)||'';
+    case 'chg':  return (i.fin && i.fin!==normPN(r.pn)) ? normBadgePN(i.fin) : '';
+    case 'name': return poName(r.pn)||'';
+    case 'spec': return poSpec(r.pn)||'';
+    case 'qty':  return String(Number(r.qty)||0);
+    case 'sup':  return String(Number(r.supplied)||0);
+    case 'rest': return String((Number(r.qty)||0)-(Number(r.supplied)||0));
+  }
+  return '';
+}
+let _poFilters={};                    // {열: [고른 값들]}
+let _poSort={key:null, dir:'asc'};    // 정렬
+let _poAllRows=[];                    // 거르개 창에 보일 값의 바탕(다른 조건까지 거른 뒤)
+function poApplyFilters(rows){
+  const keys=Object.keys(_poFilters);
+  if(!keys.length) return rows;
+  const sets=keys.map(k=>({k, set:new Set((_poFilters[k]||[]).map(String))}));
+  return rows.filter(r=> sets.every(a=> a.set.has(poCellVal(a.k, r))));
+}
+function poApplySort(rows){
+  const K=_poSort.key; if(!K) return rows;
+  const dir=(_poSort.dir==='desc')?-1:1, num=poIsNumCol(K);
+  return rows.slice().sort((a,b)=>{
+    const va=poCellVal(K,a), vb=poCellVal(K,b);
+    const ea=va==='', eb=vb==='';
+    if(ea&&eb) return 0; if(ea) return 1; if(eb) return -1;   // 빈 값은 늘 뒤로
+    return (num ? ((parseFloat(va)||0)-(parseFloat(vb)||0)) : va.localeCompare(vb,'ko'))*dir;
+  });
+}
+function poFilterIcon(key){
+  const on=(_poFilters[key]!=null)||(_poSort.key===key);
+  const glyph=(_poSort.key===key)?(_poSort.dir==='desc'?'▼':'▲'):'▾';
+  return '<span onclick="event.stopPropagation();openPOFilter(&quot;'+key+'&quot;,this)"'
+    + ' title="'+(lang==='ru'?'Фильтр и сортировка':'필터·정렬')+'"'
+    + ' style="display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:16px;margin-left:4px;'
+    + 'border-radius:4px;border:1px solid '+(on?'var(--accent2)':'var(--border)')+';'
+    + 'background:'+(on?'var(--accent2)':'var(--bg)')+';color:'+(on?'#fff':'var(--muted)')+';'
+    + 'font-size:10px;line-height:1;cursor:pointer;vertical-align:middle">'+glyph+'</span>'
+    + ((_poFilters[key]!=null)?PSI_DOT:'');
+}
+function poDistinctValues(key){
+  const set=new Set();
+  (_poAllRows||[]).forEach(r=>set.add(poCellVal(key, r)));
+  const a=[...set];
+  if(poIsNumCol(key)) return a.sort((x,y)=>{ if(x==='') return 1; if(y==='') return -1; return parseFloat(x)-parseFloat(y); });
+  return a.sort((x,y)=>x.localeCompare(y,'ko'));
+}
+function poValLabel(key,v){
+  if(v==='') return '';
+  if(!poIsNumCol(key)) return v;
+  const num=parseFloat(v); return isNaN(num)?v:num.toLocaleString();
+}
+function _poFilterEsc(e){ if(e.key==='Escape') closePOFilter(); }
+function _poFilterOutside(e){ const b=document.getElementById('poFilterPop'); if(b && !b.contains(e.target)) closePOFilter(); }
+function closePOFilter(){ const b=document.getElementById('poFilterPop'); if(b) b.remove();
+  document.removeEventListener('mousedown', _poFilterOutside); document.removeEventListener('keydown', _poFilterEsc); }
+function poResetFilters(){ _poFilters={}; _poSort={key:null,dir:'asc'}; closePOFilter(); renderPO(); }
+function openPOFilter(key, anchor){
+  closePOFilter();
+  const ru=(lang==='ru');
+  const rect=anchor.getBoundingClientRect();
+  const box=document.createElement('div'); box.id='poFilterPop';
+  const W=258;
+  box.style.cssText='position:fixed;top:'+(rect.bottom+4)+'px;left:'+Math.max(6,Math.min(rect.left, window.innerWidth-W-6))+'px;'
+    + 'z-index:9999;background:var(--surface2);border:1px solid var(--border);border-radius:10px;box-shadow:0 10px 30px #0009;'
+    + 'width:'+W+'px;font-size:12px;color:var(--text);overflow:hidden';
+  const sortBtn=(dir,txt)=>'<button class="pof-sort" data-dir="'+dir+'" style="width:100%;text-align:left;padding:6px 8px;border:none;'
+    + 'background:'+((_poSort.key===key&&_poSort.dir===dir)?'var(--accent2)':'none')+';'
+    + 'color:'+((_poSort.key===key&&_poSort.dir===dir)?'#fff':'var(--text)')+';cursor:pointer;border-radius:6px;font-size:12px">'+txt+'</button>';
+  const vals=poDistinctValues(key);
+  const cur=_poFilters[key]?new Set(_poFilters[key]):null;
+  const blank=ru?'(пусто)':'(비어 있음)';
+  const itemsHtml=vals.map(v=>{
+    const checked=(!cur||cur.has(v))?'checked':'';
+    const label=v===''?blank:escapeHtml(poValLabel(key,v));
+    return '<label class="pof-item" data-v="'+escapeHtml(v)+'" style="display:flex;align-items:center;gap:6px;padding:4px 8px;cursor:pointer;line-height:1.3">'
+      + '<input type="checkbox" class="pof-chk" '+checked+' style="cursor:pointer;flex:none">'
+      + '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+label+'</span></label>';
+  }).join('');
+  box.innerHTML='<div style="padding:8px 8px 6px;border-bottom:1px solid var(--border)">'
+    + '<div style="font-size:11px;color:var(--muted);margin:0 2px 5px">'+escapeHtml(poColLabel(key))+'</div>'
+    + sortBtn('asc','▲ '+(ru?'По возрастанию':'오름차순 정렬'))
+    + sortBtn('desc','▼ '+(ru?'По убыванию':'내림차순 정렬'))
+    + '</div>'
+    + '<div style="padding:8px">'
+    + '<input id="pofSearch" type="text" placeholder="'+(ru?'Поиск значений…':'값 검색…')+'" style="width:100%;box-sizing:border-box;padding:5px 8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:12px">'
+    + '<label style="display:flex;align-items:center;gap:6px;padding:5px 4px 4px;cursor:pointer;font-weight:600;border-bottom:1px solid var(--border);margin-top:4px">'
+    + '<input type="checkbox" id="pofAll" checked style="cursor:pointer;flex:none"><span>'+(ru?'(Выбрать все)':'(모두 선택)')+'</span></label>'
+    + '<div id="pofList" style="max-height:230px;overflow:auto;margin-top:2px">'+itemsHtml+'</div></div>'
+    + '<div style="display:flex;gap:6px;padding:8px;border-top:1px solid var(--border)">'
+    + '<button id="pofApply" style="flex:1;padding:6px;border:none;border-radius:7px;background:var(--accent2);color:#fff;cursor:pointer;font-size:12px;font-weight:600">'+(ru?'ОК':'적용')+'</button>'
+    + '<button id="pofClear" style="flex:1;padding:6px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);cursor:pointer;font-size:12px">'+(ru?'Сброс':'해제')+'</button>'
+    + '<button id="pofCancel" style="flex:none;padding:6px 10px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);cursor:pointer;font-size:12px">'+(ru?'✕':'취소')+'</button>'
+    + '</div>';
+  document.body.appendChild(box);
+  box.querySelectorAll('.pof-sort').forEach(b=>{ b.onclick=()=>{ _poSort={key, dir:b.getAttribute('data-dir')}; closePOFilter(); renderPO(); }; });
+  const listEl=box.querySelector('#pofList');
+  const allChk=box.querySelector('#pofAll');
+  const search=box.querySelector('#pofSearch');
+  const items=()=>[...listEl.querySelectorAll('.pof-item')];
+  const visItems=()=>items().filter(it=>it.style.display!=='none');
+  const syncAll=()=>{ const vis=visItems(); const chk=vis.filter(it=>it.querySelector('.pof-chk').checked);
+    allChk.checked=vis.length>0&&chk.length===vis.length; allChk.indeterminate=chk.length>0&&chk.length<vis.length; };
+  search.oninput=()=>{ const q=search.value.trim().toLowerCase();
+    items().forEach(it=>{ const v=(it.getAttribute('data-v')||'').toLowerCase(); it.style.display=(!q||v.includes(q))?'':'none'; }); syncAll(); };
+  allChk.onchange=()=>{ visItems().forEach(it=> it.querySelector('.pof-chk').checked=allChk.checked); };
+  listEl.addEventListener('change', syncAll);
+  syncAll(); search.focus();
+  box.querySelector('#pofApply').onclick=()=>{
+    const all=items();
+    const checked=all.filter(it=>it.querySelector('.pof-chk').checked).map(it=>it.getAttribute('data-v'));
+    if(checked.length===all.length) delete _poFilters[key]; else _poFilters[key]=checked;
+    closePOFilter(); renderPO();
+  };
+  box.querySelector('#pofClear').onclick=()=>{ delete _poFilters[key]; if(_poSort.key===key) _poSort={key:null,dir:'asc'}; closePOFilter(); renderPO(); };
+  box.querySelector('#pofCancel').onclick=()=> closePOFilter();
+  document.addEventListener('keydown', _poFilterEsc);
+  setTimeout(()=>document.addEventListener('mousedown', _poFilterOutside), 0);
+}
 function renderPO(){
   const pane=document.getElementById('pane-po'); if(!pane) return;
   _poRepMap=null;
@@ -10184,7 +10329,10 @@ function renderPO(){
     const i=poLookup(r.pn);
     return [r.cha, poChaLabel(r.cha), poYmOf(r), r.pn, i.rep, i.fin, poName(r.pn), poSpec(r.pn)].some(v=>String(v||'').toLowerCase().includes(kw));
   });
+  _poAllRows=rows;                       // 머리글 거르개 창에 보일 값의 바탕
+  rows=poApplyFilters(rows);             // 머리글 거르개(엑셀식: 고른 값만, 여러 열은 AND)
   rows.sort((a,b)=> (a.cha===b.cha) ? String(a.pn).localeCompare(String(b.pn)) : String(a.cha).localeCompare(String(b.cha)));
+  rows=poApplySort(rows);                // 머리글 정렬을 골랐으면 그 차례로
   _poFiltered=rows;
 
   const thS='padding:6px 5px;text-align:center;vertical-align:middle;position:sticky;top:0;z-index:3;'
@@ -10194,12 +10342,7 @@ function renderPO(){
   // 열은 열쇠(k)를 달아 둔다. 규격은 한글 화면에만 붙어 자리가 밀리므로,
   // 묶어 보기·합계 줄이 자리를 열쇠로 찾게 한다.
   const isKoPO=(lang!=='ru');
-  const heads=[['cha',L('차수','Партия'),90],['mon',L('발주년월','Мес. заказа'),68],
-               ['rep',L('대표코드','Осн. код'),104],['pn',L('발주코드','Код заказа'),104],
-               ['chg',L('변경코드(공급)','Код замены'),104],['name',L('품명','Наименование'),170]]
-    .concat(isKoPO?[['spec','규격',150]]:[])
-    .concat([['qty',L('수주수량','Заказано'),70],['sup',L('공급수량','Поставлено'),70],
-             ['rest',L('미공급수량','Недопоставка'),78]]);
+  const heads=poColDefs();
   const ixPO=k=>heads.findIndex(h=>h[0]===k);
   const cg=document.getElementById('poColgroup');
   if(cg) cg.innerHTML=heads.map(h=>'<col style="width:'+h[2]+'px">').join('');
@@ -10233,7 +10376,7 @@ function renderPO(){
       + '</tr>';
   }).join('');
 
-  if(thead) thead.innerHTML='<tr>'+heads.map(h=>'<th style="'+thS+'">'+h[1]+'</th>').join('')+'</tr>'
+  if(thead) thead.innerHTML='<tr>'+heads.map(h=>'<th style="'+thS+'">'+h[1]+poFilterIcon(h[0])+'</th>').join('')+'</tr>'
     + '<tr><th colspan="'+ixPO('qty')+'" style="'+thS+';font-weight:700;background:var(--surface);top:27px;text-align:right">'
     + escapeHtml(L('합계 '+rows.length+'건 · '+R.label,'Итого '+rows.length+' · '+R.label))+'</th>'
     + '<th style="'+thS+';font-weight:700;background:var(--surface);top:27px;text-align:right">'+tq.toLocaleString()+'</th>'
