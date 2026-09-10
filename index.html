@@ -11973,11 +11973,24 @@ function renderPSI(){
       if(ea) return 0;
       return a._mo-b._mo; });
   }
+  // 대표품번 줄에 찍히는 단종·수출제한·품명·규격은 '최종품번' 값이다.
+  //   머리글 거르개는 호환품번 줄로만 걸러 왔으므로, 최종품번이 조건에 안 맞아도
+  //   대표품번 줄이 그대로 남아 '단종 O 만' 걸어도 빈칸 줄이 보였다.
+  //   그 줄이 조건에 안 맞으면 대표품번 줄만 감춘다(호환품번 줄은 조건에 맞으니 남긴다).
+  //   호환품번 열을 꺼 둔 때는 하위 줄이 없으므로 그 묶음이 통째로 빠진다.
+  const txtKeys=fkeys.filter(k=>!psiIsNumCol(k) && String(k).indexOf('clr:')!==0);
+  groups.forEach(g=>{
+    if(!txtKeys.length){ g.hideRow=false; return; }
+    const fin=String((g.first||{}).final||'');
+    const finRow=Object.assign({}, g.first, {_split:true, _compat:fin});
+    g.hideRow=!txtKeys.every(k=> new Set((_psiFilters[k]||[]).map(String)).has(String(psiColText(k, finRow))));
+  });
   _psiGroups=groups;
 
   const tot={}; yms.forEach(y=>tot[y]={sh:0,i:0,o:0,ms:0,st:0,fut:0});
   const counted={}; let nzRep=0;
   groups.forEach(g=>{
+    if(g.hideRow && !psiShowKids()) return;      // 통째로 빠지는 묶음은 합계에서도 뺀다
     const seen2={}; let any=false;
     g.rows.forEach(it=>{ if(seen2[it.key]) return; seen2[it.key]=1;
       if(hasVal(it.v) || psiShowZero()){ counted[it.key]=1; any=true; } });
@@ -11999,6 +12012,7 @@ function renderPSI(){
     const r0=g.first;
     const fin=String(r0.final||'');
     const finRow=Object.assign({}, r0, {_split:true, _compat:fin});
+    const hideG=!!g.hideRow;
     // MASTER 는 품번조회에 가지 않고 여기서 바로 고칠 수 있다(저장 자리는 품번조회와 같다).
     const ED=(typeof pnEditable==='function') && pnEditable();
     const gTxt={ rep:(ED?pnEditSpan(g.rep,'rep',g.rep):('<span class="c">'+escapeHtml(g.rep)+'</span>')),
@@ -12096,9 +12110,10 @@ function renderPSI(){
     const gTotCells=SB.map((d,j)=>'<td class="n'+(j===0?' bl':'')+((gLow&&d.k==='mo')?' low':'')
       +((gHigh&&d.k==='mo')?' hi':'')+'">'+totTxt(d.k,gTot)+'</td>').join('');
     const gRow='<tr class="g'+band+'">'+gFix+(SHOWTOT?gTotCells:'')+gCells+'</tr>';
-    const kidRows=g.rows.map(it=>{
+    const kidRows=g.rows.map((it,ki)=>{
       const r=it.r, v=it.v;
-      const kTxt={ rep:'',
+      // 대표품번 줄을 감췄으면 첫 줄에 대표품번을 옮겨 적는다
+      const kTxt={ rep:((hideG&&ki===0)?('<span class="c">'+escapeHtml(g.rep)+'</span>'):''),
                    compat:(ED?pnCompatEdit(g.rep, r._compat):('<span class="c">'+escapeHtml(normBadgePN(r._compat))+'</span>')),
                    note:(ED?cspecEdit(r._compat,'dan',pnColText('note',r)):escapeHtml(pnColText('note',r))),
                    exp:psiColText('exp',r),
@@ -12121,7 +12136,7 @@ function renderPSI(){
         +totTxt(d.k,kTot)+'</td>').join('');
       return '<tr>'+kFix+(SHOWTOT?kTotCells:'')+cells+'</tr>';
     });
-    if(psiShowGroups()) bodyRows.push(gRow);
+    if(psiShowGroups() && !hideG) bodyRows.push(gRow);
     if(psiShowKids()) kidRows.forEach(r=>bodyRows.push(r));
   });
 
