@@ -3966,7 +3966,12 @@ async function onPNCellBlur(el){
     if(val==='') { if(idx>=0) arr.splice(idx,1); }
     else if(idx>=0) arr[idx]=val; else arr.push(val);
     const res=await savePNCell(rep, 'compat', arr.join(', '));
-    if(res && res.ok){ ktAfterPnEdit(); } else { el.textContent=el.getAttribute('data-pnorig')||''; }
+    if(res && res.ok){
+      // 호환품번 칸을 비워 그 줄을 지운 것이면(품번조회·PSI 모두 같은 칸이다)
+      // 선적/입고현황에서도 그 품번 줄을 함께 지운다.
+      if(val==='' && idx>=0 && typeof shipPurgePNs==='function') shipPurgeToast(await shipPurgePNs([rawOld]));
+      ktAfterPnEdit();
+    } else { el.textContent=el.getAttribute('data-pnorig')||''; }
     return;
   }
   const r=await savePNCell(rep, field, val);
@@ -8128,6 +8133,43 @@ async function addPNItem(){
   const inp=document.getElementById('pnInput'); if(inp) inp.value='';   // 검색어 지워 새 품목이 보이게
   renderPN();
 }
+// 품번조회·PSI 에서 품목(또는 그 줄)을 지우면 선적/입고현황에서도 그 품번 줄을 함께 지운다.
+// 지운 뒤 그 줄이 걸려 있던 선적월·입고월을 PSI 에 다시 셈하고 발주 공급수량도 맞춘다.
+async function shipPurgePNs(pns){
+  const keys=new Set((pns||[]).map(p=>normPN(p)).filter(Boolean));
+  if(!keys.size) return { ok:true, n:0 };
+  try{
+    if(typeof loadShip!=='function') return { ok:true, n:0 };
+    if(!shipData || !shipData.length) await loadShip();
+    let hit=(shipData||[]).filter(r=>keys.has(normPN(r.pn)));
+    if(!hit.length){ await loadShip(); hit=(shipData||[]).filter(r=>keys.has(normPN(r.pn))); }
+    if(!hit.length) return { ok:true, n:0 };
+    const sailYms=[...new Set(hit.map(r=>r.ym).filter(Boolean))];
+    const arrYms=[...new Set(hit.map(r=>r.arr_ym).filter(Boolean))];
+    const exact=[...new Set(hit.map(r=>r.pn))];
+    for(let i=0;i<exact.length;i+=100){
+      const { error }=await sb.from('kt_ship').delete().in('pn', exact.slice(i,i+100));
+      if(error) return { ok:false, n:0, msg:(error.message||error.code) };
+    }
+    await loadShip();
+    const rs=await shipResync(sailYms, arrYms);
+    if(!rs.ok) return { ok:false, n:hit.length, msg:rs.msg };
+    const pane=document.getElementById('pane-ship');
+    if(pane && pane.classList.contains('active') && typeof renderShip==='function') renderShip();
+    return { ok:true, n:hit.length };
+  }catch(e){ return { ok:false, n:0, msg:String((e&&e.message)||e) }; }
+}
+// 지운 결과를 한 줄로 알린다(선적/입고현황에서 몇 줄이 함께 빠졌는지).
+function shipPurgeToast(res){
+  if(!res || !res.ok){
+    if(res && res.msg) alert((lang==='ru'?'Отгрузка/приход: не удалось удалить':'선적/입고현황 삭제 실패')+'\n['+res.msg+']');
+    return;
+  }
+  if(!res.n || typeof pnToast!=='function') return;
+  pnToast(lang==='ru'
+    ? ('Отгрузка/приход: удалено строк — '+res.n)
+    : ('선적/입고현황에서도 '+res.n+'줄을 함께 지웠습니다.'));
+}
 // 분할 보기에서 그 줄 하나(호환품번 한 개)만 지운다.
 // 지우고 나서 그 대표품번에 호환품번이 남지 않으면 품목 자체를 지운다.
 async function deletePNRow(rep, compat){
@@ -8141,24 +8183,35 @@ async function deletePNRow(rep, compat){
   if(idx<0 || arr.length<=1) return await deletePNItem(rep);
   const shown=pnUpperLead(raw);
   const ok=confirm(lang==='ru'
-    ? ('Удалить строку '+shown+' ?\n(остальные строки позиции '+rep+' останутся)')
-    : (shown+' 줄을 삭제할까요?\n(대표품번 '+rep+' 의 나머지 줄은 남습니다)'));
+    ? ('Удалить строку '+shown+' ?\n(остальные строки позиции '+rep+' останутся)'
+       +'\nСтроки этого артикула в «Отгрузка/приход» тоже будут удалены.')
+    : (shown+' 줄을 삭제할까요?\n(대표품번 '+rep+' 의 나머지 줄은 남습니다)'
+       +'\n선적/입고현황에 있는 이 품번 줄도 함께 지우고 PSI 선적·입고와 발주 공급수량을 다시 셈합니다.'));
   if(!ok) return;
   arr.splice(idx,1);
   const res=await savePNCell(rep, 'compat', arr.join(', '));
-  if(res && res.ok) ktAfterPnEdit();
+  if(!(res && res.ok)) return;
+  shipPurgeToast(await shipPurgePNs([raw]));
+  ktAfterPnEdit();
 }
 async function deletePNItem(rep){
   if(!userRole(currentUser).isMaster){ alert('MASTER 만 삭제할 수 있습니다.'); return; }
   rep=String(rep||'').trim(); if(!rep) return;
-  if(!confirm(rep+' 품목을 삭제할까요?')) return;
+  if(!confirm(lang==='ru'
+      ? ('Удалить позицию '+rep+'?\nСтроки её артикулов в «Отгрузка/приход» тоже будут удалены.')
+      : (rep+' 품목을 삭제할까요?'
+         +'\n선적/입고현황에 있는 이 품목의 품번 줄도 함께 지우고 PSI 선적·입고와 발주 공급수량을 다시 셈합니다.'))) return;
   const i=PN_DATA.findIndex(p=>p.rep===rep);
+  // 선적/입고현황에서 지울 품번: 대표품번·최종품번·호환품번 전부. (지우기 전에 챙겨 둔다)
+  const gone=i>=0 ? PN_DATA[i] : (getPNInfo(rep)||{});
+  const pns=[rep, gone.final||''].concat(gone.compats||[]);
   if(i>=0) PN_DATA.splice(i,1);
   _pnLookupMap=null; _pnByRepMap=null; _nameRuByRep=null;
   // 하드코딩 기본 품목도 재접속 때 다시 안 뜨도록 톰스톤(final='__DELETED__')을 남긴다.
   const { error } = await sb.from('kt_pn_overrides').upsert({ rep, name_ko:'', name_ru:'', spec:'', final:'__DELETED__', compats:[] },{onConflict:'rep'});
   if(error){ alert('삭제 저장 실패\n['+(error.message||error.code)+']'); return; }
-  renderPN();
+  shipPurgeToast(await shipPurgePNs(pns));
+  ktAfterPnEdit();
 }
 const PN_TOMBSTONE='__DELETED__';
 let receivedOrderTotals={}; // 고객사(구매처)들로부터 접수받은 주문수량 합계 (rep 기준)
