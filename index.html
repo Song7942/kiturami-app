@@ -10178,7 +10178,7 @@ async function loadPSI(){
   try{
     const page=1000;
     for(let from=0;;from+=page){
-      const { data, error }=await sb.from('kt_psi').select('pn,rep,data').range(from, from+page-1);
+      const { data, error }=await sb.from('kt_psi').select('pn,rep,data').order('pn').range(from, from+page-1);
       if(error) return;   // 표 없음/오류 → 빈 화면(안전)
       (data||[]).forEach(r=>{ const p=normPN(r.pn); if(p) psiData[p]={ rep:r.rep||'', data:(r.data||{}) }; });
       if(!data || data.length<page) break;
@@ -10247,6 +10247,13 @@ function psiShipOf(d,ym){
 // 자료에 들어 있는 가장 늦은 연월 (표시 기본값 계산용)
 // 접속한 달의 'YYMM'
 function psiNowYm(){ const d=new Date(); return String(d.getFullYear()%100).padStart(2,'0')+String(d.getMonth()+1).padStart(2,'0'); }
+// 자료가 있는 첫 달. 기산월을 여기에 두어야 이월재고가 1C 의 기초재고를 물고 시작한다.
+function psiMinYm(){
+  let mn='';
+  Object.keys(psiData).forEach(pn=>{ Object.keys(psiData[pn].data||{}).forEach(ym=>{
+    if(/^\d{4}$/.test(ym) && (!mn || ym<mn)) mn=ym; }); });
+  return mn;
+}
 function psiMaxYm(){
   let mx='';
   Object.keys(psiData).forEach(pn=>{ Object.keys(psiData[pn].data||{}).forEach(ym=>{ if(/^\d{4}$/.test(ym) && ym>mx) mx=ym; }); });
@@ -10320,7 +10327,13 @@ function psiCfg(){
   if(from>to){ const t=from; from=to; to=t; }
   let months=1, y=from;
   while(y<to && months<600){ y=psiYmAdd(y,1); months++; }   // 사실상 제한 없음(무한루프만 막는다)
-  let base=clean(g('BaseYm')?g('BaseYm').value:''); if(base.length!==4) base=PSI_BASE_DEFAULT;
+  // 기산월: 손으로 적었으면 그대로, 아니면 자료가 있는 첫 달을 저절로 쓴다.
+  //   재고는 '이월재고 + 입고 − 출고' 로 셈하므로, 기산월이 자료 첫 달이어야
+  //   1C 의 기초재고를 물고 시작해 재고가 원자료와 맞는다.
+  let base=clean(g('BaseYm')?g('BaseYm').value:'');
+  //   자료 첫 달에는 1C 의 기초재고(Начальный остаток)가 들어 있으므로,
+  //   기산월은 그 다음 달로 잡아야 그 기초재고를 이월재고로 물고 시작한다.
+  if(base.length!==4){ const mn=psiMinYm(); base=mn?psiYmAdd(mn,1):PSI_BASE_DEFAULT; }
   const avgN=Math.max(1,Math.min(24,parseInt(g('AvgN')?g('AvgN').value:'',10)||6));
   return { from, months, base, avgN };
 }
