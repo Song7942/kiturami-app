@@ -327,6 +327,8 @@ input[type="text"]::placeholder{color:var(--muted)}
 .pn-hdr-wrap .pn-sticky2{z-index:3;background:var(--surface2)}
 /* 변경된 셀 강조 + 변경이력 배지 */
 .pn-changed{background:#fbbf2422}
+/* 발주현황에서 손으로 고친 칸 */
+td.po-man{background:#ffedd5!important;color:#9a3412!important;font-weight:700;border-bottom:1px solid #f97316!important}
 /* 발주현황·선적입고현황 '묶어 보기' 의 대표품번 줄 */
 tr.kt-grp td{background:var(--tag-bg)!important;font-weight:700}
 /* 가격정보 '묶어 보기' 의 대표품번 줄 */
@@ -1180,6 +1182,10 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
       <span style="font-size:11px;color:var(--muted)">~</span>
       <select id="poTo" onchange="renderPO()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></select>
       <button class="dl-btn" onclick="poAllPeriod()" title="발주년월을 전체로 돌리기"><span id="i18n-po-all">전체 기간</span></button>
+      <button class="dl-btn" id="poResetManualBtn" onclick="poResetManual()" title="손으로 고친 공급수량을 인보이스 기준으로 되돌립니다">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/></svg>
+        <span id="i18n-po-manual">수기 초기화</span>
+      </button>
       <button class="dl-btn" onclick="openPoViewPanel()" title="대표품번끼리 묶어 볼지 고릅니다">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
         <span id="i18n-po-view">보기</span>
@@ -2099,6 +2105,7 @@ function refreshPsiTexts(){
   if(document.getElementById('pane-prod') && document.getElementById('pane-prod').classList.contains('active')) renderProd();
   set('i18n-po-all',ALL[0],ALL[1]);
   set('i18n-po-view','보기','Вид');
+  set('i18n-po-manual','수기 초기화','Сброс ручных');
   set('i18n-po-up','발주 업로드','Загрузить заказы');
   set('i18n-po-dl',DL[0],DL[1]);
   // 선적/입고현황
@@ -9482,7 +9489,9 @@ async function poRecalcSupply(){
   if(!poData.length) return {ok:true, rows:0, total:0};
   const need={};
   (shipData||[]).forEach(r=>{ const k=normPN(r.pn); if(!k) return; need[k]=(need[k]||0)+(Number(r.qty)||0); });
-  const before={}; poData.forEach(r=>{ before[r.cha+'\u0000'+r.pn]=r.supplied; r.supplied=0; });
+  // 손으로 고쳐 둔 줄은 그대로 두고, 나머지만 0 으로 놓고 다시 채운다
+  const before={}; poData.forEach(r=>{ before[r.cha+'\u0000'+r.pn]=r.supplied;
+    if(!poIsMan(r.cha,r.pn)) r.supplied=0; });
   const byYm=(a,b)=>{ const ya=poYmOf(a)||'9999-99', yb=poYmOf(b)||'9999-99';
     return (ya===yb) ? String(a.cha).localeCompare(String(b.cha)) : ya.localeCompare(yb); };
   Object.keys(need).sort().forEach(pn=>{
@@ -9498,6 +9507,7 @@ async function poRecalcSupply(){
     const dated=r=>!!poYmOf(r);
     own.filter(dated).concat(chg.filter(dated), own.filter(r=>!dated(r)), chg.filter(r=>!dated(r))).forEach(r=>{
       if(left<=0) return;
+      if(poIsMan(r.cha,r.pn)) return;                 // 손으로 고친 줄은 그대로 둔다
       const room=(Number(r.qty)||0)-r.supplied; if(room<=0) return;
       const take=Math.min(room, left); r.supplied+=take; left-=take; });
   });
@@ -9868,6 +9878,7 @@ function renderPO(){
   const empty=document.getElementById('poEmpty');
 
   let tq=0, ts=0;
+  const EDPO=(typeof pnEditable==='function') && pnEditable();   // 변경코드는 MASTER 만 고친다
   const body=rows.map(r=>{
     const i=poLookup(r.pn);
     const chg=(i.fin && i.fin!==normPN(r.pn)) ? i.fin : '';
@@ -9880,10 +9891,13 @@ function renderPO(){
       + '<td style="'+tdS+';text-align:center;color:var(--muted);white-space:nowrap">'+escapeHtml(poYmOf(r))+'</td>'
       + '<td style="'+tdS+'">'+(i.rep?('<span style="'+codeS+'">'+escapeHtml(i.rep)+'</span>'):'')+'</td>'
       + '<td style="'+tdS+'"><span style="'+codeS+'">'+escapeHtml(normBadgePN(r.pn))+'</span></td>'
-      + '<td style="'+tdS+'">'+(chg?('<span style="'+codeS+';color:#b91c1c;font-weight:600">'+escapeHtml(normBadgePN(chg))+'</span>'):'')+'</td>'
+      + '<td style="'+tdS+'">'+(EDPO
+          ? poChgEdit(r.pn, chg)
+          : (chg?('<span style="'+codeS+';color:#b91c1c;font-weight:600">'+escapeHtml(normBadgePN(chg))+'</span>'):''))+'</td>'
       + '<td style="'+tdS+';word-break:break-all;font-size:10.5px;line-height:1.25">'+escapeHtml(poName(r.pn))+'</td>'
-      + '<td style="'+numS+'">'+(r.qty?r.qty.toLocaleString():'0')+'</td>'
-      + '<td style="'+numS+'">'+(r.supplied?r.supplied.toLocaleString():'')+'</td>'
+      + '<td style="'+numS+'">'+(EDPO?poNumEdit(r.cha,r.pn,'qty',r.qty):(r.qty?r.qty.toLocaleString():'0'))+'</td>'
+      + '<td class="'+(poIsMan(r.cha,r.pn)?'po-man':'')+'" style="'+numS+'">'
+        +(EDPO?poNumEdit(r.cha,r.pn,'supplied',r.supplied):(r.supplied?r.supplied.toLocaleString():''))+'</td>'
       + '<td style="'+numS+';font-weight:600'+(rest>0?';color:#b91c1c':'')+'">'+(rest?rest.toLocaleString():'0')+'</td>'
       + '</tr>';
   }).join('');
@@ -9900,6 +9914,129 @@ function renderPO(){
   if(empty){ empty.textContent=L('자료가 없습니다. 엑셀 업로드로 발주 자료를 올려주세요.','Нет данных.');
              empty.style.display=rows.length?'none':'block'; }
   updatePaneHBar('po');
+}
+// ── 발주현황 수기 수정 ────────────────────────────────────
+//   수주수량은 원래 손으로 넣는 값이라 그대로 저장한다.
+//   공급수량은 인보이스에서 저절로 셈하는 값이라, 손으로 고친 줄을 적어 두고
+//   다시 셈할 때 그 줄은 건드리지 않는다(안 그러면 다음 업로드에 지워진다).
+//   보관은 설정 칸(kt_psi_cfg id=94). '차수\u0000발주코드' 를 열쇠로 쓴다.
+const PO_MAN_ID=94;
+let _poMan={};
+let _poManLoaded=false;
+function poManKey(cha,pn){ return String(cha||'')+'\u0000'+normPN(pn); }
+async function loadPoMan(){
+  if(_poManLoaded) return;
+  _poManLoaded=true;
+  try{
+    const { data }=await sb.from('kt_psi_cfg').select('cfg').eq('id',PO_MAN_ID).maybeSingle();
+    if(data && data.cfg && typeof data.cfg==='object') _poMan=data.cfg;
+  }catch(e){}
+}
+let _poManT=null;
+function savePoMan(){
+  clearTimeout(_poManT);
+  _poManT=setTimeout(async function(){
+    try{ await sb.from('kt_psi_cfg').upsert({ id:PO_MAN_ID, cfg:_poMan, updated_at:new Date().toISOString() },{onConflict:'id'}); }catch(e){}
+  }, 400);
+}
+function poIsMan(cha,pn){ return !!_poMan[poManKey(cha,pn)]; }
+function poManCount(){ return Object.keys(_poMan).length; }
+function poNumEdit(cha, pn, field, val){
+  const v=(val==null||val==='')?'':Number(val).toLocaleString();
+  return '<span contenteditable="true" class="pn-edit" data-pocha="'+escapeHtml(String(cha||''))+'"'
+    + ' data-popn="'+escapeHtml(String(pn||''))+'" data-pofield="'+field+'" data-pnorig="'+escapeHtml(v)+'"'
+    + ' onclick="event.stopPropagation()" onmousedown="event.stopPropagation()"'
+    + ' onblur="onPoNumBlur(this)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();this.blur();}"'
+    + ' style="display:inline-block;min-width:28px;outline:none;border-bottom:1px dashed var(--accent2);cursor:text;padding:0 2px">'+v+'</span>';
+}
+async function onPoNumBlur(el){
+  const ru=(lang==='ru');
+  const cha=String(el.getAttribute('data-pocha')||'');
+  const pn=String(el.getAttribute('data-popn')||'');
+  const field=String(el.getAttribute('data-pofield')||'');
+  const before=String(el.getAttribute('data-pnorig')||'');
+  const txt=String(el.textContent||'').replace(/[,\s]/g,'').trim();
+  if(txt===before.replace(/[,\s]/g,'')) return;
+  if(!pnEditable() && !canEditPsi()){ el.textContent=before; return; }
+  const num=txt===''?0:Number(txt);
+  if(!isFinite(num) || num<0){ alert(ru?'Введите число.':'숫자를 넣어 주세요.'); el.textContent=before; return; }
+  const row=(poData||[]).find(x=>String(x.cha)===cha && normPN(x.pn)===normPN(pn));
+  if(!row){ el.textContent=before; return; }
+  row[field]=Math.round(num);
+  if(field==='supplied'){ _poMan[poManKey(cha,pn)]=1; savePoMan(); }
+  const { error }=await sb.from('kt_po').upsert(
+    { cha:row.cha, pn:row.pn, mon:row.mon, qty:row.qty, supplied:row.supplied, updated_at:new Date().toISOString() },
+    {onConflict:'cha,pn'});
+  if(error){ alert((ru?'Ошибка сохранения':'저장 실패')+'\n['+(error.message||error.code)+']'); el.textContent=before; return; }
+  renderPO();
+}
+function poManBtn(){
+  const b=document.getElementById('poResetManualBtn'); if(!b) return;
+  const c=poManCount(), t=b.querySelector('span');
+  if(t) t.textContent=(lang==='ru'?'Сброс ручных':'수기 초기화')+(c?(' '+c):'');
+  b.style.opacity=c?'1':'0.45';
+  b.style.background=c?'#f97316':''; b.style.borderColor=c?'#f97316':''; b.style.color=c?'#fff':'';
+}
+// 손으로 고친 공급수량 표시를 지우고, 인보이스 기준으로 다시 셈한다
+async function poResetManual(){
+  const ru=(lang==='ru');
+  const c=poManCount();
+  if(!c){ alert(ru?'Ручных значений нет.':'손으로 고친 값이 없습니다.'); return; }
+  if(!confirm(ru?('Сбросить '+c+' ручных значений?')
+               :('손으로 고친 공급수량 '+c+'개를 인보이스 기준으로 되돌립니다.\n계속할까요?'))) return;
+  _poMan={}; savePoMan();
+  const r=await poRecalcSupply();
+  if(!r.ok){ alert((ru?'Ошибка':'실패')+'\n['+r.msg+']'); return; }
+  await loadPO();
+  poManBtn(); renderPO();
+  alert(ru?('Готово: '+r.total):('되돌렸습니다. 공급수량 합계 '+r.total.toLocaleString()));
+}
+// 변경코드(공급) 칸. 여기 적은 코드가 그 묶음의 '최종품번' 이 된다.
+function poChgEdit(pn, cur){
+  const v=escapeHtml(pnUpperLead(cur||'')), raw=escapeHtml(String(pn||''));
+  return '<span contenteditable="true" class="pn-edit" data-pochg="'+raw+'" data-pnorig="'+v+'"'
+    + ' onclick="event.stopPropagation()" onmousedown="event.stopPropagation()"'
+    + ' onblur="onPoChgBlur(this)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();this.blur();}"'
+    + ' style="display:inline-block;min-width:24px;outline:none;border-bottom:1px dashed var(--accent2);'
+    + "cursor:text;padding:0 2px;font-family:'Courier New',monospace;font-size:9.5px;color:#b91c1c;font-weight:600\">"+v+'</span>';
+}
+// 변경코드를 적으면:
+//   ① 그 묶음의 최종품번이 그 코드가 되고
+//   ② 묶음에 없던 새 코드면 호환품번으로도 넣는다
+//   ③ 최종품번이 아닌 나머지 호환품번에는 단종 O 가 저절로 붙는다(pnAutoDan)
+//   비우면 발주코드 자신이 최종품번으로 돌아간다.
+async function onPoChgBlur(el){
+  const ru=(lang==='ru');
+  const pn=String(el.getAttribute('data-pochg')||'');
+  const before=String(el.getAttribute('data-pnorig')||'');
+  const val=pnUpperLead(String(el.textContent||'').replace(/\s+/g,' ').trim());
+  if(val===before) return;
+  if(!pnEditable()){ el.textContent=before; return; }
+  const info=poLookup(pn);
+  const rep=String(info.rep||'');
+  if(!rep){
+    alert(ru?('Не найден осн. артикул для '+pn):(pn+' 의 대표품번을 품번조회에서 찾지 못했습니다.\n먼저 품번조회에 그 품번을 넣어 주세요.'));
+    el.textContent=before; return;
+  }
+  const p=getPNInfo(rep);
+  const fin=val || pnUpperLead(pn);            // 비우면 발주코드가 최종품번
+  const cs=((p&&p.compats)||[]).slice();
+  const has=cs.some(c=>normPN(c)===normPN(fin));
+  const msg=ru
+    ? ('Осн. артикул '+rep+'\nАктуальный артикул → '+fin+(has?'':'\n+ добавить как артикул замены')+'\n\nПродолжить?')
+    : ('대표품번 '+rep+' 의 최종품번을 '+fin+' 로 바꿉니다.'
+       +(has?'':('\n· '+fin+' 을(를) 호환품번으로도 넣습니다.'))
+       +'\n· 최종품번이 아닌 나머지 호환품번에는 단종 O 가 붙습니다.\n\n계속할까요?');
+  if(!confirm(msg)){ el.textContent=before; return; }
+  if(!has){
+    const r1=await savePNCell(rep, 'compat', cs.concat([fin]).join(', '));
+    if(!(r1&&r1.ok)){ el.textContent=before; return; }
+  }
+  const r2=await savePNCell(rep, 'final', fin);
+  if(!(r2&&r2.ok)){ el.textContent=before; return; }
+  _poRepMap=null;
+  ktAfterPnEdit();
+  renderPO();
 }
 // 발주현황을 대표품번끼리 묶어 볼지
 function poGroupOn(){ try{ return localStorage.getItem('kt_po_group')==='1'; }catch(e){ return false; } }
@@ -10046,8 +10183,9 @@ function debouncedRenderPO(){ clearTimeout(window._poT); window._poT=setTimeout(
 async function loadPOTab(){
   const m=canEditPsi();
   ['poUploadBtn'].forEach(id=>{ const b=document.getElementById(id); if(b) b.style.display=m?'':'none'; });
-  await loadPO();
+  await Promise.all([loadPO(), loadPoMan()]);
   renderPO();
+  poManBtn();
 }
 // 헤더 이름으로 열을 찾는다(양식이 조금 달라도 읽히게)
 function poFindCols(row){
