@@ -11983,10 +11983,13 @@ function renderPSI(){
       // 이미 지난 달은 실적만큼만 나간 것으로 보고, 모자란 만큼은 다음 달 계획으로 넘긴다.
       // 앞으로 올 달은 계획대로 나가는 것으로 보고 그 49일 뒤 입고를 잡는다.
       const planCalc=psiSimOn?shipPlan[i]:0;
-      // 발주현황 미공급분은 이 달 선적으로 잡아 '선적계획' 열에 함께 보여 준다.
-      //   입고는 위 simBuild 에서 이미 얹었으므로, 아래 셈(이월·입고)에는 넣지 않는다.
-      const planAdd=(psiSimOn && _simPlanYm===y) ? (_simPlan.get(g.rep)||0) : 0;
-      const plan=planCalc+planAdd;                       // 화면에 찍는 선적계획
+      // 발주현황 미공급분이 나가는 달(이번 달)의 '선적계획' 은 그 미공급수량 그대로 본다.
+      //   이미 낸 발주가 곧 미공급이라, 시뮬이 지난 달에 잡아 둔 발주분까지 더하면 겹쳐 세어진다.
+      //   입고는 위 simBuild 에서 이미 얹었으므로 아래 셈(이월·입고)에는 넣지 않고,
+      //   넘어온 이월분(planCalc)은 종전대로 다음 달 계획으로 흘려보낸다.
+      const isPlanYm=(psiSimOn && _simPlanYm===y);
+      const planAdd=isPlanYm ? (_simPlan.get(g.rep)||0) : 0;
+      const plan=isPlanYm ? planAdd : planCalc;          // 화면에 찍는 선적계획
       const manShip=_simShip[simNeedKey(g.rep,y)];
       const realSh=(manShip!=null)?Math.max(0,manShip):a.sh;
       // 이미 지났거나 실적을 손으로 적어 둔 달은 '나간 양이 정해진' 달로 본다
