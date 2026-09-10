@@ -8984,15 +8984,16 @@ async function loadShip(){
   try{
     const page=1000;
     for(let from=0;;from+=page){
-      let { data, error }=await sb.from('kt_ship').select('inv,pn,sail,ym,arrive,arr_ym,name_en,hs,qty,price,amount').range(from, from+page-1);
+      let { data, error }=await sb.from('kt_ship').select('inv,pn,sail,ym,arrive,arr_ym,name_en,hs,qty,price,amount,updated_at').order('inv').range(from, from+page-1);
       if(error){   // arrive/arr_ym 컬럼이 없는 스키마도 견딘다
-        const r2=await sb.from('kt_ship').select('inv,pn,sail,ym,name_en,hs,qty,price,amount').range(from, from+page-1);
+        const r2=await sb.from('kt_ship').select('inv,pn,sail,ym,name_en,hs,qty,price,amount,updated_at').order('inv').range(from, from+page-1);
         data=r2.data; error=r2.error;
       }
       if(error) return;
       (data||[]).forEach(r=>shipData.push({ inv:r.inv||'', pn:r.pn||'', sail:r.sail||'', ym:r.ym||'',
         arrive:r.arrive||'', arr_ym:r.arr_ym||'',
-        name_en:r.name_en||'', hs:r.hs||'', qty:Number(r.qty)||0, price:Number(r.price)||0, amount:Number(r.amount)||0 }));
+        name_en:r.name_en||'', hs:r.hs||'', qty:Number(r.qty)||0, price:Number(r.price)||0, amount:Number(r.amount)||0,
+        updated_at:r.updated_at||'' }));
       if(!data || data.length<page) break;
     }
   }catch(e){}
@@ -9498,7 +9499,8 @@ async function poRecalcSupply(){
   if(!poData.length) await loadPO();
   if(!poData.length) return {ok:true, rows:0, total:0};
   const need={};
-  (shipData||[]).forEach(r=>{ const k=normPN(r.pn); if(!k) return; need[k]=(need[k]||0)+(Number(r.qty)||0); });
+  (shipData||[]).forEach(r=>{ if(!poCountShip(r)) return;      // 기준 시각 앞의 인보이스는 빼고 센다
+    const k=normPN(r.pn); if(!k) return; need[k]=(need[k]||0)+(Number(r.qty)||0); });
   // 손으로 고쳐 둔 줄은 그대로 두고, 나머지만 0 으로 놓고 다시 채운다
   const before={}; poData.forEach(r=>{ before[r.cha+'\u0000'+r.pn]=r.supplied;
     if(!poIsMan(r.cha,r.pn)) r.supplied=0; });
@@ -9931,7 +9933,8 @@ function renderPO(){
 //   다시 셈할 때 그 줄은 건드리지 않는다(안 그러면 다음 업로드에 지워진다).
 //   보관은 설정 칸(kt_psi_cfg id=94). '차수\u0000발주코드' 를 열쇠로 쓴다.
 const PO_MAN_ID=94;
-let _poMan={};
+let _poMan={};          // '차수\u0000발주코드' -> 1  (손으로 고친 공급수량)
+let _poSince='';        // 이 시각 뒤에 올린 인보이스만 공급수량에 센다(비면 전부)
 let _poManLoaded=false;
 function poManKey(cha,pn){ return String(cha||'')+'\u0000'+normPN(pn); }
 async function loadPoMan(){
@@ -9939,18 +9942,36 @@ async function loadPoMan(){
   _poManLoaded=true;
   try{
     const { data }=await sb.from('kt_psi_cfg').select('cfg').eq('id',PO_MAN_ID).maybeSingle();
-    if(data && data.cfg && typeof data.cfg==='object') _poMan=data.cfg;
+    const c=(data && data.cfg && typeof data.cfg==='object') ? data.cfg : null;
+    if(c){
+      if(c.man && typeof c.man==='object'){ _poMan=c.man; _poSince=String(c.since||''); }
+      else { _poMan=c; _poSince=''; }        // 옛 모양(맵만 있던 것)도 읽는다
+    }
   }catch(e){}
 }
 let _poManT=null;
 function savePoMan(){
   clearTimeout(_poManT);
   _poManT=setTimeout(async function(){
-    try{ await sb.from('kt_psi_cfg').upsert({ id:PO_MAN_ID, cfg:_poMan, updated_at:new Date().toISOString() },{onConflict:'id'}); }catch(e){}
+    try{ await sb.from('kt_psi_cfg').upsert({ id:PO_MAN_ID, cfg:{ since:_poSince, man:_poMan },
+      updated_at:new Date().toISOString() },{onConflict:'id'}); }catch(e){}
   }, 400);
 }
 function poIsMan(cha,pn){ return !!_poMan[poManKey(cha,pn)]; }
 function poManCount(){ return Object.keys(_poMan).length; }
+// 이 인보이스 줄을 공급수량에 셀 것인가(기준 시각 뒤에 올린 것만)
+function poCountShip(r){
+  if(!_poSince) return true;
+  const t=String((r&&r.updated_at)||'');
+  return t>_poSince;
+}
+function poSinceLabel(){
+  if(!_poSince) return (lang==='ru')?'все инвойсы':'전체 인보이스';
+  const d=new Date(_poSince);
+  const z=x=>String(x).padStart(2,'0');
+  const t=d.getFullYear()+'-'+z(d.getMonth()+1)+'-'+z(d.getDate())+' '+z(d.getHours())+':'+z(d.getMinutes());
+  return (lang==='ru')?('инвойсы после '+t):(t+' 뒤에 올린 인보이스만');
+}
 function poNumEdit(cha, pn, field, val){
   const v=(val==null||val==='')?'':Number(val).toLocaleString();
   return '<span contenteditable="true" class="pn-edit" data-pocha="'+escapeHtml(String(cha||''))+'"'
@@ -10065,6 +10086,15 @@ function openPoViewPanel(){
     +'<div style="font-size:11px;color:var(--muted);margin-top:6px;line-height:1.5">'
     +(ru?'Строки одного осн. кода собираются вместе; сверху — строка с суммой.'
         :'같은 대표코드끼리 모으고, 그 위에 수주·공급·미공급 수량을 합한 줄을 얹습니다.')
+    +'</div>'
+    +'<div style="border-top:1px solid var(--border);margin:12px 0 8px"></div>'
+    +'<div style="font-size:12px;font-weight:700;margin-bottom:4px">'+(ru?'Что считать в «Поставлено»':'공급수량에 셀 인보이스')+'</div>'
+    +'<div style="font-size:11px;color:var(--muted);line-height:1.5">'+escapeHtml(poSinceLabel())+'</div>'
+    +'<div style="display:flex;gap:6px;margin-top:7px">'
+    +'<button id="povSince" style="flex:1;padding:6px;border:1px solid #f97316;border-radius:7px;background:var(--surface2);color:#f97316;cursor:pointer;font-size:11px">'
+      +(ru?'Считать только новые':'지금부터 올리는 것만')+'</button>'
+    +'<button id="povAll" style="flex:1;padding:6px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);cursor:pointer;font-size:11px">'
+      +(ru?'Считать все':'전체를 다시')+'</button>'
     +'</div></div>'
     +'<div style="display:flex;gap:7px;padding:11px 14px;border-top:1px solid var(--border)">'
     +'<button id="povClose" style="flex:1;padding:7px;border:none;border-radius:7px;background:var(--accent2);color:#fff;cursor:pointer;font-size:12px;font-weight:700">'+(ru?'Закрыть':'닫기')+'</button>'
@@ -10073,6 +10103,22 @@ function openPoViewPanel(){
   const done=()=>{ const on=box.querySelector('#povGroup').checked;
     box.remove(); try{ localStorage.setItem('kt_po_group', on?'1':'0'); }catch(e){} renderPO(); };
   box.querySelector('#povClose').onclick=done;
+  const setSince=async(v)=>{
+    const ru=(lang==='ru');
+    const txt=v?(ru?'С этого момента считать только новые инвойсы. Текущее «Поставлено» обнулится.'
+                  :'지금부터 올리는 인보이스만 공급수량에 셉니다.\n지금 잡혀 있는 공급수량은 0 이 됩니다.\n\n계속할까요?')
+              :(ru?'Считать все инвойсы заново?':'모든 인보이스를 다시 세어 공급수량을 채웁니다.\n\n계속할까요?');
+    if(!confirm(txt)) return;
+    box.remove();
+    _poSince=v?new Date().toISOString():'';
+    savePoMan();
+    const r=await poRecalcSupply();
+    await loadPO();
+    poManBtn(); renderPO();
+    alert((ru?'Готово. Поставлено: ':'반영했습니다. 공급수량 합계 ')+((r&&r.ok)?r.total.toLocaleString():'?'));
+  };
+  box.querySelector('#povSince').onclick=()=>setSince(true);
+  box.querySelector('#povAll').onclick=()=>setSince(false);
   box.onmousedown=e=>{ if(e.target===box) done(); };
 }
 // ══ 제품목록 ═══════════════════════════════════════════════
