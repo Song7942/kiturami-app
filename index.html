@@ -3964,9 +3964,17 @@ async function onPNCellBlur(el){
   } else { el.textContent=el.getAttribute('data-pnorig')||''; }
 }
 async function loadPNOverrides(){
-  const { data, error } = await sb.from('kt_pn_overrides').select('*');
-  if(error){ console.error('kt_pn_overrides:', error.message); return; }
-  (data||[]).forEach(row=>{
+  // 서버는 한 요청에 1,000줄까지만 준다. 지금은 그보다 많으므로 나눠 읽는다.
+  // 나눠 읽을 때는 차례(order)를 꼭 못 박아야 빠지거나 겹치는 줄이 없다.
+  const rows=[];
+  const page=1000;
+  for(let from=0;;from+=page){
+    const { data, error } = await sb.from('kt_pn_overrides').select('*').order('rep').range(from, from+page-1);
+    if(error){ console.error('kt_pn_overrides:', error.message); if(!rows.length) return; break; }
+    (data||[]).forEach(r=>rows.push(r));
+    if(!data || data.length<page) break;
+  }
+  rows.forEach(row=>{
     // 톰스톤: 삭제된 품목은 기본 목록에서 제거한다.
     if(row.final===PN_TOMBSTONE){ const i=PN_DATA.findIndex(p=>p.rep===row.rep); if(i>=0) PN_DATA.splice(i,1); return; }
     let compats=row.compats;
@@ -6104,8 +6112,15 @@ function canViewEngName(){ const r=userRole(currentUser); if(r.isMaster) return 
 async function loadEngNames(){
   engNameByRep={};
   if(!canViewEngName()) return;   // 권한 없으면 데이터 자체를 받지 않는다(브라우저에도 안 남게)
-  try{ const { data } = await sb.from('kt_names_en').select('rep,name_en');
-    (data||[]).forEach(r=>{ const k=String(r.rep||'').trim().toUpperCase(); if(k && r.name_en) engNameByRep[k]=String(r.name_en); }); }catch(e){}
+  try{
+    const page=1000;
+    for(let from=0;;from+=page){
+      const { data, error } = await sb.from('kt_names_en').select('rep,name_en').order('rep').range(from, from+page-1);
+      if(error) break;
+      (data||[]).forEach(r=>{ const k=String(r.rep||'').trim().toUpperCase(); if(k && r.name_en) engNameByRep[k]=String(r.name_en); });
+      if(!data || data.length<page) break;
+    }
+  }catch(e){}
 }
 // 품명 옆에 붙일 영문명 조각(HTML). 권한 없거나 값 없으면 빈 문자열.
 function engNameHtml(rep){
