@@ -9024,7 +9024,12 @@ function saveShipMeta(){
 }
 function shipMetaOf(inv){ return _shipMeta[String(inv||'')] || {}; }
 // 컨테이너 넘버. 인보이스에 없거나 AIR 라고 적혀 있으면 AIR 로 본다.
-function shipContOf(inv){ const c=String(shipMetaOf(inv).c||'').trim(); return c || 'AIR'; }
+function shipContOf(inv){
+  const m=shipMetaOf(inv);
+  if(!m || !Object.keys(m).length) return '';   // 인보이스를 안 읽은 줄(엑셀로 만든 줄)은 빈칸
+  const c=String(m.c||'').trim();
+  return c || 'AIR';
+}
 function shipIsNC(inv){ return !!shipMetaOf(inv).nc; }
 // 이 줄(인보이스+품번)이 무상인가. 인보이스 전체가 무상이거나, 그 줄만 무상이거나.
 function shipIsFoc(inv, pn){
