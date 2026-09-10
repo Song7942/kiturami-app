@@ -10892,10 +10892,11 @@ function psiOpenOf(d,base){
   return (o && o.k!=null && o.k!=='') ? (Number(o.k)||0) : 0;
 }
 // 입고: 인보이스에 입고일을 적으면 그 값(w)을 쓰고, 없으면 입고 시트의 월별 값(n).
-function psiInOf(d,ym){
+function psiInOf(d,ym,pn){
   const o=d?d[ym]:null;
   let v=!o?0:((o.w!=null && o.w!=='')?(Number(o.w)||0):(Number(o.n)||0));
-  if(psiSimOn && d){ const z=_simZ.get(d); if(z && z[ym]) v+=z[ym]; }
+  // 발주시뮬레이션: 발주현황 미공급분이 들어오는 달에 그 수량을 얹는다(품번 기준)
+  if(psiSimOn && pn){ const z=_simZ[pn]; if(z && z[ym]) v+=z[ym]; }
   return v;
 }
 // 출고: 예측 시작월부터는 실적 대신 예상수량을 쓴다(psiFc 설정)
@@ -11026,17 +11027,17 @@ function psiFillCfgInputs(c){
   put('BaseYm', c.base); put('AvgN', c.avgN);
 }
 // 한 품번의 표시 구간 값. 재고는 기산월부터 한 번만 훑어 누적한다.
-function psiRowVals(d,c,yms){
+function psiRowVals(d,c,yms,pn){
   const want={}; yms.forEach(y=>want[y]=1);
   const last=yms[yms.length-1];
   let stock=psiOpenOf(d,c.base); const out={};
   out._open=stock;
   const start=(c.base<=last)?c.base:last;
   for(let k=start;k<=last;k=psiYmAdd(k,1)){
-    stock += psiInOf(d,k)-psiOutOf(d,k);
-    if(want[k]) out[k]={ sh:psiShipOf(d,k), i:psiInOf(d,k), o:psiOutOf(d,k), ms:psiMissOf(d,k), st:stock };
+    stock += psiInOf(d,k,pn)-psiOutOf(d,k);
+    if(want[k]) out[k]={ sh:psiShipOf(d,k), i:psiInOf(d,k,pn), o:psiOutOf(d,k), ms:psiMissOf(d,k), st:stock };
   }
-  yms.forEach(y=>{ if(!out[y]) out[y]={ sh:psiShipOf(d,y), i:psiInOf(d,y), o:psiOutOf(d,y), ms:psiMissOf(d,y), st:stock }; });
+  yms.forEach(y=>{ if(!out[y]) out[y]={ sh:psiShipOf(d,y), i:psiInOf(d,y,pn), o:psiOutOf(d,y), ms:psiMissOf(d,y), st:stock }; });
   // 보유월: 그 달 재고 ÷ (다음 달부터 N개월 출고 합계 ÷ N)
   //   예) 26-01 재고 100, 26-02~26-07 출고 합계 30 → 평균 5 → 20.0
   yms.forEach(y=>{
@@ -11669,12 +11670,15 @@ function psiStickHead(){
 //   품번은 변경코드(최종품번)가 있으면 그 쪽, 없으면 발주코드 그대로.
 // ══════════════════════════════════════════
 let psiSimOn=false;
-const _simZ=new Map();          // psiData[pn].data 객체 → {ym: 더할 입고수량}
+// 품번(normPN) → {ym: 더할 입고수량}.
+//   전에는 psiData[pn].data 객체를 열쇠로 삼았는데, 8초마다 도는 새로고침이
+//   psiData 를 통째로 새로 만들면 열쇠가 죄다 남의 것이 되어 입고가 안 붙었다.
+let _simZ={};
 const _simPlan=new Map();       // 대표품번 → 발주현황 미공급수량(그 달 '선적계획' 열에 얹는다)
 let _simPlanYm='';              // 미공급분을 선적하는 것으로 보는 달
 let _simInfo=null;
 function simBuild(){
-  _simZ.clear(); _simPlan.clear(); _simPlanYm='';
+  _simZ={}; _simPlan.clear(); _simPlanYm='';
   // 미공급분은 이번 달 안에 나가는 것으로 본다(선적일 = 이번 달 말일).
   // 그래서 '선적계획' 열에는 이번 달에 찍히고, 입고는 늘 쓰는 대로 선적일 + 49일이다.
   const t=new Date(), d1=new Date(t.getFullYear(), t.getMonth()+1, 0);
@@ -11699,10 +11703,8 @@ function simBuild(){
     });
     net.forEach((a, pn)=>{
       if(a.rest<=0) return;
-      const rec=psiData[pn]||(psiData[pn]={rep:a.rep, data:{}});
-      const dat=rec.data||(rec.data={});
-      const z=_simZ.get(dat)||{}; z[ym]=(z[ym]||0)+a.rest; _simZ.set(dat, z);
-      const rp=a.rep||rec.rep||'';
+      const z=_simZ[pn]||(_simZ[pn]={}); z[ym]=(z[ym]||0)+a.rest;
+      const rp=a.rep||((psiData[pn]||{}).rep)||'';
       if(rp) _simPlan.set(rp, (_simPlan.get(rp)||0)+a.rest);   // 선적계획 열은 대표품번 줄에 찍는다
       rows++; total+=a.rest;
     });
@@ -11781,7 +11783,7 @@ function renderPSI(){
 
   // 값을 먼저 계산해 둔다(헤더 정렬이 숫자 열도 다루므로)
   let items=rows.map(r=>{ const key=normPN(r._compat); const rec=psiData[key];
-    return { r, key, d:(rec?rec.data:null), v:psiRowVals(rec?rec.data:null, c, ymsAll) }; });
+    return { r, key, d:(rec?rec.data:null), v:psiRowVals(rec?rec.data:null, c, ymsAll, key) }; });
 
   // 보는 기간에 선적·입고·출고·미출·재고가 모두 0 인 행은 감춘다.
   // 재고에 숫자가 남아 있으면 움직임이 없어도 보여 준다.
@@ -11918,7 +11920,9 @@ function renderPSI(){
   const futOut=(d,y)=>{ let s=0; for(let i=1;i<=c.avgN;i++) s+=psiOutOf(d,psiYmAdd(y,i)); return s; };
   const moOf=(st,fut)=>{ const avg=fut/c.avgN; return avg>0 ? Math.round((st/avg)*10)/10 : null; };
   // 발주필요: 보유월이 N 이 되려면 더 있어야 하는 수량(= N개월치 출고 − 지금 재고)
-  const needOf=(st,fut)=>{ const avg=fut/c.avgN; if(avg<=0) return 0;
+  //   앞으로 나갈 것이 없어 보유월을 낼 수 없어도, 재고가 모자라면(음수) 그만큼은 채운다.
+  const needOf=(st,fut)=>{ const avg=fut/c.avgN;
+    if(avg<=0) return Math.max(0, Math.ceil(-st));
     return Math.max(0, Math.ceil(avg*c.avgN-st)); };
 
   // 대표품번끼리 묶는다(대표품번 줄을 먼저 두고 그 아래 호환품번 줄)
@@ -12187,7 +12191,9 @@ async function downloadPSI(){
       else if(TOT_LAST[k]) t[k]=(last[k]===''||last[k]==null)?'':last[k];
       else t[k]=''; });
     return t; };
-  const needOf=(st,fut)=>{ const avg=fut/c.avgN; if(avg<=0) return 0; return Math.max(0, Math.ceil(avg*c.avgN-st)); };
+  const needOf=(st,fut)=>{ const avg=fut/c.avgN;
+    if(avg<=0) return Math.max(0, Math.ceil(-st));            // 앞으로 나갈 게 없어도 모자란 재고는 채운다
+    return Math.max(0, Math.ceil(avg*c.avgN-st)); };
   const tot={}; yms.forEach(y=>tot[y]={sh:0,i:0,o:0,ms:0,st:0,fut:0});
   let totOpen=0;
   const body=[];
