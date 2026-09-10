@@ -2033,7 +2033,8 @@ function switchTab(tab){
     // 표에 그려 둔 값(원가·공급가)도 같은 이유로 읽기 전에 비운다. 둘 다 await 전 동기 실행.
     clearUserScopedViews();
     applyPriceTabChrome();
-    Promise.all([loadPriceSettings(), loadPriceCalc(), loadPrices(), loadCompanyPrices(), loadPriceOrig()]).then(async()=>{ if(priceMode()==='master') await autoUpdateRatesIfNewMonth(); fillParamInputs(); applyPriceTabChrome(); renderPriceActive(); priceManBtn(); });
+    Promise.all([loadPriceSettings(), loadPriceCalc(), loadPrices(), loadCompanyPrices(), loadPriceOrig(),
+                 ((typeof psiData==='undefined'||!Object.keys(psiData).length)?loadPSI():Promise.resolve())]).then(async()=>{ if(priceMode()==='master') await autoUpdateRatesIfNewMonth(); fillParamInputs(); applyPriceTabChrome(); renderPriceActive(); priceManBtn(); });
   }
   if(tab==='psi'){ loadPSITab(); }
   if(tab==='po'){ loadPOTab(); }
@@ -12091,6 +12092,22 @@ function calcPriceRow(r){
 // 가격 데이터(kt_price_calc)에는 러시아어 품명이 없으므로 PN_DATA에서 대표품번으로 찾는다.
 // 품번조회 탭과 같은 규칙(없으면 한국어 품명)으로 표시한다.
 let _nameRuByRep=null;   // (구) 캐시 — 이제 pnName* 헬퍼를 쓰므로 미사용이나 savePNCell 무효화 대상이라 유지
+// 가격정보의 '선적'·'출고' 는 PSI 자료에서 그 품번의 전 기간 합계를 가져온다.
+//   선적 = PSI 입고 합계(인보이스 입고 w 가 있으면 그것, 없으면 월별 입고 n)
+//   출고 = PSI 출고 합계(예측이 아니라 실적만)
+function psiSumOf(pn, kind){
+  const k=normPN(pn); if(!k) return 0;
+  const rec=(typeof psiData!=='undefined')?psiData[k]:null;
+  const d=rec?rec.data:null; if(!d) return 0;
+  let t=0;
+  Object.keys(d).forEach(ym=>{
+    if(!/^\d{4}$/.test(ym)) return;
+    const c=d[ym]||{};
+    if(kind==='in'){ t += (c.w!=null && c.w!=='') ? (Number(c.w)||0) : (Number(c.n)||0); }
+    else { t += Number(c.o)||0; }
+  });
+  return t;
+}
 // 가격정보 줄의 '기준 호환품번'. 가격은 호환품번 단위라 품명·규격도 그 품번 것을 쓴다.
 // 호환품번이 여럿인 줄(지역·회사 화면)은 최종품번을, 없으면 첫 번째를 기준으로 삼는다.
 function priceCompatOf(row){
@@ -12683,6 +12700,7 @@ function priceFilterRows(){
 function renderPriceCalc(){
   const rows=priceFilterRows();
   const t=T[lang];
+  const L2=(ko,ru)=>(lang==='ru'?ru:ko);
   const isKo=lang==='ko';   // RU 에는 러시아어 규격이 없어 규격 열을 뺀다 (품번조회 탭과 동일)
   document.getElementById('priceCountBadge').innerHTML=t.priceCount(rows.length);
   const lastEl=document.getElementById('priceLastUpdated');
@@ -12694,14 +12712,14 @@ function renderPriceCalc(){
   thead.innerHTML=`<tr style="border-bottom:1px solid var(--border);color:var(--muted);font-size:11px">
     <th rowspan="2" style="${thS}">${t.pnH0}</th>${isKo?`<th rowspan="2" style="${thS}">${t.pnH0s}</th>`:''}${engThHtml(`rowspan="2" style="${thS}"`)}
     <th rowspan="2" style="${thS}">${brLabel(t.pnH1)}</th><th rowspan="2" style="${thS}">${brLabel(t.pnH2)}</th>
-    <th rowspan="2" style="${thS}">${brLabel(t.pnH3)}</th>${priceMarkTh2(thS)}<th rowspan="2" style="${thS}">${t.priceThShip}</th>
+    <th rowspan="2" style="${thS}">${brLabel(t.pnH3)}</th>${priceMarkTh2(thS)}<th rowspan="2" style="${thS}">${L2('선적','Отгрузка')}</th><th rowspan="2" style="${thS}">${t.priceThShip}</th>
     <th colspan="3" style="${thS};border-left:1px solid var(--border)">${t.priceThCost}</th>
     <th colspan="3" style="${thS};border-left:1px solid var(--border)">${t.priceThRu}</th></tr>
     <tr style="border-bottom:1px solid var(--border);color:var(--muted);font-size:11px">
     <th style="${thS};border-left:1px solid var(--border)">KRW</th><th style="${thS}">RUB</th><th style="${thS}">USD</th>
     <th style="${thS};border-left:1px solid var(--border)">${t.priceThSupply}<br>KRW</th><th style="${thS}">${t.priceThSupply}<br>RUB</th><th style="${thS}">${t.priceThGp}</th></tr>`;
   // 원가는 KRW(입력) · RUB · USD 3열
-  const cols=`<col>${isKo?'<col>':''}${engColHtml()}<col><col><col>${priceMarkCols()}<col style="width:66px"><col style="width:68px"><col style="width:62px"><col style="width:62px"><col style="width:72px"><col style="width:66px"><col style="width:48px">`;
+  const cols=`<col>${isKo?'<col>':''}${engColHtml()}<col><col><col>${priceMarkCols()}<col style="width:66px"><col style="width:66px"><col style="width:68px"><col style="width:62px"><col style="width:62px"><col style="width:72px"><col style="width:66px"><col style="width:48px">`;
   document.getElementById('pricecalc-hdr-col').innerHTML=cols;
   document.getElementById('pricecalc-body-col').innerHTML=cols;
   const tbody=document.getElementById('priceCalcTbody');
@@ -12718,7 +12736,8 @@ function renderPriceCalc(){
       <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(pnUpperLead(r.compat))}</span></td>
       <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(pnUpperLead(r.final))}</span></td>
       ${priceMarkTd(r.compat)}
-      <td class="center" style="padding:3px 2px;color:var(--muted)">${fmtN(r.ship_qty)}</td>
+      <td class="center" style="padding:3px 2px;color:var(--muted)">${fmtN(psiSumOf(r.compat,'in'))}</td>
+      <td class="center" style="padding:3px 2px;color:var(--muted)">${fmtN(psiSumOf(r.compat,'out'))}</td>
       <td class="center${priceIsMan(priceOrigKey('calc',r.row_no),'ru_cost',r.ru_cost)?' price-man':''}" style="padding:3px 2px;border-left:1px solid var(--border)"><input type="text" inputmode="decimal" style="${inputStyle}" value="${c.ruCost!=null?fmtN(c.ruCost):''}" onchange="onPriceCellEdit(${r.row_no},'ru_cost',this.value)"></td>
       <td style="text-align:right;padding:3px 4px;color:var(--muted)">${fmtN(c.costRub)}</td>
       <td style="text-align:right;padding:3px 4px;color:var(--muted)">${fmtN(c.costUsd)}</td>
@@ -12731,7 +12750,8 @@ function renderPriceCalc(){
   setPriceCards(rows.map(r=>{
     const c=calcPriceRow(r);
     return priceCardHtml(priceNameFor(r), isKo?priceSpecFor(r):'',
-      [{label:t.pnH1,val:r.rep},{label:t.pnH2,val:pnUpperLead(r.compat)},{label:t.pnH3,val:pnUpperLead(r.final)},{label:t.priceThShip.replace('<br>',' '),val:fmtN(r.ship_qty)}],
+      [{label:t.pnH1,val:r.rep},{label:t.pnH2,val:pnUpperLead(r.compat)},{label:t.pnH3,val:pnUpperLead(r.final)},{label:L2('선적','Отгрузка'),val:fmtN(psiSumOf(r.compat,'in'))},
+       {label:t.priceThShip.replace('<br>',' '),val:fmtN(psiSumOf(r.compat,'out'))}],
       [{label:t.priceThCost+' KRW',val:fmtN(c.ruCost)},{label:t.priceThCost+' RUB',val:fmtN(c.costRub)},{label:t.priceThCost+' USD',val:fmtN(c.costUsd)},
        {label:t.priceThRu+' '+t.priceThSupply+' KRW',val:fmtN(c.ruSupply)},{label:t.priceThRu+' '+t.priceThSupply+' RUB',val:fmtN(c.ruRub)},{label:t.priceThRu+' '+t.priceThGp,val:fmtGp(c.ruGpVal)}], r.rep
     );
@@ -13701,7 +13721,7 @@ function downloadPriceActive(){
     aoa.push(ins(['','','러시아','','','','','','','','','',''],''));
     aoa.push(ins(['','','기준환율(KRW/RUB)',priceSettings.rub_rate,'기준환율(KRW/USD)',priceSettings.usd_rate,'','','','러시아 기준 GP','','',priceSettings.ru_gp],''));
     aoa.push(ins(['','','최초매매기준율(전월말일)','','최초매매기준율(전월말일)','','','','','','','',''],''));
-    aoa.push(ins(['품명','규격','대표품번\n(미변경)','호환품번\n(변경)','최종품번\n(변경, 현시점)','출고\n(18y~)','원가','','','러시아','','',''],engLabel));
+    aoa.push(ins(['품명','규격','대표품번\n(미변경)','호환품번\n(변경)','최종품번\n(변경, 현시점)','출고\n(18y~)','원가','','','러시아','','','','선적'],engLabel));
     aoa.push(ins(['','','','','','','','','','공급가','','','GP'],''));
     aoa.push(ins(['','','','','','','KRW','RUB','USD','KRW','RUB','USD',''],''));
     priceCalcData.forEach(r=>{
@@ -13711,9 +13731,10 @@ function downloadPriceActive(){
       // 호환품번이 한 칸에 여러 개 적혀 있으면 품번 하나당 한 행으로 나눈다.
       // 나머지 열은 품번조회 분할 보기와 같게 반복해 적는다.
       xlSplitPNs(r.compat).forEach(pn=>{
-        aoa.push(ins([priceNameFor(r),priceSpecFor(r),r.rep||'',pn,r.final||'',r.ship_qty??'',
+        aoa.push(ins([priceNameFor(r),priceSpecFor(r),r.rep||'',pn,r.final||'',psiSumOf(pn,'out'),
           c.ruCost??'',c.costRub??'',c.costUsd??'',
-          c.ruSupply??'',c.ruRub??'',ruSupUsd,c.ruGpVal!=null?Math.round(c.ruGpVal*1000)/1000:''], engNameText(r.rep)));
+          c.ruSupply??'',c.ruRub??'',ruSupUsd,c.ruGpVal!=null?Math.round(c.ruGpVal*1000)/1000:'',
+          psiSumOf(pn,'in')], engNameText(r.rep)));
       });
     });
     const ws=XLSX.utils.aoa_to_sheet(aoa);
