@@ -233,7 +233,9 @@ input[type="text"]::placeholder{color:var(--muted)}
    left 값은 고른 열에 따라 달라져서 그릴 때마다 <style> 로 넣어 준다. */
 .pt td.fxs,.pt th.fxs{position:sticky;z-index:2}
 .pt td.fxs{background:var(--surface)}
-.pt th.fxs{z-index:5}
+/* 머리글의 고정열은 인라인 style 의 z-index:3 을 이겨야 한다.
+   안 그러면 가로로 밀 때 달 머리글이 위로 덮여 규격 같은 칸이 사라진다. */
+.pt th.fxs{z-index:6!important}
 .pt .fxend{border-right:1px solid var(--border)}
 /* 손으로 고친 칸 — 셈한 값이 아니라는 표시 */
 .pt td.man,.pt tr.g td.man{background:#ffedd5;color:#9a3412;font-weight:700;
