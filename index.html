@@ -10617,6 +10617,8 @@ function psiShowKids(){ return psiColsMap().compat!==false; }
 function psiShowGroups(){ const m=psiColsMap(); return (m.rep!==false) || (m.compat===false); }
 // 규격 오른쪽 '기간합계' 묶음을 보일지. 보기 창에서 켜고 끈다(저장은 psiCols.__tot).
 function psiShowTot(){ return !!(psiCols && psiCols.__tot); }   // 처음엔 접어 둔다
+// 고른 기간에 아무 값도 없는 품번까지 보일지. 꺼 두면 전부 0 인 줄은 감춘다.
+function psiShowZero(){ return !!(psiCols && psiCols.__zero); }
 function psiVisSub(){ const m=psiColsMap();
   let v=PSI_COL_DEFS.filter(d=>!d.fixed && m[d.k]);
   if(!v.length) v=PSI_COL_DEFS.filter(d=>d.k==='st');
@@ -10730,6 +10732,7 @@ function openPsiColsPanel(){
   const ru=(lang==='ru'), isKo=(lang!=='ru');
   const m=psiColsMap();
   m.__tot=psiShowTot();
+  m.__zero=psiShowZero();
   const box=document.createElement('div'); box.id='psiColsPop';
   box.style.cssText='position:fixed;inset:0;z-index:10000;background:#0008;display:flex;align-items:center;justify-content:center';
   const item=d=>'<label style="display:flex;align-items:center;gap:7px;padding:5px 4px;cursor:pointer">'
@@ -10744,6 +10747,7 @@ function openPsiColsPanel(){
         + PSI_COL_DEFS.filter(d=>d.fixed&&(!d.koOnly||isKo)&&(!d.perm||canViewExportCtrl())).map(item).join('')+'</div>'
       + '<div style="flex:1"><div style="font-size:11px;color:var(--muted);margin-bottom:3px">'+(ru?'По месяцам':'월별 수치')+'</div>'
         + item({k:'__tot', ko:'기간합계', ru:'Итого за период'})
+        + item({k:'__zero', ko:'값 없는 품번도 보기', ru:'Показывать артикулы без данных'})
         + '<div style="border-top:1px solid var(--border);margin:4px 0"></div>'
         + PSI_COL_DEFS.filter(d=>!d.fixed).map(item).join('')+'</div>'
     + '</div>'
@@ -11292,7 +11296,7 @@ function renderPSI(){
   // 재고에 숫자가 남아 있으면 움직임이 없어도 보여 준다.
   const hasVal=v=>yms.some(y=>{ const x=v[y]||{};
     return (x.sh||0)||(x.i||0)||(x.o||0)||(x.ms||0)||(x.st||0); });
-  items=items.filter(it=>hasVal(it.v));
+  if(!psiShowZero()) items=items.filter(it=>hasVal(it.v));
 
   _psiAllItems=items;
   const fkeys=Object.keys(_psiFilters);
@@ -11443,7 +11447,7 @@ function renderPSI(){
   groups.forEach(g=>{
     const seen2={}; let any=false;
     g.rows.forEach(it=>{ if(seen2[it.key]) return; seen2[it.key]=1;
-      if(hasVal(it.v)){ counted[it.key]=1; any=true; } });
+      if(hasVal(it.v) || psiShowZero()){ counted[it.key]=1; any=true; } });
     if(any) nzRep++;
     yms.forEach(y=>{ const a=g.agg[y], t=tot[y];
       t.sh+=a.sh; t.i+=a.i; t.o+=a.o; t.ms+=a.ms; t.st+=a.st; t.fut+=a.fut; }); });
