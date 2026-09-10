@@ -11057,7 +11057,7 @@ function psiFmt(v){ return _psiNF?_psiNF.format(v):String(v); }
 const PSI_COL_DEFS=[
   {k:'rep',    fixed:1, w:106, ko:'대표품번', ru:'Осн. артикул'},
   {k:'compat', fixed:1, w:106, ko:'호환품번', ru:'Артикул замены', off:1},
-  {k:'note',   fixed:1, w:38,  ko:'단종',     ru:'Снято'},
+  {k:'note',   fixed:1, w:58,  ko:'단종',     ru:'Снято'},
   {k:'exp',    fixed:1, w:52,  ko:'수출제한', ru:'Эксп.контроль', hko:'수출<br>제한', hru:'Эксп.<br>контр.', perm:'exp', off:1},
   {k:'name',   fixed:1, w:142, ko:'품명',     ru:'Наименование'},
   {k:'spec',   fixed:1, w:182, ko:'규격',     ru:'Хар-ки', koOnly:1},
@@ -11490,6 +11490,31 @@ function psiFilterIcon(key){
     + psiFilterDot(key);
 }
 // 필터·값목록에 쓰는 표준 문자열. 숫자 열은 화면과 같은 값을 문자로 쓴다(천단위 쉼표 없음).
+// 선적계획·발주필요·발주후재고·발주후보유월은 자료에 있는 값이 아니라
+// 그리면서 대표품번 묶음마다 셈해 내는 값이다. 그래서 호환품번 줄(it.v)에는 없고,
+// 거르개·정렬도 줄이 아니라 묶음을 기준으로 해야 한다. 그린 값을 g.sim 에 담아 둔다.
+const PSI_SIM_VAL_COLS={plan:1, need:1, st2:1, mo2:1};
+function psiIsSimCol(key){ return !!PSI_SIM_VAL_COLS[String(key).split(':')[0]]; }
+function psiSimValStr(f,v){
+  if(v==null||v==='') return '';
+  const num=Number(v);
+  if(f==='mo2') return num.toFixed(1);
+  if(f==='st2') return String(num);
+  return num ? String(num) : '';                   // 선적계획·발주필요는 0 이면 빈칸으로 찍힌다
+}
+function psiSimNum(g,key){
+  const p=String(key).split(':'), f=p[0], ym=p[1];
+  const s=g&&g.sim; if(!s) return null;
+  if(ym==='tot'){                                  // 기간합계: 더할 열은 합, 재고·보유월은 마지막 달
+    const ys=_psiYms||[];
+    if(f==='st2'||f==='mo2'){ const x=s[ys[ys.length-1]]; return x?(x[f]==null?null:x[f]):null; }
+    let sm=0, any=false; ys.forEach(y=>{ const x=s[y]; if(x && x[f]!=null){ sm+=Number(x[f])||0; any=true; } });
+    return any?sm:null;
+  }
+  const x=s[ym]; if(!x) return null;
+  return (x[f]==null)?null:Number(x[f]);
+}
+function psiSimCell(g,key){ const f=String(key).split(':')[0]; return psiSimValStr(f, psiSimNum(g,key)); }
 function psiCellVal(key,it){
   // 바탕색으로 거르기: 'clr:YYMM' → 'red' / 'none'
   if(String(key).indexOf('clr:')===0){
@@ -11506,6 +11531,14 @@ function psiCellVal(key,it){
 //   글자 열은 전체 품번에서, 숫자 열은 이번 화면의 계산값에서 모은다(월·기산월에 따라 달라지므로).
 function psiDistinctValues(key){
   const set=new Set();
+  // 선적계획·발주필요·발주후재고·발주후보유월은 묶음마다 셈해 낸 값이라 묶음에서 모은다
+  if(psiIsSimCol(key)){
+    (_psiGroups||[]).forEach(g=> set.add(psiSimCell(g,key)));
+    return [...set].sort((a,b)=>{
+      if(a==='') return 1; if(b==='') return -1;
+      return parseFloat(a)-parseFloat(b);
+    });
+  }
   if(psiIsNumCol(key)){
     (_psiAllItems||[]).forEach(it=> set.add(psiCellVal(key,it)));
     return [...set].sort((a,b)=>{
@@ -11793,11 +11826,14 @@ function renderPSI(){
 
   _psiAllItems=items;
   const fkeys=Object.keys(_psiFilters);
-  if(fkeys.length){
-    const sets=fkeys.map(k=>({k, set:new Set((_psiFilters[k]||[]).map(String))}));
+  // 선적계획·발주필요·발주후재고·발주후보유월은 묶음 단위로 나중에 거른다(아래 simKeys)
+  const rowFkeys=fkeys.filter(k=>!psiIsSimCol(k));
+  const simFkeys=fkeys.filter(k=>psiIsSimCol(k));
+  if(rowFkeys.length){
+    const sets=rowFkeys.map(k=>({k, set:new Set((_psiFilters[k]||[]).map(String))}));
     items=items.filter(it=> sets.every(a=> a.set.has(psiCellVal(a.k,it))));
   }
-  if(_psiSort.key){
+  if(_psiSort.key && !psiIsSimCol(_psiSort.key)){
     const k=_psiSort.key, dir=_psiSort.dir==='desc'?-1:1;
     if(psiIsNumCol(k)){
       items=items.slice().sort((a,b)=>{
@@ -11926,7 +11962,7 @@ function renderPSI(){
     return Math.max(0, Math.ceil(avg*c.avgN-st)); };
 
   // 대표품번끼리 묶는다(대표품번 줄을 먼저 두고 그 아래 호환품번 줄)
-  const groups=[]; const gmap={};
+  let groups=[]; const gmap={};
   items.forEach(it=>{ const rep=String(it.r.rep||'');
     let g=gmap[rep];
     if(!g){ g=gmap[rep]={rep, first:it.r, rows:[], seen:{}, agg:{}, open:0}; ymsAll.forEach(y=>g.agg[y]={sh:0,i:0,o:0,ms:0,st:0,fut:0}); groups.push(g); }
@@ -11985,19 +12021,13 @@ function renderPSI(){
     const finRow=Object.assign({}, g.first, {_split:true, _compat:fin});
     g.hideRow=!txtKeys.every(k=> new Set((_psiFilters[k]||[]).map(String)).has(String(psiColText(k, finRow))));
   });
+  // 통째로 빠지는 묶음(대표품번 줄이 걸러졌는데 호환품번 줄도 안 보이는 때)은 아예 뺀다
+  if(!psiShowKids()) groups=groups.filter(g=>!g.hideRow);
   _psiGroups=groups;
 
+  // 합계는 실제로 화면에 남는 묶음만 더한다(아래 keep 에서 채운다)
   const tot={}; yms.forEach(y=>tot[y]={sh:0,i:0,o:0,ms:0,st:0,fut:0});
   const counted={}; let nzRep=0;
-  groups.forEach(g=>{
-    if(g.hideRow && !psiShowKids()) return;      // 통째로 빠지는 묶음은 합계에서도 뺀다
-    const seen2={}; let any=false;
-    g.rows.forEach(it=>{ if(seen2[it.key]) return; seen2[it.key]=1;
-      if(hasVal(it.v) || psiShowZero()){ counted[it.key]=1; any=true; } });
-    if(any) nzRep++;
-    yms.forEach(y=>{ const a=g.agg[y], t=tot[y];
-      t.sh+=a.sh; t.i+=a.i; t.o+=a.o; t.ms+=a.ms; t.st+=a.st; t.fut+=a.fut; }); });
-  _psiNz={rep:nzRep, pn:Object.keys(counted).length};
 
   // 대표품번 줄 색(참고 엑셀의 연한 파랑 띠)
   // 하위 호환품번 줄이 없으면(대표품번만 보기) 띠를 칠하지 않는다 — 모든 줄이 같은 색이면 의미가 없다
@@ -12008,6 +12038,7 @@ function renderPSI(){
   const arrStTot={}, arrFutTot={};        // 달마다 '그 발주분이 들어오는 달'의 재고·앞으로 출고 합계
   const kCls={ rep:'cd', compat:'cd', note:'ct', exp:'xc', name:'nm', spec:'sp' };   // 하위 줄 고정열
   const bodyRows=[];
+  const drawn=[];                            // 묶음마다 그린 줄. 아래에서 걸러 붙인다
   groups.forEach(g=>{
     const r0=g.first;
     const fin=String(r0.final||'');
@@ -12031,6 +12062,8 @@ function renderPSI(){
     let addSt=0;
     const arrive=new Array(ymsAll.length).fill(0);
     const shipPlan=new Array(ymsAll.length).fill(0);
+    const gAcc={};                            // 달마다 합계에 더할 값(남는 묶음만 나중에 더한다)
+    g.sim={};                                 // 달마다 선적계획·발주필요·발주후재고·발주후보유월
     const gEach=yms.map((y,i)=>{
       const a=g.agg[y]; const b=i===0?' bl':'';
       addSt+=arrive[i];                       // 이 달에 들어오는 발주분
@@ -12077,12 +12110,11 @@ function renderPSI(){
         arrSt=at.st+got; arrFut=at.fut;
         nd=(man!=null)?man:needOf(arrSt, arrFut);
         m2=moOf(arrSt+nd, arrFut);            // 발주후 보유월 = 그 발주분이 들어오는 달의 보유월
-        arrStTot[y]=(arrStTot[y]||0)+arrSt; arrFutTot[y]=(arrFutTot[y]||0)+arrFut;
+        gAcc[y]=Object.assign(gAcc[y]||{}, {arrSt, arrFut});
       }else if(psiSimOn && man!=null){ nd=man; }
-      needTot[y]=(needTot[y]||0)+nd;
-      stAdd[y]=(stAdd[y]||0)+addSt;
-      shipTot[y]=(shipTot[y]||0)+plan;    // 합계 줄의 선적계획
-      inTot[y]=(inTot[y]||0)+arrive[i];
+      // 합계 줄에 더할 값은 일단 묶음마다 담아 두고, 아래에서 남은 묶음만 골라 더한다
+      //   (선적계획·발주필요 같은 열로 거르면 빠진 묶음은 합계에서도 빠져야 한다)
+      gAcc[y]=Object.assign(gAcc[y]||{}, {need:nd, addSt, plan, arrIn:arrive[i]});
       if(psiSimOn && i+1<ymsAll.length) shipPlan[i+1]+=nd;   // 이 달 발주분은 다음 달에 나간다
       const sAttr=' data-rep="'+escapeHtml(g.rep)+'" data-ym="'+y
         +'" onclick="simShipFocus(this)" title="'
@@ -12094,6 +12126,7 @@ function renderPSI(){
            'Нажмите, чтобы изменить')+'"';
       // 발주후 재고 = 그 발주분이 들어오는 달의 재고(발주필요를 더한 값). 보유월과 같은 기준.
       const st2=(psiSimOn && ai>i) ? (arrSt+nd) : null;
+      g.sim[y]={plan, need:nd, st2, mo2:m2};   // 거르개·정렬이 볼 수 있게 담아 둔다
       const val={sh:n(sh), plan:(plan?n(plan):''), i:n(inq), o:n(a.o), ms:n(a.ms), st:n(st),
                  mo:(mo==null?'':mo.toFixed(1)),
                  need:(nd?n(nd):''), st2:(st2==null?'':n(st2)), mo2:(m2==null?'':m2.toFixed(1))};
@@ -12136,9 +12169,41 @@ function renderPSI(){
         +totTxt(d.k,kTot)+'</td>').join('');
       return '<tr>'+kFix+(SHOWTOT?kTotCells:'')+cells+'</tr>';
     });
-    if(psiShowGroups() && !hideG) bodyRows.push(gRow);
-    if(psiShowKids()) kidRows.forEach(r=>bodyRows.push(r));
+    drawn.push({g, gRow, kidRows, hideG, gAcc});
   });
+
+  // 선적계획·발주필요·발주후재고·발주후보유월로 거르기·정렬 — 여기서 처음 값이 나오므로 이제 한다
+  let keep=drawn;
+  if(simFkeys.length){
+    const sets=simFkeys.map(k=>({k, set:new Set((_psiFilters[k]||[]).map(String))}));
+    keep=keep.filter(x=> sets.every(a=> a.set.has(psiSimCell(x.g, a.k))));
+  }
+  if(_psiSort.key && psiIsSimCol(_psiSort.key)){
+    const k=_psiSort.key, dir=(_psiSort.dir==='desc')?-1:1;
+    keep=keep.slice().sort((a,b)=>{
+      const na=psiSimNum(a.g,k), nb=psiSimNum(b.g,k);
+      const ea=(na==null), eb=(nb==null);
+      if(ea&&eb) return 0; if(ea) return 1; if(eb) return -1;   // 값 없는 묶음은 늘 뒤로
+      return (na-nb)*dir; });
+  }
+  // 남은 묶음만 합계에 더하고 줄을 붙인다
+  keep.forEach(x=>{
+    yms.forEach(y=>{ const s=x.gAcc[y]; if(!s) return;
+      if(s.arrSt!=null){ arrStTot[y]=(arrStTot[y]||0)+s.arrSt; arrFutTot[y]=(arrFutTot[y]||0)+s.arrFut; }
+      needTot[y]=(needTot[y]||0)+(s.need||0);
+      stAdd[y]=(stAdd[y]||0)+(s.addSt||0);
+      shipTot[y]=(shipTot[y]||0)+(s.plan||0);
+      inTot[y]=(inTot[y]||0)+(s.arrIn||0);
+      const a=x.g.agg[y], t=tot[y];
+      t.sh+=a.sh; t.i+=a.i; t.o+=a.o; t.ms+=a.ms; t.st+=a.st; t.fut+=a.fut; });
+    const seen2={}; let any=false;
+    x.g.rows.forEach(it=>{ if(seen2[it.key]) return; seen2[it.key]=1;
+      if(hasVal(it.v) || psiShowZero()){ counted[it.key]=1; any=true; } });
+    if(any) nzRep++;
+    if(psiShowGroups() && !x.hideG) bodyRows.push(x.gRow);
+    if(psiShowKids()) x.kidRows.forEach(r=>bodyRows.push(r));
+  });
+  _psiNz={rep:nzRep, pn:Object.keys(counted).length};
 
   const sumS=thS+';font-weight:700;background:var(--surface)';
   const sumRaws=yms.map(y=>{ const t=tot[y]; const tst=t.st+(stAdd[y]||0);
