@@ -218,8 +218,10 @@ table.pt td{padding:3px 5px;font-size:11px;overflow:hidden;border-bottom:1px sol
 .pt td.bl{border-left:1px solid var(--border)}
 /* 품명·규격은 한 줄로 자른다(마우스를 올리면 전체가 보인다).
    줄 높이가 모두 같아야 화면에 보이는 줄만 그릴 수 있고, 그래야 표가 빨라진다. */
-.pt td.nm,.pt td.sp{white-space:normal;word-break:break-all;line-height:1.25;
-  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;height:2.5em}
+/* 글자가 칸을 넘으면 다음 줄로 접힌다. 표 칸의 height 는 최소높이로 쓰여
+   한 줄이든 두 줄이든 줄 높이가 같다(가상 스크롤은 같은 높이를 전제로 한다).
+   -webkit-box 로 클래프하면 안의 편집 칸이 상자로 변해 표가 깨진다. */
+.pt td.nm,.pt td.sp{white-space:normal;word-break:break-all;line-height:1.25;overflow:hidden;height:34px}
 .pt td.nm{font-size:10.5px}
 .pt td.sp{color:var(--muted);font-size:10px}
 /* 품번 칸은 한 줄로 다 보이게(줄바꿈 없음) */
