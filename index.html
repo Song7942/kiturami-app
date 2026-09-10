@@ -2123,7 +2123,7 @@ function refreshPsiTexts(){
   set('i18n-prod-up','엑셀 업로드','Загрузить Excel');
   set('i18n-prod-dl',DL[0],DL[1]);
   ph('prodInput','품번·품명으로 검색…','Поиск: артикул, наименование…');
-  if(document.getElementById('pane-prod') && document.getElementById('pane-prod').classList.contains('active')) renderProd();
+  if(document.getElementById('pane-prod') && ktPaneOn('pane-prod')) renderProd();
   set('i18n-po-all',ALL[0],ALL[1]);
   set('i18n-po-view','보기','Вид');
   set('i18n-po-manual','수기 초기화','Сброс ручных');
@@ -2240,11 +2240,12 @@ function refreshPsiTexts(){
     buildDiagram(diagTypes); // 언어 변경 시 라벨/툴팁 텍스트도 새 언어로 다시 생성
     const suffix=lang==='ru'?' — Сборочный чертёж':' — 분해도';
     document.getElementById('diagTitle').textContent=diagTypes.map(dt=>DIAG_NAMES[dt]||dt).join(' / ')+suffix;
-    const hideBtn=document.getElementById('diagHideBtn');
-    if(hideBtn) hideBtn.textContent = diagHidden ? (lang==='ru'?'Показать':'보이기') : (lang==='ru'?'Скрыть':'숨기기');
   } else {
     document.getElementById('diagTitle').textContent=t.diagTitle;
   }
+  // 분해도가 열려 있든 아니든 '숨기기/보이기' 단추는 늘 지금 언어로 적는다
+  const hideBtn=document.getElementById('diagHideBtn');
+  if(hideBtn) hideBtn.textContent = diagHidden ? (lang==='ru'?'Показать':'보이기') : (lang==='ru'?'Скрыть':'숨기기');
   const mbAllLbl=document.getElementById('mbAllLabel');
   if(mbAllLbl) mbAllLbl.textContent=T[l].mbAll||'전체';
   refreshNewsTexts();
@@ -2256,7 +2257,7 @@ function refreshPsiTexts(){
   renderModelBar(); if(openGroup) buildDropdown(openGroup); else if(openSeries) buildSeriesDropdown(openSeries);
   renderTable(); renderPN();
   mountModelDiag('order'); // 부품검색 탭 제거로 기본 탭이 주문이 되어, 공용 모델바/분해도를 주문 슬롯에 장착
-  if(document.getElementById('pane-order').classList.contains('active')) renderOrderTable();
+  if(ktPaneOn('pane-order')) renderOrderTable();
 }
 
 // ── 드롭다운 ──
@@ -2490,7 +2491,7 @@ function onSelChange(){
   if(JSON.stringify(newTypes)!==JSON.stringify(diagTypes)){diagBuilt=false;}
   manualClosed=false;  // 새 선택 시 수동닫기 해제
   renderModelBar();syncDiagram();renderTable();
-  if(document.getElementById('pane-order') && document.getElementById('pane-order').classList.contains('active')) renderOrderTable();
+  if(document.getElementById('pane-order') && ktPaneOn('pane-order')) renderOrderTable();
 }
 
 // ── 분해도 ──
@@ -2939,7 +2940,7 @@ function onDiagClick(dn,btn,targetRep){
   activeDiagNum=dn;activeDiagRep=targetRep||null;btn.classList.add('active');highlightByDiag(dn,targetRep);
 }
 function highlightByDiag(dn,targetRep){
-  const onOrder=document.getElementById('pane-order').classList.contains('active');
+  const onOrder=ktPaneOn('pane-order');
   const sb=document.getElementById(onOrder?'scrollBodyOrder':'scrollBodyParts');
   let scrolled=false;
   function tryScroll(el){
@@ -6350,7 +6351,7 @@ function applyPermTabVisibility(skipSwitch){
   const pEl=document.getElementById('tab-parts'); if(pEl) pEl.style.display='none';
   // 라벨(주문↔부품조회)·열 구성을 현재 권한 기준으로 다시 맞춘다.
   applyOrderTabLabel();
-  if(document.getElementById('pane-order') && document.getElementById('pane-order').classList.contains('active')) renderOrderTable();
+  if(document.getElementById('pane-order') && ktPaneOn('pane-order')) renderOrderTable();
   if(!skipSwitch) ensureVisibleTab();   // 열려 있던 탭이 권한으로 닫혔으면 보이는 탭으로 옮긴다
 }
 
@@ -6932,6 +6933,9 @@ function downloadAdminOrders(){
   XLSX.utils.book_append_sheet(wb, ws, lang==='ko'?'회원및주문관리':'Заказы');
   XLSX.writeFile(wb, xlsxName('주문내역','История_заказов'));
 }
+// 그 화면이 지금 열려 있나. 화면이 아예 없는 파일(화면 몇 개를 뺀 내려받기)도 견딘다.
+//   여기서 걸려 넘어지면 뒤따르는 말바꾸기가 통째로 멈춰 한글이 그대로 남는다.
+function ktPaneOn(id){ const e=document.getElementById(id); return !!(e && e.classList.contains('active')); }
 function refreshAdminTexts(){
   const t=T[lang];
   const setTxt=(id,val)=>{const el=document.getElementById(id);if(el)el.textContent=val;};
@@ -6977,8 +6981,8 @@ function refreshAdminTexts(){
   setTxt('i18n-editmember-status', t.signupThStatus);
   setTxt('i18n-editmember-pwhint', t.editMemberPwHint);
   setTxt('i18n-editmember-save', t.editMemberSave);
-  if(document.getElementById('pane-adminOrders').classList.contains('active')){ renderAdminOrders(); renderAdminMyOrders(); }
-  if(document.getElementById('pane-memberManagement').classList.contains('active')){ renderPendingSignups(); }
+  if(ktPaneOn('pane-adminOrders')){ renderAdminOrders(); renderAdminMyOrders(); }
+  if(ktPaneOn('pane-memberManagement')){ renderPendingSignups(); }
 }
 
 // ══════════════════════════════════════════
@@ -8582,8 +8586,8 @@ function refreshInventoryTexts(){
   setTxt('i18n-admingroup-orders', t.adminGroupOrders);
   const sEl=document.getElementById('invSearchInput'); if(sEl) sEl.placeholder=t.invSearchPh;
   const shEl=document.getElementById('shipSearchInput'); if(shEl) shEl.placeholder=t.shipSearchPh;
-  if(document.getElementById('pane-inventory').classList.contains('active')) renderInventoryList();
-  if(document.getElementById('pane-shipments').classList.contains('active')) renderShipmentsList();
+  if(ktPaneOn('pane-inventory')) renderInventoryList();
+  if(ktPaneOn('pane-shipments')) renderShipmentsList();
 }
 
 // ══════════════════════════════════════════
@@ -14618,7 +14622,7 @@ function refreshPriceTexts(){
   setTxt('i18n-prm-kzgp', lang==='ru'?'Базовый GP Казахстан (%)':'카자흐스탄 기준 GP(%)');
   fillParamInputs(); // 기준월·환율 출처 안내문도 새 언어로 다시 씀
   const sEl=document.getElementById('priceSearchInput'); if(sEl) sEl.placeholder=lang==='ru'?'Поиск: название, характеристика, артикул…':'품명·규격·영문품명·대표/호환/최종품번으로 검색…';
-  if(document.getElementById('pane-price').classList.contains('active')) renderPriceActive();
+  if(ktPaneOn('pane-price')) renderPriceActive();
 }
 
 initScroll();mountModelDiag('parts');renderModelBar();renderTable();renderPN();renderOrderTable();initDiagScrollbar();
@@ -15314,8 +15318,8 @@ function enterApp(user){
     // 오버라이드가 얹힌 뒤 새로 생긴 호환품번의 품명·규격을 뒤늦게 채운다
     const added=await pnSpecTopUp();
     if(added){ _pnLookupMap=null; _pnByRepMap=null; }
-    if(document.getElementById('pane-order').classList.contains('active')) renderOrderTable();
-    if(document.getElementById('pane-pn').classList.contains('active')) renderPN();
+    if(ktPaneOn('pane-order')) renderOrderTable();
+    if(ktPaneOn('pane-pn')) renderPN();
   });
   loadNewsPosts();
 }
