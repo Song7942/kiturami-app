@@ -11932,7 +11932,33 @@ function renderPSI(){
     ymsAll.forEach(y=>{ const x=it.v[y]||{}; const a=g.agg[y];
       a.sh+=x.sh||0; a.i+=x.i||0; a.o+=x.o||0; a.ms+=x.ms||0; a.st+=x.st||0; a.fut+=futOut(it.d,y); });
   });
-  if(psiSimOn){
+  // 머리글 정렬은 대표품번 줄에 찍히는 값으로 묶음 차례를 잡아야 한다.
+  //   대표품번 줄의 숫자는 그 묶음을 합친 값(재고·보유월은 묶음 기준)이라,
+  //   호환품번 줄 값으로 줄을 세우면 화면에 보이는 숫자가 뒤죽박죽이 된다.
+  const gNum=(g,key)=>{
+    const p=String(key).split(':'); const f=p[0], ym=p[1];
+    if(f==='open') return g.open||0;
+    const one=y=>{ const a=g.agg[y]; if(!a) return null;
+      if(f==='mo') return moOf(a.st,a.fut);
+      if(f==='st'||f==='sh'||f==='i'||f==='o'||f==='ms') return a[f];
+      return null; };
+    if(ym==='tot'){
+      if(f==='st'||f==='mo') return one(yms[yms.length-1]);
+      let s=0, any=false; yms.forEach(y=>{ const v=one(y); if(v!=null){ s+=v; any=true; } });
+      return any?s:null;
+    }
+    return one(ym);
+  };
+  const GRP_SORTABLE={sh:1,i:1,o:1,ms:1,st:1,mo:1,open:1};
+  const sKey=_psiSort.key||'', sFld=String(sKey).split(':')[0];
+  if(sKey && GRP_SORTABLE[sFld] && psiIsNumCol(sKey)){
+    const dir=(_psiSort.dir==='desc')?-1:1;
+    groups.sort((a,b)=>{
+      const na=gNum(a,sKey), nb=gNum(b,sKey);
+      const ea=(na==null), eb=(nb==null);
+      if(ea&&eb) return 0; if(ea) return 1; if(eb) return -1;   // 값 없는 묶음은 늘 뒤로
+      return (na-nb)*dir; });
+  }else if(psiSimOn){
     // 시작월 보유월이 낮은 대표품번부터 위로. 하위 호환품번도 따라 올라간다.
     // 보유월을 낼 수 없는(앞으로 출고가 없는) 묶음은 맨 뒤로 보낸다.
     const y0=yms[0];
