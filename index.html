@@ -3491,10 +3491,14 @@ function renderPNChunk(startFrom=0){
   // 사용자별 열 순서를 반영한 열 목록(데이터-드리븐). 헤더/본문/폭이 모두 이 순서를 따른다.
   const meta=pnColMetaOrdered(isKo, showEng, showDel);
   const ctx={isMaster, isKo, kw, hlPN};
+  const qJs=v=>String(v==null?'':v).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
   const rows=chunk.map(r=>{
-    // 맨 앞 '삭제' 열(MASTER): 그 품목(대표품번) 전체를 삭제. 분할 보기에선 그룹 첫 행에만 버튼.
-    const showDelBtn = !r._split || r._first;
-    const delColCell = showDel ? `<td class="center" style="position:sticky;left:0;z-index:3;background:var(--bg)">${showDelBtn?`<button title="이 품목 전체 삭제" onclick="event.stopPropagation();deletePNItem('${String(r.rep).replace(/'/g,"\\'")}')" style="border:none;background:none;color:#ef4444;cursor:pointer;font-size:14px;padding:2px 4px">✕</button>`:''}</td>` : '';
+    // 맨 앞 '삭제' 열(MASTER): 줄마다 붙는다.
+    //  · 분할 보기(호환품번 한 개 = 한 줄)에선 그 줄의 호환품번만 지운다.
+    //  · 묶어 보기이거나 마지막 남은 한 줄이면 품목(대표품번) 전체를 지운다.
+    const delTip = r._split ? (lang==='ru'?'Удалить эту строку':'이 줄(호환품번) 삭제') : (lang==='ru'?'Удалить позицию':'이 품목 전체 삭제');
+    const delCall = r._split ? `deletePNRow('${qJs(r.rep)}','${qJs(r._compat)}')` : `deletePNItem('${qJs(r.rep)}')`;
+    const delColCell = showDel ? `<td class="center" style="position:sticky;left:0;z-index:3;background:var(--bg)"><button title="${delTip}" onclick="event.stopPropagation();${delCall}" style="border:none;background:none;color:#ef4444;cursor:pointer;font-size:14px;padding:2px 4px">✕</button></td>` : '';
     return `<tr>${delColCell}${meta.map(c=>pnCellHtml(c, r, ctx)).join('')}</tr>`;
   }).join('');
   if(startFrom===0) tbody.innerHTML=rows;
@@ -8123,6 +8127,26 @@ async function addPNItem(){
   await recordPNHistory(rep, 'rep', '', rep);   // 품목 추가를 변경이력에 기록(대표품번 셀에 배지 표시)
   const inp=document.getElementById('pnInput'); if(inp) inp.value='';   // 검색어 지워 새 품목이 보이게
   renderPN();
+}
+// 분할 보기에서 그 줄 하나(호환품번 한 개)만 지운다.
+// 지우고 나서 그 대표품번에 호환품번이 남지 않으면 품목 자체를 지운다.
+async function deletePNRow(rep, compat){
+  if(!userRole(currentUser).isMaster){ alert(lang==='ru'?'Удалять может только MASTER.':'MASTER 만 삭제할 수 있습니다.'); return; }
+  rep=String(rep||'').trim(); if(!rep) return;
+  const raw=String(compat==null?'':compat).trim();
+  const p=PN_DATA.find(x=>x.rep===rep);
+  const arr=(p&&p.compats)?p.compats.slice():[];
+  const idx=raw?arr.findIndex(c=>normPN(c)===normPN(raw)):-1;
+  // 호환품번이 없거나 이게 마지막 한 줄이면 품목 전체를 지운다.
+  if(idx<0 || arr.length<=1) return await deletePNItem(rep);
+  const shown=pnUpperLead(raw);
+  const ok=confirm(lang==='ru'
+    ? ('Удалить строку '+shown+' ?\n(остальные строки позиции '+rep+' останутся)')
+    : (shown+' 줄을 삭제할까요?\n(대표품번 '+rep+' 의 나머지 줄은 남습니다)'));
+  if(!ok) return;
+  arr.splice(idx,1);
+  const res=await savePNCell(rep, 'compat', arr.join(', '));
+  if(res && res.ok) ktAfterPnEdit();
 }
 async function deletePNItem(rep){
   if(!userRole(currentUser).isMaster){ alert('MASTER 만 삭제할 수 있습니다.'); return; }
