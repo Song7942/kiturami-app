@@ -3933,8 +3933,8 @@ async function savePNCell(rep, field, value){
   const oldVal = field==='compat' ? (p.compats||[]).map(pnUpperLead).join(', ') : (p[field]!=null?String(p[field]):'');
   const beforeCompats=(p.compats||[]).map(normPN);
   let rerender=false;
-  if(field==='compat'){ p.compats = val ? val.split(/[\s,]+/).map(s=>pnUpperLead(s.trim())).filter(Boolean) : []; rerender=true; }
-  else if(field==='final'){ p.final = pnUpperLead(val); }
+  if(field==='compat'){ p.compats = val ? val.split(/[\s,]+/).map(s=>pnUpAll(s)).filter(Boolean) : []; rerender=true; }
+  else if(field==='final'){ p.final = pnUpAll(val); }
   else { p[field]=val; }
   const newVal = field==='compat' ? (p.compats||[]).map(pnUpperLead).join(', ') : String(field==='final'?p.final:p[field]);
   _pnLookupMap=null; _pnByRepMap=null; _nameRuByRep=null;
@@ -3957,7 +3957,7 @@ async function savePNCell(rep, field, value){
 }
 // 대표품번 변경: 옛 rep 은 톰스톤으로 지우고 새 rep 으로 오버라이드를 다시 만든다.
 async function _renamePNRep(oldRep, newRaw){
-  const newRep=pnUpperLead(String(newRaw||'').trim());
+  const newRep=pnUpAll(newRaw);
   if(!newRep){ return { ok:false }; }
   if(newRep===oldRep) return { ok:true };
   if(PN_DATA.some(p=>p.rep===newRep)){ alert('이미 있는 품번입니다: '+newRep); return { ok:false }; }
@@ -8087,6 +8087,9 @@ function pnSpec(rep, fb){ const i=_pnResolved(rep); return (i&&i.spec!=null&&i.s
 function pnName(rep, fbKo, fbRu){ return lang==='ru' ? pnNameRu(rep, fbRu||fbKo) : pnNameKo(rep, fbKo); }
 // 품번 표시용: 맨 앞 영문(연속 알파벳)을 대문자로. 뒤 숫자·기호는 그대로.
 function pnUpperLead(x){ return String(x==null?'':x).replace(/^[A-Za-z]+/, m=>m.toUpperCase()); }
+// 품번을 적어 넣을 때 쓰는 다듬개. 소문자로 쳐도 대문자로 담는다(A11e100060 → A11E100060).
+// 보여 줄 때 쓰는 pnUpperLead 는 앞 글자만 올리므로, 저장하는 자리에서는 이쪽을 쓴다.
+function pnUpAll(x){ return String(x==null?'':x).trim().toUpperCase(); }
 // 적용모델(임시): 주문 데이터(PARTS)의 모델 적용표를 대표품번으로 찾아 라벨로 보여준다(표시 전용).
 let _partsByRep=null;
 function _partsModels(rep){
@@ -9272,7 +9275,7 @@ async function onShipCellBlur(el){
     if(f==='sail') patch.ym=shipYmOf(val)||null;
     else patch.arr_ym=shipYmOf(val)||null;
   } else if(f==='pn'){
-    const np=pnUpperLead(val); if(!np){ el.textContent=before; return; }
+    const np=pnUpAll(val); if(!np){ el.textContent=before; return; }
     if((shipData||[]).some(r=>r.inv===inv && normPN(r.pn)===normPN(np))){
       alert(ru?'Такой артикул уже есть в инвойсе.':'이 차수에 이미 있는 품번입니다.'); el.textContent=before; return; }
     // 품번은 열쇠라 지우고 새로 넣는다
@@ -9349,7 +9352,7 @@ function openShipAddRow(){
   box.querySelector('#saNo').onclick=()=>box.remove();
   box.onmousedown=e=>{ if(e.target===box) box.remove(); };
   box.querySelector('#saOk').onclick=async()=>{
-    const inv=g('saInv'), pn=pnUpperLead(g('saPn')), sail=g('saSail'), arr=g('saArr');
+    const inv=g('saInv'), pn=pnUpAll(g('saPn')), sail=g('saSail'), arr=g('saArr');
     if(!inv || !pn){ alert(ru?'Инвойс и артикул обязательны.':'인보이스 넘버와 호환품번은 꼭 적어 주세요.'); return; }
     if(sail && !/^\d{4}-\d{2}-\d{2}$/.test(sail)){ alert('선적일은 2026-09-15 처럼 적어 주세요.'); return; }
     if(arr && !/^\d{4}-\d{2}-\d{2}$/.test(arr)){ alert('입고일은 2026-09-15 처럼 적어 주세요.'); return; }
@@ -10740,7 +10743,7 @@ async function onPoChgBlur(el){
   const ru=(lang==='ru');
   const pn=String(el.getAttribute('data-pochg')||'');
   const before=String(el.getAttribute('data-pnorig')||'');
-  const val=pnUpperLead(String(el.textContent||'').replace(/\s+/g,' ').trim());
+  const val=pnUpAll(String(el.textContent||'').replace(/\s+/g,' '));
   if(val===before) return;
   if(!pnEditable()){ el.textContent=before; return; }
   const info=poLookup(pn);
