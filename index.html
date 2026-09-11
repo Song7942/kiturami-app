@@ -3931,6 +3931,7 @@ async function savePNCell(rep, field, value){
   let p=PN_DATA.find(x=>x.rep===rep);
   if(!p){ const cur=getPNInfo(rep)||{}; p={ rep, name_ko:cur.name_ko||'', name_ru:cur.name_ru||'', spec:cur.spec||'', final:cur.final||'', compats:(cur.compats||[]).slice() }; PN_DATA.push(p); }
   const oldVal = field==='compat' ? (p.compats||[]).map(pnUpperLead).join(', ') : (p[field]!=null?String(p[field]):'');
+  const beforeCompats=(p.compats||[]).map(normPN);
   let rerender=false;
   if(field==='compat'){ p.compats = val ? val.split(/[\s,]+/).map(s=>pnUpperLead(s.trim())).filter(Boolean) : []; rerender=true; }
   else if(field==='final'){ p.final = pnUpperLead(val); }
@@ -3941,6 +3942,11 @@ async function savePNCell(rep, field, value){
   const { error } = await sb.from('kt_pn_overrides').upsert(row,{onConflict:'rep'});
   if(error){ alert('저장 실패\n['+(error.message||error.code)+']'); return { ok:false }; }
   await recordPNHistory(rep, field, oldVal, newVal);
+  if(field==='compat'){
+    // 새로 붙인 호환품번에 가격 줄을 만들어 준다(최종품번 공급가를 그대로, 원가는 비움)
+    const added=(p.compats||[]).map(normPN).filter(k=>k && beforeCompats.indexOf(k)<0);
+    if(added.length) await priceSeedNewCompats(rep, added);
+  }
   if(field==='final'){
     const marked=await pnAutoDan(rep);
     if(marked.length) pnToast(lang==='ru'
@@ -13142,15 +13148,24 @@ function priceCompatOf(row){
 // 품번조회의 '호환품번 단위' 화면과 같은 규칙: kt_pn_specs(품번별 품명) 이 먼저,
 // 없으면 대표품번의 품명, 그것도 없으면 가격자료 자체 값.
 // (kt_price_calc 의 name_ko 에는 영문 품명이 들어 있는 줄이 있어 그대로 쓰면 영문으로 보였다)
+// 그 품번에 품명·규격이 안 적혀 있으면 같은 대표품번의 최종품번 것을 가져다 쓴다
+// (새로 붙인 호환품번은 아직 제 이름이 없다).
+function _priceSpecRow(row){
+  const own=pnSpecOf(priceCompatOf(row));
+  if(own && (own.name || own.spec || own.name_ru)) return own;
+  const info=(typeof getPNInfo==='function')?getPNInfo(row.rep):null;
+  const fin=info && info.final;
+  return (fin ? pnSpecOf(fin) : null) || own || {};
+}
 function priceNameFor(row){
-  const sp=pnSpecOf(priceCompatOf(row))||{};
+  const sp=_priceSpecRow(row);
   if(lang==='ru') return pnNameRu(row.rep, sp.name_ru || row.name_ru || row.name_ko);
   const kn=sp.name;
   return (kn!=null && String(kn).trim()!=='') ? String(kn) : pnNameKo(row.rep, row.name_ko);
 }
 // 규격도 같은 규칙
 function priceSpecFor(row){
-  const sp=pnSpecOf(priceCompatOf(row))||{};
+  const sp=_priceSpecRow(row);
   if(sp.spec!=null && String(sp.spec).trim()!=='') return String(sp.spec);
   return pnSpec(row.rep, row.spec);
 }
@@ -13160,6 +13175,48 @@ function priceFinalFor(row){
   const info=(typeof getPNInfo==='function')?getPNInfo(row.rep):null;
   const f=info && info.final;
   return (f!=null && String(f).trim()!=='') ? String(f) : (row.final||'');
+}
+// ── 새 호환품번에 가격 줄 만들어 주기 ─────────────────────
+//   같은 대표품번의 '최종품번' 에 공급가가 잡혀 있으면, 새로 붙인 호환품번에도
+//   그 공급가를 그대로 적어 둔다. 원가는 품번마다 다르므로 비워 둔다.
+//   (원가가 비어 있어도 공급가를 적어 두면 그 값이 그대로 쓰인다 — calcPriceRow 참고)
+function priceSupplyOfFinal(rep){
+  const info=(typeof getPNInfo==='function')?getPNInfo(rep):null;
+  const fin=normPN((info&&info.final)||'');
+  if(!fin) return null;
+  const row=(priceCalcData||[]).find(r=>r.rep===rep && normPN(r.compat)===fin);
+  if(!row) return null;
+  const c=calcPriceRow(row);
+  const v=(row.ru_supply_krw!=null && row.ru_supply_krw!=='') ? Number(row.ru_supply_krw) : c.ruSupply;
+  return (v!=null && isFinite(v) && v>0) ? Math.ceil(v) : null;
+}
+async function priceSeedNewCompats(rep, added){
+  try{
+    // 가격 화면을 안 열어 봤으면 자료가 없다. 그때는 여기서 한 번 읽어 온다.
+    if((!Array.isArray(priceCalcData) || !priceCalcData.length) && typeof loadPriceCalc==='function'){
+      try{ await loadPriceCalc(); }catch(e){}
+    }
+    if(!Array.isArray(priceCalcData) || !priceCalcData.length) return;
+    const supply=priceSupplyOfFinal(rep);
+    if(supply==null) return;                                            // 최종품번에 공급가가 없으면 아무것도 안 한다
+    let next=0; priceCalcData.forEach(r=>{ const n=Number(r.row_no); if(isFinite(n) && n>next) next=n; });
+    const now=new Date().toISOString();
+    const rows=[];
+    added.forEach(k=>{
+      if((priceCalcData||[]).some(r=>r.rep===rep && normPN(r.compat)===k)) return;   // 이미 있으면 그대로
+      // 품명·규격은 비워 둔다. 화면은 품번조회에서 가져와 찍으므로 그 쪽이 늘 맞다.
+      rows.push({ row_no:++next, name_ko:'', spec:'', rep,
+                  compat:pnUpperLead(k), final:priceFinalFor({rep}),
+                  ship_qty:null, ru_cost:null, ru_supply_krw:supply, kz_supply_krw:null, updated_at:now });
+    });
+    if(!rows.length) return;
+    const { error }=await sb.from('kt_price_calc').upsert(rows,{onConflict:'row_no'});
+    if(error){ console.error('kt_price_calc seed:', error.message); return; }
+    rows.forEach(r=>priceCalcData.push(r));
+    if(typeof pnToast==='function') pnToast(lang==='ru'
+      ? ('Цена скопирована на новые артикулы: '+rows.length)
+      : ('새 호환품번 '+rows.length+'개에 최종품번 공급가('+supply.toLocaleString()+')를 넣었습니다. 원가는 비어 있습니다.'));
+  }catch(e){ console.error(e); }
 }
 // 그 줄이 품번조회에서 어떤 품번들로 불리는지(검색에 쓴다)
 function priceKeyPNs(row){
