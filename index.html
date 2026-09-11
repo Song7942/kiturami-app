@@ -294,6 +294,20 @@ table.pt td{padding:3px 5px;font-size:11px;overflow:hidden;border-bottom:1px sol
 /* ── 모바일 카드 ── */
 .card-list{border:1px solid var(--border);border-radius:10px;background:var(--surface)}
 .price-row td{overflow:hidden}
+/* 가격정보 줄의 칸 모양. 줄마다 style= 을 되풀이하면 표 HTML 이 4MB 를 넘어
+   화면 뜨는 데만 0.5초가 걸린다. 같은 모양은 여기 한 번만 적는다. */
+.price-row{border-bottom:1px solid var(--border);font-size:11px}
+.price-row td.pc-nm{padding:3px 4px;word-break:break-all}
+.price-row td.pc-sp{padding:3px 4px;color:var(--muted);font-size:10px;word-break:break-all}
+.price-row td.pc-en{padding:3px 4px;color:var(--accent2);font-weight:600;word-break:break-all}
+.price-row td.pc-cd{padding:3px 4px}
+.price-row td.pc-n{padding:3px 2px;color:var(--muted)}
+.price-row td.pc-e{padding:3px 2px;border-left:1px solid var(--border)}
+.price-row td.pc-r{text-align:right;padding:3px 4px;color:var(--muted)}
+.price-row td.pc-r2{text-align:right;padding:3px 4px}
+.price-row span.pc-c{font-size:10px;padding:1px 4px;white-space:nowrap}
+.price-row input.pc-in{width:100%;max-width:72px;box-sizing:border-box;padding:2px 3px;border:1px solid var(--border);
+  border-radius:4px;background:var(--surface);color:var(--text);text-align:right;font-size:11px}
 #priceCalcThead th,#priceSupplyThead th{overflow:hidden}
 /* 주문관리 표: 한 화면 맞춤 (압축·줄바꿈·넘침 차단) */
 #adminOrderThead th,#adminMyOrdersThead th{padding:4px 3px !important;font-size:10px !important;word-break:break-all;overflow:hidden;text-align:center !important;vertical-align:middle}
@@ -969,7 +983,7 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
       <div class="search-bar">
         <div class="search-wrap">
           <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-          <input type="text" id="priceSearchInput" placeholder="품명·규격·영문품명·대표/호환/최종품번으로 검색…" oninput="renderPriceActive()">
+          <input type="text" id="priceSearchInput" placeholder="품명·규격·영문품명·대표/호환/최종품번으로 검색…" oninput="debouncedRenderPrice()">
         </div>
         <div class="count-badge" id="priceCountBadge"></div>
         <button class="dl-btn" id="priceViewWrap" onclick="openPriceViewPanel()" title="표에 보일 열·값 없는 품번·묶어 보기를 고릅니다">
@@ -2049,8 +2063,12 @@ function switchTab(tab){
     // 표에 그려 둔 값(원가·공급가)도 같은 이유로 읽기 전에 비운다. 둘 다 await 전 동기 실행.
     clearUserScopedViews();
     applyPriceTabChrome();
-    Promise.all([loadPriceSettings(), loadPriceCalc(), loadPrices(), loadCompanyPrices(), loadPriceOrig(),
-                 ((typeof psiData==='undefined'||!Object.keys(psiData).length)?loadPSI():Promise.resolve())]).then(async()=>{ if(priceMode()==='master') await autoUpdateRatesIfNewMonth(); fillParamInputs(); applyPriceTabChrome(); renderPriceActive(); priceManBtn(); });
+    // 방금 받아 온 자료면 다시 받지 않는다(줄이 많아 탭을 옮길 때마다 받으면 화면이 늦게 뜬다)
+    const _pFresh=ldFresh('price') && priceCalcData.length;
+    Promise.all(_pFresh ? [] : [loadPriceSettings(), loadPriceCalc(), loadPrices(), loadCompanyPrices(), loadPriceOrig()])
+      .then(()=>{ if(!_pFresh) ldMark('price');
+        return (typeof psiData==='undefined'||!Object.keys(psiData).length)?loadPSI():Promise.resolve(); })
+      .then(async()=>{ if(priceMode()==='master') await autoUpdateRatesIfNewMonth(); fillParamInputs(); applyPriceTabChrome(); renderPriceActive(); priceManBtn(); });
   }
   if(tab==='psi'){ loadPSITab(); }
   if(tab==='po'){ loadPOTab(); }
@@ -11056,6 +11074,7 @@ async function loadPSI(){
       if(!data || data.length<page) break;
     }
   }catch(e){}
+  ldMark('psi');
   // 자료 지문. 이게 그대로면 화면을 다시 그리지 않는다.
   //   품번 수·달 칸 수만 세면 숫자만 바뀐 경우(인보이스 삭제, 선적 지움 등)를 못 알아채
   //   새 자료를 받고도 옛 숫자가 그대로 남는다. 그래서 값까지 더해 지문에 넣는다.
@@ -12802,12 +12821,19 @@ function psiParse1C(aoa){
   };
   reader.readAsArrayBuffer(file);
 }
+// ── 화면을 열 때마다 표를 통째로 다시 내려받지 않게 ──────────
+//   PSI·가격정보는 줄이 2천 개가 넘어, 탭을 옮길 때마다 받으면 화면이 늦게 뜬다.
+//   방금 받아 온 것이면 그대로 쓴다. 올리기·고치기는 스스로 다시 받으므로
+//   (그때 시각이 갱신된다) 새 자료를 못 보는 일은 없다.
+const _ldAt={};
+function ldFresh(key, ms){ return (Date.now()-(_ldAt[key]||0)) < (ms||60000); }
+function ldMark(key){ _ldAt[key]=Date.now(); }
 async function loadPSITab(){
   const btn=document.getElementById('psiUploadBtn');
   if(btn) btn.style.display = canEditPsi() ? '' : 'none';
   await loadPsiFc();
   await loadPsiCols();
-  await loadPSI();
+  if(!Object.keys(psiData).length || !ldFresh('psi')) await loadPSI();
   // 기간은 고른 값을 그대로 둔다(처음 열 때만 psiCfg 가 자료의 마지막 두 달로 잡는다)
   if(psiPaneFresh('psi')){ updatePaneHBar('psi'); return; }   // 바뀐 게 없으면 그대로 둔다
   renderPSI();
@@ -13639,6 +13665,8 @@ function openPRFilter(i, anchor){
   document.addEventListener('keydown', _prFilterEsc);
   setTimeout(()=>document.addEventListener('mousedown', _prFilterOutside), 0);
 }
+// 검색은 글자를 칠 때마다 2천 줄을 다시 그리게 되므로 잠깐 모았다 그린다(다른 화면과 같게)
+function debouncedRenderPrice(){ clearTimeout(window._priceT); window._priceT=setTimeout(renderPriceActive, 200); }
 function renderPriceActive(){
   const m=priceMode();
   if(m==='ru'||m==='kz') return renderPriceRegion(m);
@@ -13740,25 +13768,24 @@ function renderPriceCalc(){
   const emptyEl=document.getElementById('priceNoResult');
   if(!rows.length){ tbody.innerHTML=''; setPriceCards(''); emptyEl.textContent=t.priceNoCalc; emptyEl.style.display='block'; return; }
   emptyEl.style.display='none';
-  const inputStyle='width:100%;max-width:72px;box-sizing:border-box;padding:2px 3px;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:var(--text);text-align:right;font-size:11px';
   tbody.innerHTML=rows.map(r=>{
     const c=calcPriceRow(r);
-    return `<tr style="border-bottom:1px solid var(--border);font-size:11px" class="price-row">
-      <td style="padding:3px 4px;word-break:break-all">${escapeHtml(priceNameFor(r))}</td>
-      ${isKo?`<td style="padding:3px 4px;color:var(--muted);font-size:10px;word-break:break-all">${escapeHtml(priceSpecFor(r))}</td>`:''}${engTdHtml(r.rep,'style="padding:3px 4px;color:var(--accent2);font-weight:600;word-break:break-all"')}
-      <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(r.rep||'')}</span></td>
-      <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(pnUpperLead(r.compat))}</span></td>
-      <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(pnUpperLead(r.final))}</span></td>
-      ${priceMarkTd(r.compat)}
-      <td class="center" style="padding:3px 2px;color:var(--muted)">${fmtN(psiSumOf(r.compat,'in'))}</td>
-      <td class="center" style="padding:3px 2px;color:var(--muted)">${fmtN(psiSumOf(r.compat,'out'))}</td>
-      <td class="center${priceIsMan(priceOrigKey('calc',r.row_no),'ru_cost',r.ru_cost)?' price-man':''}" style="padding:3px 2px;border-left:1px solid var(--border)"><input type="text" inputmode="decimal" style="${inputStyle}" value="${c.ruCost!=null?fmtN(c.ruCost):''}" onchange="onPriceCellEdit(${r.row_no},'ru_cost',this.value)"></td>
-      <td style="text-align:right;padding:3px 4px;color:var(--muted)">${fmtN(c.costRub)}</td>
-      <td style="text-align:right;padding:3px 4px;color:var(--muted)">${fmtN(c.costUsd)}</td>
-      <td class="center${priceIsMan(priceOrigKey('calc',r.row_no),'ru_supply_krw',r.ru_supply_krw)?' price-man':''}" style="padding:3px 2px;border-left:1px solid var(--border)"><input type="text" inputmode="decimal" style="${inputStyle}" value="${r.ru_supply_krw!=null&&r.ru_supply_krw!==''?fmtN(Number(r.ru_supply_krw)):''}" placeholder="${c.ruSupply!=null?fmtN(c.ruSupply):''}" onchange="onPriceCellEdit(${r.row_no},'ru_supply_krw',this.value)"></td>
-      <td style="text-align:right;padding:3px 4px">${fmtN(c.ruRub)}</td>
-      <td class="center" style="padding:3px 2px;color:var(--muted)">${fmtGp(c.ruGpVal)}</td>
-    </tr>`;   /* [임시] 카자흐스탄 공급가KRW/USD/GP 열 제거 */
+    return `<tr class="price-row">`
+      +`<td class="pc-nm">${escapeHtml(priceNameFor(r))}</td>`
+      +(isKo?`<td class="pc-sp">${escapeHtml(priceSpecFor(r))}</td>`:'')+engTdHtml(r.rep,'class="pc-en"')
+      +`<td class="pc-cd"><span class="code pc-c">${escapeHtml(r.rep||'')}</span></td>`
+      +`<td class="pc-cd"><span class="code pc-c">${escapeHtml(pnUpperLead(r.compat))}</span></td>`
+      +`<td class="pc-cd"><span class="code pc-c">${escapeHtml(pnUpperLead(r.final))}</span></td>`
+      +priceMarkTd(r.compat)
+      +`<td class="center pc-n">${fmtN(psiSumOf(r.compat,'in'))}</td>`
+      +`<td class="center pc-n">${fmtN(psiSumOf(r.compat,'out'))}</td>`
+      +`<td class="center pc-e${priceIsMan(priceOrigKey('calc',r.row_no),'ru_cost',r.ru_cost)?' price-man':''}"><input type="text" inputmode="decimal" class="pc-in" value="${c.ruCost!=null?fmtN(c.ruCost):''}" onchange="onPriceCellEdit(${r.row_no},'ru_cost',this.value)"></td>`
+      +`<td class="pc-r">${fmtN(c.costRub)}</td>`
+      +`<td class="pc-r">${fmtN(c.costUsd)}</td>`
+      +`<td class="center pc-e${priceIsMan(priceOrigKey('calc',r.row_no),'ru_supply_krw',r.ru_supply_krw)?' price-man':''}"><input type="text" inputmode="decimal" class="pc-in" value="${r.ru_supply_krw!=null&&r.ru_supply_krw!==''?fmtN(Number(r.ru_supply_krw)):''}" placeholder="${c.ruSupply!=null?fmtN(c.ruSupply):''}" onchange="onPriceCellEdit(${r.row_no},'ru_supply_krw',this.value)"></td>`
+      +`<td class="pc-r2">${fmtN(c.ruRub)}</td>`
+      +`<td class="center pc-n">${fmtGp(c.ruGpVal)}</td>`
+      +`</tr>`;   /* [임시] 카자흐스탄 공급가KRW/USD/GP 열 제거 */
   }).join('');
   // 모바일 카드 (조회용 — 편집은 데스크톱 표에서)
   setPriceCards(rows.map(r=>{
