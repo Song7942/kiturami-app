@@ -13994,6 +13994,22 @@ function renderPriceSupply(){
   const emptyEl=document.getElementById('priceNoResult');
   if(!list.length){ tbody.innerHTML=''; setPriceCards(''); emptyEl.textContent=t.priceNoSupply; emptyEl.style.display='block'; return; }
   emptyEl.style.display='none';
+  // 공급가 칸은 손으로 고칠 수 있다. 적은 값은 환율로 원화(공급가KRW)로 되돌려 담는다.
+  //   고칠 권한이 없거나 그 줄이 계산식 줄이 아니면(row_no 없음) 종전대로 글자만 보여 준다.
+  const EDSUP=(typeof guardWrite==='function') && (typeof priceMode==='function') && priceMode()==='master'
+              && (typeof pnEditable==='function') && pnEditable();
+  const supCell=(m,cur)=>{
+    const v=(cur==='usd')?m.usd:m.rub;
+    const fld=(cur==='usd')?'kz_supply_krw':'ru_supply_krw';
+    const src=(m.row_no!=null)?(priceCalcData||[]).find(x=>x.row_no===m.row_no):null;
+    const man=(src && typeof priceIsMan==='function'
+               && priceIsMan(priceOrigKey('calc',m.row_no), fld, src[fld]))?' price-man':'';
+    if(!EDSUP || m.row_no==null)
+      return '<td class="'+man.trim()+'" style="text-align:right;padding:3px 6px;font-weight:600">'+fmtN(v)+'</td>';
+    return '<td class="center'+man+'" style="padding:3px 2px">'
+      +'<input type="text" inputmode="decimal" class="pc-in" value="'+(v!=null?fmtN(v):'')+'"'
+      +' onchange="onPriceSupplyEdit('+m.row_no+',\''+cur+'\',this.value)"></td>';
+  };
   tbody.innerHTML=list.map(m=>`<tr style="border-bottom:1px solid var(--border);font-size:11px" class="price-row">
       <td style="padding:3px 4px;word-break:break-all">${escapeHtml(priceNameFor(m))}</td>
       ${isKo?`<td style="padding:3px 4px;color:var(--muted);font-size:10px;word-break:break-all">${escapeHtml(priceSpecFor(m))}</td>`:''}${engTdHtml(m.rep,'style="padding:3px 4px;color:var(--accent2);font-weight:600;word-break:break-all"')}
@@ -14001,8 +14017,7 @@ function renderPriceSupply(){
       <td style="padding:3px 4px">${m.compats.map(c=>`<span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(pnUpperLead(c))}</span>`).join('<br>')}</td>
       <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(pnUpperLead(m.final))}</span></td>
       ${priceMarkTd(m.compats)}
-      <td style="text-align:right;padding:3px 6px;font-weight:600">${fmtN(m.rub)}</td>
-      <td style="text-align:right;padding:3px 6px;font-weight:600">${fmtN(m.usd)}</td>
+      ${supCell(m,'rub')}${supCell(m,'usd')}
     </tr>`).join('');
   setPriceCards(list.map(m=>priceCardHtml(priceNameFor(m), isKo?priceSpecFor(m):'',
     [{label:t.pnH1,val:m.rep},{label:t.pnH2,val:(m.compats||[]).map(pnUpperLead).join(', ')},{label:t.pnH3,val:pnUpperLead(m.final)}],
@@ -14446,8 +14461,23 @@ async function onPriceCellEdit(rowNo, field, value){
   const { error } = await sb.from('kt_price_calc').upsert({ row_no:r.row_no, name_ko:r.name_ko, spec:r.spec, rep:r.rep, compat:r.compat, final:r.final, ship_qty:r.ship_qty, ru_cost:r.ru_cost, ru_supply_krw:r.ru_supply_krw, kz_supply_krw:r.kz_supply_krw, updated_at:r.updated_at },{onConflict:'row_no'});
   if(error){ alert('저장 실패\n['+(error.message||error.code)+']'); return; }
   priceManBtn();
-  renderPriceCalc();
+  renderPriceActive();   // 계산식·공급가 어느 화면에서 고쳤든 지금 보고 있는 화면을 다시 그린다
   syncKtPricesFromCalc();
+}
+// 공급가 화면에서 RUB·USD 를 손으로 고친다.
+//   저장은 원화(공급가KRW) 한 곳에만 한다 — 화면의 RUB·USD 는 환율로 환산한 값이라,
+//   따로 담아 두면 환율이 바뀔 때 서로 어긋난다. 적은 값에 환율을 곱해 원화로 되돌린다.
+async function onPriceSupplyEdit(rowNo, cur, value){
+  const raw=String(value==null?'':value).replace(/,/g,'').trim();
+  if(raw!==''){
+    const n=Number(raw);
+    if(isNaN(n)){ alert(lang==='ru'?'Введите число.':'숫자를 입력해 주세요.'); renderPriceActive(); return; }
+  }
+  const rate=(cur==='usd')?priceSettings.usd_rate:priceSettings.rub_rate;
+  if(raw!=='' && !(rate>0)){ alert(lang==='ru'?'Не задан курс.':'기준환율이 없어 원화로 되돌릴 수 없습니다.'); renderPriceActive(); return; }
+  const field=(cur==='usd')?'kz_supply_krw':'ru_supply_krw';
+  const krw=(raw==='')?'':Math.ceil(Number(raw)*rate);
+  await onPriceCellEdit(rowNo, field, krw);
 }
 
 // 역할에 따라 계산식(MASTER) / 회사 가격(회사 계정) 업로드로 분기
