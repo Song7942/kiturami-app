@@ -1196,9 +1196,10 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
       </div>
 
       <select id="poCha" onchange="renderPO()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></select>
-      <select id="poFrom" onchange="renderPO()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></select>
+      <datalist id="ktPoYmOpts"></datalist>
+      <input type="text" id="poFrom" list="ktPoYmOpts" placeholder="2026-01" onchange="renderPO()" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center">
       <span style="font-size:11px;color:var(--muted)">~</span>
-      <select id="poTo" onchange="renderPO()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></select>
+      <input type="text" id="poTo" list="ktPoYmOpts" placeholder="2026-12" onchange="renderPO()" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center">
       <button class="dl-btn" onclick="poAllPeriod()" title="발주년월을 전체로 돌리기"><span id="i18n-po-all">전체 기간</span></button>
       <button class="dl-btn" id="poResetManualBtn" onclick="poResetManual()" title="손으로 고친 공급수량을 인보이스 기준으로 되돌립니다">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/></svg>
@@ -2031,6 +2032,7 @@ function switchTab(tab){
   document.getElementById('pane-'+tab).classList.add('active');
   const el=getScrollBody(); if(el) el.scrollTop=0;
   const btn=document.getElementById('toTopBtn'); if(btn) btn.classList.remove('show');
+  try{ ktDropInitAll(); }catch(e){}   // 엑셀을 화면에 끌어다 놓아 올리는 길(화면마다 한 번만 단다)
   // 탭을 옮길 때마다 주문 알림 점을 가볍게 새로고침 — 로그인 중 새 주문/배분도 바로 보이게.
   if(currentUser){ loadOrderFeedStamps().then(updateOrderUnreadDots); refreshSignupDot(); }
   if(tab==='pn') renderPN();
@@ -9717,6 +9719,60 @@ function shipDropInit(){
   document.addEventListener('dragover', guard);
   document.addEventListener('drop', e=>{ guard(e); if(pane.classList.contains('active')) hide(); });
 }
+// ── 엑셀을 화면에 끌어다 놓아 올리기 (업로드 단추가 있는 화면 공용) ──
+//   놓은 파일을 그 화면의 '파일 고르기' 칸에 그대로 넣고 change 를 울린다.
+//   그러면 단추로 올릴 때와 똑같은 길을 타므로 권한 검사도 그대로 걸린다.
+const _ktDropDone={};
+function ktDropInit(paneId, inputId, hintKo, hintRu){
+  if(_ktDropDone[paneId+'|'+inputId]) return;
+  const pane=document.getElementById(paneId), inp=document.getElementById(inputId);
+  if(!pane || !inp) return;
+  _ktDropDone[paneId+'|'+inputId]=true;
+  const hintId=paneId+'DropHint';
+  let depth=0;
+  const hasFiles=e=>{ const dt=e.dataTransfer; if(!dt||!dt.types) return false;
+    for(let i=0;i<dt.types.length;i++) if(String(dt.types[i])==='Files') return true;
+    return false; };
+  const show=()=>{
+    if(document.getElementById(hintId)) return;
+    const d=document.createElement('div'); d.id=hintId; d.className='drop-hint';
+    d.textContent=(lang==='ru')?hintRu:hintKo;
+    pane.appendChild(d);
+  };
+  const hide=()=>{ depth=0; const d=document.getElementById(hintId); if(d) d.remove(); };
+  const take=files=>{
+    const ok=[];
+    for(let i=0;i<(files?files.length:0);i++){ if(/\.(xlsx|xlsm|xls)$/i.test(files[i].name)) ok.push(files[i]); }
+    if(!ok.length){ alert((lang==='ru')?'Поддерживаются только файлы Excel (.xlsx).':'엑셀 파일(.xlsx)만 올릴 수 있습니다.'); return; }
+    try{
+      const dt=new DataTransfer(); ok.forEach(f=>dt.items.add(f));
+      inp.files=dt.files;
+      inp.dispatchEvent(new Event('change', {bubbles:true}));
+    }catch(e){ alert((lang==='ru')?'Не удалось принять файл.':'파일을 받지 못했습니다. 업로드 단추로 올려 주세요.'); }
+  };
+  pane.addEventListener('dragenter', e=>{ if(!hasFiles(e)) return; e.preventDefault(); depth++; show(); });
+  pane.addEventListener('dragover',  e=>{ if(!hasFiles(e)) return; e.preventDefault(); e.dataTransfer.dropEffect='copy'; show(); });
+  pane.addEventListener('dragleave', e=>{ if(!hasFiles(e)) return; depth--; if(depth<=0) hide(); });
+  pane.addEventListener('drop', e=>{ if(!hasFiles(e)) return; e.preventDefault(); hide(); take(e.dataTransfer.files); });
+  // 화면을 빗맞혀 놓았을 때 브라우저가 파일을 열어 버리지 않게 한다(이 화면일 때만)
+  const guard=e=>{ if(pane.classList.contains('active') && hasFiles(e)) e.preventDefault(); };
+  document.addEventListener('dragover', guard);
+  document.addEventListener('drop', e=>{ guard(e); if(pane.classList.contains('active')) hide(); });
+}
+// 업로드 단추가 있는 화면마다 한 번씩 달아 둔다(여러 번 불러도 한 번만 단다)
+function ktDropInitAll(){
+  const X=(ko)=>'여기에 '+ko+' 엑셀(.xlsx)을 놓으세요';
+  const R=(ru)=>'Отпустите файл Excel ('+ru+') здесь';
+  ktDropInit('pane-psi',       'psiFileInput',    X('PSI'),      R('PSI'));
+  ktDropInit('pane-sim',       'psiFileInput',    X('PSI'),      R('PSI'));
+  ktDropInit('pane-po',        'poFileInput',     X('발주'),     R('заказы'));
+  ktDropInit('pane-pn',        'pnFileInput',     X('품번'),     R('артикулы'));
+  ktDropInit('pane-prod',      'prodFileInput',   X('제품목록'), R('изделия'));
+  ktDropInit('pane-price',     'priceFileInput',  X('가격'),     R('цены'));
+  ktDropInit('pane-inventory', 'invFileInput',    X('재고'),     R('остатки'));
+  ktDropInit('pane-shipments', 'shipFileInput',   X('출고'),     R('отгрузки'));
+  ktDropInit('pane-order',     'orderUploadInput',X('주문'),     R('заказ'));
+}
 function _readWb(file){
   return new Promise((res,rej)=>{
     const fr=new FileReader();
@@ -10290,16 +10346,20 @@ function poFillRange(){
   const list=poYmList();
   const f=document.getElementById('poFrom'), t=document.getElementById('poTo');
   if(!list.length) return {from:'', to:'', label:L('전 기간','все')};
-  if(f && f.getAttribute('data-list')!==lang+'|'+list.join('|')){
-    const cf=f.value, ct=t?t.value:'';
-    const opts=list.map(v=>'<option value="'+v+'">'+v+'</option>').join('');
-    f.innerHTML=opts; if(t) t.innerHTML=opts;
-    f.setAttribute('data-list',lang+'|'+list.join('|')); if(t) t.setAttribute('data-list',lang+'|'+list.join('|'));
-    f.value=(cf && list.indexOf(cf)>=0)?cf:list[0];
-    if(t) t.value=(ct && list.indexOf(ct)>=0)?ct:list[list.length-1];
+  // 손으로 적어도 되고, 목록에서 골라도 되게(다른 화면과 같은 방식)
+  const dl=document.getElementById('ktPoYmOpts');
+  const key=list.join('|');
+  if(dl && dl.getAttribute('data-list')!==key){
+    dl.innerHTML=list.map(v=>'<option value="'+v+'">').join('');
+    dl.setAttribute('data-list', key);
   }
-  let from=f?f.value:'', to=t?t.value:'';
+  // 처음 열 때는 전 기간으로 채워 둔다(빈 칸이면 전 기간과 같다)
+  let from=f?String(f.value||'').trim():'', to=t?String(t.value||'').trim():'';
+  if(!from) from=list[0];
+  if(!to) to=list[list.length-1];
   if(from && to && from>to){ const x=from; from=to; to=x; }
+  if(f && document.activeElement!==f && f.value!==from) f.value=from;
+  if(t && document.activeElement!==t && t.value!==to) t.value=to;
   const whole=(from===list[0] && to===list[list.length-1]);
   const label = whole ? L('전 기간','все периоды') : (from===to ? from : (from+' ~ '+to));
   return {from, to, label, whole};
@@ -13207,6 +13267,65 @@ function setPriceGroup(on){
   try{ localStorage.setItem('kt_price_group', on?'1':'0'); }catch(e){}
   renderPriceActive();
 }
+// ── 가격정보 '보기' — 열 감추기 / 값 없는 품번 ─────────────
+//   가격정보는 보는 사람과 탭에 따라 열이 달라져, 열 목록을 미리 정해 둘 수 없다.
+//   그래서 그려 놓은 머리글에서 이름을 읽어 그 이름으로 기억한다(화면마다 따로).
+function _priceColsKey(){
+  const u=(typeof currentUser!=='undefined'&&currentUser)?(currentUser.id||''):'';
+  return 'kt_price_cols:'+u;
+}
+function priceColsAll(){
+  try{ const s=localStorage.getItem(_priceColsKey()); const o=s?JSON.parse(s):null; return (o&&typeof o==='object')?o:{}; }
+  catch(e){ return {}; }
+}
+function priceColsCur(){ const o=priceColsAll()[priceViewKey()]; return (o&&typeof o==='object')?o:{}; }
+function priceColHidden(label){ return priceColsCur()[label]===false; }
+function priceShowZero(){ return priceColsCur().__zero!==false; }   // 처음엔 다 보여 준다
+function priceSaveCols(cur){
+  const all=priceColsAll(); all[priceViewKey()]=cur;
+  try{ localStorage.setItem(_priceColsKey(), JSON.stringify(all)); }catch(e){}
+}
+// 머리글 칸에서 열 이름만 뽑는다(거르개 단추·붉은 점은 뗀다)
+function priceThLabel(th){
+  if(!th) return '';
+  return String(th.textContent||'').replace(/[▾▲▼●]/g,'').replace(/\s+/g,' ').trim();
+}
+// 고른 열을 감춘다. 묶음 머리글은 그 아래 감춘 개수만큼 colspan 을 줄인다.
+function priceApplyCols(){
+  if(!_prCtx) return;
+  const thead=_prCtx.thead, tbody=_prCtx.tbody;
+  const leaves=priceLeafThs(thead);
+  const hide=leaves.map(th=>priceColHidden(priceThLabel(th)));
+  // 본문
+  [...tbody.children].forEach(tr=>{
+    const tds=tr.children;
+    for(let i=0;i<tds.length && i<hide.length;i++) tds[i].style.display=hide[i]?'none':'';
+  });
+  // 머리글: 두 줄짜리면 첫 줄의 묶음 칸은 colspan 을 줄인다
+  const rows=[...thead.querySelectorAll('tr')];
+  if(rows.length===1){
+    [...rows[0].children].forEach((th,i)=>{ th.style.display=hide[i]?'none':''; });
+  }else if(rows.length>1){
+    const r1=[...rows[0].children], r2=[...rows[1].children];
+    let leaf=0, j=0;
+    r1.forEach(th=>{
+      const rs=parseInt(th.getAttribute('rowspan')||'1',10);
+      const cs0=parseInt(th.getAttribute('data-cs0')||th.getAttribute('colspan')||'1',10);
+      th.setAttribute('data-cs0', String(cs0));       // 원래 colspan 을 기억해 둔다
+      let show=0;
+      for(let k=0;k<cs0;k++){
+        const h=hide[leaf++];
+        if(rs<=1){ const sub=r2[j++]; if(sub) sub.style.display=h?'none':''; }
+        if(!h) show++;
+      }
+      if(rs>1){ th.style.display=show?'':'none'; }
+      else { th.style.display=show?'':'none'; if(show) th.setAttribute('colspan', String(show)); }
+    });
+  }
+  // 남은 칸이 하나도 없으면 안내
+  const cg=thead.parentElement?thead.parentElement.querySelector('colgroup'):null;
+  if(cg){ [...cg.children].forEach((c,i)=>{ c.style.display=hide[i]?'none':''; }); }
+}
 // 대표품번 열의 자리. 품명 · (규격) · (영문품명) 다음이 대표품번이다.
 function priceRepColIdx(){ return 1 + ((lang==='ko')?1:0) + (canViewEngName()?1:0); }
 function priceGroupRows(tbodyId){
@@ -13249,24 +13368,52 @@ function openPriceViewPanel(){
   const old=document.getElementById('priceViewPop'); if(old) old.remove();
   const box=document.createElement('div'); box.id='priceViewPop';
   box.style.cssText='position:fixed;inset:0;z-index:10000;background:#0008;display:flex;align-items:center;justify-content:center';
-  box.innerHTML='<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;width:330px;max-width:92vw;'
-    +'box-shadow:0 16px 44px #000a;font-size:12px;color:var(--text)">'
+  // 지금 그려진 머리글에서 열 이름을 읽어 온다(보는 사람·탭에 따라 열이 달라진다)
+  const leaves=_prCtx?priceLeafThs(_prCtx.thead):[];
+  const seen={};
+  const cols=[];
+  leaves.forEach(th=>{ const lb=priceThLabel(th); if(!lb || seen[lb]) return; seen[lb]=1; cols.push(lb); });
+  const item=lb=>'<label style="display:flex;align-items:center;gap:7px;padding:4px 4px;cursor:pointer">'
+    +'<input type="checkbox" class="pvCol" data-lb="'+escapeHtml(lb)+'" '+(priceColHidden(lb)?'':'checked')+' style="cursor:pointer;flex:none">'
+    +'<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escapeHtml(lb)+'</span></label>';
+  box.innerHTML='<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;width:340px;max-width:92vw;'
+    +'max-height:86vh;overflow:auto;box-shadow:0 16px 44px #000a;font-size:12px;color:var(--text)">'
     +'<div style="padding:12px 14px;border-bottom:1px solid var(--border);font-weight:700;font-size:13px">'+(ru?'Вид':'보기')+'</div>'
     +'<div style="padding:12px 14px">'
+    +(cols.length?('<div style="font-size:11px;color:var(--muted);margin-bottom:4px">'+(ru?'Столбцы':'표에 보일 열')+'</div>'
+      +'<div style="max-height:34vh;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:4px 6px">'
+      +cols.map(item).join('')+'</div>'):'')
+    +'<div style="border-top:1px solid var(--border);margin:10px 0 6px"></div>'
     +'<label style="display:flex;align-items:center;gap:8px;cursor:pointer">'
+    +'<input type="checkbox" id="pvZero" '+(priceShowZero()?'checked':'')+' style="cursor:pointer;flex:none">'
+    +'<span>'+(ru?'Показывать артикулы без данных':'값 없는 품번도 보기')+'</span></label>'
+    +'<label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:6px">'
     +'<input type="checkbox" id="pvGroup" '+(priceGroupOn()?'checked':'')+' style="cursor:pointer;flex:none">'
     +'<span>'+(ru?'Группировать по осн. артикулу':'대표품번끼리 묶어 보기')+'</span></label>'
     +'<div style="font-size:11px;color:var(--muted);margin-top:6px;line-height:1.5">'
     +(ru?'Строки одного осн. артикула собираются вместе, сверху — строка осн. артикула. При группировке сортировка по заголовку отключена.'
         :'같은 대표품번끼리 모으고 그 위에 대표품번 줄을 얹습니다. 묶어 보는 동안에는 머리글 정렬을 쓸 수 없습니다.')
+    +'<br>'+(ru?'Выбор столбцов сохраняется отдельно для каждого экрана и ID.':'열 선택은 화면마다·아이디별로 따로 저장됩니다.')
     +'</div></div>'
     +'<div style="display:flex;gap:7px;padding:11px 14px;border-top:1px solid var(--border)">'
+    +'<button id="pvAll" style="flex:none;padding:7px 12px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);cursor:pointer;font-size:12px">'+(ru?'Все':'전체 선택')+'</button>'
     +'<button id="pvClose" style="flex:1;padding:7px;border:none;border-radius:7px;background:var(--accent2);color:#fff;cursor:pointer;font-size:12px;font-weight:700">'+(ru?'Закрыть':'닫기')+'</button>'
     +'</div></div>';
   document.body.appendChild(box);
-  const done=()=>{ const on=box.querySelector('#pvGroup').checked; box.remove(); setPriceGroup(on); };
-  box.querySelector('#pvClose').onclick=done;
-  box.onmousedown=e=>{ if(e.target===box) done(); };
+  let done=false;
+  const commit=()=>{
+    if(done) return; done=true;
+    const cur={};
+    box.querySelectorAll('.pvCol').forEach(c=>{ cur[c.getAttribute('data-lb')]=c.checked; });
+    cur.__zero=box.querySelector('#pvZero').checked;
+    priceSaveCols(cur);
+    const on=box.querySelector('#pvGroup').checked;
+    box.remove();
+    setPriceGroup(on);                       // 안에서 renderPriceActive() 를 부른다
+  };
+  box.querySelector('#pvAll').onclick=()=>box.querySelectorAll('.pvCol').forEach(c=>c.checked=true);
+  box.querySelector('#pvClose').onclick=commit;
+  box.onmousedown=e=>{ if(e.target===box) commit(); };
 }
 // ══ 가격정보 머리글 거르개·정렬 ═══════════════════════════
 //   가격정보는 보는 사람(MASTER·지역·회사)과 탭(계산식·공급가)에 따라 열이 달라진다.
@@ -13346,7 +13493,22 @@ function priceHookFilters(theadId, tbodyId){
   _prCtx={thead, tbody};
   const ths=priceLeafThs(thead);
   ths.forEach((th,i)=>{ if(th && !th.querySelector('span[onclick^="event.stopPropagation();openPRFilter"]')) th.insertAdjacentHTML('beforeend', priceIconHtml(i)); });
+  // 숫자 열이 어디인지 한 번 가려 둔다('값 없는 품번' 을 가릴 때 쓴다)
+  _prNumCols=[];
+  const body=[...tbody.children].filter(tr=>!tr.classList.contains('price-grp'));
+  for(let i=0;i<ths.length;i++){
+    let any=false, ok=true;
+    for(const tr of body){ const v=priceCellVal(tr,i); if(v==='') continue; if(_prNum(v)==null){ ok=false; break; } any=true; }
+    if(ok && any) _prNumCols.push(i);
+  }
   priceApplyFilters();
+  priceApplyCols();
+}
+let _prNumCols=[];
+// 그 줄에 숫자 값이 하나라도 있나(전부 비었거나 0 이면 '값 없는 품번')
+function priceRowHasVal(tr){
+  for(const i of _prNumCols){ const n=_prNum(priceCellVal(tr,i)); if(n) return true; }
+  return false;
 }
 function priceApplyFilters(){
   if(!_prCtx) return;
@@ -13354,14 +13516,16 @@ function priceApplyFilters(){
   const all=[...tbody.children];
   const trs=all.filter(tr=>!tr.classList.contains('price-grp'));
   const keys=Object.keys(_prFilters);
-  if(!keys.length && _prSort.i==null){
+  const hideZero=!priceShowZero() && _prNumCols.length>0;   // 값 없는 품번 감추기
+  if(!keys.length && _prSort.i==null && !hideZero){
     // 걸어 둔 것도 정렬도 없다 — 줄마다 손댈 까닭이 없다
     for(let x=0;x<all.length;x++) if(all[x].style.display==='none') all[x].style.display='';
     return;
   }
   let vis=0;
   trs.forEach(tr=>{
-    const ok=keys.every(k=>_prFilters[k].indexOf(priceCellVal(tr, Number(k)))>=0);
+    let ok=keys.every(k=>_prFilters[k].indexOf(priceCellVal(tr, Number(k)))>=0);
+    if(ok && hideZero && !priceRowHasVal(tr)) ok=false;
     tr.style.display=ok?'':'none';
     if(ok) vis++;
   });
@@ -13391,7 +13555,7 @@ function priceApplyFilters(){
     arr.forEach(tr=>tbody.appendChild(tr));
   }
   const badge=document.getElementById('priceCountBadge');
-  if(badge && keys.length) badge.innerHTML=T[lang].priceCount(vis);
+  if(badge && (keys.length||hideZero)) badge.innerHTML=T[lang].priceCount(vis);
   const emptyEl=document.getElementById('priceNoResult');
   if(emptyEl && trs.length){
     emptyEl.textContent=(lang==='ru')?'Нет строк по выбранным условиям.':'고른 조건에 맞는 줄이 없습니다.';
