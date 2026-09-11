@@ -972,6 +972,10 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
           <input type="text" id="priceSearchInput" placeholder="품명·규격·영문품명·대표/호환/최종품번으로 검색…" oninput="renderPriceActive()">
         </div>
         <div class="count-badge" id="priceCountBadge"></div>
+        <button class="dl-btn" id="priceViewWrap" onclick="openPriceViewPanel()" title="표에 보일 열·값 없는 품번·묶어 보기를 고릅니다">
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
+          <span id="i18n-price-view">보기</span>
+        </button>
         <button class="dl-btn" id="shipQtyUploadWrap" onclick="document.getElementById('shipQtyFileInput').click()" style="background:var(--surface2);border-color:var(--border);color:var(--text)">
           <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
           <span id="i18n-shipqtyupload">출고수량 업로드</span>
@@ -985,10 +989,6 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
         <button class="dl-btn" onclick="downloadPriceActive()">
           <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           <span id="i18n-pricedl">엑셀 다운로드</span>
-        </button>
-        <button class="dl-btn" id="priceViewWrap" onclick="openPriceViewPanel()" title="대표품번끼리 묶어 볼지 고릅니다">
-          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
-          <span id="i18n-price-view">보기</span>
         </button>
         <button class="dl-btn" id="priceResetManualWrap" onclick="priceResetManual()" title="손으로 고친 원가·공급가·구매가를 고치기 전 값으로 되돌립니다">
           <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/></svg>
@@ -1141,6 +1141,10 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
         <input type="text" id="shipInput" placeholder="인보이스·선적일·품번·품명으로 검색…" oninput="debouncedRenderShip()">
       </div>
 
+      <button class="dl-btn" onclick="openShipColsPanel()" title="표에 보일 열을 고릅니다(아이디별로 저장)">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="9" y1="4" x2="9" y2="20"/><line x1="15" y1="4" x2="15" y2="20"/></svg>
+        <span id="i18n-ship-cols">보기</span>
+      </button>
       <select id="shipInv" onchange="renderShip()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></select>
       <input type="text" id="shipFrom" list="ktShipYmOpts" placeholder="2026-05" onchange="renderShip()" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center">
       <span style="font-size:11px;color:var(--muted)">~</span>
@@ -1150,10 +1154,6 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
       <button class="dl-btn" id="shipAddBtn" onclick="openShipAddRow()" title="선적 줄을 손으로 하나 넣습니다" style="background:var(--accent2);border-color:var(--accent2);color:#fff">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         <span id="i18n-ship-add">품목 추가</span>
-      </button>
-      <button class="dl-btn" onclick="openShipColsPanel()" title="표에 보일 열을 고릅니다(아이디별로 저장)">
-        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="9" y1="4" x2="9" y2="20"/><line x1="15" y1="4" x2="15" y2="20"/></svg>
-        <span id="i18n-ship-cols">보기</span>
       </button>
       <button class="dl-btn" onclick="shipResetFilters()" title="헤더 필터·정렬을 기본값으로">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
@@ -1195,6 +1195,10 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
         <input type="text" id="poInput" placeholder="차수·발주년월·대표코드·발주코드·품명으로 검색…" oninput="debouncedRenderPO()">
       </div>
 
+      <button class="dl-btn" onclick="openPoViewPanel()" title="대표품번끼리 묶어 볼지 고릅니다">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
+        <span id="i18n-po-view">보기</span>
+      </button>
       <select id="poCha" onchange="renderPO()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></select>
       <datalist id="ktPoYmOpts"></datalist>
       <input type="text" id="poFrom" list="ktPoYmOpts" placeholder="2026-01" onchange="renderPO()" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center">
@@ -1204,10 +1208,6 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
       <button class="dl-btn" id="poResetManualBtn" onclick="poResetManual()" title="손으로 고친 공급수량을 인보이스 기준으로 되돌립니다">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/></svg>
         <span id="i18n-po-manual">수기 초기화</span>
-      </button>
-      <button class="dl-btn" onclick="openPoViewPanel()" title="대표품번끼리 묶어 볼지 고릅니다">
-        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
-        <span id="i18n-po-view">보기</span>
       </button>
       <button class="dl-btn" onclick="poResetFilters()" title="헤더 필터·정렬을 기본값으로">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
@@ -1248,6 +1248,10 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
         <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
         <input type="text" id="simInput" placeholder="품명·규격·대표/호환품번으로 검색…" oninput="debouncedRenderSIM()">
       </div>
+      <button class="dl-btn" onclick="openPsiColsPanel()" title="표에 보일 열을 고릅니다(아이디별로 저장)">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="9" y1="4" x2="9" y2="20"/><line x1="15" y1="4" x2="15" y2="20"/></svg>
+        <span id="i18n-sim-cols">보기</span>
+      </button>
       <input type="text" id="simFromYm" list="ktYmOpts" placeholder="2026-09" onchange="renderSIM()" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center">
       <span style="font-size:11px;color:var(--muted)">~</span>
       <input type="text" id="simToYm" list="ktYmOpts" placeholder="2027-02" onchange="renderSIM()" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center">
@@ -1256,10 +1260,6 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
       <span id="simOpenNote" style="display:none;font-size:10px;color:var(--muted);white-space:nowrap"></span>
       <label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--muted)" title="보유월 = 그 달 재고 ÷ (다음 달부터 이 개월 수만큼의 출고 합계 ÷ 개월 수)"><span id="i18n-sim-avg">보유월 향후</span>
         <input type="number" id="simAvgN" min="1" max="24" onchange="renderSIM()" style="width:48px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"><span id="i18n-sim-avgunit">개월</span></label>
-      <button class="dl-btn" onclick="openPsiColsPanel()" title="표에 보일 열을 고릅니다(아이디별로 저장)">
-        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="9" y1="4" x2="9" y2="20"/><line x1="15" y1="4" x2="15" y2="20"/></svg>
-        <span id="i18n-sim-cols">보기</span>
-      </button>
       <button class="dl-btn" onclick="psiResetFilters()" title="헤더 필터·정렬을 기본값으로">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
         <span id="i18n-sim-reset">필터 초기화</span>
@@ -1297,6 +1297,10 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
         <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
         <input type="text" id="psiInput" placeholder="품명·규격·대표/호환품번으로 검색…" oninput="debouncedRenderPSI()">
       </div>
+      <button class="dl-btn" onclick="openPsiColsPanel()" title="표에 보일 열을 고릅니다(아이디별로 저장)">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="9" y1="4" x2="9" y2="20"/><line x1="15" y1="4" x2="15" y2="20"/></svg>
+        <span id="i18n-psi-cols">보기</span>
+      </button>
       <input type="text" id="psiFromYm" list="ktYmOpts" placeholder="2026-08" onchange="renderPSI()" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center">
       <span style="font-size:11px;color:var(--muted)">~</span>
       <input type="text" id="psiToYm" list="ktYmOpts" placeholder="2026-09" onchange="renderPSI()" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center">
@@ -1306,10 +1310,6 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
       <span id="psiOpenNote" style="display:none;font-size:10px;color:var(--muted);white-space:nowrap"></span>
       <label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--muted)" title="보유월 = 그 달 재고 ÷ (다음 달부터 이 개월 수만큼의 출고 합계 ÷ 개월 수)"><span id="i18n-psi-avg">보유월 향후</span>
         <input type="number" id="psiAvgN" min="1" max="24" onchange="renderPSI()" style="width:48px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"><span id="i18n-psi-avgunit">개월</span></label>
-      <button class="dl-btn" onclick="openPsiColsPanel()" title="표에 보일 열을 고릅니다(아이디별로 저장)">
-        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="9" y1="4" x2="9" y2="20"/><line x1="15" y1="4" x2="15" y2="20"/></svg>
-        <span id="i18n-psi-cols">보기</span>
-      </button>
       <button class="dl-btn" onclick="psiResetFilters()" title="헤더 필터·정렬을 기본값으로">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
         <span id="i18n-psi-reset">필터 초기화</span>
@@ -2161,7 +2161,7 @@ function refreshPsiTexts(){
       'Загрузка Excel: партия, месяц заказа, код, количество');
   ttl('#psiUploadBtn','선적·입고·출고·재고 시트가 든 파일을 올리면 시트 이름으로 가려 반영합니다 (재고 시트는 이월재고용)',
       'Загрузка Excel с листами отгрузки, прихода, расхода и остатка');
-  ttl('#priceViewWrap','대표품번끼리 묶어 볼지 고릅니다','Выбор: группировать по осн. артикулу');
+  ttl('#priceViewWrap','표에 보일 열·값 없는 품번·묶어 보기를 고릅니다','Столбцы, артикулы без данных, группировка');
   ttl('#priceResetManualWrap','손으로 고친 원가·공급가·구매가를 고치기 전 값으로 되돌립니다',
       'Вернуть изменённые вручную цены к исходным значениям');
   ttl('#simResetManualBtn','손으로 고친 실제선적·발주필요를 원래 셈한 값으로 되돌립니다',
@@ -13322,9 +13322,17 @@ function priceApplyCols(){
       else { th.style.display=show?'':'none'; if(show) th.setAttribute('colspan', String(show)); }
     });
   }
-  // 남은 칸이 하나도 없으면 안내
-  const cg=thead.parentElement?thead.parentElement.querySelector('colgroup'):null;
-  if(cg){ [...cg.children].forEach((c,i)=>{ c.style.display=hide[i]?'none':''; }); }
+  // 폭 잡는 colgroup. 가격정보는 머리글과 본문이 '서로 다른 표' 라 둘 다 손봐야 한다.
+  //   한쪽만 감추면 본문 칸이 왼쪽으로 밀려 호환품번 자리에 엉뚱한 값이 보인다.
+  const tbls=[];
+  const t1=thead.closest?thead.closest('table'):thead.parentElement;
+  const t2=tbody.closest?tbody.closest('table'):tbody.parentElement;
+  if(t1) tbls.push(t1);
+  if(t2 && t2!==t1) tbls.push(t2);
+  tbls.forEach(tbl=>{
+    const cg=tbl.querySelector('colgroup'); if(!cg) return;
+    [...cg.children].forEach((c,i)=>{ c.style.display=hide[i]?'none':''; });
+  });
 }
 // 대표품번 열의 자리. 품명 · (규격) · (영문품명) 다음이 대표품번이다.
 function priceRepColIdx(){ return 1 + ((lang==='ko')?1:0) + (canViewEngName()?1:0); }
