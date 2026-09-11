@@ -13184,14 +13184,19 @@ function priceFinalFor(row){
 //   그 공급가를 그대로 적어 둔다. 원가는 품번마다 다르므로 비워 둔다.
 //   (원가가 비어 있어도 공급가를 적어 두면 그 값이 그대로 쓰인다 — calcPriceRow 참고)
 function priceSupplyOfFinal(rep){
+  const sup=row=>{ if(!row) return null;
+    const c=calcPriceRow(row);
+    const v=(row.ru_supply_krw!=null && row.ru_supply_krw!=='') ? Number(row.ru_supply_krw) : c.ruSupply;
+    return (v!=null && isFinite(v) && v>0) ? Math.ceil(v) : null; };
   const info=(typeof getPNInfo==='function')?getPNInfo(rep):null;
   const fin=normPN((info&&info.final)||'');
-  if(!fin) return null;
-  const row=(priceCalcData||[]).find(r=>r.rep===rep && normPN(r.compat)===fin);
-  if(!row) return null;
-  const c=calcPriceRow(row);
-  const v=(row.ru_supply_krw!=null && row.ru_supply_krw!=='') ? Number(row.ru_supply_krw) : c.ruSupply;
-  return (v!=null && isFinite(v) && v>0) ? Math.ceil(v) : null;
+  const mine=(priceCalcData||[]).filter(r=>r.rep===rep);
+  // 먼저 최종품번 줄에서. 최종품번이 바로 그 새 품번이라 줄이 없을 수도 있으니,
+  // 그때는 같은 품목의 다른 줄에서 가장 높은 공급가를 가져온다.
+  const v1=sup(mine.find(r=>fin && normPN(r.compat)===fin));
+  if(v1!=null) return v1;
+  let best=null; mine.forEach(r=>{ const v=sup(r); if(v!=null && (best==null || v>best)) best=v; });
+  return best;
 }
 async function priceSeedNewCompats(rep, added){
   try{
@@ -13552,9 +13557,34 @@ function priceGroupRows(tbodyId){
     const band=head.cloneNode(true);
     band.className='price-grp';
     band.setAttribute('style','border-bottom:1px solid var(--border);font-size:11px');
+    // 대표품번 줄에서도 숫자를 넣을 수 있게 한다. 넣으면 그 묶음의 호환품번 줄 전부에 들어간다.
+    //   (호환품번 줄에 입력칸이 있는 칸만 — RUB·USD·GP 같은 셈해서 나오는 칸은 그대로 비운다)
+    const nos=[];
+    for(let j=0;j<kids.length;j++){
+      const q=kids[j].querySelector('input[onchange]');
+      const mm=q?String(q.getAttribute('onchange')).match(/\((\d+)\s*,/):null;
+      if(mm) nos.push(mm[1]);
+    }
     const bc=band.children;
     for(let i=0;i<bc.length;i++){
-      if(i===ci || i>=pi) bc[i].textContent='';            // 호환품번과 가격 칸은 비운다
+      if(i===ci){ bc[i].textContent=''; }
+      else if(i>=pi){
+        const q=head.children[i]?head.children[i].querySelector('input[onchange]'):null;
+        const fm=q?String(q.getAttribute('onchange')).match(/,\s*'([a-z_]+)'/):null;
+        if(q && fm && nos.length){
+          // 묶음의 값이 모두 같으면 흐린 글씨로 보여 준다(그 값으로 넣겠다는 뜻은 아니다)
+          let same=''; let ok=true;
+          for(let j=0;j<kids.length;j++){ const e=kids[j].children[i]?kids[j].children[i].querySelector('input'):null;
+            const v=e?e.value:''; if(j===0) same=v; else if(v!==same){ ok=false; break; } }
+          bc[i].textContent='';
+          bc[i].innerHTML='<input type="text" inputmode="decimal" class="pc-in" value=""'
+            +(ok&&same?(' placeholder="'+escapeHtml(same)+'"'):'')
+            +' title="'+(lang==='ru'?'Значение уйдёт во все артикулы этой позиции':'이 묶음의 호환품번 줄 전부에 들어갑니다')+'"'
+            +' onchange="onPriceGroupEdit(\''+nos.join(',')+'\',\''+fm[1]+'\',this.value)">';
+        }else{
+          bc[i].textContent='';
+        }
+      }
       const cn=bc[i].className;
       if(cn && cn.indexOf('price-man')>=0) bc[i].className=cn.replace(/\bprice-man\b/g,'').trim();
     }
@@ -14462,6 +14492,48 @@ async function onPriceCellEdit(rowNo, field, value){
   if(error){ alert('저장 실패\n['+(error.message||error.code)+']'); return; }
   priceManBtn();
   renderPriceActive();   // 계산식·공급가 어느 화면에서 고쳤든 지금 보고 있는 화면을 다시 그린다
+  syncKtPricesFromCalc();
+}
+// 대표품번(묶음) 줄에 넣은 값을 그 묶음의 호환품번 줄 전부에 넣는다.
+//   줄이 여럿이면 한 번 물어본다. 저장은 한 번에 모아서 한다(줄마다 저장하면 느리다).
+async function onPriceGroupEdit(rowNos, field, value){
+  if(!guardWrite('price')){ renderPriceActive(); return; }
+  const nos=String(rowNos||'').split(',').map(x=>Number(x)).filter(n=>isFinite(n));
+  if(!nos.length){ renderPriceActive(); return; }
+  const raw=String(value==null?'':value).replace(/,/g,'').trim();
+  let num=raw===''?null:Number(raw);
+  if(raw!=='' && isNaN(num)){ alert(lang==='ru'?'Введите число.':'숫자를 입력해 주세요.'); renderPriceActive(); return; }
+  if(field==='ru_cost' && num!=null) num=Math.ceil(num);
+  if(nos.length>1){
+    const ru=(lang==='ru');
+    const ok=confirm(ru ? ('Записать это значение во все '+nos.length+' артикулов позиции?')
+                        : ('이 묶음의 호환품번 '+nos.length+'줄에 모두 넣을까요?'));
+    if(!ok){ renderPriceActive(); return; }
+  }
+  const now=new Date().toISOString();
+  const up=[];
+  nos.forEach(no=>{
+    const r=priceCalcData.find(x=>x.row_no===no); if(!r) return;
+    const key=priceOrigKey('calc', r.row_no);
+    priceRememberOrig(key, field, r[field]);
+    if(field==='ru_cost') priceRememberOrig(key, 'kz_supply_krw', r.kz_supply_krw);
+    r[field]=num;
+    // 새 원가를 넣었는데 공급가가 비어 있으면 기준 GP 로 채운다(한 줄 고칠 때와 같은 규칙)
+    if(field==='ru_cost' && num!=null && num>0 && (r.ru_supply_krw==null||r.ru_supply_krw===''||Number(r.ru_supply_krw)===0)){
+      r.ru_supply_krw=Math.ceil(num/(1-priceSettings.ru_gp));
+      if(r.kz_supply_krw==null||r.kz_supply_krw===''||Number(r.kz_supply_krw)===0) r.kz_supply_krw=Math.ceil(num/(1-priceSettings.kz_gp));
+    }
+    priceForgetIfSame(key, field, r[field]);
+    if(field==='ru_cost') priceForgetIfSame(key, 'kz_supply_krw', r.kz_supply_krw);
+    r.updated_at=now;
+    up.push({ row_no:r.row_no, name_ko:r.name_ko, spec:r.spec, rep:r.rep, compat:r.compat, final:r.final,
+              ship_qty:r.ship_qty, ru_cost:r.ru_cost, ru_supply_krw:r.ru_supply_krw, kz_supply_krw:r.kz_supply_krw, updated_at:r.updated_at });
+  });
+  if(!up.length){ renderPriceActive(); return; }
+  const { error } = await sb.from('kt_price_calc').upsert(up,{onConflict:'row_no'});
+  if(error){ alert('저장 실패\n['+(error.message||error.code)+']'); return; }
+  priceManBtn();
+  renderPriceActive();
   syncKtPricesFromCalc();
 }
 // 공급가 화면에서 RUB·USD 를 손으로 고친다.
