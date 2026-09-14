@@ -1131,6 +1131,10 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
         <input type="text" id="moqInput" placeholder="대표품번·호환품번·품명·규격으로 검색…" oninput="debouncedRenderMOQ()">
       </div>
       <div class="count-badge" id="moqBadge"></div>
+      <button class="dl-btn" onclick="openMoqViewPanel()" title="표에 보일 열과 그 차례를 고릅니다(아이디별로 저장)">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
+        <span id="i18n-moq-cols">보기</span>
+      </button>
       <button class="dl-btn" onclick="moqResetFilters()" title="헤더 필터·정렬을 기본값으로">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
         <span id="i18n-moq-reset">필터 초기화</span>
@@ -1184,6 +1188,10 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
         <input type="text" id="blkInput" placeholder="대표품번·호환품번·품명·규격으로 검색…" oninput="debouncedRenderBLK()">
       </div>
       <div class="count-badge" id="blkBadge"></div>
+      <button class="dl-btn" onclick="openBlkViewPanel()" title="표에 보일 열과 그 차례를 고릅니다(아이디별로 저장)">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
+        <span id="i18n-blk-cols">보기</span>
+      </button>
       <button class="dl-btn" onclick="blkResetFilters()" title="헤더 필터·정렬을 기본값으로">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
         <span id="i18n-blk-reset">필터 초기화</span>
@@ -2261,11 +2269,13 @@ function refreshPsiTexts(){
   set('i18n-moq-reset','필터 초기화','Сброс фильтров');
   set('i18n-moq-man','수기 초기화','Сброс ручных');
   set('i18n-moq-clear','전체 지우기','Очистить всё');
+  set('i18n-moq-cols',COLS[0],COLS[1]);
   set('i18n-moq-up','엑셀 업로드','Загрузить Excel');
   set('i18n-moq-dl',DL[0],DL[1]);
   ph('moqInput','대표품번·호환품번·품명·규격으로 검색…','Поиск: артикул, наименование, хар-ки…');
   if(ktPaneOn('pane-moq') && typeof renderMOQ==='function') renderMOQ();
   set('i18n-blk-tab','사용불가','Заблокировано');
+  set('i18n-blk-cols',COLS[0],COLS[1]);
   set('i18n-blk-reset','필터 초기화','Сброс фильтров');
   set('i18n-blk-man','수기 초기화','Сброс ручных');
   set('i18n-blk-up','엑셀 업로드','Загрузить Excel');
@@ -2317,8 +2327,9 @@ function refreshPsiTexts(){
   // 마우스를 올렸을 때 나오는 도움말
   const ttl=(sel,ko,rr)=>{ document.querySelectorAll(sel).forEach(e=>{ e.title=L(ko,rr); }); };
   ttl('[onclick="switchTab(\'psi\')"]','PSI 화면으로 돌아가기','Вернуться к PSI');
-  ttl('[onclick="openPsiColsPanel()"],[onclick="openMsColsPanel()"],[onclick="openShipColsPanel()"]',
-      '표에 보일 열을 고릅니다(아이디별로 저장)','Выбор столбцов (сохраняется для этого ID)');
+  ttl('[onclick="openPsiColsPanel()"],[onclick="openMsColsPanel()"],[onclick="openShipColsPanel()"],'
+      +'[onclick="openMoqViewPanel()"],[onclick="openBlkViewPanel()"]',
+      '표에 보일 열과 그 차례를 고릅니다(아이디별로 저장)','Столбцы и их порядок (сохраняется для этого ID)');
   ttl('[onclick="psiResetFilters()"]','헤더 필터·정렬을 기본값으로','Сбросить фильтры и сортировку');
   ttl('[onclick="msAllPeriod()"]','기간을 전체로 돌리기','Показать весь период');
   ttl('[onclick="poAllPeriod()"]','발주년월을 전체로 돌리기','Показать весь период');
@@ -8774,6 +8785,81 @@ function refreshInventoryTexts(){
 // 가격정보 (KITURAMI 전용) — 계산식 / 공급가
 // ══════════════════════════════════════════
 // ══════════════════════════════════════════
+// 보기 창 공용 — 열 차례 바꾸기
+//   화면마다 psiCols.__ord[화면이름] 에 열 이름을 적어 둔 차례대로 담는다.
+//   적어 둔 차례에 없는 열(뒤에 새로 생긴 열)은 원래 자리 그대로 뒤에 붙는다.
+//   끌어서 옮기거나, ▲▼ 로 한 칸씩 올리고 내린다.
+// ══════════════════════════════════════════
+function colOrdBag(){
+  if(!psiCols || typeof psiCols!=='object') psiCols={};
+  if(!psiCols.__ord || typeof psiCols.__ord!=='object') psiCols.__ord={};
+  return psiCols.__ord;
+}
+function colOrdList(scope){ const a=colOrdBag()[scope]; return Array.isArray(a)?a:null; }
+// 열 목록을 저장해 둔 차례로 다시 늘어놓는다(원본은 건드리지 않는다).
+function colOrdApply(scope, defs){
+  const saved=colOrdList(scope);
+  if(!saved || !saved.length) return defs.slice();
+  const pos={}; saved.forEach((k,i)=>{ pos[k]=i; });
+  return defs.map((d,i)=>({d,i})).sort((a,b)=>{
+    const ka=(a.d.k!=null)?a.d.k:a.d[0], kb=(b.d.k!=null)?b.d.k:b.d[0];
+    const pa=(ka in pos)?pos[ka]:(saved.length+a.i);
+    const pb=(kb in pos)?pos[kb]:(saved.length+b.i);
+    return (pa-pb)||(a.i-b.i);
+  }).map(x=>x.d);
+}
+function colOrdSet(scope, keys){ colOrdBag()[scope]=keys.slice(); }
+function colOrdClear(scope){ delete colOrdBag()[scope]; }
+const COL_ORD_BTN='flex:none;width:18px;height:18px;padding:0;line-height:1;border:1px solid var(--border);'
+  +'border-radius:5px;background:var(--bg);color:var(--muted);cursor:pointer;font-size:9px';
+// 보기 창에 넣을 열 한 줄. chk 가 null 이면 켜고 끄는 칸 없이 차례만 바꾼다.
+function colOrdRow(key, label, checked, ru, chkClass){
+  const lab=String(label==null?'':label).replace(/<br>/g,' ');
+  return '<div class="co-row" data-k="'+escapeHtml(String(key))+'" draggable="true"'
+    + ' style="display:flex;align-items:center;gap:6px;padding:3px 3px;border-radius:7px">'
+    + '<span title="'+(ru?'Перетащите, чтобы изменить порядок':'끌어서 차례를 바꿉니다')+'"'
+    + ' style="cursor:grab;color:var(--muted);font-size:11px;user-select:none;flex:none">⠿</span>'
+    + (checked==null
+        ? '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escapeHtml(lab)+'</span>'
+        : ('<label style="display:flex;align-items:center;gap:7px;cursor:pointer;flex:1;min-width:0">'
+          + '<input type="checkbox" class="'+(chkClass||'mcChk')+'" data-k="'+escapeHtml(String(key))+'" '+(checked?'checked':'')+' style="cursor:pointer;flex:none">'
+          + '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escapeHtml(lab)+'</span></label>'))
+    + '<button type="button" class="co-up" title="'+(ru?'Вверх':'위로')+'" style="'+COL_ORD_BTN+'">▲</button>'
+    + '<button type="button" class="co-dn" title="'+(ru?'Вниз':'아래로')+'" style="'+COL_ORD_BTN+'">▼</button>'
+    + '</div>';
+}
+// 목록 상자에 끌어 옮기기·▲▼ 를 붙인다.
+function colOrdWire(list){
+  if(!list) return;
+  let src=null;
+  const rows=[...list.querySelectorAll('.co-row')];
+  rows.forEach(el=>{
+    el.addEventListener('dragstart', e=>{ src=el; el.style.opacity='.45';
+      try{ e.dataTransfer.effectAllowed='move'; e.dataTransfer.setData('text/plain', el.getAttribute('data-k')||''); }catch(_){} });
+    el.addEventListener('dragend', ()=>{ if(src) src.style.opacity=''; src=null;
+      rows.forEach(x=>x.style.background=''); });
+    el.addEventListener('dragover', e=>{ e.preventDefault();
+      if(!src || src===el) return;
+      const r=el.getBoundingClientRect();
+      list.insertBefore(src, ((e.clientY-r.top)>r.height/2) ? el.nextSibling : el); });
+    el.addEventListener('drop', e=>{ e.preventDefault(); });
+    const mv=(dir)=>(e)=>{ e.preventDefault(); e.stopPropagation();
+      if(dir<0){ const p=el.previousElementSibling; if(p && p.classList.contains('co-row')) list.insertBefore(el,p); }
+      else     { const n=el.nextElementSibling;     if(n && n.classList.contains('co-row')) list.insertBefore(n,el); }
+      el.style.background='var(--border)'; setTimeout(()=>{ el.style.background=''; },240);
+      el.scrollIntoView({block:'nearest'}); };
+    const up=el.querySelector('.co-up'), dn=el.querySelector('.co-dn');
+    if(up) up.onclick=mv(-1);
+    if(dn) dn.onclick=mv(1);
+  });
+}
+function colOrdRead(list){ return list ? [...list.querySelectorAll('.co-row')].map(e=>e.getAttribute('data-k')) : []; }
+function colOrdHint(ru){
+  return '<div style="font-size:11px;color:var(--muted);margin:2px 2px 5px">'
+    + (ru?'Перетащите строку (или ▲▼), чтобы изменить порядок столбцов.'
+        :'줄을 끌거나 ▲▼ 로 열 차례를 바꿉니다.')+'</div>';
+}
+// ══════════════════════════════════════════
 // 미출현황 (통합문서 미출_Упущенные → data[ym].u)
 //   품번·품명·규격·대표품번은 품번조회에서 가져오고, 수량만 PSI 자료를 본다.
 //   PSI 기본 화면처럼 대표품번으로 묶고(띠), 그 아래에 호환품번·일자·수량을 편다.
@@ -8797,7 +8883,7 @@ function msColsMap(){
 }
 function msVisCols(isKo){ const m=msColsMap();
   const v=MS_COL_DEFS.filter(d=>(!d.koOnly||isKo) && (!d.perm||canViewExportCtrl()) && m[d.k]);
-  return v.length?v:MS_COL_DEFS.filter(d=>d.k==='rep'); }   // 전부 끄면 대표품번은 남긴다
+  return colOrdApply('ms', v.length?v:MS_COL_DEFS.filter(d=>d.k==='rep')); }   // 전부 끄면 대표품번은 남긴다
 function msShowKids(){ return msColsMap().compat!==false; }   // 호환품번을 끄면 하위 줄을 감춘다
 function msShowDays(){ return msColsMap().ymd!==false; }   // 일자를 끄면 품번당 한 줄로 접는다
 // 대표품번끼리 묶어 보기(보기 창에서 켜고 끈다). 끄면 묶음 줄 없이 호환품번 줄만 죽 나온다.
@@ -8813,15 +8899,16 @@ function openMsColsPanel(){
   const m=msColsMap();
   const box=document.createElement('div'); box.id='msColsPop';
   box.style.cssText='position:fixed;inset:0;z-index:10000;background:#0008;display:flex;align-items:center;justify-content:center';
-  const item=d=>'<label style="display:flex;align-items:center;gap:7px;padding:5px 4px;cursor:pointer">'
-    + '<input type="checkbox" class="mcChk" data-k="'+d.k+'" '+(m[d.k]?'checked':'')+'>'
-    + '<span>'+(ru?d.ru:d.ko)+'</span></label>';
+  const ordList=colOrdApply('ms', MS_COL_DEFS.filter(d=>(!d.koOnly||isKo)&&(!d.perm||canViewExportCtrl())));
   box.innerHTML=
     '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;width:300px;max-width:92vw;'
       +'box-shadow:0 16px 44px #000a;font-size:12px;color:var(--text)">'
     + '<div style="padding:12px 14px;border-bottom:1px solid var(--border);font-weight:700;font-size:13px">'+(ru?'Столбцы':'보기 — 열 선택')+'</div>'
     + '<div style="padding:10px 14px">'
-      + MS_COL_DEFS.filter(d=>(!d.koOnly||isKo)&&(!d.perm||canViewExportCtrl())).map(item).join('')
+      + colOrdHint(ru)
+      + '<div id="msColList" style="border:1px solid var(--border);border-radius:8px;padding:4px 6px">'
+      + ordList.map(d=>colOrdRow(d.k,(ru?d.ru:d.ko),!!m[d.k],ru,'mcChk')).join('')
+      + '</div>'
       + '<div style="border-top:1px solid var(--border);margin:6px 0 2px"></div>'
       + '<label style="display:flex;align-items:center;gap:7px;padding:5px 4px;cursor:pointer">'
       + '<input type="checkbox" class="mcChk" data-k="__grp" '+(msGrpOn()?'checked':'')+'>'
@@ -8829,19 +8916,24 @@ function openMsColsPanel(){
     + '</div>'
     + '<div style="padding:0 14px 8px;font-size:11px;color:var(--muted)">'+(ru?'Выбор сохраняется для этого ID при закрытии.':'닫으면 그대로 저장되어 이 아이디에 다음에도 남습니다.')+'</div>'
     + '<div style="display:flex;gap:7px;padding:11px 14px;border-top:1px solid var(--border)">'
-      + '<button id="mcAll" style="flex:none;padding:7px 12px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);cursor:pointer;font-size:12px">'+(ru?'Все':'전체 선택')+'</button>'
+      + '<button id="mcAll" style="flex:none;padding:7px 10px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);cursor:pointer;font-size:12px">'+(ru?'Все':'전체 선택')+'</button>'
+      + '<button id="mcOrd" style="flex:none;padding:7px 10px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);cursor:pointer;font-size:12px">'+(ru?'Порядок по умолч.':'차례 되돌리기')+'</button>'
       + '<button id="mcClose" style="flex:1;padding:7px;border:none;border-radius:7px;background:var(--accent2);color:#fff;cursor:pointer;font-size:12px;font-weight:700">'+(ru?'Закрыть':'닫기')+'</button>'
     + '</div></div>';
   document.body.appendChild(box);
+  colOrdWire(box.querySelector('#msColList'));
   let done=false;
   const commit=async()=>{
     if(done) return; done=true;
     const v={}; box.querySelectorAll('.mcChk').forEach(c=>{ v[c.getAttribute('data-k')]=c.checked; });
     if(!psiCols || typeof psiCols!=='object') psiCols={};
-    psiCols.__ms=v; closeMsColsPanel(); renderMS();
+    psiCols.__ms=v;
+    colOrdSet('ms', colOrdRead(box.querySelector('#msColList')));
+    closeMsColsPanel(); renderMS();
     const ok=await savePsiCols();
     if(!ok) console.log('ms_cols: 이 브라우저에만 저장');
   };
+  box.querySelector('#mcOrd').onclick=async()=>{ colOrdClear('ms'); done=true; closeMsColsPanel(); renderMS(); await savePsiCols(); };
   box.querySelector('#mcAll').onclick=()=>box.querySelectorAll('.mcChk').forEach(c=>c.checked=true);
   box.querySelector('#mcClose').onclick=commit;
   box.onmousedown=(e)=>{ if(e.target===box) commit(); };
@@ -9169,14 +9261,22 @@ function renderMS(){
     return ((msShowGroups()&&!g.hideRow)?gRow:'')+(msShowKids()?kids:'');
   }).join('');
 
-  const nq=CO.filter(d=>d.k==='qty').length;
+  // 합계 줄: 미출수량 열이 어디로 가든 그 자리에 숫자를 놓는다(열 차례를 바꿀 수 있다).
+  const sumS=thS+';font-weight:700;background:var(--surface);top:28px';
+  const iq=CO.findIndex(d=>d.k==='qty');
+  const sumLab=escapeHtml(L('합계 '+groups.length+'개 대표품번 / '+nPn+'개 호환품번 · '+R.label,
+                            'Итого '+groups.length+' Осн. артикул / '+nPn+' Артикул · '+R.label));
+  let sumRow;
+  if(iq<0){
+    sumRow='<th colspan="'+Math.max(1,CO.length)+'" style="'+sumS+';text-align:right">'+sumLab+'</th>';
+  }else{
+    const left=iq, right=CO.length-iq-1;
+    sumRow=(left?('<th colspan="'+left+'" style="'+sumS+';text-align:right">'+sumLab+'</th>'):'')
+      + '<th style="'+sumS+';text-align:right">'+tot.toLocaleString()+'</th>'
+      + (right?('<th colspan="'+right+'" style="'+sumS+';text-align:left">'+(left?'':sumLab)+'</th>'):'');
+  }
   const head='<tr>'+CO.map(d=>'<th style="'+thS+'">'+(ru?(d.hru||d.ru):(d.hko||d.ko))+msFilterIcon(d.k)+'</th>').join('')+'</tr>'
-    + '<tr><th colspan="'+Math.max(1,CO.length-nq)+'" style="'+thS+';font-weight:700;background:var(--surface);top:28px;text-align:right">'
-    + escapeHtml(L('합계 '+groups.length+'개 대표품번 / '+nPn+'개 호환품번 · '+R.label,
-                   'Итого '+groups.length+' Осн. артикул / '+nPn+' Артикул · '+R.label))+'</th>'
-    + CO.filter(d=>d.k==='qty').map(d=>'<th style="'+thS+';font-weight:700;background:var(--surface);top:28px;text-align:right">'
-        +tot.toLocaleString()+'</th>').join('')
-    + '</tr>';
+    + '<tr>'+sumRow+'</tr>';
   const thead=document.getElementById('msThead'); if(thead) thead.innerHTML=head;
   const tbody=document.getElementById('msTbody'); if(tbody) tbody.innerHTML=body;
   const empty=document.getElementById('msEmpty');
@@ -9365,7 +9465,7 @@ function shipColsMap(){
 function shipVisCols(){
   const isKo=(lang!=='ru'), m=shipColsMap();
   const v=SHIP_COL_DEFS.filter(d=>(!d.koOnly||isKo) && (!d.ruOnly||!isKo) && m[d.k]);
-  return v.length?v:SHIP_COL_DEFS.filter(d=>d.k==='inv');
+  return colOrdApply('ship', v.length?v:SHIP_COL_DEFS.filter(d=>d.k==='inv'));
 }
 // 품명·규격은 품번조회 자료에서. 영문품명만 인보이스에 적힌 값을 쓴다.
 function shipPnInfo(pn){
@@ -9659,15 +9759,16 @@ function openShipColsPanel(){
   const m=shipColsMap();
   const box=document.createElement('div'); box.id='shipColsPop';
   box.style.cssText='position:fixed;inset:0;z-index:10000;background:#0008;display:flex;align-items:center;justify-content:center';
-  const item=d=>'<label style="display:flex;align-items:center;gap:7px;padding:5px 4px;cursor:pointer">'
-    + '<input type="checkbox" class="scChk" data-k="'+d.k+'" '+(m[d.k]?'checked':'')+'>'
-    + '<span>'+(ru?d.ru:d.ko)+'</span></label>';
+  const ordList=colOrdApply('ship', SHIP_COL_DEFS.filter(d=>(!d.koOnly||isKo) && (!d.ruOnly||!isKo)));
   box.innerHTML=
     '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;width:300px;max-width:92vw;'
       +'box-shadow:0 16px 44px #000a;font-size:12px;color:var(--text)">'
     + '<div style="padding:12px 14px;border-bottom:1px solid var(--border);font-weight:700;font-size:13px">'+(ru?'Столбцы':'보기 — 열 선택')+'</div>'
     + '<div style="padding:10px 14px;max-height:60vh;overflow:auto">'
-      + SHIP_COL_DEFS.filter(d=>(!d.koOnly||isKo) && (!d.ruOnly||!isKo)).map(item).join('')
+      + colOrdHint(ru)
+      + '<div id="shipColList" style="border:1px solid var(--border);border-radius:8px;padding:4px 6px">'
+      + ordList.map(d=>colOrdRow(d.k,(ru?d.ru:d.ko),!!m[d.k],ru,'scChk')).join('')
+      + '</div>'
       + '<div style="border-top:1px solid var(--border);margin:6px 0 2px"></div>'
       + '<label style="display:flex;align-items:center;gap:7px;padding:5px 4px;cursor:pointer">'
       + '<input type="checkbox" class="scChk" data-k="__grp" '+(shipGroupOn()?'checked':'')+'>'
@@ -9675,20 +9776,25 @@ function openShipColsPanel(){
     + '</div>'
     + '<div style="padding:0 14px 8px;font-size:11px;color:var(--muted)">'+(ru?'Выбор сохраняется для этого ID при закрытии.':'닫으면 그대로 저장되어 이 아이디에 다음에도 남습니다.')+'</div>'
     + '<div style="display:flex;gap:7px;padding:11px 14px;border-top:1px solid var(--border)">'
-      + '<button id="scAll" style="flex:none;padding:7px 12px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);cursor:pointer;font-size:12px">'+(ru?'Все':'전체 선택')+'</button>'
+      + '<button id="scAll" style="flex:none;padding:7px 10px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);cursor:pointer;font-size:12px">'+(ru?'Все':'전체 선택')+'</button>'
+      + '<button id="scOrd" style="flex:none;padding:7px 10px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);cursor:pointer;font-size:12px">'+(ru?'Порядок по умолч.':'차례 되돌리기')+'</button>'
       + '<button id="scClose" style="flex:1;padding:7px;border:none;border-radius:7px;background:var(--accent2);color:#fff;cursor:pointer;font-size:12px;font-weight:700">'+(ru?'Закрыть':'닫기')+'</button>'
     + '</div></div>';
   document.body.appendChild(box);
+  colOrdWire(box.querySelector('#shipColList'));
   let done=false;
   const commit=async()=>{
     if(done) return; done=true;
     const v=(psiCols && psiCols.__ship && typeof psiCols.__ship==='object')?psiCols.__ship:{};
     box.querySelectorAll('.scChk').forEach(c=>{ v[c.getAttribute('data-k')]=c.checked; });
     if(!psiCols || typeof psiCols!=='object') psiCols={};
-    psiCols.__ship=v; closeShipColsPanel(); renderShip();
+    psiCols.__ship=v;
+    colOrdSet('ship', colOrdRead(box.querySelector('#shipColList')));
+    closeShipColsPanel(); renderShip();
     const ok=await savePsiCols();
     if(!ok) console.log('ship_cols: 이 브라우저에만 저장');
   };
+  box.querySelector('#scOrd').onclick=async()=>{ colOrdClear('ship'); done=true; closeShipColsPanel(); renderShip(); await savePsiCols(); };
   box.querySelector('#scAll').onclick=()=>box.querySelectorAll('.scChk').forEach(c=>c.checked=true);
   box.querySelector('#scClose').onclick=commit;
   box.onmousedown=(e)=>{ if(e.target===box) commit(); };
@@ -9772,15 +9878,20 @@ function openShipColsPanel(){
   }).join('');
   const thead=document.getElementById('shipThead');
   const sumS=thS+';font-weight:700;background:var(--surface);top:28px;text-align:right';
-  const nLead=CO.findIndex(d=>d.k==='qty');
+  // 합계 줄: 수량·금액 열이 어디로 가든 그 자리에 숫자를 놓는다(열 차례를 바꿀 수 있다).
+  const nLead=CO.findIndex(d=>d.k==='qty'||d.k==='amt');
   const lead=(nLead<0?CO.length:nLead);
-  const tail=CO.slice(lead).map(d=>{
-    const v=(d.k==='qty')?tq.toLocaleString():((d.k==='amt')?Math.round(ta).toLocaleString():'');
-    return '<th style="'+sumS+'">'+v+'</th>'; }).join('');
+  const sumLabel=L('합계 '+rows.length+'건','Итого '+rows.length);
+  const tailArr=CO.slice(lead).map(d=>
+    (d.k==='qty')?tq.toLocaleString():((d.k==='amt')?Math.round(ta).toLocaleString():''));
+  // 합계 글자는 숫자 왼쪽에 모아 적는다. 숫자가 맨 앞이면 그 뒤 첫 빈 칸에 적는다.
+  let leadCell='', labAt=-1;
+  if(lead) leadCell='<th colspan="'+lead+'" style="'+sumS+'">'+sumLabel+'</th>';
+  else { labAt=tailArr.findIndex(v=>v===''); if(labAt>=0) tailArr[labAt]=sumLabel; }
+  const tail=tailArr.map((v,i)=>'<th style="'+sumS+(i===labAt?';text-align:left':'')+'">'+v+'</th>').join('');
   const edCol=shipEditable()?'<th style="'+thS+';width:26px"></th>':'';
   if(thead) thead.innerHTML='<tr>'+CO.map(d=>'<th style="'+thS+'">'+(ru?d.ru:d.ko)+shipFilterIcon(d.k)+'</th>').join('')+edCol+'</tr>'
-    + '<tr><th colspan="'+Math.max(1,lead)+'" style="'+sumS+'">'
-    + L('합계 '+rows.length+'건','Итого '+rows.length)+'</th>'+tail+edCol+'</tr>';
+    + '<tr>'+leadCell+tail+edCol+'</tr>';
   const tbody=document.getElementById('shipTbody'); if(tbody) tbody.innerHTML=body;
   if(shipGroupOn()){
     const ix=k=>CO.findIndex(d=>d.k===k);
@@ -10550,7 +10661,8 @@ function poAllPeriod(){
 }
 // ── 발주현황 머리글 거르개·정렬 (다른 화면과 같은 엑셀식) ─────
 //   규격은 한글 화면에만 붙으므로 열 목록을 한 군데서 만들어 쓴다.
-function poColDefs(){
+function poColDefs(){ return colOrdApply('po', poColDefsBase()); }
+function poColDefsBase(){
   const ru=(lang==='ru'), L=(ko,rr)=>(ru?rr:ko);
   return [['cha',L('차수','Партия'),90],['mon',L('발주년월','Мес. заказа'),68],
           ['rep',L('대표코드','Осн. код'),104],['pn',L('발주코드','Код заказа'),104],
@@ -10742,29 +10854,38 @@ function renderPO(){
     tq+=r.qty; ts+=r.supplied;
     // 코드 세 열은 바탕색 없이 글자만(변경코드는 눈에 띄게 붉은 글씨)
     const codeS="font-family:'Courier New',monospace;font-size:9.5px;white-space:nowrap";
-    return '<tr>'
-      + '<td style="'+tdS+';white-space:nowrap">'+escapeHtml(poChaLabel(r.cha))+'</td>'
-      + '<td style="'+tdS+';text-align:center;color:var(--muted);white-space:nowrap">'+escapeHtml(poYmOf(r))+'</td>'
-      + '<td style="'+tdS+'">'+(i.rep?('<span style="'+codeS+'">'+escapeHtml(i.rep)+'</span>'):'')+'</td>'
-      + '<td style="'+tdS+'"><span style="'+codeS+'">'+escapeHtml(normBadgePN(r.pn))+'</span></td>'
-      + '<td style="'+tdS+'">'+(EDPO
+    // 열 차례를 보기 창에서 바꿀 수 있으므로, 칸을 열 이름으로 만들어 두고 머리글 차례대로 잇는다.
+    const cell={
+      cha:'<td style="'+tdS+';white-space:nowrap">'+escapeHtml(poChaLabel(r.cha))+'</td>',
+      mon:'<td style="'+tdS+';text-align:center;color:var(--muted);white-space:nowrap">'+escapeHtml(poYmOf(r))+'</td>',
+      rep:'<td style="'+tdS+'">'+(i.rep?('<span style="'+codeS+'">'+escapeHtml(i.rep)+'</span>'):'')+'</td>',
+      pn:'<td style="'+tdS+'"><span style="'+codeS+'">'+escapeHtml(normBadgePN(r.pn))+'</span></td>',
+      chg:'<td style="'+tdS+'">'+(EDPO
           ? poChgEdit(r.pn, chg)
-          : (chg?('<span style="'+codeS+';color:#b91c1c;font-weight:600">'+escapeHtml(normBadgePN(chg))+'</span>'):''))+'</td>'
-      + '<td style="'+tdS+';word-break:break-all;font-size:10.5px;line-height:1.25">'+escapeHtml(poName(r.pn))+'</td>'
-      + (isKoPO?('<td style="'+tdS+';word-break:break-all;font-size:10.5px;line-height:1.25;color:var(--muted)">'+escapeHtml(poSpec(r.pn))+'</td>'):'')
-      + '<td style="'+numS+'">'+(EDPO?poNumEdit(r.cha,r.pn,'qty',r.qty):(r.qty?r.qty.toLocaleString():'0'))+'</td>'
-      + '<td class="'+(poIsMan(r.cha,r.pn)?'po-man':'')+'" style="'+numS+'">'
-        +(EDPO?poNumEdit(r.cha,r.pn,'supplied',r.supplied):(r.supplied?r.supplied.toLocaleString():''))+'</td>'
-      + '<td style="'+numS+';font-weight:600'+(rest>0?';color:#b91c1c':'')+'">'+(rest?rest.toLocaleString():'0')+'</td>'
-      + '</tr>';
+          : (chg?('<span style="'+codeS+';color:#b91c1c;font-weight:600">'+escapeHtml(normBadgePN(chg))+'</span>'):''))+'</td>',
+      name:'<td style="'+tdS+';word-break:break-all;font-size:10.5px;line-height:1.25">'+escapeHtml(poName(r.pn))+'</td>',
+      spec:'<td style="'+tdS+';word-break:break-all;font-size:10.5px;line-height:1.25;color:var(--muted)">'+escapeHtml(poSpec(r.pn))+'</td>',
+      qty:'<td style="'+numS+'">'+(EDPO?poNumEdit(r.cha,r.pn,'qty',r.qty):(r.qty?r.qty.toLocaleString():'0'))+'</td>',
+      sup:'<td class="'+(poIsMan(r.cha,r.pn)?'po-man':'')+'" style="'+numS+'">'
+        +(EDPO?poNumEdit(r.cha,r.pn,'supplied',r.supplied):(r.supplied?r.supplied.toLocaleString():''))+'</td>',
+      rest:'<td style="'+numS+';font-weight:600'+(rest>0?';color:#b91c1c':'')+'">'+(rest?rest.toLocaleString():'0')+'</td>'
+    };
+    return '<tr>'+heads.map(h=>cell[h[0]]||'<td style="'+tdS+'"></td>').join('')+'</tr>';
   }).join('');
 
+  // 합계 줄: 수량 세 열이 어디로 가든 그 자리에 숫자를 놓는다(열 차례를 바꿀 수 있다).
+  const poSumS=thS+';font-weight:700;background:var(--surface);top:27px;text-align:right';
+  const poTot={ qty:tq.toLocaleString(), sup:ts.toLocaleString(), rest:(tq-ts).toLocaleString() };
+  const poLead=Math.max(0, heads.findIndex(h=>poTot[h[0]]!=null));
+  const poSumLab=escapeHtml(L('합계 '+rows.length+'건 · '+R.label,'Итого '+rows.length+' · '+R.label));
+  const poTailArr=heads.slice(poLead).map(h=>poTot[h[0]]||'');
+  let poLeadCell='', poLabAt=-1;
+  if(poLead) poLeadCell='<th colspan="'+poLead+'" style="'+poSumS+'">'+poSumLab+'</th>';
+  else { poLabAt=poTailArr.findIndex(v=>v===''); if(poLabAt>=0) poTailArr[poLabAt]=poSumLab; }
   if(thead) thead.innerHTML='<tr>'+heads.map(h=>'<th style="'+thS+'">'+h[1]+poFilterIcon(h[0])+'</th>').join('')+'</tr>'
-    + '<tr><th colspan="'+ixPO('qty')+'" style="'+thS+';font-weight:700;background:var(--surface);top:27px;text-align:right">'
-    + escapeHtml(L('합계 '+rows.length+'건 · '+R.label,'Итого '+rows.length+' · '+R.label))+'</th>'
-    + '<th style="'+thS+';font-weight:700;background:var(--surface);top:27px;text-align:right">'+tq.toLocaleString()+'</th>'
-    + '<th style="'+thS+';font-weight:700;background:var(--surface);top:27px;text-align:right">'+ts.toLocaleString()+'</th>'
-    + '<th style="'+thS+';font-weight:700;background:var(--surface);top:27px;text-align:right">'+(tq-ts).toLocaleString()+'</th></tr>';
+    + '<tr>'+poLeadCell
+    + poTailArr.map((v,i)=>'<th style="'+poSumS+(i===poLabAt?';text-align:left':'')+'">'+v+'</th>').join('')
+    + '</tr>';
   if(tbody) tbody.innerHTML=body;
   // 대표코드끼리 묶어 보기: 수주·공급·미공급 수량은 묶음 줄에서 합해 보여 준다
   if(poGroupOn()) ktGroupByRep('poTbody',{ rep:ixPO('rep'),
@@ -10924,7 +11045,7 @@ function openPoViewPanel(){
   const box=document.createElement('div'); box.id='poViewPop';
   box.style.cssText='position:fixed;inset:0;z-index:10000;background:#0008;display:flex;align-items:center;justify-content:center';
   box.innerHTML='<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;width:330px;max-width:92vw;'
-    +'box-shadow:0 16px 44px #000a;font-size:12px;color:var(--text)">'
+    +'max-height:88vh;overflow:auto;box-shadow:0 16px 44px #000a;font-size:12px;color:var(--text)">'
     +'<div style="padding:12px 14px;border-bottom:1px solid var(--border);font-weight:700;font-size:13px">'+(ru?'Вид':'보기')+'</div>'
     +'<div style="padding:12px 14px">'
     +'<label style="display:flex;align-items:center;gap:8px;cursor:pointer">'
@@ -10934,6 +11055,13 @@ function openPoViewPanel(){
     +(ru?'Строки одного осн. кода собираются вместе; сверху — строка с суммой.'
         :'같은 대표코드끼리 모으고, 그 위에 수주·공급·미공급 수량을 합한 줄을 얹습니다.')
     +'</div>'
+    +'<div style="border-top:1px solid var(--border);margin:12px 0 8px"></div>'
+    +'<div style="font-size:12px;font-weight:700;margin-bottom:4px">'+(ru?'Порядок столбцов':'열 차례')+'</div>'
+    +colOrdHint(ru)
+    +'<div id="poColList" style="max-height:34vh;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:4px 6px">'
+    +poColDefs().map(h=>colOrdRow(h[0], h[1], null, ru)).join('')
+    +'</div>'
+    +'<button id="povOrd" style="margin-top:7px;padding:6px 10px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);cursor:pointer;font-size:11px">'+(ru?'Порядок по умолчанию':'차례 되돌리기')+'</button>'
     +'<div style="border-top:1px solid var(--border);margin:12px 0 8px"></div>'
     +'<div style="font-size:12px;font-weight:700;margin-bottom:4px">'+(ru?'Что считать в «Поставлено»':'공급수량에 셀 인보이스')+'</div>'
     +'<div style="font-size:11px;color:var(--muted);line-height:1.5">'+escapeHtml(poSinceLabel())+'</div>'
@@ -10947,8 +11075,13 @@ function openPoViewPanel(){
     +'<button id="povClose" style="flex:1;padding:7px;border:none;border-radius:7px;background:var(--accent2);color:#fff;cursor:pointer;font-size:12px;font-weight:700">'+(ru?'Закрыть':'닫기')+'</button>'
     +'</div></div>';
   document.body.appendChild(box);
-  const done=()=>{ const on=box.querySelector('#povGroup').checked;
-    box.remove(); try{ localStorage.setItem('kt_po_group', on?'1':'0'); }catch(e){} renderPO(); };
+  colOrdWire(box.querySelector('#poColList'));
+  const done=async()=>{ const on=box.querySelector('#povGroup').checked;
+    const ord=colOrdRead(box.querySelector('#poColList'));
+    box.remove(); try{ localStorage.setItem('kt_po_group', on?'1':'0'); }catch(e){}
+    colOrdSet('po', ord); renderPO();
+    try{ await savePsiCols(); }catch(e){} };
+  box.querySelector('#povOrd').onclick=async()=>{ colOrdClear('po'); box.remove(); renderPO(); try{ await savePsiCols(); }catch(e){} };
   box.querySelector('#povClose').onclick=done;
   const setSince=async(v)=>{
     const ru=(lang==='ru');
@@ -11087,6 +11220,7 @@ async function loadPOTab(){
   const m=canEditPsi();
   ['poUploadBtn'].forEach(id=>{ const b=document.getElementById(id); if(b) b.style.display=m?'':'none'; });
   await Promise.all([loadPO(), loadPoMan()]);
+  if(typeof loadPsiCols==='function') await loadPsiCols();   // 열 차례를 같은 곳에 담는다
   renderPO();
   poManBtn();
 }
@@ -11366,8 +11500,59 @@ const MOQ_COL_DEFS=[
   {k:'note',   w:64,  ko:'단종',     ru:'Снято'},
   {k:'qty',    w:80,  ko:'MOQ',      ru:'MOQ'}
 ];
-function moqVisCols(){ const isKo=(lang!=='ru');
-  return MOQ_COL_DEFS.filter(d=>(!d.koOnly||isKo) && (!d.ruOnly||!isKo) && (d.k!=='exp'||canViewExportCtrl())); }
+function moqColsMap(){
+  const src=(psiCols && psiCols.__moq && typeof psiCols.__moq==='object')?psiCols.__moq:null;
+  const m={}; MOQ_COL_DEFS.forEach(d=>m[d.k]=true);
+  if(src) MOQ_COL_DEFS.forEach(d=>{ if(typeof src[d.k]==='boolean') m[d.k]=src[d.k]; });
+  return m;
+}
+function moqVisCols(){ const isKo=(lang!=='ru'), m=moqColsMap();
+  const base=MOQ_COL_DEFS.filter(d=>(!d.koOnly||isKo) && (!d.ruOnly||!isKo) && (d.k!=='exp'||canViewExportCtrl()));
+  const v=base.filter(d=>m[d.k]!==false);
+  return colOrdApply('moq', v.length?v:base.filter(d=>d.k==='qty'));   // 전부 끄면 MOQ 는 남긴다
+}
+function closeMoqViewPanel(){ const b=document.getElementById('moqViewPop'); if(b) b.remove(); }
+function openMoqViewPanel(){
+  closeMoqViewPanel();
+  const ru=(lang==='ru'), isKo=(lang!=='ru'), m=moqColsMap();
+  const list=colOrdApply('moq', MOQ_COL_DEFS.filter(d=>(!d.koOnly||isKo) && (!d.ruOnly||!isKo) && (d.k!=='exp'||canViewExportCtrl())));
+  const box=document.createElement('div'); box.id='moqViewPop';
+  box.style.cssText='position:fixed;inset:0;z-index:10000;background:#0008;display:flex;align-items:center;justify-content:center';
+  box.innerHTML=
+    '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;width:320px;max-width:92vw;'
+      +'max-height:86vh;overflow:auto;box-shadow:0 16px 44px #000a;font-size:12px;color:var(--text)">'
+    + '<div style="padding:12px 14px;border-bottom:1px solid var(--border);font-weight:700;font-size:13px">'+(ru?'Вид — столбцы':'보기 — 열 선택·차례')+'</div>'
+    + '<div style="padding:10px 14px">'
+      + colOrdHint(ru)
+      + '<div id="moqColList" style="border:1px solid var(--border);border-radius:8px;padding:4px 6px">'
+      + list.map(d=>colOrdRow(d.k, (ru?d.ru:d.ko), m[d.k]!==false, ru, 'moqChk')).join('')
+      + '</div>'
+    + '</div>'
+    + '<div style="padding:0 14px 8px;font-size:11px;color:var(--muted)">'
+      +(ru?'Выбор сохраняется для этого ID при закрытии.':'닫으면 그대로 저장되어 이 아이디에 다음에도 남습니다.')+'</div>'
+    + '<div style="display:flex;gap:7px;padding:11px 14px;border-top:1px solid var(--border)">'
+      + '<button id="mvAll" style="flex:none;padding:7px 10px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);cursor:pointer;font-size:12px">'+(ru?'Все':'전체 선택')+'</button>'
+      + '<button id="mvOrd" style="flex:none;padding:7px 10px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);cursor:pointer;font-size:12px">'+(ru?'Порядок по умолч.':'차례 되돌리기')+'</button>'
+      + '<button id="mvClose" style="flex:1;padding:7px;border:none;border-radius:7px;background:var(--accent2);color:#fff;cursor:pointer;font-size:12px;font-weight:700">'+(ru?'Закрыть':'닫기')+'</button>'
+    + '</div></div>';
+  document.body.appendChild(box);
+  colOrdWire(box.querySelector('#moqColList'));
+  let done=false;
+  const commit=async()=>{
+    if(done) return; done=true;
+    const v={}; box.querySelectorAll('.moqChk').forEach(c=>{ v[c.getAttribute('data-k')]=c.checked; });
+    if(!psiCols || typeof psiCols!=='object') psiCols={};
+    psiCols.__moq=v;
+    colOrdSet('moq', colOrdRead(box.querySelector('#moqColList')));
+    closeMoqViewPanel(); renderMOQ();
+    const ok=await savePsiCols();
+    if(!ok) console.log('moq_cols: 이 브라우저에만 저장');
+  };
+  box.querySelector('#mvAll').onclick=()=>box.querySelectorAll('.moqChk').forEach(c=>c.checked=true);
+  box.querySelector('#mvOrd').onclick=async()=>{ colOrdClear('moq'); done=true; closeMoqViewPanel(); renderMOQ(); await savePsiCols(); };
+  box.querySelector('#mvClose').onclick=commit;
+  box.onmousedown=(e)=>{ if(e.target===box) commit(); };
+}
 function moqCellVal(key, r){
   if(key==='qty') return String(moqQtyOf(r._compat));
   return blkCellVal(key, r);            // 나머지 열은 사용불가 화면과 같은 값
@@ -11521,7 +11706,9 @@ function renderMOQ(){
     const s=mb.querySelector('span'); if(s) s.textContent=(lang==='ru'?('Сброс ручных ('+n+')'):('수기 초기화 ('+n+')')); }
   updatePaneHBar('moq');
 }
-async function loadMOQTab(){ await loadMoq(); if(!PN_DATA.length) await loadPNOverrides(); renderMOQ(); }
+async function loadMOQTab(){ await loadMoq(); if(!PN_DATA.length) await loadPNOverrides();
+  if(typeof loadPsiCols==='function') await loadPsiCols();
+  renderMOQ(); }
 function downloadMOQ(){
   const ru=(lang==='ru');
   const CO=moqVisCols();
@@ -11582,8 +11769,59 @@ const BLK_COL_DEFS=[
   {k:'note',   w:64,  ko:'단종',     ru:'Снято'},
   {k:'qty',    w:80,  ko:'수량',     ru:'Кол-во'}
 ];
-function blkVisCols(){ const isKo=(lang!=='ru');
-  return BLK_COL_DEFS.filter(d=>(!d.koOnly||isKo) && (!d.ruOnly||!isKo) && (d.k!=='exp'||canViewExportCtrl())); }
+function blkColsMap(){
+  const src=(psiCols && psiCols.__blk && typeof psiCols.__blk==='object')?psiCols.__blk:null;
+  const m={}; BLK_COL_DEFS.forEach(d=>m[d.k]=true);
+  if(src) BLK_COL_DEFS.forEach(d=>{ if(typeof src[d.k]==='boolean') m[d.k]=src[d.k]; });
+  return m;
+}
+function blkVisCols(){ const isKo=(lang!=='ru'), m=blkColsMap();
+  const base=BLK_COL_DEFS.filter(d=>(!d.koOnly||isKo) && (!d.ruOnly||!isKo) && (d.k!=='exp'||canViewExportCtrl()));
+  const v=base.filter(d=>m[d.k]!==false);
+  return colOrdApply('blk', v.length?v:base.filter(d=>d.k==='qty'));
+}
+function closeBlkViewPanel(){ const b=document.getElementById('blkViewPop'); if(b) b.remove(); }
+function openBlkViewPanel(){
+  closeBlkViewPanel();
+  const ru=(lang==='ru'), isKo=(lang!=='ru'), m=blkColsMap();
+  const list=colOrdApply('blk', BLK_COL_DEFS.filter(d=>(!d.koOnly||isKo) && (!d.ruOnly||!isKo) && (d.k!=='exp'||canViewExportCtrl())));
+  const box=document.createElement('div'); box.id='blkViewPop';
+  box.style.cssText='position:fixed;inset:0;z-index:10000;background:#0008;display:flex;align-items:center;justify-content:center';
+  box.innerHTML=
+    '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;width:320px;max-width:92vw;'
+      +'max-height:86vh;overflow:auto;box-shadow:0 16px 44px #000a;font-size:12px;color:var(--text)">'
+    + '<div style="padding:12px 14px;border-bottom:1px solid var(--border);font-weight:700;font-size:13px">'+(ru?'Вид — столбцы':'보기 — 열 선택·차례')+'</div>'
+    + '<div style="padding:10px 14px">'
+      + colOrdHint(ru)
+      + '<div id="blkColList" style="border:1px solid var(--border);border-radius:8px;padding:4px 6px">'
+      + list.map(d=>colOrdRow(d.k, (ru?d.ru:d.ko), m[d.k]!==false, ru, 'blkChk')).join('')
+      + '</div>'
+    + '</div>'
+    + '<div style="padding:0 14px 8px;font-size:11px;color:var(--muted)">'
+      +(ru?'Выбор сохраняется для этого ID при закрытии.':'닫으면 그대로 저장되어 이 아이디에 다음에도 남습니다.')+'</div>'
+    + '<div style="display:flex;gap:7px;padding:11px 14px;border-top:1px solid var(--border)">'
+      + '<button id="bvAll" style="flex:none;padding:7px 10px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);cursor:pointer;font-size:12px">'+(ru?'Все':'전체 선택')+'</button>'
+      + '<button id="bvOrd" style="flex:none;padding:7px 10px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);cursor:pointer;font-size:12px">'+(ru?'Порядок по умолч.':'차례 되돌리기')+'</button>'
+      + '<button id="bvClose" style="flex:1;padding:7px;border:none;border-radius:7px;background:var(--accent2);color:#fff;cursor:pointer;font-size:12px;font-weight:700">'+(ru?'Закрыть':'닫기')+'</button>'
+    + '</div></div>';
+  document.body.appendChild(box);
+  colOrdWire(box.querySelector('#blkColList'));
+  let done=false;
+  const commit=async()=>{
+    if(done) return; done=true;
+    const v={}; box.querySelectorAll('.blkChk').forEach(c=>{ v[c.getAttribute('data-k')]=c.checked; });
+    if(!psiCols || typeof psiCols!=='object') psiCols={};
+    psiCols.__blk=v;
+    colOrdSet('blk', colOrdRead(box.querySelector('#blkColList')));
+    closeBlkViewPanel(); renderBLK();
+    const ok=await savePsiCols();
+    if(!ok) console.log('blk_cols: 이 브라우저에만 저장');
+  };
+  box.querySelector('#bvAll').onclick=()=>box.querySelectorAll('.blkChk').forEach(c=>c.checked=true);
+  box.querySelector('#bvOrd').onclick=async()=>{ colOrdClear('blk'); done=true; closeBlkViewPanel(); renderBLK(); await savePsiCols(); };
+  box.querySelector('#bvClose').onclick=commit;
+  box.onmousedown=(e)=>{ if(e.target===box) commit(); };
+}
 function blkCellVal(key, r){
   switch(key){
     case 'name':   return pnColText('name', r);
@@ -11743,7 +11981,9 @@ function renderBLK(){
     const s=mb.querySelector('span'); if(s) s.textContent=(lang==='ru'?('Сброс ручных ('+n+')'):('수기 초기화 ('+n+')')); }
   updatePaneHBar('blk');
 }
-async function loadBLKTab(){ await loadBlocked(); if(!PN_DATA.length) await loadPNOverrides(); renderBLK(); }
+async function loadBLKTab(){ await loadBlocked(); if(!PN_DATA.length) await loadPNOverrides();
+  if(typeof loadPsiCols==='function') await loadPsiCols();
+  renderBLK(); }
 function downloadBLK(){
   const ru=(lang==='ru');
   const CO=blkVisCols();
@@ -12197,9 +12437,12 @@ async function psiSetOutRange(p){
 function psiColDefsFor(){
   return psiIsSimPane() ? PSI_COL_DEFS.concat(PSI_PLAN_COL, PSI_SIM_COL_DEFS) : PSI_COL_DEFS.slice();
 }
+// 열 차례는 화면마다 따로 담는다. 앞쪽 고정 열과 달마다 되풀이되는 열을 나누어 기억한다.
+function psiOrdScope(){ return psiIsSimPane()?'sim':'psi'; }
+function psiOrdScopeSub(){ return psiIsSimPane()?'simSub':'psiSub'; }
 function psiVisFixed(isKo){ const m=psiColsMap();
   const v=PSI_COL_DEFS.filter(d=>d.fixed && (!d.koOnly||isKo) && (!d.perm||canViewExportCtrl()) && m[d.k]);
-  return v.length?v:PSI_COL_DEFS.filter(d=>d.k==='rep'); }      // 전부 끄면 대표품번은 남긴다
+  return colOrdApply(psiOrdScope(), v.length?v:PSI_COL_DEFS.filter(d=>d.k==='rep')); }      // 전부 끄면 대표품번은 남긴다
 // 호환품번 열을 끄면 하위 호환품번 줄 자체를 감춘다(대표품번 줄만 본다)
 function psiShowKids(){ return psiColsMap().compat!==false; }
 // 대표품번끼리 묶어 보기(보기 창에서 켜고 끈다). 끄면 묶음 줄 없이 호환품번 줄만 죽 나온다.
@@ -12224,7 +12467,7 @@ function psiVisSub(){ const m=psiColsMap();
     v=v.concat(PSI_SIM_COL_DEFS.filter(d=>m[d.k]!==false));
   }
   if(!v.length) v=PSI_COL_DEFS.filter(d=>d.k==='st');   // 전부 끄면 재고는 남긴다
-  return v; }
+  return colOrdApply(psiOrdScopeSub(), v); }
 const PSI_PLAN_COL=[{k:'plan', w:62, ko:'선적<br>계획', ru:'План<br>отгр.', simOff:1}];
 const PSI_SIM_COL_DEFS=[
   {k:'need', w:64, ko:'발주<br>필요', ru:'Доза-<br>каз'},
@@ -12347,28 +12590,38 @@ function openPsiColsPanel(){
   const item=d=>'<label style="display:flex;align-items:center;gap:7px;padding:5px 4px;cursor:pointer">'
     + '<input type="checkbox" class="pcChk" data-k="'+d.k+'" '+(m[d.k]?'checked':'')+'>'
     + '<span>'+(ru?d.ru:d.ko)+'</span></label>';
+  const ordFix=colOrdApply(psiOrdScope(), PSI_COL_DEFS.filter(d=>d.fixed&&(!d.koOnly||isKo)&&(!d.perm||canViewExportCtrl())));
+  const ordSub=colOrdApply(psiOrdScopeSub(), psiColDefsFor().filter(d=>!d.fixed));
   box.innerHTML=
     '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;width:330px;max-width:92vw;'
       +'box-shadow:0 16px 44px #000a;font-size:12px;color:var(--text)">'
     + '<div style="padding:12px 14px;border-bottom:1px solid var(--border);font-weight:700;font-size:13px">'+(ru?'Столбцы':'보기 — 열 선택')+'</div>'
     + '<div style="padding:10px 14px;display:flex;gap:18px">'
-      + '<div style="flex:1"><div style="font-size:11px;color:var(--muted);margin-bottom:3px">'+(ru?'Артикул':'품번 정보')+'</div>'
-        + PSI_COL_DEFS.filter(d=>d.fixed&&(!d.koOnly||isKo)&&(!d.perm||canViewExportCtrl())).map(item).join('')
+      + '<div style="flex:1;min-width:0"><div style="font-size:11px;color:var(--muted);margin-bottom:3px">'+(ru?'Артикул':'품번 정보')+'</div>'
+        + '<div id="psiColListFix" style="border:1px solid var(--border);border-radius:8px;padding:4px 5px">'
+        + ordFix.map(d=>colOrdRow(d.k,(ru?d.ru:d.ko),!!m[d.k],ru,'pcChk')).join('')
+        + '</div>'
         + '<div style="border-top:1px solid var(--border);margin:4px 0"></div>'
         + item({k:'__grp', ko:'대표품번끼리 묶어 보기', ru:'Группировать по осн. артикулу'})+'</div>'
-      + '<div style="flex:1"><div style="font-size:11px;color:var(--muted);margin-bottom:3px">'+(ru?'По месяцам':'월별 수치')+'</div>'
+      + '<div style="flex:1;min-width:0"><div style="font-size:11px;color:var(--muted);margin-bottom:3px">'+(ru?'По месяцам':'월별 수치')+'</div>'
         + item({k:'__tot', ko:'기간합계', ru:'Итого за период'})
         + item({k:'__zero', ko:'값 없는 품번도 보기', ru:'Показывать артикулы без данных'})
         + item({k:'__out', ko:'출고현황(연도별·월별 출고)', ru:'Расход по годам и месяцам'})
         + '<div style="border-top:1px solid var(--border);margin:4px 0"></div>'
-        + psiColDefsFor().filter(d=>!d.fixed).map(item).join('')+'</div>'
+        + '<div id="psiColListSub" style="border:1px solid var(--border);border-radius:8px;padding:4px 5px">'
+        + ordSub.map(d=>colOrdRow(d.k,(ru?d.ru:d.ko),!!m[d.k],ru,'pcChk')).join('')
+        + '</div></div>'
     + '</div>'
+    + '<div style="padding:0 14px">'+colOrdHint(ru)+'</div>'
     + '<div style="padding:0 14px 8px;font-size:11px;color:var(--muted)">'+(ru?'Выбор сохраняется для этого ID при закрытии.':'닫으면 그대로 저장되어 이 아이디에 다음에도 남습니다.')+'</div>'
     + '<div style="display:flex;gap:7px;padding:11px 14px;border-top:1px solid var(--border)">'
-      + '<button id="pcAll" style="flex:none;padding:7px 12px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);cursor:pointer;font-size:12px">'+(ru?'Все':'전체 선택')+'</button>'
+      + '<button id="pcAll" style="flex:none;padding:7px 10px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);cursor:pointer;font-size:12px">'+(ru?'Все':'전체 선택')+'</button>'
+      + '<button id="pcOrd" style="flex:none;padding:7px 10px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);cursor:pointer;font-size:12px">'+(ru?'Порядок по умолч.':'차례 되돌리기')+'</button>'
       + '<button id="pcClose" style="flex:1;padding:7px;border:none;border-radius:7px;background:var(--accent2);color:#fff;cursor:pointer;font-size:12px;font-weight:700">'+(ru?'Закрыть':'닫기')+'</button>'
     + '</div></div>';
   document.body.appendChild(box);
+  colOrdWire(box.querySelector('#psiColListFix'));
+  colOrdWire(box.querySelector('#psiColListSub'));
   // 저장 단추 없이, 닫을 때 고른 값을 그대로 저장한다
   let done=false;
   const commit=async()=>{
@@ -12378,16 +12631,22 @@ function openPsiColsPanel(){
     if(psiIsSimPane()){
       psiCols.__sim=v;                                     // 발주시뮬레이션은 따로 담는다
     }else{
-      const keep={ __v:PSI_COLS_VER };
-      if(psiCols.__ms) keep.__ms=psiCols.__ms;              // 미출현황 열 선택은 건드리지 않는다
-      if(psiCols.__ship) keep.__ship=psiCols.__ship;        // 선적/입고현황 열 선택도 그대로 둔다
-      if(psiCols.__sim) keep.__sim=psiCols.__sim;           // 발주시뮬레이션 것도 그대로 둔다
-      psiCols=Object.assign(v, keep);
+      // 밑줄 두 개로 시작하는 값(다른 화면 열 선택·열 차례·출고기간 따위)은 그대로 지킨다.
+      const keep={};
+      Object.keys(psiCols).forEach(k=>{ if(k.slice(0,2)==='__') keep[k]=psiCols[k]; });
+      Object.keys(v).forEach(k=>{ if(k.slice(0,2)==='__') keep[k]=v[k]; });   // 보기 창에서 고른 값이 우선
+      keep.__v=PSI_COLS_VER;
+      const nv={}; Object.keys(v).forEach(k=>{ if(k.slice(0,2)!=='__') nv[k]=v[k]; });
+      psiCols=Object.assign(nv, keep);
     }
+    colOrdSet(psiOrdScope(),    colOrdRead(box.querySelector('#psiColListFix')));
+    colOrdSet(psiOrdScopeSub(), colOrdRead(box.querySelector('#psiColListSub')));
     closePsiColsPanel(); psiRepaint();
     const ok=await savePsiCols();
     if(!ok) console.log('psi_cols: 이 브라우저에만 저장');
   };
+  box.querySelector('#pcOrd').onclick=async()=>{ colOrdClear(psiOrdScope()); colOrdClear(psiOrdScopeSub());
+    done=true; closePsiColsPanel(); psiRepaint(); await savePsiCols(); };
   box.querySelector('#pcAll').onclick=()=>box.querySelectorAll('.pcChk').forEach(c=>c.checked=true);
   box.querySelector('#pcClose').onclick=commit;
   box.onmousedown=(e)=>{ if(e.target===box) commit(); };
