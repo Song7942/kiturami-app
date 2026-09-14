@@ -11428,12 +11428,14 @@ async function loadMoq(){
       else { psiMoq=c; psiMoqMan={}; }
     }
   }catch(e){}
+  if(typeof simMoqClear==='function') simMoqClear();
 }
 async function saveMoq(){
   try{
     const { error }=await sb.from('kt_psi_cfg').upsert({ id:MOQ_ID, cfg:{ q:psiMoq, man:psiMoqMan },
       updated_at:new Date().toISOString() },{onConflict:'id'});
     if(error){ alert('저장 실패\n['+(error.message||error.code)+']'); return false; }
+    if(typeof simMoqClear==='function') simMoqClear();   // 발주시뮬레이션이 새 MOQ 를 보게 한다
     return true;
   }catch(e){ alert('저장 실패\n['+(e&&e.message||e)+']'); return false; }
 }
@@ -12477,6 +12479,36 @@ const PSI_SIM_COL_DEFS=[
 // 발주필요를 손으로 고친 값. '대표품번|연월' → 수량. 화면에서만 쓰고 저장하지 않는다.
 let _simNeed={};
 function simNeedKey(rep,ym){ return rep+'|'+ym; }
+// ── 발주필요의 최소 수량(MOQ) ──────────────────────────────
+//   MOQ 화면에 담아 둔 품번별 최소 발주수량. 발주필요가 0 보다 크면 그 아래로는 안 내려간다.
+//   손으로 고쳐도 마찬가지다(MOQ 보다 작게 적으면 MOQ 로 올려 적는다).
+//   대표품번 묶음은 실제로 시키는 품번(최종품번)의 MOQ 를 먼저 보고,
+//   없으면 그 묶음에 든 호환품번 가운데 가장 큰 값을 쓴다.
+let _simMoqCache={};
+function simMoqClear(){ _simMoqCache={}; }
+function simMoqOfRep(rep){
+  if(typeof moqQtyOf!=='function') return 0;
+  const key=String(rep||''); if(!key) return 0;
+  if(_simMoqCache[key]!=null) return _simMoqCache[key];
+  let q=0;
+  const info=(typeof getPNInfo==='function')
+    ? (getPNInfo(key) || ((typeof findMasterRep==='function')?getPNInfo(findMasterRep(key)):null))
+    : null;
+  if(info){
+    if(info.final) q=moqQtyOf(info.final);
+    if(!q) (info.compats||[]).forEach(c=>{ const v=moqQtyOf(c); if(v>q) q=v; });
+  }
+  if(!q) q=moqQtyOf(key);
+  _simMoqCache[key]=q;
+  return q;
+}
+// 발주필요를 MOQ 이상으로 올린다(0 은 0 그대로 — 시킬 것이 없으면 안 시킨다).
+function simNeedMoq(rep, n){
+  const v=Math.max(0, Math.round(Number(n)||0));
+  if(v<=0) return 0;
+  const q=simMoqOfRep(rep);
+  return (q>0 && v<q) ? q : v;
+}
 // 이 달에 발주하면 언제 들어오나: 다음 달 말에 선적 → 늘 쓰는 대로 선적일 + 49일이 입고일.
 //   예) 2026-09 발주 → 2026-10-31 선적 → 2026-12-19 입고 → 2612
 const _simArrCache={}, _simShipArrCache={};
@@ -12518,11 +12550,13 @@ function simShipFocus(td){
   el.focus(); el.select();
 }
 // 값을 고치면 그 줄의 '발주후 보유월'만 바로 다시 적는다(표 전체를 다시 그리지 않는다)
-function simNeedApply(td, raw){
+function simNeedApply(td, raw, final){
   const rep=td.getAttribute('data-rep'), ym=td.getAttribute('data-ym');
   const st=Number(td.getAttribute('data-st'))||0, avg=Number(td.getAttribute('data-avg'))||0;
   const t=String(raw).replace(/[^0-9-]/g,'');
-  const num=(t===''||t==='-')?null:Math.round(Number(t));
+  let num=(t===''||t==='-')?null:Math.round(Number(t));
+  // 다 적고 칸을 떠날 때 MOQ 아래면 MOQ 로 올려 담는다(적는 동안에는 그대로 둔다)
+  if(num!=null && final) num=simNeedMoq(rep, num);
   if(num==null) delete _simNeed[simNeedKey(rep,ym)]; else _simNeed[simNeedKey(rep,ym)]=num;
   const next=td.nextElementSibling;
   if(next) next.textContent = avg>0 ? (Math.round(((st+(num||0))/avg)*10)/10).toFixed(1) : '';
@@ -12536,7 +12570,7 @@ function simNeedFocus(td){
   const el=td.querySelector('input');
   el.oninput=()=>simNeedApply(td, el.value);
   el.onkeydown=(e)=>{ if(e.key==='Enter'||e.key==='Escape') el.blur(); };
-  el.onblur=()=>{ simNeedApply(td, el.value);
+  el.onblur=()=>{ simNeedApply(td, el.value, true);
     renderSIM();          // 그 뒤 달 재고·보유월·발주필요까지 다시 계산한다
   };
   el.focus(); el.select();
@@ -13189,6 +13223,8 @@ async function loadSimTab(){
   if(!poData.length) await loadPO();
   if(typeof loadPsiCols==='function') await loadPsiCols();
   await loadBlocked();
+  await loadMoq();                                           // 발주필요를 MOQ 이상으로 적으려면 필요하다
+  simMoqClear();
   if(psiPaneFresh('sim')){ updatePaneHBar('sim'); return; }   // 바뀐 게 없으면 그대로 둔다
   renderSIM();
 }
@@ -13497,6 +13533,7 @@ function renderPSI(){
     const shipPlan=new Array(ymsAll.length).fill(0);
     const gAcc={};                            // 달마다 합계에 더할 값(남는 묶음만 나중에 더한다)
     g.sim={};                                 // 달마다 선적계획·발주필요·발주후재고·발주후보유월
+    const gMoq=psiSimOn?simMoqOfRep(g.rep):0; // 이 묶음의 최소 발주수량(MOQ)
     const gEach=yms.map((y,i)=>{
       const a=g.agg[y]; const b=i===0?' bl':'';
       addSt+=arrive[i];                       // 이 달에 들어오는 발주분
@@ -13542,9 +13579,10 @@ function renderPSI(){
         if(i+1<ymsAll.length) got+=shipPlan[i+1];
         arrSt=at.st+got; arrFut=at.fut;
         nd=(man!=null)?man:needOf(arrSt, arrFut);
+        nd=simNeedMoq(g.rep, nd);             // MOQ 아래로는 안 내려간다(손으로 고친 값도 마찬가지)
         m2=moOf(arrSt+nd, arrFut);            // 발주후 보유월 = 그 발주분이 들어오는 달의 보유월
         gAcc[y]=Object.assign(gAcc[y]||{}, {arrSt, arrFut});
-      }else if(psiSimOn && man!=null){ nd=man; }
+      }else if(psiSimOn && man!=null){ nd=simNeedMoq(g.rep, man); }
       // 합계 줄에 더할 값은 일단 묶음마다 담아 두고, 아래에서 남은 묶음만 골라 더한다
       //   (선적계획·발주필요 같은 열로 거르면 빠진 묶음은 합계에서도 빠져야 한다)
       gAcc[y]=Object.assign(gAcc[y]||{}, {need:nd, addSt, plan, arrIn:arrive[i]});
@@ -13556,7 +13594,9 @@ function renderPSI(){
         +'" data-avg="'+(arrFut/c.avgN)+'" onclick="simNeedFocus(this)" title="'
         +L((simArriveYm(y)?psiYmLabel(simArriveYm(y))+' 입고 기준 수량입니다. ':'')
            +'눌러서 고치면 선적·입고와 그 뒤 달까지 다시 계산됩니다',
-           'Нажмите, чтобы изменить')+'"';
+           'Нажмите, чтобы изменить')
+        +(gMoq>0?escapeHtml(L('\nMOQ '+gMoq.toLocaleString()+' 아래로는 적히지 않습니다',
+                              '\nMOQ: '+gMoq.toLocaleString())):'')+'"';
       // 발주후 재고 = 그 발주분이 들어오는 달의 재고(발주필요를 더한 값). 보유월과 같은 기준.
       const st2=(psiSimOn && ai>i) ? (arrSt+nd) : null;
       g.sim[y]={plan, need:nd, st2, mo2:m2};   // 거르개·정렬이 볼 수 있게 담아 둔다
