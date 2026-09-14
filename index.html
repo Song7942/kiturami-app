@@ -653,6 +653,7 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
   <button class="tab-btn" style="display:none" onclick="switchTab('ship')"      id="tab-ship"><span id="i18n-tab-ship">🚢 선적/입고현황</span></button>
   <button class="tab-btn" style="display:none" onclick="switchTab('ms')"        id="tab-ms"><span id="i18n-tab-ms">⚠ 미출현황</span></button>
   <button class="tab-btn" style="display:none" onclick="switchTab('blk')"       id="tab-blk"><span id="i18n-tab-blk">⛔ 사용불가</span></button>
+  <button class="tab-btn" style="display:none" onclick="switchTab('moq')"       id="tab-moq"><span id="i18n-tab-moq">📦 MOQ</span></button>
   <button class="tab-btn" style="display:none" onclick="switchTab('sim')"       id="tab-sim"><span id="i18n-tab-sim">📈 발주시뮬레이션</span></button>
   <button class="tab-btn" style="display:none;position:relative" onclick="switchTab('memberManagement')" id="tab-memberManagement"><span id="i18n-tab-membermgmt">👥 회원관리</span><span id="memberMgmtUnreadDot" style="display:none;position:absolute;top:4px;right:2px;width:8px;height:8px;border-radius:50%;background:#ef4444;box-shadow:0 0 0 2px var(--bg)"></span></button>
   <button class="tab-btn" style="display:none" onclick="switchTab('reset')" id="tab-reset"><span id="i18n-tab-reset">🗑️ 초기화</span></button>
@@ -1120,6 +1121,54 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
 
 <!-- ══ 탭: 회원관리 (취소·변경 요청 / 회원관리 및 가입승인) ══ -->
 <!-- 미출현황 (MASTER 전용) -->
+<!-- ══ MOQ (PSI 안에서 여는 화면) ══
+     품번조회의 목록에 'MOQ'(최소 발주수량)를 붙여 보여 준다. -->
+<div class="tab-pane" id="pane-moq">
+  <div class="fixed-top">
+    <div class="search-bar">
+      <div class="search-wrap">
+        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+        <input type="text" id="moqInput" placeholder="대표품번·호환품번·품명·규격으로 검색…" oninput="debouncedRenderMOQ()">
+      </div>
+      <div class="count-badge" id="moqBadge"></div>
+      <button class="dl-btn" onclick="moqResetFilters()" title="헤더 필터·정렬을 기본값으로">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+        <span id="i18n-moq-reset">필터 초기화</span>
+      </button>
+      <button class="dl-btn" id="moqManBtn" onclick="moqResetManual()" title="손으로 고친 MOQ 를 고치기 전 값으로 되돌립니다">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/></svg>
+        <span id="i18n-moq-man">수기 초기화</span>
+      </button>
+      <button class="dl-btn" id="moqUploadBtn" onclick="document.getElementById('moqFileInput').click()" title="MOQ 엑셀을 올리면 수량을 새로 반영합니다" style="background:var(--accent2);border-color:var(--accent2);color:#fff">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <span id="i18n-moq-up">엑셀 업로드</span>
+      </button>
+      <input type="file" id="moqFileInput" accept=".xlsx,.xls" style="display:none" onchange="handleMoqUpload(event)">
+      <button class="dl-btn" onclick="downloadMOQ()">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        <span id="i18n-moq-dl">엑셀 다운로드</span>
+      </button>
+      <button class="dl-btn" onclick="switchTab('psi')" title="PSI 로 돌아가기" style="background:#0ea5e9;border-color:#0ea5e9;color:#fff">
+        <span id="i18n-moq-psi">PSI</span>
+      </button>
+    </div>
+    <div style="font-size:11px;color:var(--muted);padding:0 4px 4px" id="moqNote"></div>
+      <div class="tbl-scrollbar" id="moqTblScrollbar" style="display:none;margin:4px 0 0">
+        <div class="tbl-scrollbar-thumb" id="moqTblScrollbarThumb"></div>
+      </div>
+  </div>
+  <div class="scroll-body" id="scrollBodyMOQ" style="padding:0 12px 72px">
+    <div class="pn-body-wrap">
+      <table id="moqTable" style="width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed">
+        <colgroup id="moqColgroup"></colgroup>
+        <thead id="moqThead"></thead>
+        <tbody id="moqTbody"></tbody>
+      </table>
+    </div>
+    <div id="moqEmpty" class="no-result" style="display:none"></div>
+  </div>
+</div>
+
 <!-- ══ 사용불가 (PSI 안에서 여는 화면) ══
      품번조회의 목록에 '수량'(엑셀 Blocked 열)을 붙여 보여 준다.
      이 수량은 달마다 PSI 재고에서 고정으로 빠진다(달마다 쌓이지 않는다). -->
@@ -1328,15 +1377,15 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
       <span style="font-size:11px;color:var(--muted)">~</span>
       <input type="text" id="simToYm" list="ktOutYmOpts" placeholder="2027-02" onfocus="this.select()" onchange="psiSetPerRange('sim')" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"><button type="button" class="ym-pick" onclick="ktYmPickOpen('simToYm',this)">▾</button>
       <span style="font-size:11px;color:var(--muted);margin-left:6px" id="i18n-sim-outlab">출고기간</span><input type="text" id="simOutFrom" list="ktOutYmOpts" placeholder="2025-10" onfocus="this.select()" onchange="psiSetOutRange('sim')" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"><button type="button" class="ym-pick" onclick="ktYmPickOpen('simOutFrom',this)">▾</button><span style="font-size:11px;color:var(--muted)">~</span><input type="text" id="simOutTo" list="ktOutYmOpts" placeholder="2026-09" onfocus="this.select()" onchange="psiSetOutRange('sim')" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"><button type="button" class="ym-pick" onclick="ktYmPickOpen('simOutTo',this)">▾</button>
-      <button class="dl-btn" onclick="openPsiColsPanel()" title="표에 보일 열을 고릅니다(아이디별로 저장)">
-        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="9" y1="4" x2="9" y2="20"/><line x1="15" y1="4" x2="15" y2="20"/></svg>
-        <span id="i18n-sim-cols">보기</span>
-      </button>
       <label style="display:none;align-items:center;gap:4px;font-size:10px;color:var(--muted)"><span id="i18n-sim-base">재고 기산</span>
         <input type="text" id="simBaseYm" maxlength="4" onchange="renderSIM()" style="width:52px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></label>
       <span id="simOpenNote" style="display:none;font-size:10px;color:var(--muted);white-space:nowrap"></span>
       <label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--muted)" title="보유월 = 그 달 재고 ÷ (다음 달부터 이 개월 수만큼의 출고 합계 ÷ 개월 수)"><span id="i18n-sim-avg">보유월 향후</span>
         <input type="number" id="simAvgN" min="1" max="24" onchange="renderSIM()" style="width:48px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"><span id="i18n-sim-avgunit">개월</span></label>
+      <button class="dl-btn" onclick="openPsiColsPanel()" title="표에 보일 열을 고릅니다(아이디별로 저장)">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="9" y1="4" x2="9" y2="20"/><line x1="15" y1="4" x2="15" y2="20"/></svg>
+        <span id="i18n-sim-cols">보기</span>
+      </button>
       <button class="dl-btn" onclick="psiResetFilters()" title="헤더 필터·정렬을 기본값으로">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
         <span id="i18n-sim-reset">필터 초기화</span>
@@ -1378,16 +1427,16 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
       <span style="font-size:11px;color:var(--muted)">~</span>
       <input type="text" id="psiToYm" list="ktOutYmOpts" placeholder="2026-09" onfocus="this.select()" onchange="psiSetPerRange('psi')" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"><button type="button" class="ym-pick" onclick="ktYmPickOpen('psiToYm',this)">▾</button>
       <span style="font-size:11px;color:var(--muted);margin-left:6px" id="i18n-psi-outlab">출고기간</span><input type="text" id="psiOutFrom" list="ktOutYmOpts" placeholder="2025-10" onfocus="this.select()" onchange="psiSetOutRange('psi')" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"><button type="button" class="ym-pick" onclick="ktYmPickOpen('psiOutFrom',this)">▾</button><span style="font-size:11px;color:var(--muted)">~</span><input type="text" id="psiOutTo" list="ktOutYmOpts" placeholder="2026-09" onfocus="this.select()" onchange="psiSetOutRange('psi')" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"><button type="button" class="ym-pick" onclick="ktYmPickOpen('psiOutTo',this)">▾</button>
-      <button class="dl-btn" onclick="openPsiColsPanel()" title="표에 보일 열을 고릅니다(아이디별로 저장)">
-        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="9" y1="4" x2="9" y2="20"/><line x1="15" y1="4" x2="15" y2="20"/></svg>
-        <span id="i18n-psi-cols">보기</span>
-      </button>
       <datalist id="ktYmOpts"></datalist><datalist id="ktOutYmOpts"></datalist>
       <label style="display:none;align-items:center;gap:4px;font-size:10px;color:var(--muted)"><span id="i18n-psi-base">재고 기산</span>
         <input type="text" id="psiBaseYm" maxlength="4" onchange="renderPSI()" style="width:52px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></label>
       <span id="psiOpenNote" style="display:none;font-size:10px;color:var(--muted);white-space:nowrap"></span>
       <label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--muted)" title="보유월 = 그 달 재고 ÷ (다음 달부터 이 개월 수만큼의 출고 합계 ÷ 개월 수)"><span id="i18n-psi-avg">보유월 향후</span>
         <input type="number" id="psiAvgN" min="1" max="24" onchange="renderPSI()" style="width:48px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"><span id="i18n-psi-avgunit">개월</span></label>
+      <button class="dl-btn" onclick="openPsiColsPanel()" title="표에 보일 열을 고릅니다(아이디별로 저장)">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="9" y1="4" x2="9" y2="20"/><line x1="15" y1="4" x2="15" y2="20"/></svg>
+        <span id="i18n-psi-cols">보기</span>
+      </button>
       <button class="dl-btn" onclick="psiResetFilters()" title="헤더 필터·정렬을 기본값으로">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
         <span id="i18n-psi-reset">필터 초기화</span>
@@ -1412,6 +1461,10 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
       <button class="dl-btn" onclick="switchTab('po')" title="차수별 수주·공급·미공급 현황" style="background:#f59e0b;border-color:#f59e0b;color:#fff">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h4"/></svg>
         <span id="i18n-po-tab">발주현황</span>
+      </button>
+      <button class="dl-btn" onclick="switchTab('moq')" title="품번별 최소 발주수량(MOQ)" style="background:#0d9488;border-color:#0d9488;color:#fff">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a4 4 0 018 0v2"/></svg>
+        <span id="i18n-moq-tab">MOQ</span>
       </button>
       <button class="dl-btn" onclick="switchTab('blk')" title="사용불가 수량(재고에서 고정으로 빠집니다)" style="background:#78716c;border-color:#78716c;color:#fff">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -2143,6 +2196,7 @@ function switchTab(tab){
   if(tab==='ship'){ loadShipTab(); }
   if(tab==='ms'){ loadMSTab(); }
   if(tab==='blk'){ loadBLKTab(); }
+  if(tab==='moq'){ loadMOQTab(); }
   if(tab==='sim'){ loadSimTab(); }
   if(tab==='adminOrders'){ loadAdminOrdersTab(); }
   if(tab==='memberManagement'){ loadMemberManagementTab(); }
@@ -2198,6 +2252,14 @@ function refreshPsiTexts(){
   set('i18n-ms-tab','미출현황','Невыполненные');
   // 사용불가
   set('i18n-tab-blk','⛔ 사용불가','⛔ Заблокировано');
+  set('i18n-tab-moq','📦 MOQ','📦 MOQ');
+  set('i18n-moq-tab','MOQ','MOQ');
+  set('i18n-moq-reset','필터 초기화','Сброс фильтров');
+  set('i18n-moq-man','수기 초기화','Сброс ручных');
+  set('i18n-moq-up','엑셀 업로드','Загрузить Excel');
+  set('i18n-moq-dl',DL[0],DL[1]);
+  ph('moqInput','대표품번·호환품번·품명·규격으로 검색…','Поиск: артикул, наименование, хар-ки…');
+  if(ktPaneOn('pane-moq') && typeof renderMOQ==='function') renderMOQ();
   set('i18n-blk-tab','사용불가','Заблокировано');
   set('i18n-blk-reset','필터 초기화','Сброс фильтров');
   set('i18n-blk-man','수기 초기화','Сброс ручных');
@@ -6431,7 +6493,7 @@ function applyPermTabVisibility(skipSwitch){
   if(!pobj){
     // 권한을 아직 부여하지 않은 회원: 품번조회 하나만 연다.
     // 종전에는 역할 기본값을 그대로 써서 주문·재고관리·가격정보까지 다 보였다.
-    ['tab-order','tab-parts','tab-adminOrders','tab-inventory','tab-shipments','tab-price','tab-psi','tab-po','tab-ship','tab-ms','tab-blk','tab-sim','tab-memberManagement']
+    ['tab-order','tab-parts','tab-adminOrders','tab-inventory','tab-shipments','tab-price','tab-psi','tab-po','tab-ship','tab-ms','tab-blk','tab-moq','tab-sim','tab-memberManagement']
       .forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display='none'; });
     const pnEl=document.getElementById('tab-pn'); if(pnEl) pnEl.style.display='';
     // KITURAMI(본사)는 권한 기록이 없어도 PSI 를 본다
@@ -6446,6 +6508,7 @@ function applyPermTabVisibility(skipSwitch){
   const shipEl=document.getElementById('tab-ship'); if(shipEl) shipEl.style.display='none';
   const msEl=document.getElementById('tab-ms'); if(msEl) msEl.style.display='none';
   const blkEl=document.getElementById('tab-blk'); if(blkEl) blkEl.style.display='none';
+  const moqEl=document.getElementById('tab-moq'); if(moqEl) moqEl.style.display='none';
   const simEl=document.getElementById('tab-sim'); if(simEl) simEl.style.display='none';
   const map={ 'tab-pn':'pn','tab-inventory':'inventory','tab-shipments':'shipments','tab-price':'price','tab-memberManagement':'memberManagement' };
   Object.keys(map).forEach(tabId=>{ const el=document.getElementById(tabId); if(el) el.style.display = pobj[map[tabId]].v ? '' : 'none'; });
@@ -11207,6 +11270,266 @@ function psiOpenOf(d,base){
   const o=d[psiYmAdd(base,-1)];
   return (o && o.k!=null && o.k!=='') ? (Number(o.k)||0) : 0;
 }
+// ── MOQ 화면 ─────────────────────────────────────────────
+//   품번마다 '한 번에 시켜야 하는 최소 수량'. 보관은 설정 칸(kt_psi_cfg id=96).
+const MOQ_ID=96;
+let psiMoq={};                // normPN -> MOQ
+let psiMoqMan={};             // normPN -> 손으로 고치기 전 값
+let _moqLoaded=false;
+function moqQtyOf(pn){ const k=normPN(pn); return k?(Number(psiMoq[k])||0):0; }
+function moqIsMan(pn){ const k=normPN(pn); return k ? (k in psiMoqMan) : false; }
+async function loadMoq(){
+  if(_moqLoaded) return;
+  _moqLoaded=true;
+  try{
+    const { data, error }=await sb.from('kt_psi_cfg').select('cfg').eq('id',MOQ_ID).limit(1);
+    const c=(!error && data && data[0])?data[0].cfg:null;
+    if(c && typeof c==='object'){
+      if(c.q && typeof c.q==='object'){ psiMoq=c.q; psiMoqMan=(c.man&&typeof c.man==='object')?c.man:{}; }
+      else { psiMoq=c; psiMoqMan={}; }
+    }
+  }catch(e){}
+}
+async function saveMoq(){
+  try{
+    const { error }=await sb.from('kt_psi_cfg').upsert({ id:MOQ_ID, cfg:{ q:psiMoq, man:psiMoqMan },
+      updated_at:new Date().toISOString() },{onConflict:'id'});
+    if(error){ alert('저장 실패\n['+(error.message||error.code)+']'); return false; }
+    return true;
+  }catch(e){ alert('저장 실패\n['+(e&&e.message||e)+']'); return false; }
+}
+async function onMoqQtyEdit(pn, value){
+  const k=normPN(pn); if(!k) return;
+  if(!canEditPsi()){ alert(lang==='ru'?'Нет прав на изменение.':'고칠 권한이 없습니다.'); renderMOQ(); return; }
+  const raw=String(value==null?'':value).replace(/[,\s]/g,'').trim();
+  if(raw!=='' && !isFinite(Number(raw))){ alert(lang==='ru'?'Введите число.':'숫자를 입력해 주세요.'); renderMOQ(); return; }
+  const now=(raw==='')?0:Math.max(0, Math.round(Number(raw)));
+  const before=moqQtyOf(k);
+  if(now===before) return;
+  if(!(k in psiMoqMan)) psiMoqMan[k]=before;
+  if(now>0) psiMoq[k]=now; else delete psiMoq[k];
+  if(Number(psiMoqMan[k])===now) delete psiMoqMan[k];
+  if(!await saveMoq()) return;
+  renderMOQ();
+}
+async function moqResetManual(){
+  const ru=(lang==='ru');
+  const keys=Object.keys(psiMoqMan);
+  if(!keys.length){ alert(ru?'Ручных значений нет.':'손으로 고친 값이 없습니다.'); return; }
+  if(!confirm(ru?('Вернуть '+keys.length+' значений?'):(keys.length+'개를 고치기 전 값으로 되돌릴까요?'))) return;
+  keys.forEach(k=>{ const v=Number(psiMoqMan[k])||0; if(v>0) psiMoq[k]=v; else delete psiMoq[k]; });
+  psiMoqMan={};
+  if(!await saveMoq()) return;
+  renderMOQ();
+  alert(ru?('Возвращено: '+keys.length):(keys.length+'개를 고치기 전 값으로 되돌렸습니다.'));
+}
+const MOQ_COL_DEFS=[
+  {k:'name',   w:200, ko:'품명',     ru:'Наименование', koOnly:1},
+  {k:'spec',   w:170, ko:'규격',     ru:'Хар-ки',       koOnly:1},
+  {k:'nameRu', w:250, ko:'러시아어 품명', ru:'Наименование', ruOnly:1},
+  {k:'rep',    w:112, ko:'대표품번', ru:'Осн. артикул'},
+  {k:'compat', w:112, ko:'호환품번', ru:'Артикул замены'},
+  {k:'final',  w:112, ko:'최종품번', ru:'Конечный артикул'},
+  {k:'exp',    w:70,  ko:'수출제한', ru:'Эксп.контроль'},
+  {k:'note',   w:64,  ko:'단종',     ru:'Снято'},
+  {k:'qty',    w:80,  ko:'MOQ',      ru:'MOQ'}
+];
+function moqVisCols(){ const isKo=(lang!=='ru');
+  return MOQ_COL_DEFS.filter(d=>(!d.koOnly||isKo) && (!d.ruOnly||!isKo) && (d.k!=='exp'||canViewExportCtrl())); }
+function moqCellVal(key, r){
+  if(key==='qty') return String(moqQtyOf(r._compat));
+  return blkCellVal(key, r);            // 나머지 열은 사용불가 화면과 같은 값
+}
+let _moqFilters={}, _moqSort={key:null,dir:'asc'}, _moqAllRows=[], _moqFiltered=[];
+function moqColLabel(k){ const d=MOQ_COL_DEFS.find(x=>x.k===k); return d?(lang==='ru'?d.ru:d.ko):k; }
+function moqResetFilters(){ _moqFilters={}; _moqSort={key:null,dir:'asc'}; closeMOQFilter(); renderMOQ(); }
+function debouncedRenderMOQ(){ clearTimeout(window._moqT); window._moqT=setTimeout(renderMOQ,200); }
+function moqFilterIcon(key){
+  const on=(_moqFilters[key]!=null)||(_moqSort.key===key);
+  const glyph=(_moqSort.key===key)?(_moqSort.dir==='desc'?'▼':'▲'):'▾';
+  return '<span onclick="event.stopPropagation();openMOQFilter(&quot;'+key+'&quot;,this)"'
+    + ' title="'+(lang==='ru'?'Фильтр и сортировка':'필터·정렬')+'"'
+    + ' style="display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:16px;margin-left:4px;'
+    + 'border-radius:4px;border:1px solid '+(on?'var(--accent2)':'var(--border)')+';'
+    + 'background:'+(on?'var(--accent2)':'var(--bg)')+';color:'+(on?'#fff':'var(--muted)')+';'
+    + 'font-size:10px;line-height:1;cursor:pointer;vertical-align:middle">'+glyph+'</span>'
+    + ((_moqFilters[key]!=null)?PSI_DOT:'');
+}
+function _moqEsc(e){ if(e.key==='Escape') closeMOQFilter(); }
+function _moqOutside(e){ const b=document.getElementById('moqFilterPop'); if(b && !b.contains(e.target)) closeMOQFilter(); }
+function closeMOQFilter(){ const b=document.getElementById('moqFilterPop'); if(b) b.remove();
+  document.removeEventListener('mousedown', _moqOutside); document.removeEventListener('keydown', _moqEsc); }
+function openMOQFilter(key, anchor){
+  closeMOQFilter();
+  const ru=(lang==='ru');
+  const set=new Set(); (_moqAllRows||[]).forEach(r=>set.add(moqCellVal(key,r)));
+  let vals=[...set];
+  vals = (key==='qty') ? vals.sort((a,b)=>{ if(a==='') return 1; if(b==='') return -1; return parseFloat(a)-parseFloat(b); })
+                       : vals.sort((a,b)=>a.localeCompare(b,'ko'));
+  const cur=_moqFilters[key]?new Set(_moqFilters[key]):null;
+  const rect=anchor.getBoundingClientRect(), W=258;
+  const box=document.createElement('div'); box.id='moqFilterPop';
+  box.style.cssText='position:fixed;top:'+(rect.bottom+4)+'px;left:'+Math.max(6,Math.min(rect.left, window.innerWidth-W-6))+'px;'
+    + 'z-index:9999;background:var(--surface2);border:1px solid var(--border);border-radius:10px;box-shadow:0 10px 30px #0009;'
+    + 'width:'+W+'px;font-size:12px;color:var(--text);overflow:hidden';
+  const sortBtn=(dir,txt)=>'<button class="mqf-sort" data-dir="'+dir+'" style="width:100%;text-align:left;padding:6px 8px;border:none;'
+    + 'background:'+((_moqSort.key===key&&_moqSort.dir===dir)?'var(--accent2)':'none')+';'
+    + 'color:'+((_moqSort.key===key&&_moqSort.dir===dir)?'#fff':'var(--text)')+';cursor:pointer;border-radius:6px;font-size:12px">'+txt+'</button>';
+  box.innerHTML='<div style="padding:8px 8px 6px;border-bottom:1px solid var(--border)">'
+    + '<div style="font-size:11px;color:var(--muted);margin:0 2px 5px">'+escapeHtml(moqColLabel(key))+'</div>'
+    + sortBtn('asc','▲ '+(ru?'По возрастанию':'오름차순 정렬'))
+    + sortBtn('desc','▼ '+(ru?'По убыванию':'내림차순 정렬'))+'</div>'
+    + '<div style="padding:8px">'
+    + '<input id="mqfSearch" type="text" placeholder="'+(ru?'Поиск значений…':'값 검색…')+'" style="width:100%;box-sizing:border-box;padding:5px 8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:12px">'
+    + '<label style="display:flex;align-items:center;gap:6px;padding:5px 4px 4px;cursor:pointer;font-weight:600;border-bottom:1px solid var(--border);margin-top:4px">'
+    + '<input type="checkbox" id="mqfAll" checked style="cursor:pointer;flex:none"><span>'+(ru?'(Выбрать все)':'(모두 선택)')+'</span></label>'
+    + '<div id="mqfList" style="max-height:230px;overflow:auto;margin-top:2px">'
+    + vals.map(v=>'<label class="mqf-item" data-v="'+escapeHtml(v)+'" style="display:flex;align-items:center;gap:6px;padding:4px 8px;cursor:pointer;line-height:1.3">'
+        +'<input type="checkbox" class="mqf-chk" '+((!cur||cur.has(v))?'checked':'')+' style="cursor:pointer;flex:none">'
+        +'<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(v===''?(ru?'(пусто)':'(비어 있음)'):escapeHtml(v))+'</span></label>').join('')
+    + '</div></div>'
+    + '<div style="display:flex;gap:6px;padding:8px;border-top:1px solid var(--border)">'
+    + '<button id="mqfApply" style="flex:1;padding:6px;border:none;border-radius:7px;background:var(--accent2);color:#fff;cursor:pointer;font-size:12px;font-weight:600">'+(ru?'ОК':'적용')+'</button>'
+    + '<button id="mqfClear" style="flex:1;padding:6px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);cursor:pointer;font-size:12px">'+(ru?'Сброс':'해제')+'</button>'
+    + '<button id="mqfCancel" style="flex:none;padding:6px 10px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);cursor:pointer;font-size:12px">'+(ru?'✕':'취소')+'</button>'
+    + '</div>';
+  document.body.appendChild(box);
+  box.querySelectorAll('.mqf-sort').forEach(b=>{ b.onclick=()=>{ _moqSort={key, dir:b.getAttribute('data-dir')}; closeMOQFilter(); renderMOQ(); }; });
+  const listEl=box.querySelector('#mqfList'), allChk=box.querySelector('#mqfAll'), search=box.querySelector('#mqfSearch');
+  const items=()=>[...listEl.querySelectorAll('.mqf-item')];
+  const visItems=()=>items().filter(it=>it.style.display!=='none');
+  const syncAll=()=>{ const v=visItems(), c=v.filter(it=>it.querySelector('.mqf-chk').checked);
+    allChk.checked=v.length>0&&c.length===v.length; allChk.indeterminate=c.length>0&&c.length<v.length; };
+  search.oninput=()=>{ const q=search.value.trim().toLowerCase();
+    items().forEach(it=>{ const v=(it.getAttribute('data-v')||'').toLowerCase(); it.style.display=(!q||v.includes(q))?'':'none'; }); syncAll(); };
+  allChk.onchange=()=>{ visItems().forEach(it=> it.querySelector('.mqf-chk').checked=allChk.checked); };
+  listEl.addEventListener('change', syncAll); syncAll(); search.focus();
+  box.querySelector('#mqfApply').onclick=()=>{
+    const all=items(), checked=all.filter(it=>it.querySelector('.mqf-chk').checked).map(it=>it.getAttribute('data-v'));
+    if(checked.length===all.length) delete _moqFilters[key]; else _moqFilters[key]=checked;
+    closeMOQFilter(); renderMOQ();
+  };
+  box.querySelector('#mqfClear').onclick=()=>{ delete _moqFilters[key]; if(_moqSort.key===key) _moqSort={key:null,dir:'asc'}; closeMOQFilter(); renderMOQ(); };
+  box.querySelector('#mqfCancel').onclick=()=> closeMOQFilter();
+  document.addEventListener('keydown', _moqEsc);
+  setTimeout(()=>document.addEventListener('mousedown', _moqOutside), 0);
+}
+function renderMOQ(){
+  const pane=document.getElementById('pane-moq'); if(!pane) return;
+  const ru=(lang==='ru'), L=(ko,rr)=>(ru?rr:ko);
+  const kw=(document.getElementById('moqInput')||{value:''}).value.trim().toLowerCase();
+  let rows=pnExpandRows(PN_DATA).filter(r=>normPN(r._compat) && moqQtyOf(r._compat)>0);
+  if(kw) rows=rows.filter(r=>searchRow(r.rep, kw, [r.name_ko,r.name_ru,r.spec,r.final,r._compat]));
+  _moqAllRows=rows;
+  const fk=Object.keys(_moqFilters);
+  if(fk.length){ const sets=fk.map(k=>({k,set:new Set((_moqFilters[k]||[]).map(String))}));
+    rows=rows.filter(r=>sets.every(a=>a.set.has(moqCellVal(a.k,r)))); }
+  if(_moqSort.key){ const k=_moqSort.key, dir=(_moqSort.dir==='desc')?-1:1, num=(k==='qty');
+    rows=rows.slice().sort((a,b)=>{ const va=moqCellVal(k,a), vb=moqCellVal(k,b);
+      const ea=va==='', eb=vb==='';
+      if(ea&&eb) return 0; if(ea) return 1; if(eb) return -1;
+      return (num?((parseFloat(va)||0)-(parseFloat(vb)||0)):va.localeCompare(vb,'ko'))*dir; });
+  }else{
+    rows=rows.slice().sort((a,b)=>String(a.rep).localeCompare(String(b.rep)) || String(a._compat).localeCompare(String(b._compat)));
+  }
+  _moqFiltered=rows;
+  const CO=moqVisCols();
+  const badge=document.getElementById('moqBadge'); if(badge) badge.innerHTML='<b>'+rows.length+'</b>';
+  const note=document.getElementById('moqNote');
+  if(note) note.textContent=L('품번마다 한 번에 시켜야 하는 최소 수량입니다. 숫자를 눌러 고칠 수 있습니다.',
+                              'Минимальное количество заказа по артикулу. Число можно изменить.');
+  const cg=document.getElementById('moqColgroup');
+  if(cg) cg.innerHTML=CO.map(d=>'<col style="width:'+d.w+'px">').join('');
+  const thS='padding:6px 5px;text-align:center;vertical-align:middle;position:sticky;top:0;z-index:3;'
+    +'background:var(--surface2);font-size:11px;white-space:nowrap;border-bottom:1px solid var(--border)';
+  const thead=document.getElementById('moqThead');
+  if(thead) thead.innerHTML='<tr>'+CO.map(d=>'<th style="'+thS+'">'+(ru?d.ru:d.ko)+moqFilterIcon(d.k)+'</th>').join('')+'</tr>'
+    +'<tr><th colspan="'+Math.max(1,CO.length)+'" style="'+thS+';font-weight:700;background:var(--surface);top:27px;text-align:right">'
+    +escapeHtml(L('합계 '+rows.length+'건','Итого '+rows.length))+'</th></tr>';
+  const tdS='padding:4px 6px;font-size:11px;border-bottom:1px solid var(--border)';
+  const codeS="font-family:'Courier New',monospace;font-size:9.5px;white-space:nowrap";
+  const sty={ name:tdS+';word-break:break-all', spec:tdS+';color:var(--muted);font-size:10px;word-break:break-all',
+              nameRu:tdS+';word-break:break-all', rep:tdS, compat:tdS, final:tdS,
+              exp:tdS+';text-align:center;color:#ef4444;font-weight:700',
+              note:tdS+';text-align:center;color:#ef4444;font-weight:700',
+              qty:tdS+';text-align:right;font-weight:700;white-space:nowrap' };
+  const ED=canEditPsi();
+  const tbody=document.getElementById('moqTbody');
+  if(tbody) tbody.innerHTML=rows.map(r=>'<tr>'+CO.map(d=>{
+      const v=moqCellVal(d.k,r);
+      if(d.k==='qty'){
+        const man=moqIsMan(r._compat)?' price-man':'';
+        const nv=(Number(v)||0).toLocaleString();
+        if(!ED) return '<td class="'+man.trim()+'" style="'+sty.qty+'">'+nv+'</td>';
+        return '<td class="center'+man+'" style="padding:3px 2px">'
+          +'<input type="text" inputmode="numeric" class="pc-in" value="'+nv+'"'
+          +' onchange="onMoqQtyEdit(\''+escapeHtml(normPN(r._compat))+'\',this.value)"></td>';
+      }
+      const inner=(d.k==='rep'||d.k==='compat'||d.k==='final')
+        ? (v?'<span style="'+codeS+'">'+escapeHtml(v)+'</span>':'')
+        : escapeHtml(v);
+      return '<td style="'+sty[d.k]+'">'+inner+'</td>';
+    }).join('')+'</tr>').join('');
+  const empty=document.getElementById('moqEmpty');
+  if(empty){ empty.textContent=L('MOQ 가 있는 품번이 없습니다. 엑셀 업로드로 MOQ 자료를 올려주세요.',
+                                 'Нет артикулов с MOQ. Загрузите файл MOQ.');
+             empty.style.display=rows.length?'none':'block'; }
+  const up=document.getElementById('moqUploadBtn'); if(up) up.style.display=ED?'':'none';
+  const mb=document.getElementById('moqManBtn');
+  if(mb){ const n=Object.keys(psiMoqMan).length;
+    mb.style.display=(ED&&n)?'':'none';
+    const s=mb.querySelector('span'); if(s) s.textContent=(lang==='ru'?('Сброс ручных ('+n+')'):('수기 초기화 ('+n+')')); }
+  updatePaneHBar('moq');
+}
+async function loadMOQTab(){ await loadMoq(); if(!PN_DATA.length) await loadPNOverrides(); renderMOQ(); }
+function downloadMOQ(){
+  const ru=(lang==='ru');
+  const CO=moqVisCols();
+  const aoa=[CO.map(d=>String(ru?d.ru:d.ko).replace(/<br>/g,' '))];
+  (_moqFiltered||[]).forEach(r=>aoa.push(CO.map(d=>{
+    const v=moqCellVal(d.k,r); return d.k==='qty'?(Number(v)||0):v; })));
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols']=CO.map(d=>({wch:Math.max(8, Math.round(d.w/7))}));
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'MOQ');
+  XLSX.writeFile(wb, xlsxName('MOQ','MOQ'));
+}
+// MOQ 엑셀 올리기: '호환품번' 과 'MOQ' 열을 찾아 그대로 담는다.
+async function handleMoqUpload(ev){
+  const ru=(lang==='ru');
+  const file=ev.target.files && ev.target.files[0];
+  ev.target.value='';
+  if(!file) return;
+  if(!canEditPsi()){ alert(ru?'Нет прав.':'올릴 권한이 없습니다.'); return; }
+  try{
+    const wb=await _readWb(file);
+    let done=null;
+    for(const sn of wb.SheetNames){
+      const a=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:''});
+      let pnCol=-1, qCol=-1, hdr=-1;
+      for(let r=0;r<Math.min(a.length,20) && hdr<0;r++){
+        const row=a[r]||[]; let pc=-1, qc=-1;
+        row.forEach((v,c)=>{ const s=String(v==null?'':v).replace(/\s+/g,'');
+          if(pc<0 && (s.indexOf('호환품번')>=0 || s.indexOf('검색용')>=0 || s==='품번')) pc=c;
+          if(qc<0 && /^moq$/i.test(s)) qc=c; });
+        if(pc>=0 && qc>=0){ hdr=r; pnCol=pc; qCol=qc; }
+      }
+      if(hdr<0) continue;
+      const map={}; let n=0;
+      for(let r=hdr+1;r<a.length;r++){
+        const row=a[r]||[];
+        const pn=normPN(row[pnCol]); if(!pn) continue;
+        const q=Math.round(Number(String(row[qCol]==null?'':row[qCol]).replace(/[,\s]/g,''))||0);
+        if(q>0){ map[pn]=q; n++; }
+      }
+      if(n){ done={map,n,sheet:sn}; break; }
+    }
+    if(!done){ alert(ru?'Не найдены столбцы «호환품번» и «MOQ».':'\'호환품번\' 과 \'MOQ\' 열을 찾지 못했습니다.'); return; }
+    psiMoq=done.map; psiMoqMan={};
+    if(!await saveMoq()) return;
+    renderMOQ();
+    alert(ru ? ('Загружено: '+done.n+' арт.') : ('MOQ 를 반영했습니다.\n품번 '+done.n+'개'));
+  }catch(e){ console.error(e); alert(ru?'Ошибка чтения файла.':'파일을 읽지 못했습니다.'); }
+}
 // ── 사용불가 화면 ────────────────────────────────────────
 const BLK_COL_DEFS=[
   {k:'name',   w:200, ko:'품명',     ru:'Наименование', koOnly:1},
@@ -15643,7 +15966,7 @@ updatePNTableScrollbar=setupHTableScroll('scrollBodyPN','pnHdrWrap','pnTblScroll
 // PSI 계열 화면(PSI·발주시뮬레이션·발주현황·선적/입고현황·미출현황)도 같은 가로 슬라이드 막대를 쓴다.
 // 이 화면들은 머리글이 표 안에 있어서 따로 맞출 헤더가 없다 — 스크롤 칸을 헤더 자리에 그대로 넘긴다.
 [['psi','scrollBodyPSI'],['sim','scrollBodySIM'],['po','scrollBodyPO'],
- ['ship','scrollBodySHIP'],['ms','scrollBodyMS']].forEach(function(x){
+ ['ship','scrollBodySHIP'],['ms','scrollBodyMS'],['blk','scrollBodyBLK'],['moq','scrollBodyMOQ']].forEach(function(x){
   _hbars[x[0]]=setupHTableScroll(x[1], x[1], x[0]+'TblScrollbar', x[0]+'TblScrollbarThumb');
 });
 setupSimpleHeaderScrollSync('scrollBodyPrice','priceCalcHdrWrap');
@@ -16293,6 +16616,8 @@ function enterApp(user){
   const tabMs=document.getElementById('tab-ms');
   if(tabMs) tabMs.style.display='none';
   const tabBlk=document.getElementById('tab-blk');
+  const tabMoq=document.getElementById('tab-moq');
+  if(tabMoq) tabMoq.style.display='none';
   if(tabBlk) tabBlk.style.display='none';
   const tabSim=document.getElementById('tab-sim');
   if(tabSim) tabSim.style.display='none';
