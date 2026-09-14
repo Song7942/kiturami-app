@@ -12692,9 +12692,16 @@ function renderPSI(){
   const noteEl=pgEl('OpenNote');
   if(noteEl) noteEl.textContent=L('이월재고 = '+psiYmLabel(openYm)+' 재고','Нач. остаток = остаток '+psiYmLabel(openYm));
   // 규격 오른쪽에 '기간합계' 묶음. 고른 기간을 한 칸에 모아 본다.
+  // 조회기간도 해로 적었으면 '2020년 ~ 2021년' 으로 적는다
+  const pTxt=_psiPerTxt[PSIP]||{};
+  const perYear=/^\d{4}$/.test(String(pTxt.f||'')) && /^\d{4}$/.test(String(pTxt.t||''));
+  const lastYm=yms[yms.length-1];
+  const pRng=perYear
+    ? L('20'+c.from.slice(0,2)+'년 ~ 20'+lastYm.slice(0,2)+'년',
+        '20'+c.from.slice(0,2)+' ~ 20'+lastYm.slice(0,2)+' г.')
+    : (psiYmLabel(c.from)+' ~ '+psiYmLabel(lastYm));
   const totHead='<th colspan="'+SB.length+'" style="'+thS+bl+';background:var(--surface)">'
-    + L('기간합계 ('+psiYmLabel(c.from)+' ~ '+psiYmLabel(yms[yms.length-1])+')',
-        'Итого за период ('+psiYmLabel(c.from)+' ~ '+psiYmLabel(yms[yms.length-1])+')')+'</th>';
+    + L('기간합계 ('+pRng+')','Итого за период ('+pRng+')')+'</th>';
   const totLab=d=>{
     if(psiSimOn && d.k==='mo2') return L('발주후<br>보유월','После<br>мес.');
     if(psiSimOn && d.k==='st2') return L('발주후<br>재고','Остаток<br>после');
@@ -12711,9 +12718,13 @@ function renderPSI(){
     }).join('');
   // 출고기간 묶음: 규격 오른쪽, 기간합계·달별 묶음보다 앞에 온다
   const oR=psiOutRange();
+  // 해로 적었으면 '2020년 ~ 2021년' 으로, 달로 적었으면 '2020-01 ~ 2021-12' 로 적는다
+  const oRng=psiOutYearMode()
+    ? L('20'+oR.from.slice(0,2)+'년 ~ 20'+oR.to.slice(0,2)+'년',
+        '20'+oR.from.slice(0,2)+' ~ 20'+oR.to.slice(0,2)+' г.')
+    : (psiYmLabel(oR.from)+' ~ '+psiYmLabel(oR.to));
   const outHead=OUT.length ? ('<th colspan="'+OUT.length+'" style="'+thS+bl+';background:var(--surface)">'
-    + L('출고 ('+psiYmLabel(oR.from)+' ~ '+psiYmLabel(oR.to)+')',
-        'Расход ('+psiYmLabel(oR.from)+' ~ '+psiYmLabel(oR.to)+')')+'</th>') : '';
+    + L('출고 ('+oRng+')','Расход ('+oRng+')')+'</th>') : '';
   const outSub=OUT.map((d,i)=>'<th style="'+thS+(i===0?bl:'')+';background:var(--surface)'
     +(d.year?';font-weight:700':';color:var(--muted)')+'">'+escapeHtml(d.lab)+'</th>').join('');
   let head=['<tr>',
