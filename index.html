@@ -13630,7 +13630,9 @@ function renderPSI(){
       const planAdd=isPlanYm ? (_simPlan.get(g.rep)||0) : 0;
       const manShip=_simShip[simNeedKey(g.rep,y)];
       const realSh=(manShip!=null)?Math.max(0,manShip):a.sh;
-      const plan=isPlanYm ? (planStarted ? 0 : planAdd) : planCalc;   // 화면에 찍는 선적계획
+      // 화면에 찍는 선적계획. 그 달에 선적이 시작됐으면 남은 몫은 다음 달로 넘겼으니 비운다.
+      const ymStarted=psiSimOn && !!startedYm[y];
+      const plan=ymStarted ? 0 : (isPlanYm ? planAdd : planCalc);
       // 이미 지났거나, 그 달에 실제선적이 한 줄이라도 잡힌 달은 '나간 양이 정해진' 달로 본다
       //   (그 달에 못 나간 몫은 품번을 가리지 않고 모두 다음 달 계획으로 넘어간다)
       const known=(y<=psiNowYm()) || !!startedYm[y];
