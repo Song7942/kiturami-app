@@ -11996,7 +11996,7 @@ function openPsiColsPanel(){
       + '<div style="flex:1"><div style="font-size:11px;color:var(--muted);margin-bottom:3px">'+(ru?'По месяцам':'월별 수치')+'</div>'
         + item({k:'__tot', ko:'기간합계', ru:'Итого за период'})
         + item({k:'__zero', ko:'값 없는 품번도 보기', ru:'Показывать артикулы без данных'})
-        + item({k:'__out', ko:'출고기간(연도별·월별 출고)', ru:'Расход по годам и месяцам'})
+        + item({k:'__out', ko:'출고현황(연도별·월별 출고)', ru:'Расход по годам и месяцам'})
         + '<div style="border-top:1px solid var(--border);margin:4px 0"></div>'
         + psiColDefsFor().filter(d=>!d.fixed).map(item).join('')+'</div>'
     + '</div>'
