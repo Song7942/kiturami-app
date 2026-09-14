@@ -300,8 +300,12 @@ table.pt td{padding:3px 5px;font-size:11px;overflow:hidden;border-bottom:1px sol
 .card-list{border:1px solid var(--border);border-radius:10px;background:var(--surface)}
 .price-row td{overflow:hidden}
 /* 기간칸 옆 '달 고르기' 단추. 손으로 적는 길은 그대로 두고 고르는 길을 더한다. */
-.ym-pick{margin-left:-1px;padding:3px 5px;border:1px solid var(--border);border-radius:0 6px 6px 0;
-  background:var(--surface);color:var(--muted);font-size:10px;line-height:1;cursor:pointer;vertical-align:middle;height:24px}
+/* 기입칸 안쪽에 브라우저가 그리는 세모(datalist 표시)는 감춘다.
+   같은 모양의 세모는 칸 오른쪽 단추(.ym-pick) 하나만 둔다. */
+input[list]::-webkit-calendar-picker-indicator{display:none!important;opacity:0;width:0;height:0}
+input[list]{-webkit-appearance:none;appearance:none;background-image:none}
+.ym-pick{margin-left:-1px;padding:3px 6px;border:1px solid var(--border);border-radius:0 6px 6px 0;
+  background:var(--surface);color:var(--text);font-size:9px;line-height:1;cursor:pointer;vertical-align:middle;height:24px}
 .ym-pick:hover{background:var(--surface2);color:var(--text)}
 #ktYmPickPop .ymp-it{padding:5px 10px;cursor:pointer;font-size:12px;white-space:nowrap}
 #ktYmPickPop .ymp-it:hover{background:var(--tag-bg)}
@@ -1238,9 +1242,9 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
         <input type="text" id="msInput" placeholder="대표품번·호환품번·품명·규격으로 검색…" oninput="debouncedRenderMS()">
       </div>
 
-      <input type="text" id="msFrom" list="ktMsYmOpts" placeholder="2021-12" onfocus="this.select()" onchange="renderMS()" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"><button type="button" class="ym-pick" onclick="ktYmPickOpen('msFrom',this)">▾</button>
+      <input type="text" id="msFrom" list="ktMsYmOpts" placeholder="2021-12" onfocus="this.select()" onchange="renderMS()" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"><button type="button" class="ym-pick" onclick="ktYmPickOpen('msFrom',this)">▼</button>
       <span style="font-size:11px;color:var(--muted)">~</span>
-      <input type="text" id="msTo" list="ktMsYmOpts" placeholder="2026-09" onfocus="this.select()" onchange="renderMS()" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"><button type="button" class="ym-pick" onclick="ktYmPickOpen('msTo',this)">▾</button>
+      <input type="text" id="msTo" list="ktMsYmOpts" placeholder="2026-09" onfocus="this.select()" onchange="renderMS()" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"><button type="button" class="ym-pick" onclick="ktYmPickOpen('msTo',this)">▼</button>
       <datalist id="ktMsYmOpts"></datalist>
       <button class="dl-btn" onclick="msAllPeriod()" title="기간을 전체로 돌리기"><span id="i18n-ms-all">전체 기간</span></button>
       <button class="dl-btn" onclick="openMsColsPanel()" title="표에 보일 열을 고릅니다(아이디별로 저장)">
@@ -1279,9 +1283,9 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
       </div>
 
       <select id="shipInv" onchange="renderShip()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></select>
-      <input type="text" id="shipFrom" list="ktShipYmOpts" placeholder="2026-05" onfocus="this.select()" onchange="renderShip()" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"><button type="button" class="ym-pick" onclick="ktYmPickOpen('shipFrom',this)">▾</button>
+      <input type="text" id="shipFrom" list="ktShipYmOpts" placeholder="2026-05" onfocus="this.select()" onchange="renderShip()" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"><button type="button" class="ym-pick" onclick="ktYmPickOpen('shipFrom',this)">▼</button>
       <span style="font-size:11px;color:var(--muted)">~</span>
-      <input type="text" id="shipTo" list="ktShipYmOpts" placeholder="2026-09" onfocus="this.select()" onchange="renderShip()" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"><button type="button" class="ym-pick" onclick="ktYmPickOpen('shipTo',this)">▾</button>
+      <input type="text" id="shipTo" list="ktShipYmOpts" placeholder="2026-09" onfocus="this.select()" onchange="renderShip()" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"><button type="button" class="ym-pick" onclick="ktYmPickOpen('shipTo',this)">▼</button>
       <datalist id="ktShipYmOpts"></datalist>
       <button class="dl-btn" onclick="shipAllPeriod()" title="선적월을 전체로 돌리기"><span id="i18n-ship-all">전체 기간</span></button>
       <button class="dl-btn" onclick="openShipColsPanel()" title="표에 보일 열을 고릅니다(아이디별로 저장)">
@@ -1334,9 +1338,9 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
 
       <select id="poCha" onchange="renderPO()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></select>
       <datalist id="ktPoYmOpts"></datalist>
-      <input type="text" id="poFrom" list="ktPoYmOpts" placeholder="2026-01" onfocus="this.select()" onchange="renderPO()" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"><button type="button" class="ym-pick" onclick="ktYmPickOpen('poFrom',this)">▾</button>
+      <input type="text" id="poFrom" list="ktPoYmOpts" placeholder="2026-01" onfocus="this.select()" onchange="renderPO()" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"><button type="button" class="ym-pick" onclick="ktYmPickOpen('poFrom',this)">▼</button>
       <span style="font-size:11px;color:var(--muted)">~</span>
-      <input type="text" id="poTo" list="ktPoYmOpts" placeholder="2026-12" onfocus="this.select()" onchange="renderPO()" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"><button type="button" class="ym-pick" onclick="ktYmPickOpen('poTo',this)">▾</button>
+      <input type="text" id="poTo" list="ktPoYmOpts" placeholder="2026-12" onfocus="this.select()" onchange="renderPO()" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"><button type="button" class="ym-pick" onclick="ktYmPickOpen('poTo',this)">▼</button>
       <button class="dl-btn" onclick="poAllPeriod()" title="발주년월을 전체로 돌리기"><span id="i18n-po-all">전체 기간</span></button>
       <button class="dl-btn" onclick="openPoViewPanel()" title="대표품번끼리 묶어 볼지 고릅니다">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
@@ -1385,10 +1389,10 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
         <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
         <input type="text" id="simInput" placeholder="품명·규격·대표/호환품번으로 검색…" oninput="debouncedRenderSIM()">
       </div>
-      <span style="font-size:11px;color:var(--muted)" id="i18n-sim-perlab">조회기간</span><input type="text" id="simFromYm" list="ktOutYmOpts" placeholder="2026-09" onfocus="this.select()" onchange="psiSetPerRange('sim')" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"><button type="button" class="ym-pick" onclick="ktYmPickOpen('simFromYm',this)">▾</button>
+      <span style="font-size:11px;color:var(--muted)" id="i18n-sim-perlab">조회기간</span><input type="text" id="simFromYm" list="ktOutYmOpts" placeholder="2026-09" onfocus="this.select()" onchange="psiSetPerRange('sim')" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"><button type="button" class="ym-pick" onclick="ktYmPickOpen('simFromYm',this)">▼</button>
       <span style="font-size:11px;color:var(--muted)">~</span>
-      <input type="text" id="simToYm" list="ktOutYmOpts" placeholder="2027-02" onfocus="this.select()" onchange="psiSetPerRange('sim')" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"><button type="button" class="ym-pick" onclick="ktYmPickOpen('simToYm',this)">▾</button>
-      <span style="font-size:11px;color:var(--muted);margin-left:6px" id="i18n-sim-outlab">출고기간</span><input type="text" id="simOutFrom" list="ktOutYmOpts" placeholder="2025-10" onfocus="this.select()" onchange="psiSetOutRange('sim')" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"><button type="button" class="ym-pick" onclick="ktYmPickOpen('simOutFrom',this)">▾</button><span style="font-size:11px;color:var(--muted)">~</span><input type="text" id="simOutTo" list="ktOutYmOpts" placeholder="2026-09" onfocus="this.select()" onchange="psiSetOutRange('sim')" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"><button type="button" class="ym-pick" onclick="ktYmPickOpen('simOutTo',this)">▾</button>
+      <input type="text" id="simToYm" list="ktOutYmOpts" placeholder="2027-02" onfocus="this.select()" onchange="psiSetPerRange('sim')" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"><button type="button" class="ym-pick" onclick="ktYmPickOpen('simToYm',this)">▼</button>
+      <span style="font-size:11px;color:var(--muted);margin-left:6px" id="i18n-sim-outlab">출고기간</span><input type="text" id="simOutFrom" list="ktOutYmOpts" placeholder="2025-10" onfocus="this.select()" onchange="psiSetOutRange('sim')" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"><button type="button" class="ym-pick" onclick="ktYmPickOpen('simOutFrom',this)">▼</button><span style="font-size:11px;color:var(--muted)">~</span><input type="text" id="simOutTo" list="ktOutYmOpts" placeholder="2026-09" onfocus="this.select()" onchange="psiSetOutRange('sim')" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"><button type="button" class="ym-pick" onclick="ktYmPickOpen('simOutTo',this)">▼</button>
       <label style="display:none;align-items:center;gap:4px;font-size:10px;color:var(--muted)"><span id="i18n-sim-base">재고 기산</span>
         <input type="text" id="simBaseYm" maxlength="4" onchange="renderSIM()" style="width:52px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></label>
       <span id="simOpenNote" style="display:none;font-size:10px;color:var(--muted);white-space:nowrap"></span>
@@ -1435,10 +1439,10 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
         <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
         <input type="text" id="psiInput" placeholder="품명·규격·대표/호환품번으로 검색…" oninput="debouncedRenderPSI()">
       </div>
-      <span style="font-size:11px;color:var(--muted)" id="i18n-psi-perlab">조회기간</span><input type="text" id="psiFromYm" list="ktOutYmOpts" placeholder="2026-08" onfocus="this.select()" onchange="psiSetPerRange('psi')" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"><button type="button" class="ym-pick" onclick="ktYmPickOpen('psiFromYm',this)">▾</button>
+      <span style="font-size:11px;color:var(--muted)" id="i18n-psi-perlab">조회기간</span><input type="text" id="psiFromYm" list="ktOutYmOpts" placeholder="2026-08" onfocus="this.select()" onchange="psiSetPerRange('psi')" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"><button type="button" class="ym-pick" onclick="ktYmPickOpen('psiFromYm',this)">▼</button>
       <span style="font-size:11px;color:var(--muted)">~</span>
-      <input type="text" id="psiToYm" list="ktOutYmOpts" placeholder="2026-09" onfocus="this.select()" onchange="psiSetPerRange('psi')" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"><button type="button" class="ym-pick" onclick="ktYmPickOpen('psiToYm',this)">▾</button>
-      <span style="font-size:11px;color:var(--muted);margin-left:6px" id="i18n-psi-outlab">출고기간</span><input type="text" id="psiOutFrom" list="ktOutYmOpts" placeholder="2025-10" onfocus="this.select()" onchange="psiSetOutRange('psi')" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"><button type="button" class="ym-pick" onclick="ktYmPickOpen('psiOutFrom',this)">▾</button><span style="font-size:11px;color:var(--muted)">~</span><input type="text" id="psiOutTo" list="ktOutYmOpts" placeholder="2026-09" onfocus="this.select()" onchange="psiSetOutRange('psi')" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"><button type="button" class="ym-pick" onclick="ktYmPickOpen('psiOutTo',this)">▾</button>
+      <input type="text" id="psiToYm" list="ktOutYmOpts" placeholder="2026-09" onfocus="this.select()" onchange="psiSetPerRange('psi')" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"><button type="button" class="ym-pick" onclick="ktYmPickOpen('psiToYm',this)">▼</button>
+      <span style="font-size:11px;color:var(--muted);margin-left:6px" id="i18n-psi-outlab">출고기간</span><input type="text" id="psiOutFrom" list="ktOutYmOpts" placeholder="2025-10" onfocus="this.select()" onchange="psiSetOutRange('psi')" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"><button type="button" class="ym-pick" onclick="ktYmPickOpen('psiOutFrom',this)">▼</button><span style="font-size:11px;color:var(--muted)">~</span><input type="text" id="psiOutTo" list="ktOutYmOpts" placeholder="2026-09" onfocus="this.select()" onchange="psiSetOutRange('psi')" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"><button type="button" class="ym-pick" onclick="ktYmPickOpen('psiOutTo',this)">▼</button>
       <datalist id="ktYmOpts"></datalist><datalist id="ktOutYmOpts"></datalist>
       <label style="display:none;align-items:center;gap:4px;font-size:10px;color:var(--muted)"><span id="i18n-psi-base">재고 기산</span>
         <input type="text" id="psiBaseYm" maxlength="4" onchange="renderPSI()" style="width:52px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></label>
@@ -14087,6 +14091,27 @@ function ktYmPickClose(){
 }
 function _ktYmPickEsc(e){ if(e.key==='Escape') ktYmPickClose(); }
 function _ktYmPickOutside(e){ const b=document.getElementById('ktYmPickPop'); if(b && !b.contains(e.target)) ktYmPickClose(); }
+// 기간 칸에 '202610' 처럼 붙여 적어도 '2026-10' 으로 고쳐 적는다.
+//   숫자만 남겼을 때 여섯 자리이고 뒤 두 자리가 달(01~12)이면 가운데에 '-' 를 넣는다.
+//   네 자리(2026)는 '연도만' 뜻이 있으므로 그대로 둔다.
+function ktYmNorm(v){
+  const s=String(v==null?'':v).trim();
+  if(!s) return s;
+  const d=s.replace(/[^0-9]/g,'');
+  if(/^\d{6}$/.test(d)){
+    const m=parseInt(d.slice(4),10);
+    if(m>=1 && m<=12) return d.slice(0,4)+'-'+d.slice(4);
+  }
+  return s;
+}
+// 칸을 떠날 때(또는 값이 바뀔 때) 먼저 고쳐 놓는다. 붙잡는 단계에서 잡아
+// 칸에 달린 onchange 가 이미 고쳐진 값을 보게 한다.
+document.addEventListener('change', function(e){
+  const el=e.target;
+  if(!el || el.tagName!=='INPUT' || !el.hasAttribute('list')) return;
+  const nv=ktYmNorm(el.value);
+  if(nv!==el.value) el.value=nv;
+}, true);
 function ktYmPickOpen(inputId, btn){
   const open=!!document.getElementById('ktYmPickPop');
   ktYmPickClose();
