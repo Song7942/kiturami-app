@@ -11312,6 +11312,19 @@ async function onMoqQtyEdit(pn, value){
   if(!await saveMoq()) return;
   renderMOQ();
 }
+// 줄 지우기: 그 품번을 MOQ 목록에서 뺀다(품번조회·PSI 자료는 그대로 둔다).
+async function moqDeleteRow(pn){
+  const ru=(lang==='ru');
+  const k=normPN(pn); if(!k) return;
+  if(!canEditPsi()){ alert(ru?'Нет прав на изменение.':'지울 권한이 없습니다.'); return; }
+  if(!(k in psiMoq)){ renderMOQ(); return; }
+  if(!confirm(ru ? ('Удалить артикул '+k+' из списка MOQ?')
+                 : (k+' 을(를) MOQ 목록에서 지울까요?\n(품번조회·PSI 자료는 그대로 둡니다)'))) return;
+  const before=psiMoq[k];
+  delete psiMoq[k]; delete psiMoqMan[k];
+  if(!await saveMoq()){ psiMoq[k]=before; return; }
+  renderMOQ();
+}
 async function moqResetManual(){
   const ru=(lang==='ru');
   const keys=Object.keys(psiMoqMan);
@@ -11438,13 +11451,15 @@ function renderMOQ(){
   const note=document.getElementById('moqNote');
   if(note) note.textContent=L('품번마다 한 번에 시켜야 하는 최소 수량입니다. 숫자를 눌러 고칠 수 있습니다.',
                               'Минимальное количество заказа по артикулу. Число можно изменить.');
+  const ED=canEditPsi();
   const cg=document.getElementById('moqColgroup');
-  if(cg) cg.innerHTML=CO.map(d=>'<col style="width:'+d.w+'px">').join('');
+  if(cg) cg.innerHTML=(ED?'<col style="width:30px">':'')+CO.map(d=>'<col style="width:'+d.w+'px">').join('');
   const thS='padding:6px 5px;text-align:center;vertical-align:middle;position:sticky;top:0;z-index:3;'
     +'background:var(--surface2);font-size:11px;white-space:nowrap;border-bottom:1px solid var(--border)';
   const thead=document.getElementById('moqThead');
-  if(thead) thead.innerHTML='<tr>'+CO.map(d=>'<th style="'+thS+'">'+(ru?d.ru:d.ko)+moqFilterIcon(d.k)+'</th>').join('')+'</tr>'
-    +'<tr><th colspan="'+Math.max(1,CO.length)+'" style="'+thS+';font-weight:700;background:var(--surface);top:27px;text-align:right">'
+  if(thead) thead.innerHTML='<tr>'+(ED?'<th style="'+thS+'"></th>':'')
+    +CO.map(d=>'<th style="'+thS+'">'+(ru?d.ru:d.ko)+moqFilterIcon(d.k)+'</th>').join('')+'</tr>'
+    +'<tr><th colspan="'+Math.max(1,CO.length+(ED?1:0))+'" style="'+thS+';font-weight:700;background:var(--surface);top:27px;text-align:right">'
     +escapeHtml(L('합계 '+rows.length+'건','Итого '+rows.length))+'</th></tr>';
   const tdS='padding:4px 6px;font-size:11px;border-bottom:1px solid var(--border)';
   const codeS="font-family:'Courier New',monospace;font-size:9.5px;white-space:nowrap";
@@ -11453,9 +11468,13 @@ function renderMOQ(){
               exp:tdS+';text-align:center;color:#ef4444;font-weight:700',
               note:tdS+';text-align:center;color:#ef4444;font-weight:700',
               qty:tdS+';text-align:right;font-weight:700;white-space:nowrap' };
-  const ED=canEditPsi();
+  const delTip=L('이 품번을 MOQ 목록에서 지웁니다','Удалить артикул из списка MOQ');
   const tbody=document.getElementById('moqTbody');
-  if(tbody) tbody.innerHTML=rows.map(r=>'<tr>'+CO.map(d=>{
+  if(tbody) tbody.innerHTML=rows.map(r=>'<tr>'
+    +(ED?('<td class="center" style="'+tdS+';padding:2px"><button title="'+delTip+'"'
+      +' onclick="moqDeleteRow(\''+escapeHtml(normPN(r._compat))+'\')"'
+      +' style="border:none;background:none;color:#ef4444;cursor:pointer;font-size:14px;padding:2px 4px">✕</button></td>'):'')
+    +CO.map(d=>{
       const v=moqCellVal(d.k,r);
       if(d.k==='qty'){
         const man=moqIsMan(r._compat)?' price-man':'';
