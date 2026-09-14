@@ -12576,6 +12576,7 @@ function simShipFocus(td){
     const rep=td.getAttribute('data-rep'), ym=td.getAttribute('data-ym');
     const t=String(el.value).replace(/[^0-9]/g,'');
     if(t==='') delete _simShip[simNeedKey(rep,ym)]; else _simShip[simNeedKey(rep,ym)]=Math.round(Number(t));
+    saveSimMan();
     renderSIM();      // 못 나간 물량이 다음 달로 넘어가므로 표 전체를 다시 셈한다
   };
   el.focus(); el.select();
@@ -12602,6 +12603,7 @@ function simNeedFocus(td){
   el.oninput=()=>simNeedApply(td, el.value);
   el.onkeydown=(e)=>{ if(e.key==='Enter'||e.key==='Escape') el.blur(); };
   el.onblur=()=>{ simNeedApply(td, el.value, true);
+    saveSimMan();
     renderSIM();          // 그 뒤 달 재고·보유월·발주필요까지 다시 계산한다
   };
   el.focus(); el.select();
@@ -13239,7 +13241,34 @@ function simResetManual(){
   if(!c){ alert(ru?'Ручных значений нет.':'손으로 고친 값이 없습니다.'); return; }
   if(!confirm(ru ? ('Сбросить '+c+' ручных значений?')
                  : ('손으로 고친 '+c+'개를 원래 셈한 값으로 되돌립니다.\n계속할까요?'))) return;
-  _simNeed={}; _simShip={}; renderSIM();
+  _simNeed={}; _simShip={}; saveSimMan(); renderSIM();
+}
+// ── 손으로 적은 실제선적·발주필요를 담아 둔다 ──────────────
+//   전에는 화면에서만 쓰고 버려서, 새로 고치거나 다른 화면에 다녀오면 사라졌다.
+//   설정 칸(kt_psi_cfg id=97)에 담아 다음에 들어와도 그대로 보이게 한다.
+const SIM_MAN_ID=97;
+let _simManLoaded=false;
+async function loadSimMan(){
+  if(_simManLoaded) return;
+  _simManLoaded=true;
+  try{
+    const { data, error }=await sb.from('kt_psi_cfg').select('cfg').eq('id',SIM_MAN_ID).limit(1);
+    const c=(!error && data && data[0])?data[0].cfg:null;
+    if(c && typeof c==='object'){
+      if(c.ship && typeof c.ship==='object') _simShip=c.ship;
+      if(c.need && typeof c.need==='object') _simNeed=c.need;
+    }
+  }catch(e){}
+}
+let _simManT=null;
+function saveSimMan(){
+  clearTimeout(_simManT);
+  _simManT=setTimeout(async()=>{
+    try{
+      await sb.from('kt_psi_cfg').upsert({ id:SIM_MAN_ID, cfg:{ ship:_simShip, need:_simNeed },
+        updated_at:new Date().toISOString() },{onConflict:'id'});
+    }catch(e){ console.log('sim_man: 저장 실패'); }
+  }, 600);
 }
 function simManualBtn(){
   const b=document.getElementById('simResetManualBtn'); if(!b) return;
@@ -13256,6 +13285,7 @@ async function loadSimTab(){
   await loadBlocked();
   await loadMoq();                                           // 발주필요를 MOQ 이상으로 적으려면 필요하다
   simMoqClear();
+  await loadSimMan();                                        // 손으로 적어 둔 실제선적·발주필요
   if(psiPaneFresh('sim')){ updatePaneHBar('sim'); return; }   // 바뀐 게 없으면 그대로 둔다
   renderSIM();
 }
