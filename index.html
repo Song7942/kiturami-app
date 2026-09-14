@@ -1327,7 +1327,7 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
       <span style="font-size:11px;color:var(--muted)" id="i18n-sim-perlab">조회기간</span><input type="text" id="simFromYm" list="ktYmOpts" placeholder="2026-09" onchange="renderSIM()" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"><button type="button" class="ym-pick" onclick="ktYmPickOpen('simFromYm',this)">▾</button>
       <span style="font-size:11px;color:var(--muted)">~</span>
       <input type="text" id="simToYm" list="ktYmOpts" placeholder="2027-02" onchange="renderSIM()" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"><button type="button" class="ym-pick" onclick="ktYmPickOpen('simToYm',this)">▾</button>
-      <span style="font-size:11px;color:var(--muted);margin-left:6px" id="i18n-sim-outlab">출고기간</span><input type="text" id="simOutFrom" list="ktYmOpts" placeholder="2025-10" onchange="psiSetOutRange('sim')" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"><button type="button" class="ym-pick" onclick="ktYmPickOpen('simOutFrom',this)">▾</button><span style="font-size:11px;color:var(--muted)">~</span><input type="text" id="simOutTo" list="ktYmOpts" placeholder="2026-09" onchange="psiSetOutRange('sim')" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"><button type="button" class="ym-pick" onclick="ktYmPickOpen('simOutTo',this)">▾</button>
+      <span style="font-size:11px;color:var(--muted);margin-left:6px" id="i18n-sim-outlab">출고기간</span><input type="text" id="simOutFrom" list="ktOutYmOpts" placeholder="2025-10" onchange="psiSetOutRange('sim')" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"><button type="button" class="ym-pick" onclick="ktYmPickOpen('simOutFrom',this)">▾</button><span style="font-size:11px;color:var(--muted)">~</span><input type="text" id="simOutTo" list="ktOutYmOpts" placeholder="2026-09" onchange="psiSetOutRange('sim')" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"><button type="button" class="ym-pick" onclick="ktYmPickOpen('simOutTo',this)">▾</button>
       <button class="dl-btn" onclick="openPsiColsPanel()" title="표에 보일 열을 고릅니다(아이디별로 저장)">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="9" y1="4" x2="9" y2="20"/><line x1="15" y1="4" x2="15" y2="20"/></svg>
         <span id="i18n-sim-cols">보기</span>
@@ -1377,12 +1377,12 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
       <span style="font-size:11px;color:var(--muted)" id="i18n-psi-perlab">조회기간</span><input type="text" id="psiFromYm" list="ktYmOpts" placeholder="2026-08" onchange="renderPSI()" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"><button type="button" class="ym-pick" onclick="ktYmPickOpen('psiFromYm',this)">▾</button>
       <span style="font-size:11px;color:var(--muted)">~</span>
       <input type="text" id="psiToYm" list="ktYmOpts" placeholder="2026-09" onchange="renderPSI()" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"><button type="button" class="ym-pick" onclick="ktYmPickOpen('psiToYm',this)">▾</button>
-      <span style="font-size:11px;color:var(--muted);margin-left:6px" id="i18n-psi-outlab">출고기간</span><input type="text" id="psiOutFrom" list="ktYmOpts" placeholder="2025-10" onchange="psiSetOutRange('psi')" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"><button type="button" class="ym-pick" onclick="ktYmPickOpen('psiOutFrom',this)">▾</button><span style="font-size:11px;color:var(--muted)">~</span><input type="text" id="psiOutTo" list="ktYmOpts" placeholder="2026-09" onchange="psiSetOutRange('psi')" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"><button type="button" class="ym-pick" onclick="ktYmPickOpen('psiOutTo',this)">▾</button>
+      <span style="font-size:11px;color:var(--muted);margin-left:6px" id="i18n-psi-outlab">출고기간</span><input type="text" id="psiOutFrom" list="ktOutYmOpts" placeholder="2025-10" onchange="psiSetOutRange('psi')" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"><button type="button" class="ym-pick" onclick="ktYmPickOpen('psiOutFrom',this)">▾</button><span style="font-size:11px;color:var(--muted)">~</span><input type="text" id="psiOutTo" list="ktOutYmOpts" placeholder="2026-09" onchange="psiSetOutRange('psi')" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"><button type="button" class="ym-pick" onclick="ktYmPickOpen('psiOutTo',this)">▾</button>
       <button class="dl-btn" onclick="openPsiColsPanel()" title="표에 보일 열을 고릅니다(아이디별로 저장)">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="9" y1="4" x2="9" y2="20"/><line x1="15" y1="4" x2="15" y2="20"/></svg>
         <span id="i18n-psi-cols">보기</span>
       </button>
-      <datalist id="ktYmOpts"></datalist>
+      <datalist id="ktYmOpts"></datalist><datalist id="ktOutYmOpts"></datalist>
       <label style="display:none;align-items:center;gap:4px;font-size:10px;color:var(--muted)"><span id="i18n-psi-base">재고 기산</span>
         <input type="text" id="psiBaseYm" maxlength="4" onchange="renderPSI()" style="width:52px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></label>
       <span id="psiOpenNote" style="display:none;font-size:10px;color:var(--muted);white-space:nowrap"></span>
@@ -11715,7 +11715,7 @@ function psiColsMap(){
 function psiOutOn(){ const b=psiColsBag(); return !!(b && b.__out); }
 function psiOutRange(){
   const b=psiColsBag()||{};
-  const list=(typeof psiYmList==='function')?psiYmList():[];
+  const list=(typeof psiMonthList==='function')?psiMonthList().slice().sort():[];
   const last=list.length?list[list.length-1]:psiNowYm();
   let from=String(b.__outFrom||''), to=String(b.__outTo||'');
   if(!/^\d{4}$/.test(from)) from=psiYmAdd(last,-11);      // 처음엔 최근 12개월
@@ -11729,20 +11729,42 @@ function psiOutYms(){
   for(let y=r.from; y<=r.to && out.length<120; y=psiYmAdd(y,1)) out.push(y);
   return out;
 }
-// 보여 줄 열: 해마다 한 칸(그 해 출고 합계) + 달마다 한 칸
+// 보여 줄 열: 맨 왼쪽에 고른 기간 전체 합계, 그 다음 해마다 한 칸, 그 다음 달마다 한 칸
 function psiOutCols(){
   if(!psiOutOn()) return [];
   const ys=psiOutYms(); if(!ys.length) return [];
   const years=[]; ys.forEach(y=>{ const yy=y.slice(0,2); if(years.indexOf(yy)<0) years.push(yy); });
-  const cols=years.map(yy=>({ k:'oy:'+yy, w:62, lab:'20'+yy, yms:ys.filter(y=>y.slice(0,2)===yy), year:1 }));
+  const cols=[{ k:'ot', w:70, lab:(lang==='ru'?'Итого':'합계'), yms:ys.slice(), tot:1 }];
+  years.forEach(yy=>cols.push({ k:'oy:'+yy, w:62, lab:'20'+yy, yms:ys.filter(y=>y.slice(0,2)===yy), year:1 }));
   ys.forEach(y=>cols.push({ k:'om:'+y, w:58, lab:psiYmLabel(y), yms:[y] }));
   return cols;
+}
+// 출고기간 칸에 적은 글자를 달로 바꾼다. '2025' 처럼 해만 적으면 그 해의 1월~12월로 본다.
+function psiOutBound(txt, isTo){
+  const s=String(txt==null?'':txt).trim();
+  const y4=s.match(/^(20)?(\d{2})$/);                 // 2025 · 25
+  if(y4) return y4[2]+(isTo?'12':'01');
+  const y=s.match(/^(\d{4})$/);                       // 4자리인데 위에서 안 걸린 것(예: 2512 = 25년 12월)
+  if(y && Number(s.slice(0,2))>20) return s;
+  return psiYmParse(s);
 }
 // 출고기간 칸을 지금 값으로 채운다(다른 데서 고쳐도 따라오게)
 function psiFillOutRange(){
   const p=psiIsSimPane()?'sim':'psi';
   const r=psiOutRange();
   const f=document.getElementById(p+'OutFrom'), t=document.getElementById(p+'OutTo');
+  // 고르개 목록: 해를 먼저(2025 처럼), 그 뒤에 달을 죽 놓는다
+  const dl=document.getElementById('ktOutYmOpts');
+  if(dl){
+    const list=(typeof psiMonthList==='function')?psiMonthList().slice().sort():[];
+    const years=[]; list.forEach(y=>{ const s='20'+y.slice(0,2); if(years.indexOf(s)<0) years.push(s); });
+    const key=years.join(',')+'|'+list.join(',');
+    if(dl.getAttribute('data-list')!==key){
+      dl.innerHTML=years.map(v=>'<option value="'+v+'">').join('')
+                 + list.map(v=>'<option value="'+psiYmLabel(v)+'">').join('');
+      dl.setAttribute('data-list', key);
+    }
+  }
   if(f && document.activeElement!==f) f.value=psiYmLabel(r.from);
   if(t && document.activeElement!==t) t.value=psiYmLabel(r.to);
   const wrap=[f,t,document.getElementById('i18n-'+p+'-outlab')];
@@ -11757,7 +11779,12 @@ function psiFillOutRange(){
 // 출고기간 칸을 고쳤을 때
 async function psiSetOutRange(p){
   const f=document.getElementById(p+'OutFrom'), t=document.getElementById(p+'OutTo');
-  let a=psiYmParse(f?f.value:''), b=psiYmParse(t?t.value:'');
+  // 한쪽에만 해를 적으면(예: 시작칸에 2025) 그 해 전체로 본다
+  const fv=String(f?f.value:'').trim(), tv=String(t?t.value:'').trim();
+  const isYear=s=>/^(20)?\d{2}$/.test(s) && !(/^\d{4}$/.test(s) && Number(s.slice(0,2))>20);
+  let a=psiOutBound(fv,false), b=psiOutBound(tv,true);
+  if(isYear(fv) && !tv) b=psiOutBound(fv,true);
+  if(isYear(tv) && !fv) a=psiOutBound(tv,false);
   const r=psiOutRange();
   if(!a) a=r.from; if(!b) b=r.to;
   if(a>b){ const x=a; a=b; b=x; }
