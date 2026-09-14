@@ -1139,6 +1139,10 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/></svg>
         <span id="i18n-moq-man">수기 초기화</span>
       </button>
+      <button class="dl-btn" id="moqClearBtn" onclick="moqClearAll()" title="MOQ 목록을 통째로 비웁니다" style="background:#ef4444;border-color:#ef4444;color:#fff">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>
+        <span id="i18n-moq-clear">전체 지우기</span>
+      </button>
       <button class="dl-btn" id="moqUploadBtn" onclick="document.getElementById('moqFileInput').click()" title="MOQ 엑셀을 올리면 수량을 새로 반영합니다" style="background:var(--accent2);border-color:var(--accent2);color:#fff">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
         <span id="i18n-moq-up">엑셀 업로드</span>
@@ -2256,6 +2260,7 @@ function refreshPsiTexts(){
   set('i18n-moq-tab','MOQ','MOQ');
   set('i18n-moq-reset','필터 초기화','Сброс фильтров');
   set('i18n-moq-man','수기 초기화','Сброс ручных');
+  set('i18n-moq-clear','전체 지우기','Очистить всё');
   set('i18n-moq-up','엑셀 업로드','Загрузить Excel');
   set('i18n-moq-dl',DL[0],DL[1]);
   ph('moqInput','대표품번·호환품번·품명·규격으로 검색…','Поиск: артикул, наименование, хар-ки…');
@@ -11325,6 +11330,20 @@ async function moqDeleteRow(pn){
   if(!await saveMoq()){ psiMoq[k]=before; return; }
   renderMOQ();
 }
+// 전체 지우기: MOQ 목록을 통째로 비운다(엑셀을 다시 올리면 되살릴 수 있다).
+async function moqClearAll(){
+  const ru=(lang==='ru');
+  if(!canEditPsi()){ alert(ru?'Нет прав на изменение.':'지울 권한이 없습니다.'); return; }
+  const n=Object.keys(psiMoq).length;
+  if(!n){ alert(ru?'Список MOQ уже пуст.':'MOQ 목록이 이미 비어 있습니다.'); return; }
+  if(!confirm(ru ? ('Очистить весь список MOQ? Артикулов: '+n+'.\nВосстановить можно только загрузкой файла Excel.')
+                 : ('MOQ 목록을 통째로 비웁니다. 품번 '+n.toLocaleString()+'개.\n되살리려면 엑셀을 다시 올려야 합니다. 계속할까요?'))) return;
+  const back=psiMoq, backMan=psiMoqMan;
+  psiMoq={}; psiMoqMan={};
+  if(!await saveMoq()){ psiMoq=back; psiMoqMan=backMan; return; }
+  renderMOQ();
+  alert(ru?('Удалено: '+n):(n.toLocaleString()+'개를 지웠습니다.'));
+}
 async function moqResetManual(){
   const ru=(lang==='ru');
   const keys=Object.keys(psiMoqMan);
@@ -11494,6 +11513,8 @@ function renderMOQ(){
                                  'Нет артикулов с MOQ. Загрузите файл MOQ.');
              empty.style.display=rows.length?'none':'block'; }
   const up=document.getElementById('moqUploadBtn'); if(up) up.style.display=ED?'':'none';
+  const cb=document.getElementById('moqClearBtn');
+  if(cb) cb.style.display=(ED && Object.keys(psiMoq).length)?'':'none';
   const mb=document.getElementById('moqManBtn');
   if(mb){ const n=Object.keys(psiMoqMan).length;
     mb.style.display=(ED&&n)?'':'none';
