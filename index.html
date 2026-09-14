@@ -10843,14 +10843,15 @@ function renderPO(){
   const isKoPO=(lang!=='ru');
   const heads=poColDefs();
   const ixPO=k=>heads.findIndex(h=>h[0]===k);
+  const EDPO=(typeof pnEditable==='function') && pnEditable();   // 변경코드·줄 지우기는 MASTER 만
   const cg=document.getElementById('poColgroup');
-  if(cg) cg.innerHTML=heads.map(h=>'<col style="width:'+h[2]+'px">').join('');
+  if(cg) cg.innerHTML=heads.map(h=>'<col style="width:'+h[2]+'px">').join('')
+    + (EDPO?'<col style="width:26px">':'');
   const thead=document.getElementById('poThead');
   const tbody=document.getElementById('poTbody');
   const empty=document.getElementById('poEmpty');
 
   let tq=0, ts=0;
-  const EDPO=(typeof pnEditable==='function') && pnEditable();   // 변경코드는 MASTER 만 고친다
   const body=rows.map(r=>{
     const i=poLookup(r.pn);
     const chg=(i.fin && i.fin!==normPN(r.pn)) ? i.fin : '';
@@ -10874,7 +10875,11 @@ function renderPO(){
         +(EDPO?poNumEdit(r.cha,r.pn,'supplied',r.supplied):(r.supplied?r.supplied.toLocaleString():''))+'</td>',
       rest:'<td style="'+numS+';font-weight:600'+(rest>0?';color:#b91c1c':'')+'">'+(rest?rest.toLocaleString():'0')+'</td>'
     };
-    return '<tr>'+heads.map(h=>cell[h[0]]||'<td style="'+tdS+'"></td>').join('')+'</tr>';
+    const del=EDPO ? ('<td style="'+tdS+';text-align:center;width:26px">'
+      + '<span onclick="event.stopPropagation();poDeleteRow(&quot;'+escapeHtml(String(r.cha).replace(/"/g,''))+'&quot;,&quot;'+escapeHtml(String(r.pn))+'&quot;)"'
+      + ' title="'+L('이 줄 지우기','Удалить строку')+'"'
+      + ' style="cursor:pointer;color:#ef4444;font-weight:700">✕</span></td>') : '';
+    return '<tr>'+heads.map(h=>cell[h[0]]||'<td style="'+tdS+'"></td>').join('')+del+'</tr>';
   }).join('');
 
   // 합계 줄: 수량 세 열이 어디로 가든 그 자리에 숫자를 놓는다(열 차례를 바꿀 수 있다).
@@ -10886,10 +10891,11 @@ function renderPO(){
   let poLeadCell='', poLabAt=-1;
   if(poLead) poLeadCell='<th colspan="'+poLead+'" style="'+poSumS+'">'+poSumLab+'</th>';
   else { poLabAt=poTailArr.findIndex(v=>v===''); if(poLabAt>=0) poTailArr[poLabAt]=poSumLab; }
-  if(thead) thead.innerHTML='<tr>'+heads.map(h=>'<th style="'+thS+'">'+h[1]+poFilterIcon(h[0])+'</th>').join('')+'</tr>'
+  const poEdCol=EDPO?('<th style="'+thS+';width:26px"></th>'):'';
+  if(thead) thead.innerHTML='<tr>'+heads.map(h=>'<th style="'+thS+'">'+h[1]+poFilterIcon(h[0])+'</th>').join('')+poEdCol+'</tr>'
     + '<tr>'+poLeadCell
     + poTailArr.map((v,i)=>'<th style="'+poSumS+(i===poLabAt?';text-align:left':'')+'">'+v+'</th>').join('')
-    + '</tr>';
+    + poEdCol+'</tr>';
   if(tbody) tbody.innerHTML=body;
   // 대표코드끼리 묶어 보기: 수주·공급·미공급 수량은 묶음 줄에서 합해 보여 준다
   if(poGroupOn()) ktGroupByRep('poTbody',{ rep:ixPO('rep'),
@@ -11220,6 +11226,27 @@ function handleProdUpload(event){
   reader.readAsArrayBuffer(file);
 }
 function debouncedRenderPO(){ clearTimeout(window._poT); window._poT=setTimeout(renderPO,200); }
+// 발주현황 줄 지우기: kt_po 에서 그 (차수, 발주코드) 줄을 없앤다.
+//   발주필요·선적계획을 이 자료로 셈하므로 시뮬레이션도 다시 그린다.
+async function poDeleteRow(cha, pn){
+  const ru=(lang==='ru');
+  if(!((typeof pnEditable==='function') && pnEditable())){ alert(ru?'Нет прав.':'지울 권한이 없습니다.'); return; }
+  const row=(poData||[]).find(x=>String(x.cha)===String(cha) && normPN(x.pn)===normPN(pn));
+  if(!row) return;
+  const rest=(Number(row.qty)||0)-(Number(row.supplied)||0);
+  if(!confirm(ru ? ('Удалить строку?\n'+cha+' / '+pn+' / '+row.qty)
+                 : (poChaLabel(cha)+' 의 '+normBadgePN(pn)+' 줄을 지웁니다.'
+                    +'\n수주 '+(Number(row.qty)||0).toLocaleString()
+                    +' · 공급 '+(Number(row.supplied)||0).toLocaleString()
+                    +' · 미공급 '+rest.toLocaleString()
+                    +'\n발주시뮬레이션의 선적계획·입고도 다시 셈합니다.\n\n계속할까요?'))) return;
+  const { error }=await sb.from('kt_po').delete().eq('cha',row.cha).eq('pn',row.pn);
+  if(error){ alert((ru?'Ошибка':'삭제 실패')+'\n['+(error.message||error.code)+']'); return; }
+  if(_poMan[poManKey(row.cha,row.pn)]){ delete _poMan[poManKey(row.cha,row.pn)]; savePoMan(); }
+  await loadPO();
+  renderPO(); poManBtn();
+  if(typeof renderSIM==='function' && ktPaneOn('pane-sim')) renderSIM();
+}
 async function loadPOTab(){
   const m=canEditPsi();
   ['poUploadBtn'].forEach(id=>{ const b=document.getElementById(id); if(b) b.style.display=m?'':'none'; });
