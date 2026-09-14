@@ -11765,8 +11765,12 @@ function psiFillOutRange(){
       dl.setAttribute('data-list', key);
     }
   }
-  if(f && document.activeElement!==f) f.value=psiYmLabel(r.from);
-  if(t && document.activeElement!==t) t.value=psiYmLabel(r.to);
+  // 해로 적어 둔 칸은 해 그대로 보여 준다
+  const bag=psiColsBag()||{};
+  const fTxt=String(bag.__outFromT||'')||psiYmLabel(r.from);
+  const tTxt=String(bag.__outToT||'')||psiYmLabel(r.to);
+  if(f && document.activeElement!==f) f.value=fTxt;
+  if(t && document.activeElement!==t) t.value=tTxt;
   const wrap=[f,t,document.getElementById('i18n-'+p+'-outlab')];
   wrap.forEach(e=>{ if(e) e.style.display=psiOutOn()?'':'none'; });
   // ▾ 단추도 같이
@@ -11785,12 +11789,19 @@ async function psiSetOutRange(p){
   let a=psiOutBound(fv,false), b=psiOutBound(tv,true);
   if(isYear(fv) && !tv) b=psiOutBound(fv,true);
   if(isYear(tv) && !fv) a=psiOutBound(tv,false);
+  // 해로 적었으면 칸에도 해로 남긴다(2020 이라고 쓴 것이 2020-01 로 바뀌지 않게)
+  const asY=s=>{ const m=String(s).match(/^(20)?(\d{2})$/); return m?('20'+m[2]):''; };
+  let ft=isYear(fv)?asY(fv):(fv?psiYmLabel(psiOutBound(fv,false)):'');
+  let tt=isYear(tv)?asY(tv):(tv?psiYmLabel(psiOutBound(tv,true)):'');
+  if(isYear(fv) && !tv) tt=asY(fv);
+  if(isYear(tv) && !fv) ft=asY(tv);
   const r=psiOutRange();
   if(!a) a=r.from; if(!b) b=r.to;
   if(a>b){ const x=a; a=b; b=x; }
   if(!psiCols || typeof psiCols!=='object') psiCols={};
   const bag=psiIsSimPane() ? (psiCols.__sim=psiCols.__sim||{}) : psiCols;
   bag.__outFrom=a; bag.__outTo=b;
+  bag.__outFromT=ft; bag.__outToT=tt;          // 칸에 그대로 다시 적을 글자
   psiRepaint();
   try{ await savePsiCols(); }catch(e){}
 }
