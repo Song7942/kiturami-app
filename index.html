@@ -2205,7 +2205,8 @@ function switchTab(tab){
     Promise.all(_pFresh ? [] : [loadPriceSettings(), loadPriceCalc(), loadPrices(), loadCompanyPrices(), loadPriceOrig()])
       .then(()=>{ if(!_pFresh) ldMark('price');
         return (typeof psiData==='undefined'||!Object.keys(psiData).length)?loadPSI():Promise.resolve(); })
-      .then(async()=>{ if(priceMode()==='master') await autoUpdateRatesIfNewMonth(); fillParamInputs(); applyPriceTabChrome(); renderPriceActive(); priceManBtn(); });
+      .then(async()=>{ if(priceMode()==='master') await autoUpdateRatesIfNewMonth(); await loadKtHist();
+        fillParamInputs(); applyPriceTabChrome(); renderPriceActive(); priceManBtn(); });
   }
   if(tab==='psi'){ loadPSITab(); }
   if(tab==='po'){ loadPOTab(); }
@@ -8864,6 +8865,104 @@ function colOrdHint(ru){
         :'줄을 끌거나 ▲▼ 로 열 차례를 바꿉니다.')+'</div>';
 }
 // ══════════════════════════════════════════
+// 손으로 고친 숫자 이력 — 칸에 마우스를 올리면 고치기 전·후를 보여 준다
+//   설정 칸(kt_psi_cfg id=98)에 담는다. 칸마다 최근 20번까지, 전체 4,000칸까지.
+//   담는 모양: { "화면.열|열쇠": [ {b:전, a:후, t:시각, u:아이디}, ... ] }
+// ══════════════════════════════════════════
+const EDIT_LOG_ID=98;
+const EDIT_LOG_MAX=20, EDIT_LOG_KEYS=4000;
+let ktHist={}, _ktHistLoaded=false, _ktHistT=null;
+function ktHistKey(scope, key){ return String(scope)+'|'+String(key); }
+async function loadKtHist(){
+  if(_ktHistLoaded) return;
+  _ktHistLoaded=true;
+  try{
+    const { data, error }=await sb.from('kt_psi_cfg').select('cfg').eq('id',EDIT_LOG_ID).limit(1);
+    const c=(!error && data && data[0])?data[0].cfg:null;
+    if(c && typeof c==='object' && c.log && typeof c.log==='object') ktHist=c.log;
+  }catch(e){}
+}
+function saveKtHist(){
+  clearTimeout(_ktHistT);
+  _ktHistT=setTimeout(async()=>{
+    try{
+      const keys=Object.keys(ktHist);
+      if(keys.length>EDIT_LOG_KEYS){                 // 너무 불어나면 오래된 칸부터 버린다
+        keys.map(k=>({k, t:(ktHist[k][ktHist[k].length-1]||{}).t||''}))
+            .sort((a,b)=>String(a.t).localeCompare(String(b.t)))
+            .slice(0, keys.length-EDIT_LOG_KEYS)
+            .forEach(x=>{ delete ktHist[x.k]; });
+      }
+      await sb.from('kt_psi_cfg').upsert({ id:EDIT_LOG_ID, cfg:{ log:ktHist },
+        updated_at:new Date().toISOString() },{onConflict:'id'});
+    }catch(e){ console.log('edit_log: 저장 실패'); }
+  }, 800);
+}
+function _ktHistNum(v){
+  const s=String(v==null?'':v).replace(/[,\s]/g,'').trim();
+  return s;
+}
+// 한 번의 고침을 적어 둔다. 전·후가 같으면 적지 않는다.
+function ktHistAdd(scope, key, before, after){
+  const b=_ktHistNum(before), a=_ktHistNum(after);
+  if(b===a) return;
+  const k=ktHistKey(scope, key);
+  const arr=Array.isArray(ktHist[k])?ktHist[k]:(ktHist[k]=[]);
+  const who=(typeof currentUser!=='undefined' && currentUser)
+    ? String(currentUser.company||currentUser.contact_name||currentUser.id||'') : '';
+  arr.push({ b, a, t:new Date().toISOString(), u:who });
+  if(arr.length>EDIT_LOG_MAX) arr.splice(0, arr.length-EDIT_LOG_MAX);
+  saveKtHist();
+}
+function ktHistOf(scope, key){ const a=ktHist[ktHistKey(scope,key)]; return Array.isArray(a)?a:null; }
+function ktHistHas(scope, key){ const a=ktHistOf(scope,key); return !!(a && a.length); }
+// 칸에 붙일 표시. data-hist 가 있으면 마우스를 올렸을 때 이력 쪽지가 뜬다.
+function ktHistAttr(scope, key){
+  return ktHistHas(scope,key) ? (' data-hist="'+escapeHtml(ktHistKey(scope,key))+'"') : '';
+}
+function ktHistClose(){ const b=document.getElementById('ktHistPop'); if(b) b.remove(); }
+function _ktHistTime(t){
+  try{ const d=new Date(t); const p=x=>(x<10?'0':'')+x;
+    return String(d.getFullYear()).slice(2)+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes());
+  }catch(e){ return ''; }
+}
+function ktHistShow(el){
+  ktHistClose();
+  const full=el.getAttribute('data-hist')||''; if(!full) return;
+  const arr=ktHist[full]; if(!arr || !arr.length) return;
+  const ru=(lang==='ru');
+  const fmt=v=>{ const s=String(v==null?'':v); if(s==='') return ru?'(пусто)':'(빈칸)';
+    const n=Number(s); return isFinite(n)?n.toLocaleString():s; };
+  const rows=arr.slice().reverse().map((h,i)=>
+    '<div style="display:flex;align-items:baseline;gap:6px;padding:3px 0'+(i?';border-top:1px solid var(--border)':'')+'">'
+    + '<span style="flex:none;color:var(--muted);font-size:10px;min-width:74px">'+escapeHtml(_ktHistTime(h.t))+'</span>'
+    + '<span style="flex:none;color:var(--muted);text-decoration:line-through">'+escapeHtml(fmt(h.b))+'</span>'
+    + '<span style="flex:none;color:var(--muted)">→</span>'
+    + '<span style="flex:none;font-weight:700;color:var(--accent2)">'+escapeHtml(fmt(h.a))+'</span>'
+    + (h.u?('<span style="flex:1;min-width:0;text-align:right;color:var(--muted);font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escapeHtml(String(h.u))+'</span>'):'')
+    + '</div>').join('');
+  const box=document.createElement('div'); box.id='ktHistPop';
+  box.style.cssText='position:fixed;z-index:10050;background:var(--surface2);border:1px solid var(--border);'
+    +'border-radius:9px;box-shadow:0 10px 28px #000a;padding:7px 9px;font-size:11px;color:var(--text);'
+    +'max-width:320px;pointer-events:none';
+  box.innerHTML='<div style="font-size:10px;color:var(--muted);margin-bottom:3px">'
+    +(ru?('Изменено вручную · '+arr.length):('수기 수정 이력 · '+arr.length+'번'))+'</div>'+rows;
+  document.body.appendChild(box);
+  const r=el.getBoundingClientRect(), bw=box.offsetWidth, bh=box.offsetHeight;
+  let left=Math.min(Math.max(6, r.left), window.innerWidth-bw-6);
+  let top=r.bottom+6;
+  if(top+bh>window.innerHeight-6) top=Math.max(6, r.top-bh-6);
+  box.style.left=left+'px'; box.style.top=top+'px';
+}
+document.addEventListener('mouseover', function(e){
+  const el=e.target && e.target.closest ? e.target.closest('[data-hist]') : null;
+  if(el) ktHistShow(el);
+});
+document.addEventListener('mouseout', function(e){
+  const el=e.target && e.target.closest ? e.target.closest('[data-hist]') : null;
+  if(el) ktHistClose();
+});
+// ══════════════════════════════════════════
 // 미출현황 (통합문서 미출_Упущенные → data[ym].u)
 //   품번·품명·규격·대표품번은 품번조회에서 가져오고, 수량만 PSI 자료를 본다.
 //   PSI 기본 화면처럼 대표품번으로 묶고(띠), 그 아래에 호환품번·일자·수량을 편다.
@@ -10954,6 +11053,7 @@ function poNumEdit(cha, pn, field, val){
   const v=(val==null||val==='')?'':Number(val).toLocaleString();
   return '<span contenteditable="true" class="pn-edit" data-pocha="'+escapeHtml(String(cha||''))+'"'
     + ' data-popn="'+escapeHtml(String(pn||''))+'" data-pofield="'+field+'" data-pnorig="'+escapeHtml(v)+'"'
+    + ktHistAttr('po.'+field, String(cha||'')+'|'+String(pn||''))
     + ' onclick="event.stopPropagation()" onmousedown="event.stopPropagation()"'
     + ' onblur="onPoNumBlur(this)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();this.blur();}"'
     + ' style="display:inline-block;min-width:28px;outline:none;border-bottom:1px dashed var(--accent2);cursor:text;padding:0 2px">'+v+'</span>';
@@ -10977,6 +11077,7 @@ async function onPoNumBlur(el){
     { cha:row.cha, pn:row.pn, mon:row.mon, qty:row.qty, supplied:row.supplied, updated_at:new Date().toISOString() },
     {onConflict:'cha,pn'});
   if(error){ alert((ru?'Ошибка сохранения':'저장 실패')+'\n['+(error.message||error.code)+']'); el.textContent=before; return; }
+  ktHistAdd('po.'+field, cha+'|'+pn, before, String(Math.round(num)));
   renderPO();
 }
 function poManBtn(){
@@ -11252,6 +11353,7 @@ async function loadPOTab(){
   ['poUploadBtn'].forEach(id=>{ const b=document.getElementById(id); if(b) b.style.display=m?'':'none'; });
   await Promise.all([loadPO(), loadPoMan()]);
   if(typeof loadPsiCols==='function') await loadPsiCols();   // 열 차례를 같은 곳에 담는다
+  await loadKtHist();
   renderPO();
   poManBtn();
 }
@@ -11482,6 +11584,7 @@ async function onMoqQtyEdit(pn, value){
   if(now>0) psiMoq[k]=now; else delete psiMoq[k];
   if(Number(psiMoqMan[k])===now) delete psiMoqMan[k];
   if(!await saveMoq()) return;
+  ktHistAdd('moq', k, before, now);
   renderMOQ();
 }
 // 줄 지우기: 그 품번을 MOQ 목록에서 뺀다(품번조회·PSI 자료는 그대로 둔다).
@@ -11716,8 +11819,9 @@ function renderMOQ(){
       if(d.k==='qty'){
         const man=moqIsMan(r._compat)?' price-man':'';
         const nv=(Number(v)||0).toLocaleString();
-        if(!ED) return '<td class="'+man.trim()+'" style="'+sty.qty+'">'+nv+'</td>';
-        return '<td class="center'+man+'" style="padding:3px 2px">'
+        const hz=ktHistAttr('moq', normPN(r._compat));
+        if(!ED) return '<td class="'+man.trim()+'" style="'+sty.qty+'"'+hz+'>'+nv+'</td>';
+        return '<td class="center'+man+'" style="padding:3px 2px"'+hz+'>'
           +'<input type="text" inputmode="numeric" class="pc-in" value="'+nv+'"'
           +' onchange="onMoqQtyEdit(\''+escapeHtml(normPN(r._compat))+'\',this.value)"></td>';
       }
@@ -11739,7 +11843,7 @@ function renderMOQ(){
     const s=mb.querySelector('span'); if(s) s.textContent=(lang==='ru'?('Сброс ручных ('+n+')'):('수기 초기화 ('+n+')')); }
   updatePaneHBar('moq');
 }
-async function loadMOQTab(){ await loadMoq(); if(!PN_DATA.length) await loadPNOverrides();
+async function loadMOQTab(){ await loadMoq(); await loadKtHist(); if(!PN_DATA.length) await loadPNOverrides();
   if(typeof loadPsiCols==='function') await loadPsiCols();
   renderMOQ(); }
 function downloadMOQ(){
@@ -11993,8 +12097,9 @@ function renderBLK(){
       if(d.k==='qty'){
         const man=blkIsMan(r._compat)?' price-man':'';
         const n=(Number(v)||0).toLocaleString();
-        if(!ED) return '<td class="'+man.trim()+'" style="'+sty.qty+'">'+n+'</td>';
-        return '<td class="center'+man+'" style="padding:3px 2px">'
+        const hz=ktHistAttr('blk', normPN(r._compat));
+        if(!ED) return '<td class="'+man.trim()+'" style="'+sty.qty+'"'+hz+'>'+n+'</td>';
+        return '<td class="center'+man+'" style="padding:3px 2px"'+hz+'>'
           +'<input type="text" inputmode="numeric" class="pc-in" value="'+n+'"'
           +' onchange="onBlkQtyEdit(\''+escapeHtml(normPN(r._compat))+'\',this.value)"></td>';
       }
@@ -12014,7 +12119,7 @@ function renderBLK(){
     const s=mb.querySelector('span'); if(s) s.textContent=(lang==='ru'?('Сброс ручных ('+n+')'):('수기 초기화 ('+n+')')); }
   updatePaneHBar('blk');
 }
-async function loadBLKTab(){ await loadBlocked(); if(!PN_DATA.length) await loadPNOverrides();
+async function loadBLKTab(){ await loadBlocked(); await loadKtHist(); if(!PN_DATA.length) await loadPNOverrides();
   if(typeof loadPsiCols==='function') await loadPsiCols();
   renderBLK(); }
 function downloadBLK(){
@@ -12112,6 +12217,7 @@ async function onBlkQtyEdit(pn, value){
   if(now>0) psiBlocked[k]=now; else delete psiBlocked[k];
   if(Number(psiBlockedMan[k])===now) delete psiBlockedMan[k];   // 원래 값으로 되돌려 놓았으면 표시를 뗀다
   if(!await saveBlocked()) return;
+  ktHistAdd('blk', k, before, now);
   blkAfterChange();
 }
 // 사용불가 수량을 손으로 고친 것들을 고치기 전 값으로 되돌린다
@@ -12503,7 +12609,9 @@ function psiVisSub(){ const m=psiColsMap();
   return colOrdApply(psiOrdScopeSub(), v); }
 const PSI_PLAN_COL=[{k:'plan', w:62, ko:'선적<br>계획', ru:'План<br>отгр.', simOff:1}];
 const PSI_SIM_COL_DEFS=[
-  {k:'need', w:64, ko:'발주<br>필요', ru:'Доза-<br>каз'},
+  {k:'need', w:70, ko:'발주필요', ru:'Дозаказ',
+   hko:'발주필요<br><span style="font-weight:400;font-size:9px;color:var(--muted)">(다음달선적)</span>',
+   hru:'Дозаказ<br><span style="font-weight:400;font-size:9px;color:var(--muted)">(отгр. в след. мес.)</span>'},
   {k:'st2',  w:66, ko:'발주후<br>재고',   ru:'Остаток<br>после'},
   {k:'mo2',  w:60, ko:'발주후<br>보유월', ru:'Мес.<br>после'}
 ];
@@ -12576,6 +12684,7 @@ function simShipFocus(td){
     const rep=td.getAttribute('data-rep'), ym=td.getAttribute('data-ym');
     const t=String(el.value).replace(/[^0-9]/g,'');
     if(t==='') delete _simShip[simNeedKey(rep,ym)]; else _simShip[simNeedKey(rep,ym)]=Math.round(Number(t));
+    ktHistAdd('sim.sh', rep+'|'+ym, cur, t);
     saveSimMan();
     renderSIM();      // 못 나간 물량이 다음 달로 넘어가므로 표 전체를 다시 셈한다
   };
@@ -12602,7 +12711,9 @@ function simNeedFocus(td){
   const el=td.querySelector('input');
   el.oninput=()=>simNeedApply(td, el.value);
   el.onkeydown=(e)=>{ if(e.key==='Enter'||e.key==='Escape') el.blur(); };
-  el.onblur=()=>{ simNeedApply(td, el.value, true);
+  el.onblur=()=>{ const v=simNeedApply(td, el.value, true);
+    ktHistAdd('sim.need', (td.getAttribute('data-rep')||'')+'|'+(td.getAttribute('data-ym')||''),
+              cur, (v==null?'':String(v)));
     saveSimMan();
     renderSIM();          // 그 뒤 달 재고·보유월·발주필요까지 다시 계산한다
   };
@@ -13286,6 +13397,7 @@ async function loadSimTab(){
   await loadMoq();                                           // 발주필요를 MOQ 이상으로 적으려면 필요하다
   simMoqClear();
   await loadSimMan();                                        // 손으로 적어 둔 실제선적·발주필요
+  await loadKtHist();                                        // 수기 수정 이력(칸에 마우스를 올리면 뜬다)
   if(psiPaneFresh('sim')){ updatePaneHBar('sim'); return; }   // 바뀐 게 없으면 그대로 둔다
   renderSIM();
 }
@@ -13397,7 +13509,7 @@ function renderPSI(){
       return d.k==='mo2' ? L('발주후<br>보유월<br>'+t,'После<br>мес.<br>'+t)
                          : L('발주후<br>재고<br>'+t,'Остаток<br>после<br>'+t); }
     if(psiSimOn && d.k==='sh') return L('실제<br>선적','Факт<br>отгр.');
-    return L(d.ko,d.ru);
+    return L(d.hko||d.ko, d.hru||d.ru);       // 머리글 전용 글귀(hko/hru)가 있으면 그것을 쓴다
   };
   const sub=yms.map(y=>SB.map((d,i)=>{
       const key=d.k+':'+y;
@@ -13674,11 +13786,12 @@ function renderPSI(){
       //   (선적계획·발주필요 같은 열로 거르면 빠진 묶음은 합계에서도 빠져야 한다)
       gAcc[y]=Object.assign(gAcc[y]||{}, {need:nd, addSt, plan, arrIn:arrive[i], sh:realSh});
       if(psiSimOn && i+1<ymsAll.length) shipPlan[i+1]+=nd;   // 이 달 발주분은 다음 달에 나간다
-      const sAttr=' data-rep="'+escapeHtml(g.rep)+'" data-ym="'+y
-        +'" onclick="simShipFocus(this)" title="'
+      const sAttr=' data-rep="'+escapeHtml(g.rep)+'" data-ym="'+y+'"'+ktHistAttr('sim.sh', g.rep+'|'+y)
+        +' onclick="simShipFocus(this)" title="'
         +L('실제로 나간 수량을 적으면 못 나간 만큼은 다음 달 선적으로 넘어갑니다','Введите фактическую отгрузку')+'"';
       const nAttr=' data-rep="'+escapeHtml(g.rep)+'" data-ym="'+y+'" data-st="'+arrSt
-        +'" data-avg="'+(arrFut/c.avgN)+'" onclick="simNeedFocus(this)" title="'
+        +'" data-avg="'+(arrFut/c.avgN)+'"'+ktHistAttr('sim.need', g.rep+'|'+y)
+        +' onclick="simNeedFocus(this)" title="'
         +L((simArriveYm(y)?psiYmLabel(simArriveYm(y))+' 입고 기준 수량입니다. ':'')
            +'눌러서 고치면 선적·입고와 그 뒤 달까지 다시 계산됩니다',
            'Нажмите, чтобы изменить')
@@ -15280,10 +15393,10 @@ function renderPriceCalc(){
       +priceMarkTd(r.compat)
       +`<td class="center pc-n">${fmtN(psiSumOf(r.compat,'in'))}</td>`
       +`<td class="center pc-n">${fmtN(psiSumOf(r.compat,'out'))}</td>`
-      +`<td class="center pc-e${priceIsMan(priceOrigKey('calc',r.row_no),'ru_cost',r.ru_cost)?' price-man':''}"><input type="text" inputmode="decimal" class="pc-in" value="${c.ruCost!=null?fmtN(c.ruCost):''}" onchange="onPriceCellEdit(${r.row_no},'ru_cost',this.value)"></td>`
+      +`<td class="center pc-e${priceIsMan(priceOrigKey('calc',r.row_no),'ru_cost',r.ru_cost)?' price-man':''}"${ktHistAttr('price.ru_cost', r.row_no)}><input type="text" inputmode="decimal" class="pc-in" value="${c.ruCost!=null?fmtN(c.ruCost):''}" onchange="onPriceCellEdit(${r.row_no},'ru_cost',this.value)"></td>`
       +`<td class="pc-r">${fmtN(c.costRub)}</td>`
       +`<td class="pc-r">${fmtN(c.costUsd)}</td>`
-      +`<td class="center pc-e${priceIsMan(priceOrigKey('calc',r.row_no),'ru_supply_krw',r.ru_supply_krw)?' price-man':''}"><input type="text" inputmode="decimal" class="pc-in" value="${r.ru_supply_krw!=null&&r.ru_supply_krw!==''?fmtN(Number(r.ru_supply_krw)):''}" placeholder="${c.ruSupply!=null?fmtN(c.ruSupply):''}" onchange="onPriceCellEdit(${r.row_no},'ru_supply_krw',this.value)"></td>`
+      +`<td class="center pc-e${priceIsMan(priceOrigKey('calc',r.row_no),'ru_supply_krw',r.ru_supply_krw)?' price-man':''}"${ktHistAttr('price.ru_supply_krw', r.row_no)}><input type="text" inputmode="decimal" class="pc-in" value="${r.ru_supply_krw!=null&&r.ru_supply_krw!==''?fmtN(Number(r.ru_supply_krw)):''}" placeholder="${c.ruSupply!=null?fmtN(c.ruSupply):''}" onchange="onPriceCellEdit(${r.row_no},'ru_supply_krw',this.value)"></td>`
       +`<td class="pc-r2">${fmtN(c.ruRub)}</td>`
       +`<td class="center pc-n">${fmtGp(c.ruGpVal)}</td>`
       +`</tr>`;   /* [임시] 카자흐스탄 공급가KRW/USD/GP 열 제거 */
@@ -15339,7 +15452,8 @@ function renderPriceSupply(){
                && priceIsMan(priceOrigKey('calc',m.row_no), fld, src[fld]))?' price-man':'';
     if(!EDSUP || m.row_no==null)
       return '<td class="'+man.trim()+'" style="text-align:right;padding:3px 6px;font-weight:600">'+fmtN(v)+'</td>';
-    return '<td class="center'+man+'" style="padding:3px 2px">'
+    return '<td class="center'+man+'" style="padding:3px 2px"'
+      +ktHistAttr(cur==='usd'?'price.kz_supply_krw':'price.ru_supply_krw', m.row_no)+'>'
       +'<input type="text" inputmode="decimal" class="pc-in" value="'+(v!=null?fmtN(v):'')+'"'
       +' onchange="onPriceSupplyEdit('+m.row_no+',\''+cur+'\',this.value)"></td>';
   };
@@ -15780,6 +15894,7 @@ async function onPriceCellEdit(rowNo, field, value){
   if(field==='ru_cost' && num!=null) num=Math.ceil(num);
   // 처음 고치는 것이면 고치기 전 값을 적어 둔다(되돌리기·표시에 쓴다)
   const _ok=priceOrigKey('calc', r.row_no);
+  ktHistAdd('price.'+field, r.row_no, r[field], (num==null?'':num));
   priceRememberOrig(_ok, field, r[field]);
   if(field==='ru_cost') priceRememberOrig(_ok, 'kz_supply_krw', r.kz_supply_krw);
   r[field]=num;
