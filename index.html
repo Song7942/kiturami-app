@@ -1324,9 +1324,10 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
         <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
         <input type="text" id="simInput" placeholder="품명·규격·대표/호환품번으로 검색…" oninput="debouncedRenderSIM()">
       </div>
-      <input type="text" id="simFromYm" list="ktYmOpts" placeholder="2026-09" onchange="renderSIM()" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"><button type="button" class="ym-pick" onclick="ktYmPickOpen('simFromYm',this)">▾</button>
+      <span style="font-size:11px;color:var(--muted)" id="i18n-sim-perlab">조회기간</span><input type="text" id="simFromYm" list="ktYmOpts" placeholder="2026-09" onchange="renderSIM()" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"><button type="button" class="ym-pick" onclick="ktYmPickOpen('simFromYm',this)">▾</button>
       <span style="font-size:11px;color:var(--muted)">~</span>
       <input type="text" id="simToYm" list="ktYmOpts" placeholder="2027-02" onchange="renderSIM()" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"><button type="button" class="ym-pick" onclick="ktYmPickOpen('simToYm',this)">▾</button>
+      <span style="font-size:11px;color:var(--muted);margin-left:6px" id="i18n-sim-outlab">출고기간</span><input type="text" id="simOutFrom" list="ktYmOpts" placeholder="2025-10" onchange="psiSetOutRange('sim')" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"><button type="button" class="ym-pick" onclick="ktYmPickOpen('simOutFrom',this)">▾</button><span style="font-size:11px;color:var(--muted)">~</span><input type="text" id="simOutTo" list="ktYmOpts" placeholder="2026-09" onchange="psiSetOutRange('sim')" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"><button type="button" class="ym-pick" onclick="ktYmPickOpen('simOutTo',this)">▾</button>
       <button class="dl-btn" onclick="openPsiColsPanel()" title="표에 보일 열을 고릅니다(아이디별로 저장)">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="9" y1="4" x2="9" y2="20"/><line x1="15" y1="4" x2="15" y2="20"/></svg>
         <span id="i18n-sim-cols">보기</span>
@@ -1373,9 +1374,10 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
         <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
         <input type="text" id="psiInput" placeholder="품명·규격·대표/호환품번으로 검색…" oninput="debouncedRenderPSI()">
       </div>
-      <input type="text" id="psiFromYm" list="ktYmOpts" placeholder="2026-08" onchange="renderPSI()" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"><button type="button" class="ym-pick" onclick="ktYmPickOpen('psiFromYm',this)">▾</button>
+      <span style="font-size:11px;color:var(--muted)" id="i18n-psi-perlab">조회기간</span><input type="text" id="psiFromYm" list="ktYmOpts" placeholder="2026-08" onchange="renderPSI()" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"><button type="button" class="ym-pick" onclick="ktYmPickOpen('psiFromYm',this)">▾</button>
       <span style="font-size:11px;color:var(--muted)">~</span>
       <input type="text" id="psiToYm" list="ktYmOpts" placeholder="2026-09" onchange="renderPSI()" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"><button type="button" class="ym-pick" onclick="ktYmPickOpen('psiToYm',this)">▾</button>
+      <span style="font-size:11px;color:var(--muted);margin-left:6px" id="i18n-psi-outlab">출고기간</span><input type="text" id="psiOutFrom" list="ktYmOpts" placeholder="2025-10" onchange="psiSetOutRange('psi')" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"><button type="button" class="ym-pick" onclick="ktYmPickOpen('psiOutFrom',this)">▾</button><span style="font-size:11px;color:var(--muted)">~</span><input type="text" id="psiOutTo" list="ktYmOpts" placeholder="2026-09" onchange="psiSetOutRange('psi')" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"><button type="button" class="ym-pick" onclick="ktYmPickOpen('psiOutTo',this)">▾</button>
       <button class="dl-btn" onclick="openPsiColsPanel()" title="표에 보일 열을 고릅니다(아이디별로 저장)">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="9" y1="4" x2="9" y2="20"/><line x1="15" y1="4" x2="15" y2="20"/></svg>
         <span id="i18n-psi-cols">보기</span>
@@ -2182,6 +2184,10 @@ function refreshPsiTexts(){
   set('i18n-psi-avgunit','개월','мес.');
 
   set('i18n-psi-cols',COLS[0],COLS[1]);
+  set('i18n-psi-perlab','조회기간','Период');
+  set('i18n-psi-outlab','출고기간','Период расхода');
+  set('i18n-sim-perlab','조회기간','Период');
+  set('i18n-sim-outlab','출고기간','Период расхода');
   set('i18n-psi-reset','필터 초기화','Сброс фильтров');
   set('i18n-psi-upload','엑셀 업로드','Загрузить Excel');
   set('i18n-psi-dl',DL[0],DL[1]);
@@ -11704,6 +11710,63 @@ function psiColsMap(){
   if(bag) Object.keys(m).forEach(k=>{ if(typeof bag[k]==='boolean') m[k]=bag[k]; });
   return m;
 }
+// ── 출고기간: 연도별·월별 출고만 모아 보여 주는 열 ─────────
+//   조회기간(입고·출고·재고·보유월을 보는 달)과 따로 고른다. 보기 창에서 켜고 끈다.
+function psiOutOn(){ const b=psiColsBag(); return !!(b && b.__out); }
+function psiOutRange(){
+  const b=psiColsBag()||{};
+  const list=(typeof psiYmList==='function')?psiYmList():[];
+  const last=list.length?list[list.length-1]:psiNowYm();
+  let from=String(b.__outFrom||''), to=String(b.__outTo||'');
+  if(!/^\d{4}$/.test(from)) from=psiYmAdd(last,-11);      // 처음엔 최근 12개월
+  if(!/^\d{4}$/.test(to)) to=last;
+  if(from>to){ const x=from; from=to; to=x; }
+  return {from, to};
+}
+// 그 기간의 달 목록(너무 길어지지 않게 120개월까지)
+function psiOutYms(){
+  const r=psiOutRange(); const out=[];
+  for(let y=r.from; y<=r.to && out.length<120; y=psiYmAdd(y,1)) out.push(y);
+  return out;
+}
+// 보여 줄 열: 해마다 한 칸(그 해 출고 합계) + 달마다 한 칸
+function psiOutCols(){
+  if(!psiOutOn()) return [];
+  const ys=psiOutYms(); if(!ys.length) return [];
+  const years=[]; ys.forEach(y=>{ const yy=y.slice(0,2); if(years.indexOf(yy)<0) years.push(yy); });
+  const cols=years.map(yy=>({ k:'oy:'+yy, w:62, lab:'20'+yy, yms:ys.filter(y=>y.slice(0,2)===yy), year:1 }));
+  ys.forEach(y=>cols.push({ k:'om:'+y, w:58, lab:psiYmLabel(y), yms:[y] }));
+  return cols;
+}
+// 출고기간 칸을 지금 값으로 채운다(다른 데서 고쳐도 따라오게)
+function psiFillOutRange(){
+  const p=psiIsSimPane()?'sim':'psi';
+  const r=psiOutRange();
+  const f=document.getElementById(p+'OutFrom'), t=document.getElementById(p+'OutTo');
+  if(f && document.activeElement!==f) f.value=psiYmLabel(r.from);
+  if(t && document.activeElement!==t) t.value=psiYmLabel(r.to);
+  const wrap=[f,t,document.getElementById('i18n-'+p+'-outlab')];
+  wrap.forEach(e=>{ if(e) e.style.display=psiOutOn()?'':'none'; });
+  // ▾ 단추도 같이
+  [f,t].forEach(e=>{ if(e && e.nextElementSibling && e.nextElementSibling.classList.contains('ym-pick'))
+    e.nextElementSibling.style.display=psiOutOn()?'':'none'; });
+  if(f && f.nextElementSibling && f.nextElementSibling.nextElementSibling
+     && f.nextElementSibling.nextElementSibling.tagName==='SPAN')
+    f.nextElementSibling.nextElementSibling.style.display=psiOutOn()?'':'none';   // '~'
+}
+// 출고기간 칸을 고쳤을 때
+async function psiSetOutRange(p){
+  const f=document.getElementById(p+'OutFrom'), t=document.getElementById(p+'OutTo');
+  let a=psiYmParse(f?f.value:''), b=psiYmParse(t?t.value:'');
+  const r=psiOutRange();
+  if(!a) a=r.from; if(!b) b=r.to;
+  if(a>b){ const x=a; a=b; b=x; }
+  if(!psiCols || typeof psiCols!=='object') psiCols={};
+  const bag=psiIsSimPane() ? (psiCols.__sim=psiCols.__sim||{}) : psiCols;
+  bag.__outFrom=a; bag.__outTo=b;
+  psiRepaint();
+  try{ await savePsiCols(); }catch(e){}
+}
 // 보기 창에 올릴 열 목록(시뮬에는 선적계획·발주필요·발주후재고·발주후보유월도 넣는다)
 function psiColDefsFor(){
   return psiIsSimPane() ? PSI_COL_DEFS.concat(PSI_PLAN_COL, PSI_SIM_COL_DEFS) : PSI_COL_DEFS.slice();
@@ -11852,6 +11915,7 @@ function openPsiColsPanel(){
   m.__tot=psiShowTot();
   m.__zero=psiShowZero();
   m.__grp=psiGrpOn();
+  m.__out=psiOutOn();
   const box=document.createElement('div'); box.id='psiColsPop';
   box.style.cssText='position:fixed;inset:0;z-index:10000;background:#0008;display:flex;align-items:center;justify-content:center';
   const item=d=>'<label style="display:flex;align-items:center;gap:7px;padding:5px 4px;cursor:pointer">'
@@ -11869,6 +11933,7 @@ function openPsiColsPanel(){
       + '<div style="flex:1"><div style="font-size:11px;color:var(--muted);margin-bottom:3px">'+(ru?'По месяцам':'월별 수치')+'</div>'
         + item({k:'__tot', ko:'기간합계', ru:'Итого за период'})
         + item({k:'__zero', ko:'값 없는 품번도 보기', ru:'Показывать артикулы без данных'})
+        + item({k:'__out', ko:'출고기간(연도별·월별 출고)', ru:'Расход по годам и месяцам'})
         + '<div style="border-top:1px solid var(--border);margin:4px 0"></div>'
         + psiColDefsFor().filter(d=>!d.fixed).map(item).join('')+'</div>'
     + '</div>'
@@ -12450,7 +12515,7 @@ async function downloadSIM(){
 }
 function renderPSI(){
   const pane=document.getElementById('pane-'+PSIP); if(!pane) return;
-  const c=psiCfg(); psiFillCfgInputs(c);
+  const c=psiCfg(); psiFillCfgInputs(c); psiFillOutRange();
   psiFcClear();
   _psiLowN=c.avgN;
   const yms=[]; for(let i=0;i<c.months;i++) yms.push(psiYmAdd(c.from,i));
@@ -12517,9 +12582,11 @@ function renderPSI(){
     if(!el){ el=document.createElement('style'); el.id=PSIP+'FxCss'; document.head.appendChild(el); }
     el.textContent=FX.map((d,k)=>'#'+PSIP+'Table .fx'+k+'{left:'+fxLeft[k]+'px}').join('');
   }
+  const OUT=psiOutCols();                                   // 출고기간(연도별·월별 출고만)
   const cg=pgEl('Colgroup');
   if(cg){
     const w=FX.map(d=>'<col style="width:'+d.w+'px">');
+    OUT.forEach(d=>w.push('<col style="width:'+d.w+'px">'));
     if(SHOWTOT) SB.forEach(d=>w.push('<col style="width:'+d.w+'px">'));   // 기간합계
     yms.forEach(()=>SB.forEach(d=>w.push('<col style="width:'+d.w+'px">')));
     cg.innerHTML=w.join('');
@@ -12579,9 +12646,16 @@ function renderPSI(){
         + thS+(i===0?bl:'')+';background:'+(on?'var(--tag-bg)':'var(--surface)')+';cursor:pointer">'
         + totLab(d) + psiSortMark(key) + psiFilterDot(key) + clr + '</th>';
     }).join('');
+  // 출고기간 묶음: 규격 오른쪽, 기간합계·달별 묶음보다 앞에 온다
+  const oR=psiOutRange();
+  const outHead=OUT.length ? ('<th colspan="'+OUT.length+'" style="'+thS+bl+';background:var(--surface)">'
+    + L('출고 ('+psiYmLabel(oR.from)+' ~ '+psiYmLabel(oR.to)+')',
+        'Расход ('+psiYmLabel(oR.from)+' ~ '+psiYmLabel(oR.to)+')')+'</th>') : '';
+  const outSub=OUT.map((d,i)=>'<th style="'+thS+(i===0?bl:'')+';background:var(--surface)'
+    +(d.year?';font-weight:700':';color:var(--muted)')+'">'+escapeHtml(d.lab)+'</th>').join('');
   let head=['<tr>',
     FX.map((d,k)=>'<th rowspan="2" class="'+fxCls(k).trim()+'" style="'+thS+'">'+L(d.hko||d.ko,d.hru||d.ru)+psiFilterIcon(d.k)+'</th>').join(''),
-    (SHOWTOT?totHead:''),grp,'</tr><tr>',(SHOWTOT?totSub:''),sub,'</tr>'].join('');
+    outHead,(SHOWTOT?totHead:''),grp,'</tr><tr>',outSub,(SHOWTOT?totSub:''),sub,'</tr>'].join('');
 
   if(!items.length){
     if(thead) thead.innerHTML=head;
@@ -12609,6 +12683,11 @@ function renderPSI(){
     if((k==='plan'||k==='need') && !Number(v)) return '';
     return n(v); };
   const futOut=(d,y)=>{ let s=0; for(let i=1;i<=c.avgN;i++) s+=psiOutOf(d,psiYmAdd(y,i)); return s; };
+  // 출고기간 칸: 그 해(또는 그 달) 출고를 더한다. 같은 품번이 두 번 세어지지 않게 한 번만 본다.
+  const outSum=(list,col)=>{ let s=0; const seen={};
+    (list||[]).forEach(it=>{ if(!it || seen[it.key]) return; seen[it.key]=1;
+      col.yms.forEach(y=>{ s+=psiOutOf(it.d,y); }); });
+    return s; };
   const moOf=(st,fut)=>{ const avg=fut/c.avgN; return avg>0 ? Math.round((st/avg)*10)/10 : null; };
   // 발주필요: 보유월이 N 이 되려면 더 있어야 하는 수량(= N개월치 출고 − 지금 재고)
   //   앞으로 나갈 것이 없어 보유월을 낼 수 없어도, 재고가 모자라면(음수) 그만큼은 채운다.
@@ -12797,7 +12876,8 @@ function renderPSI(){
     const gLow=psiLow(gTot.mo), gHigh=psiHigh(gTot.mo);
     const gTotCells=SB.map((d,j)=>'<td class="n'+(j===0?' bl':'')+((gLow&&d.k==='mo')?' low':'')
       +((gHigh&&d.k==='mo')?' hi':'')+'">'+totTxt(d.k,gTot)+'</td>').join('');
-    const gRow='<tr class="g'+band+'">'+gFix+(SHOWTOT?gTotCells:'')+gCells+'</tr>';
+    const gOutCells=OUT.map((d,j)=>'<td class="n'+(j===0?' bl':'')+'">'+n(outSum(g.rows,d))+'</td>').join('');
+    const gRow='<tr class="g'+band+'">'+gFix+gOutCells+(SHOWTOT?gTotCells:'')+gCells+'</tr>';
     const kidRows=g.rows.map((it,ki)=>{
       const r=it.r, v=it.v;
       // 대표품번 줄을 감췄으면 첫 줄에 대표품번을 옮겨 적는다
@@ -12822,7 +12902,8 @@ function renderPSI(){
       const kDim={sh:1, ms:1};
       const kTotCells=SB.map((d,j)=>'<td class="n'+(j===0?' bl':'')+(kDim[d.k]?' dim':'')+'">'
         +totTxt(d.k,kTot)+'</td>').join('');
-      return '<tr>'+kFix+(SHOWTOT?kTotCells:'')+cells+'</tr>';
+      const kOutCells=OUT.map((d,j)=>'<td class="n'+(j===0?' bl':'')+' dim">'+n(outSum([it],d))+'</td>').join('');
+      return '<tr>'+kFix+kOutCells+(SHOWTOT?kTotCells:'')+cells+'</tr>';
     });
     drawn.push({g, gRow, kidRows, hideG, gAcc});
   });
@@ -12883,17 +12964,22 @@ function renderPSI(){
     const dim={sh:1, ms:1, mo:1, mo2:1};
     return SB.map((d,j)=>'<th style="'+sumS+';text-align:right'+(j===0?b:'')+(dim[d.k]?';color:var(--muted)':'')+'">'+val[d.k]+'</th>').join('');
   }).join('');
+  // 출고기간 합계: 화면에 남은 묶음의 모든 줄을 한 번씩만 더한다
+  const sumOutCells=OUT.map((d,j)=>{
+    const all=[]; keep.forEach(x=>x.g.rows.forEach(it=>all.push(it)));
+    return '<th style="'+sumS+';text-align:right'+(j===0?bl:'')+'">'+n(outSum(all,d))+'</th>';
+  }).join('');
   head += '<tr>'
     + '<th colspan="'+FX.length+'" class="fxs fx0 fxend" style="'+sumS+';text-align:right">'
     + L('합계 '+nzRep+'개 대표품번 / '+Object.keys(counted).length+'개 호환품번',
         'Итого '+nzRep+' Осн. артикул / '+Object.keys(counted).length+' Артикул')+'</th>'
-    + (SHOWTOT?sumTotCells:'') + sumCells + '</tr>';
+    + sumOutCells + (SHOWTOT?sumTotCells:'') + sumCells + '</tr>';
 
   // 머리글 높이는 '빈 표'에서 잰다. 수천 줄을 붙인 뒤에 재면 표 전체가 다시 계산되어 2초씩 걸린다.
   if(tbody) tbody.innerHTML='';
   if(thead) thead.innerHTML=head;
   psiStickHead();
-  if(tbody) psiSetRows(tbody, bodyRows, FX.length+(yms.length+(SHOWTOT?1:0))*SB.length, PSIP);
+  if(tbody) psiSetRows(tbody, bodyRows, FX.length+OUT.length+(yms.length+(SHOWTOT?1:0))*SB.length, PSIP);
   updatePaneHBar(PSIP);
   _psiPainted[PSIP]=psiSig(PSIP);
 }
