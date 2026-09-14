@@ -13564,6 +13564,17 @@ function renderPSI(){
   const band=psiShowKids()?' band':'';
   const needTot={};                       // 달마다 발주필요 합계(손으로 고친 값 포함)
   const stAdd={};                         // 달마다 '앞선 달 발주분'이 재고에 더해진 양의 합계
+  // 미공급분이 나가는 달(2026-09 같은 달)에 실제선적이 한 줄이라도 잡히면
+  //   '그 달부터 나가기 시작했다'고 보고, 그 달에 못 나간 몫은 품번을 가리지 않고
+  //   모두 다음 달 선적계획으로 넘긴다.
+  //   예) 계획 8,402 중 어느 품번이든 2개가 나가면 나머지 8,400 은 다음 달 계획이 된다.
+  const planStarted=(()=>{
+    if(!psiSimOn || !_simPlanYm) return false;
+    const suf='|'+_simPlanYm;
+    for(const k in _simShip){ if(k.slice(-suf.length)===suf && (Number(_simShip[k])||0)>0) return true; }
+    for(let i=0;i<groups.length;i++){ const a=groups[i].agg[_simPlanYm]; if(a && (Number(a.sh)||0)>0) return true; }
+    return false;
+  })();
   const shTot={};                         // 달마다 실제선적 합계(손으로 고친 값 포함)
   const shipTot={}, inTot={};             // 달마다 발주분의 선적·입고 합계
   const arrStTot={}, arrFutTot={};        // 달마다 '그 발주분이 들어오는 달'의 재고·앞으로 출고 합계
@@ -13615,17 +13626,17 @@ function renderPSI(){
       const planAdd=isPlanYm ? (_simPlan.get(g.rep)||0) : 0;
       const manShip=_simShip[simNeedKey(g.rep,y)];
       const realSh=(manShip!=null)?Math.max(0,manShip):a.sh;
-      const plan=isPlanYm ? (realSh>0 ? 0 : planAdd) : planCalc;   // 화면에 찍는 선적계획
+      const plan=isPlanYm ? (planStarted ? 0 : planAdd) : planCalc;   // 화면에 찍는 선적계획
       // 이미 지났거나 실적을 손으로 적어 둔 달은 '나간 양이 정해진' 달로 본다
       const known=(y<=psiNowYm()) || (manShip!=null);
       if(psiSimOn && i+1<ymsAll.length){
-        if(isPlanYm){ if(realSh>0) shipPlan[i+1]+=Math.max(0, planAdd-realSh); }
+        if(isPlanYm){ if(planStarted) shipPlan[i+1]+=Math.max(0, planAdd-realSh); }
         else if(known) shipPlan[i+1]+=Math.max(0, planCalc-realSh);
       }
       // 미공급분은 '그 달에 다 나간다'고 보고 입고에 미리 얹혀 있다(simBuild 의 _simZ).
       // 실제선적을 적어 못 나간 몫은 다음 달 선적으로 넘겼으니, 그만큼은 그 입고에서 뺀다.
       // 빼지 않으면 넘긴 물량이 두 번(원래 달 + 넘긴 달) 들어와 재고가 부풀어 오른다.
-      if(psiSimOn && isPlanYm && realSh>0){
+      if(psiSimOn && isPlanYm && planStarted){
         const carry=Math.max(0, planAdd-realSh);
         if(carry>0){ const pa=ymsAll.indexOf(simShipArriveYm(y)); if(pa>i) arrive[pa]-=carry; }
       }
