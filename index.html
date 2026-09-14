@@ -8902,17 +8902,41 @@ function _ktHistNum(v){
   const s=String(v==null?'':v).replace(/[,\s]/g,'').trim();
   return s;
 }
-// 한 번의 고침을 적어 둔다. 전·후가 같으면 적지 않는다.
+function ktHistWho(){
+  return (typeof currentUser!=='undefined' && currentUser)
+    ? String(currentUser.company||currentUser.contact_name||currentUser.id||'') : '';
+}
+// 아이디마다 한 줄만 남긴다 — 그 아이디가 '처음 고치기 전 값' 에서 '마지막 값' 으로.
+//   여러 번 고쳐도 줄이 늘지 않고, 마지막 값과 시각만 바뀐다.
+//   원래 값으로 되돌려 놓으면 그 아이디 줄은 지운다.
 function ktHistAdd(scope, key, before, after){
   const b=_ktHistNum(before), a=_ktHistNum(after);
   if(b===a) return;
   const k=ktHistKey(scope, key);
   const arr=Array.isArray(ktHist[k])?ktHist[k]:(ktHist[k]=[]);
-  const who=(typeof currentUser!=='undefined' && currentUser)
-    ? String(currentUser.company||currentUser.contact_name||currentUser.id||'') : '';
-  arr.push({ b, a, t:new Date().toISOString(), u:who });
+  const who=ktHistWho();
+  const now=new Date().toISOString();
+  const i=arr.findIndex(h=>String(h.u||'')===who);
+  if(i<0) arr.push({ b, a, t:now, u:who });
+  else { arr[i].a=a; arr[i].t=now; if(arr[i].b===a) arr.splice(i,1); }
   if(arr.length>EDIT_LOG_MAX) arr.splice(0, arr.length-EDIT_LOG_MAX);
+  if(!arr.length) delete ktHist[k];
   saveKtHist();
+}
+// 지금 아이디가 남긴 이력만 지운다(화면별 앞가지로 고른다). 다른 아이디 것은 그대로 둔다.
+function ktHistClearMine(prefix){
+  const who=ktHistWho();
+  const pre=Array.isArray(prefix)?prefix:[prefix];
+  let n=0;
+  Object.keys(ktHist).forEach(k=>{
+    if(!pre.some(p=>String(k).indexOf(p)===0)) return;
+    const arr=(ktHist[k]||[]).filter(h=>String(h.u||'')!==who);
+    if(arr.length===(ktHist[k]||[]).length) return;
+    n++;
+    if(arr.length) ktHist[k]=arr; else delete ktHist[k];
+  });
+  if(n) saveKtHist();
+  return n;
 }
 function ktHistOf(scope, key){ const a=ktHist[ktHistKey(scope,key)]; return Array.isArray(a)?a:null; }
 function ktHistHas(scope, key){ const a=ktHistOf(scope,key); return !!(a && a.length); }
@@ -8933,20 +8957,24 @@ function ktHistShow(el){
   const ru=(lang==='ru');
   const fmt=v=>{ const s=String(v==null?'':v); if(s==='') return ru?'(пусто)':'(빈칸)';
     const n=Number(s); return isFinite(n)?n.toLocaleString():s; };
-  const rows=arr.slice().reverse().map((h,i)=>
-    '<div style="display:flex;align-items:baseline;gap:6px;padding:3px 0'+(i?';border-top:1px solid var(--border)':'')+'">'
-    + '<span style="flex:none;color:var(--muted);font-size:10px;min-width:74px">'+escapeHtml(_ktHistTime(h.t))+'</span>'
-    + '<span style="flex:none;color:var(--muted);text-decoration:line-through">'+escapeHtml(fmt(h.b))+'</span>'
-    + '<span style="flex:none;color:var(--muted)">→</span>'
-    + '<span style="flex:none;font-weight:700;color:var(--accent2)">'+escapeHtml(fmt(h.a))+'</span>'
-    + (h.u?('<span style="flex:1;min-width:0;text-align:right;color:var(--muted);font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escapeHtml(String(h.u))+'</span>'):'')
-    + '</div>').join('');
+  const rows=arr.slice().sort((x,y)=>String(y.t||'').localeCompare(String(x.t||''))).map((h,i)=>
+    '<div style="padding:3px 0'+(i?';border-top:1px solid var(--border)':'')+'">'
+    + '<div style="display:flex;align-items:baseline;gap:6px">'
+    +   '<span style="flex:none;font-weight:700;min-width:60px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'
+    +     escapeHtml(String(h.u||(ru?'(неизв.)':'(모름)')))+'</span>'
+    +   '<span style="flex:none;color:var(--muted);text-decoration:line-through">'+escapeHtml(fmt(h.b))+'</span>'
+    +   '<span style="flex:none;color:var(--muted)">→</span>'
+    +   '<span style="flex:none;font-weight:700;color:var(--accent2)">'+escapeHtml(fmt(h.a))+'</span>'
+    +   '<span style="flex:1;min-width:0;text-align:right;color:var(--muted);font-size:10px;white-space:nowrap">'
+    +     escapeHtml(_ktHistTime(h.t))+'</span>'
+    + '</div></div>').join('');
   const box=document.createElement('div'); box.id='ktHistPop';
   box.style.cssText='position:fixed;z-index:10050;background:var(--surface2);border:1px solid var(--border);'
     +'border-radius:9px;box-shadow:0 10px 28px #000a;padding:7px 9px;font-size:11px;color:var(--text);'
     +'max-width:320px;pointer-events:none';
   box.innerHTML='<div style="font-size:10px;color:var(--muted);margin-bottom:3px">'
-    +(ru?('Изменено вручную · '+arr.length):('수기 수정 이력 · '+arr.length+'번'))+'</div>'+rows;
+    +(ru?('Изменено вручную · '+arr.length+' польз.')
+        :('수기 수정 이력 · 아이디 '+arr.length+'개 (처음 값 → 마지막 값)'))+'</div>'+rows;
   document.body.appendChild(box);
   const r=el.getBoundingClientRect(), bw=box.offsetWidth, bh=box.offsetHeight;
   let left=Math.min(Math.max(6, r.left), window.innerWidth-bw-6);
@@ -11095,6 +11123,7 @@ async function poResetManual(){
   if(!confirm(ru?('Сбросить '+c+' ручных значений?')
                :('손으로 고친 공급수량 '+c+'개를 인보이스 기준으로 되돌립니다.\n계속할까요?'))) return;
   _poMan={}; savePoMan();
+  ktHistClearMine('po.');                  // 이 아이디가 남긴 수기 이력도 지운다
   const r=await poRecalcSupply();
   if(!r.ok){ alert((ru?'Ошибка':'실패')+'\n['+r.msg+']'); return; }
   await loadPO();
@@ -11622,6 +11651,7 @@ async function moqResetManual(){
   keys.forEach(k=>{ const v=Number(psiMoqMan[k])||0; if(v>0) psiMoq[k]=v; else delete psiMoq[k]; });
   psiMoqMan={};
   if(!await saveMoq()) return;
+  ktHistClearMine('moq|');                 // 이 아이디가 남긴 수기 이력도 지운다
   renderMOQ();
   alert(ru?('Возвращено: '+keys.length):(keys.length+'개를 고치기 전 값으로 되돌렸습니다.'));
 }
@@ -12229,6 +12259,7 @@ async function blkResetManual(){
   keys.forEach(k=>{ const v=Number(psiBlockedMan[k])||0; if(v>0) psiBlocked[k]=v; else delete psiBlocked[k]; });
   psiBlockedMan={};
   if(!await saveBlocked()) return;
+  ktHistClearMine('blk|');                 // 이 아이디가 남긴 수기 이력도 지운다
   blkAfterChange();
   alert(ru?('Возвращено: '+keys.length):(keys.length+'개를 고치기 전 값으로 되돌렸습니다.'));
 }
@@ -13352,7 +13383,9 @@ function simResetManual(){
   if(!c){ alert(ru?'Ручных значений нет.':'손으로 고친 값이 없습니다.'); return; }
   if(!confirm(ru ? ('Сбросить '+c+' ручных значений?')
                  : ('손으로 고친 '+c+'개를 원래 셈한 값으로 되돌립니다.\n계속할까요?'))) return;
-  _simNeed={}; _simShip={}; saveSimMan(); renderSIM();
+  _simNeed={}; _simShip={}; saveSimMan();
+  ktHistClearMine('sim.');                 // 이 아이디가 남긴 수기 이력도 지운다
+  renderSIM();
 }
 // ── 손으로 적은 실제선적·발주필요를 담아 둔다 ──────────────
 //   전에는 화면에서만 쓰고 버려서, 새로 고치거나 다른 화면에 다녀오면 사라졌다.
@@ -14508,6 +14541,7 @@ async function priceResetManual(){
     savePriceOrig();
     priceManBtn(); renderPriceActive();
   }
+  ktHistClearMine('price.');               // 이 아이디가 남긴 수기 이력도 지운다
   alert(ru?('Возвращено: '+c):(c+'개를 고치기 전 값으로 되돌렸습니다.'));
 }
 function calcPriceRow(r){
