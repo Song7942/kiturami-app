@@ -45,10 +45,10 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0}
 .scroll-body{flex:1;overflow-y:auto;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-gutter:stable}
 /* 오른쪽 세로 막대는 위쪽 가로 슬라이드(.tbl-scrollbar)와 같은 색·두께로 맞춘다.
    전에는 옅은 회색이라 어디까지 내려왔는지 잘 안 보였다. */
-.scroll-body{scrollbar-width:thin;scrollbar-color:#6366f1 var(--border)}
-.scroll-body::-webkit-scrollbar{width:5px;height:5px}
-.scroll-body::-webkit-scrollbar-track{background:var(--border);border-radius:3px}
-.scroll-body::-webkit-scrollbar-thumb{background:#6366f1;border-radius:3px}
+.scroll-body{scrollbar-width:auto;scrollbar-color:#6366f1 var(--border)}
+.scroll-body::-webkit-scrollbar{width:11px;height:11px}
+.scroll-body::-webkit-scrollbar-track{background:var(--border);border-radius:6px}
+.scroll-body::-webkit-scrollbar-thumb{background:#6366f1;border-radius:6px}
 .scroll-body::-webkit-scrollbar-thumb:hover{background:#818cf8}
 .scroll-body::-webkit-scrollbar-thumb:active{background:#a5b4fc}
 
@@ -196,12 +196,12 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0}
 .diag-group-label:hover{filter:brightness(1.25)}
 .diag-group-label .dgl-arrow{writing-mode:horizontal-tb;font-size:14px;line-height:1}
 .diag-group-label .dgl-text{writing-mode:vertical-rl;text-orientation:upright;font-size:12px;font-weight:800;letter-spacing:1px}
-.diag-scrollbar{position:relative;height:5px;margin:2px 12px 8px;background:var(--border);border-radius:3px;cursor:pointer;flex-shrink:0}
-.diag-scrollbar-thumb{position:absolute;top:0;left:0;height:100%;width:60px;background:#6366f1;border-radius:3px;cursor:grab}
+.diag-scrollbar{position:relative;height:11px;margin:2px 12px 8px;background:var(--border);border-radius:6px;cursor:pointer;flex-shrink:0}
+.diag-scrollbar-thumb{position:absolute;top:0;left:0;height:100%;width:60px;background:#6366f1;border-radius:6px;cursor:grab}
 .diag-scrollbar-thumb:hover{background:#818cf8}
 .diag-scrollbar-thumb:active{cursor:grabbing;background:#a5b4fc}
-.tbl-scrollbar{position:relative;height:5px;margin:4px 12px 0;background:var(--border);border-radius:3px;cursor:pointer;flex-shrink:0}
-.tbl-scrollbar-thumb{position:absolute;top:0;left:0;height:100%;width:60px;background:#6366f1;border-radius:3px;cursor:grab}
+.tbl-scrollbar{position:relative;height:11px;margin:4px 12px 0;background:var(--border);border-radius:6px;cursor:pointer;flex-shrink:0}
+.tbl-scrollbar-thumb{position:absolute;top:0;left:0;height:100%;width:60px;background:#6366f1;border-radius:6px;cursor:grab}
 .tbl-scrollbar-thumb:hover{background:#818cf8}
 .tbl-scrollbar-thumb:active{cursor:grabbing;background:#a5b4fc}
 
