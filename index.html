@@ -1130,6 +1130,10 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
         <span id="i18n-blk-reset">필터 초기화</span>
       </button>
+      <button class="dl-btn" id="blkManBtn" onclick="blkResetManual()" title="손으로 고친 수량을 고치기 전 값으로 되돌립니다">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/></svg>
+        <span id="i18n-blk-man">수기 초기화</span>
+      </button>
       <button class="dl-btn" id="blkUploadBtn" onclick="document.getElementById('blkFileInput').click()" title="Blocked 엑셀을 올리면 수량을 새로 반영합니다" style="background:var(--accent2);border-color:var(--accent2);color:#fff">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
         <span id="i18n-blk-up">엑셀 업로드</span>
@@ -2185,6 +2189,7 @@ function refreshPsiTexts(){
   set('i18n-tab-blk','⛔ 사용불가','⛔ Заблокировано');
   set('i18n-blk-tab','사용불가','Заблокировано');
   set('i18n-blk-reset','필터 초기화','Сброс фильтров');
+  set('i18n-blk-man','수기 초기화','Сброс ручных');
   set('i18n-blk-up','엑셀 업로드','Загрузить Excel');
   set('i18n-blk-dl',DL[0],DL[1]);
   ph('blkInput','대표품번·호환품번·품명·규격으로 검색…','Поиск: артикул, наименование, хар-ки…');
@@ -11336,12 +11341,21 @@ function renderBLK(){
               exp:tdS+';text-align:center;color:#ef4444;font-weight:700',
               note:tdS+';text-align:center;color:#ef4444;font-weight:700',
               qty:tdS+';text-align:right;font-weight:700;white-space:nowrap' };
+  const ED=canEditPsi();
   const tbody=document.getElementById('blkTbody');
   if(tbody) tbody.innerHTML=rows.map(r=>'<tr>'+CO.map(d=>{
       const v=blkCellVal(d.k,r);
+      if(d.k==='qty'){
+        const man=blkIsMan(r._compat)?' price-man':'';
+        const n=(Number(v)||0).toLocaleString();
+        if(!ED) return '<td class="'+man.trim()+'" style="'+sty.qty+'">'+n+'</td>';
+        return '<td class="center'+man+'" style="padding:3px 2px">'
+          +'<input type="text" inputmode="numeric" class="pc-in" value="'+n+'"'
+          +' onchange="onBlkQtyEdit(\''+escapeHtml(normPN(r._compat))+'\',this.value)"></td>';
+      }
       const inner=(d.k==='rep'||d.k==='compat'||d.k==='final')
         ? (v?'<span style="'+codeS+'">'+escapeHtml(v)+'</span>':'')
-        : (d.k==='qty' ? (Number(v)||0).toLocaleString() : escapeHtml(v));
+        : escapeHtml(v);
       return '<td style="'+sty[d.k]+'">'+inner+'</td>';
     }).join('')+'</tr>').join('');
   const empty=document.getElementById('blkEmpty');
@@ -11349,6 +11363,10 @@ function renderBLK(){
                                  'Нет артикулов с количеством. Загрузите файл Blocked.');
              empty.style.display=rows.length?'none':'block'; }
   const up=document.getElementById('blkUploadBtn'); if(up) up.style.display=canEditPsi()?'':'none';
+  const mb=document.getElementById('blkManBtn');
+  if(mb){ const n=Object.keys(psiBlockedMan).length;
+    mb.style.display=(canEditPsi()&&n)?'':'none';
+    const s=mb.querySelector('span'); if(s) s.textContent=(lang==='ru'?('Сброс ручных ('+n+')'):('수기 초기화 ('+n+')')); }
   updatePaneHBar('blk');
 }
 async function loadBLKTab(){ await loadBlocked(); if(!PN_DATA.length) await loadPNOverrides(); renderBLK(); }
@@ -11395,7 +11413,7 @@ async function handleBlockedUpload(ev){
       break;
     }
     if(!done){ alert(ru?'Не найдены столбцы «검색용» и «Blocked».':'\'[품번]검색용\' 과 \'Blocked\' 열을 찾지 못했습니다.'); return; }
-    psiBlocked=done.map;
+    psiBlocked=done.map; psiBlockedMan={};   // 새로 올리면 손으로 고친 표시는 지운다
     if(!await saveBlocked()) return;
     renderBLK();
     if(typeof psiRepaint==='function' && document.getElementById('pane-psi')) _psiPainted.psi=null;
@@ -11409,22 +11427,69 @@ async function handleBlockedUpload(ev){
 //   보관은 설정 칸(kt_psi_cfg id=95) 한 곳. 표를 새로 만들지 않아도 모두가 같은 값을 본다.
 const BLOCKED_ID=95;
 let psiBlocked={};            // normPN -> 수량
+let psiBlockedMan={};         // normPN -> 손으로 고치기 전 값(표시·되돌리기에 쓴다)
 let _blkLoaded=false;
 function blkQtyOf(pn){ const k=normPN(pn); return k?(Number(psiBlocked[k])||0):0; }
+function blkIsMan(pn){ const k=normPN(pn); return k ? (k in psiBlockedMan) : false; }
 async function loadBlocked(){
   if(_blkLoaded) return;
   _blkLoaded=true;
   try{
     const { data, error }=await sb.from('kt_psi_cfg').select('cfg').eq('id',BLOCKED_ID).limit(1);
-    if(!error && data && data[0] && data[0].cfg && typeof data[0].cfg==='object') psiBlocked=data[0].cfg;
+    const c=(!error && data && data[0])?data[0].cfg:null;
+    if(c && typeof c==='object'){
+      // 새 모양은 {q:{품번:수량}, man:{품번:고치기 전 값}}. 옛 모양(수량만)도 그대로 읽는다.
+      if(c.q && typeof c.q==='object'){ psiBlocked=c.q; psiBlockedMan=(c.man&&typeof c.man==='object')?c.man:{}; }
+      else { psiBlocked=c; psiBlockedMan={}; }
+    }
   }catch(e){}
 }
 async function saveBlocked(){
   try{
-    const { error }=await sb.from('kt_psi_cfg').upsert({ id:BLOCKED_ID, cfg:psiBlocked, updated_at:new Date().toISOString() },{onConflict:'id'});
+    const { error }=await sb.from('kt_psi_cfg').upsert({ id:BLOCKED_ID, cfg:{ q:psiBlocked, man:psiBlockedMan },
+      updated_at:new Date().toISOString() },{onConflict:'id'});
     if(error){ alert('저장 실패\n['+(error.message||error.code)+']'); return false; }
     return true;
   }catch(e){ alert('저장 실패\n['+(e&&e.message||e)+']'); return false; }
+}
+// 수량을 손으로 고친다. 고친 칸은 색으로 표시하고, 고치기 전 값을 적어 둔다.
+async function onBlkQtyEdit(pn, value){
+  const k=normPN(pn); if(!k) return;
+  if(!canEditPsi()){ alert(lang==='ru'?'Нет прав на изменение.':'고칠 권한이 없습니다.'); renderBLK(); return; }
+  const raw=String(value==null?'':value).replace(/[,\s]/g,'').trim();
+  if(raw!=='' && !isFinite(Number(raw))){ alert(lang==='ru'?'Введите число.':'숫자를 입력해 주세요.'); renderBLK(); return; }
+  const now=(raw==='')?0:Math.max(0, Math.round(Number(raw)));
+  const before=blkQtyOf(k);
+  if(now===before) return;
+  if(!(k in psiBlockedMan)) psiBlockedMan[k]=before;        // 처음 고칠 때만 그 전 값을 적어 둔다
+  if(now>0) psiBlocked[k]=now; else delete psiBlocked[k];
+  if(Number(psiBlockedMan[k])===now) delete psiBlockedMan[k];   // 원래 값으로 되돌려 놓았으면 표시를 뗀다
+  if(!await saveBlocked()) return;
+  blkAfterChange();
+}
+// 사용불가 수량을 손으로 고친 것들을 고치기 전 값으로 되돌린다
+async function blkResetManual(){
+  const ru=(lang==='ru');
+  const keys=Object.keys(psiBlockedMan);
+  if(!keys.length){ alert(ru?'Ручных значений нет.':'손으로 고친 값이 없습니다.'); return; }
+  if(!confirm(ru?('Вернуть '+keys.length+' значений?'):(keys.length+'개를 고치기 전 값으로 되돌릴까요?'))) return;
+  keys.forEach(k=>{ const v=Number(psiBlockedMan[k])||0; if(v>0) psiBlocked[k]=v; else delete psiBlocked[k]; });
+  psiBlockedMan={};
+  if(!await saveBlocked()) return;
+  blkAfterChange();
+  alert(ru?('Возвращено: '+keys.length):(keys.length+'개를 고치기 전 값으로 되돌렸습니다.'));
+}
+// 수량이 바뀌면 이 화면과 PSI 재고를 다시 그린다
+function blkAfterChange(){
+  renderBLK();
+  try{ _psiPainted.psi=null; _psiPainted.sim=null; }catch(e){}
+  ['pane-psi','pane-sim','pane-ms'].forEach(id=>{
+    if(typeof ktPaneOn==='function' && ktPaneOn(id)){
+      if(id==='pane-sim' && typeof renderSIM==='function') renderSIM();
+      else if(id==='pane-ms' && typeof renderMS==='function') renderMS();
+      else if(typeof renderPSI==='function') renderPSI();
+    }
+  });
 }
 // 입고: 인보이스에 입고일을 적으면 그 값(w)을 쓰고, 없으면 입고 시트의 월별 값(n).
 function psiInOf(d,ym,pn){
