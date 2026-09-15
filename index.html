@@ -6587,7 +6587,14 @@ function canViewExportCtrl(){
 }
 // 지금 열려 있는 탭이 숨겨졌으면 보이는 첫 탭으로 옮긴다.
 // 로그인 직후 기본 탭은 '주문'이라, 그 탭이 없는 회원은 탭 없이 주문 화면만 보게 된다.
+// 탭줄에 단추가 없는 화면들 — PSI 도구줄에서 열고 탭 단추는 늘 숨겨 둔다.
+//   이 화면을 보고 있을 때 '보이는 탭으로 옮기기'를 하면, 32초마다 도는 권한 갱신에
+//   보던 화면이 첫 화면으로 튕겨 버린다. 그래서 건드리지 않는다.
+const KT_NO_TAB_PANES={ psi:1, sim:1, po:1, ship:1, ms:1, moq:1, blk:1 };
 function ensureVisibleTab(){
+  const pane=document.querySelector('.tab-pane.active');
+  const pid=pane?String(pane.id||'').replace(/^pane-/,''):'';
+  if(KT_NO_TAB_PANES[pid] && (typeof canSeePsi!=='function' || canSeePsi())) return;
   const cur=document.querySelector('.tab-btn.active');
   if(cur && getComputedStyle(cur).display!=='none') return;
   const first=Array.prototype.find.call(document.querySelectorAll('.tab-btn'),
