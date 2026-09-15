@@ -12823,7 +12823,10 @@ function simNeedApply(td, raw, final){
   let num=(t===''||t==='-')?null:Math.round(Number(t));
   // 다 적고 칸을 떠날 때 MOQ 아래면 MOQ 로 올려 담는다(적는 동안에는 그대로 둔다)
   if(num!=null && final) num=simNeedMoq(rep, num);
-  if(num==null) delete _simNeed[simNeedKey(rep,ym)]; else _simNeed[simNeedKey(rep,ym)]=num;
+  const _k=simNeedKey(rep,ym);
+  if(num==null) delete _simNeed[_k]; else _simNeed[_k]=num;
+  // 보고에 올릴 대상 — 지난 보고 뒤에 고친 칸만 표시해 둔다
+  if(final){ if(num==null) delete _simNeedNew[_k]; else _simNeedNew[_k]=1; }
   const next=td.nextElementSibling;
   if(next) next.textContent = avg>0 ? (Math.round(((st+(num||0))/avg)*10)/10).toFixed(1) : '';
   return num;
@@ -13484,7 +13487,7 @@ function simResetManual(){
   if(!c){ alert(ru?'Ручных значений нет.':'손으로 고친 값이 없습니다.'); return; }
   if(!confirm(ru ? ('Сбросить '+c+' ручных значений?')
                  : ('손으로 고친 '+c+'개를 원래 셈한 값으로 되돌립니다.\n계속할까요?'))) return;
-  _simNeed={}; _simShip={}; saveSimMan();
+  _simNeed={}; _simShip={}; _simNeedNew={}; saveSimMan();
   ktHistClearMine('sim.');                 // 이 아이디가 남긴 수기 이력도 지운다
   renderSIM();
 }
@@ -13552,12 +13555,15 @@ function poReqApproved(){ return poReqOf('approved'); }     // 승인을 기다�
 function poReqUnseen(uid, status){
   return (poReqs||[]).filter(r=>r && r.status===status && !(r.seen && r.seen[uid]));
 }
-// 지금 화면에 잡혀 있는 '발주필요' 수기값을 줄로 만든다(이미 승인된 줄은 뺀다)
-function poReqItems(){
+// 올릴 줄을 고른다. 기본은 '지난 보고 뒤에 고친 칸'만.
+//   all 이 참이면 남아 있는 수기값을 모두 올린다.
+//   이미 승인이 끝난 칸은 어느 쪽이든 빼놓는다.
+function poReqItems(all){
   const out=[];
-  Object.keys(_simNeed||{}).forEach(k=>{
+  const src=all ? (_simNeed||{}) : (_simNeedNew||{});
+  Object.keys(src).forEach(k=>{
     const p=String(k).split('|');
-    const qty=Number(_simNeed[k])||0;
+    const qty=Number((_simNeed||{})[k])||0;             // 수량은 늘 지금 값을 쓴다
     if(!p[0] || !p[1] || qty<=0) return;
     if(poReqLocked(p[0], p[1])) return;                 // 승인이 끝난 줄은 다시 올리지 않는다
     out.push({ rep:p[0], ym:p[1], qty:qty, name:(typeof pnNameKo==='function'?pnNameKo(p[0],''):'') });
@@ -13582,10 +13588,16 @@ async function poReqReport(){
   const ru=(lang==='ru');
   if(!poReqCanReport()){ alert(ru?'Нет прав на отправку.':'보고할 권한이 없습니다.'); return; }
   await loadPoReqs(true);
-  const items=poReqItems();
+  let items=poReqItems(false);                 // 지난 보고 뒤에 고친 칸만
   if(!items.length){
-    alert(ru?'Нет изменённых вручную «Дозаказ».':'손으로 적은 발주필요가 없습니다.\n발주필요 칸에 수량을 적은 뒤 보고해 주세요.');
-    return;
+    const rest=poReqItems(true);               // 고친 것이 없으면 남아 있는 것을 올릴지 물어본다
+    if(!rest.length){
+      alert(ru?'Нет изменённых вручную «Дозаказ».':'지난 보고 뒤에 고친 발주필요가 없습니다.\n발주필요 칸에 수량을 적은 뒤 보고해 주세요.');
+      return;
+    }
+    if(!confirm(ru ? ('Нет новых изменений. Отправить все оставшиеся ('+rest.length+')?')
+                   : ('지난 보고 뒤에 새로 고친 칸이 없습니다.\n아직 보고하지 않은 '+rest.length+'건을 올릴까요?'))) return;
+    items=rest;
   }
   const total=items.reduce((a,b)=>a+(Number(b.qty)||0),0);
   if(!confirm(ru ? ('Отправить на согласование? Позиций: '+items.length+', всего '+total.toLocaleString())
@@ -13596,6 +13608,9 @@ async function poReqReport(){
               items:items, total:total, status:'reported', seen:{} };
   poReqs.push(rec);
   if(!await savePoReqs()){ alert(ru?'Не удалось сохранить.':'저장하지 못했습니다.'); return; }
+  // 올린 칸은 '고친 표시' 를 지운다 — 다음 보고에는 그 뒤에 고친 것만 올라간다
+  items.forEach(it=>{ delete _simNeedNew[it.rep+'|'+it.ym]; });
+  saveSimMan();
   poReqBtns();
   const m=await poReqMail(PO_REQ_MAIL.report.subject, poReqText(rec), PO_REQ_MAIL.report.to);
   alert(ru ? ('Отправлено на согласование ('+PO_REQ_APPROVER+').'+(m.ok?'':'\nПисьмо не ушло: '+m.reason))
@@ -13710,6 +13725,7 @@ function poReqBtns(){
 //   설정 칸(kt_psi_cfg id=97)에 담아 다음에 들어와도 그대로 보이게 한다.
 const SIM_MAN_ID=97;
 let _simManLoaded=false;
+let _simNeedNew={};                 // 지난 보고 뒤에 고친 발주필요 칸 ('대표품번|연월' → 1)
 async function loadSimMan(){
   if(_simManLoaded) return;
   _simManLoaded=true;
@@ -13719,6 +13735,7 @@ async function loadSimMan(){
     if(c && typeof c==='object'){
       if(c.ship && typeof c.ship==='object') _simShip=c.ship;
       if(c.need && typeof c.need==='object') _simNeed=c.need;
+      if(c.needNew && typeof c.needNew==='object') _simNeedNew=c.needNew;
     }
   }catch(e){}
 }
@@ -13727,7 +13744,7 @@ function saveSimMan(){
   clearTimeout(_simManT);
   _simManT=setTimeout(async()=>{
     try{
-      await sb.from('kt_psi_cfg').upsert({ id:SIM_MAN_ID, cfg:{ ship:_simShip, need:_simNeed },
+      await sb.from('kt_psi_cfg').upsert({ id:SIM_MAN_ID, cfg:{ ship:_simShip, need:_simNeed, needNew:_simNeedNew },
         updated_at:new Date().toISOString() },{onConflict:'id'});
     }catch(e){ console.log('sim_man: 저장 실패'); }
   }, 600);
