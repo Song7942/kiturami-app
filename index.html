@@ -1406,6 +1406,14 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
         <span id="i18n-sim-reset">필터 초기화</span>
       </button>
+      <button class="dl-btn" id="simReportBtn" onclick="poReqReport()" title="적어 둔 발주필요를 신규부품발주로 보고합니다" style="display:none;background:#0ea5e9;border-color:#0ea5e9;color:#fff">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+        <span id="i18n-sim-report">보고</span>
+      </button>
+      <button class="dl-btn" id="simApproveBtn" onclick="poReqApprove()" title="올라온 신규부품발주를 재가하고 메일을 보냅니다" style="display:none;background:#16a34a;border-color:#16a34a;color:#fff">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+        <span id="i18n-sim-approve">재가</span>
+      </button>
       <button class="dl-btn" id="simResetManualBtn" onclick="simResetManual()" title="손으로 고친 실제선적·발주필요를 원래 셈한 값으로 되돌립니다">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/></svg>
         <span id="i18n-sim-manual">수기 초기화</span>
@@ -2296,6 +2304,8 @@ function refreshPsiTexts(){
   set('i18n-sim-avgunit','개월','мес.');
 
   set('i18n-sim-cols',COLS[0],COLS[1]);
+  set('i18n-sim-report','보고','Отправить');
+  set('i18n-sim-approve','재가','Согласовать');
   set('i18n-sim-reset','필터 초기화','Сброс фильтров');
   set('i18n-sim-manual','수기 초기화','Сброс ручных');
   set('i18n-price-manual','수기 초기화','Сброс ручных');
@@ -2393,6 +2403,9 @@ function refreshPsiTexts(){
   ph('fpNewPw','새 비밀번호','Новый пароль');  ph('fpNewPw2','새 비밀번호 확인','Повторите новый пароль');
   ttl('#adminOrdersIncompleteTri,#recvIncompleteTri,#myOrdersIncompleteTri',
       '출고 미완료','Отгрузка не завершена');
+  ttl('#simReportBtn','적어 둔 발주필요를 신규부품발주로 보고합니다','Отправить «Дозаказ» на согласование');
+  ttl('#simApproveBtn','올라온 신규부품발주를 재가하고 메일을 보냅니다','Согласовать заявку и отправить письмо');
+  try{ if(typeof poReqBtns==='function') poReqBtns(); }catch(e){}
   ttl('#pnResetBtn','열 순서·필터를 기본값으로','Сбросить порядок столбцов и фильтры');
   ttl('#pnUploadBtn','헤더 자동 인식: 품번조회 양식 / 품목코드정보 / N/W·G/W·CBM / 부품 적용모델 / 부품리스트(영문명·단종 등) / 전략물자(수출제한)',
       'Заголовки распознаются сами: артикулы / коды / N/W·G/W·CBM / модели / список деталей (англ. наим., снятие) / экспортный контроль');
@@ -13429,6 +13442,155 @@ function simResetManual(){
   ktHistClearMine('sim.');                 // 이 아이디가 남긴 수기 이력도 지운다
   renderSIM();
 }
+// ══════════════════════════════════════════
+// 신규부품발주 결재 — 보고(KONSTANTIN) → 재가(YOON) → 메일(song@krb.co.kr)
+//   보고를 누르면 그때의 '발주필요' 수기값을 한 건으로 묶어 담는다.
+//   YOON 이 재가를 누르면 그 건을 '재가' 로 바꾸고 메일을 보낸다.
+//   SONG 이 로그인하면 아직 못 본 재가 건을 쪽지로 알린다.
+//   담는 곳은 설정 칸(kt_psi_cfg id=99). 최근 50건만 남긴다.
+// ══════════════════════════════════════════
+const PO_REQ_ID=99;
+const PO_REQ_REPORTER='KONSTANTIN';     // 보고하는 아이디
+const PO_REQ_APPROVER='YOON';           // 재가하는 아이디
+const PO_REQ_NOTIFY='SONG';             // 접수 쪽지를 받는 아이디
+const PO_REQ_MAIL_TO='song@krb.co.kr';  // 재가되면 메일이 가는 곳
+const PO_REQ_SUBJECT='신규부품발주';
+const PO_REQ_MAX=50;
+let poReqs=[], _poReqLoaded=false;
+function ktUid(){ return (typeof currentUser!=='undefined' && currentUser) ? String(currentUser.id||'') : ''; }
+function ktIsMasterId(){ try{ return !!userRole(currentUser).isMaster; }catch(e){ return false; } }
+function poReqCanReport(){ return ktUid()===PO_REQ_REPORTER || ktIsMasterId(); }
+function poReqCanApprove(){ return ktUid()===PO_REQ_APPROVER || ktIsMasterId(); }
+async function loadPoReqs(force){
+  if(_poReqLoaded && !force) return;
+  _poReqLoaded=true;
+  try{
+    const { data, error }=await sb.from('kt_psi_cfg').select('cfg').eq('id',PO_REQ_ID).limit(1);
+    const c=(!error && data && data[0])?data[0].cfg:null;
+    poReqs=(c && Array.isArray(c.reqs))?c.reqs:[];
+  }catch(e){ poReqs=[]; }
+}
+async function savePoReqs(){
+  try{
+    if(poReqs.length>PO_REQ_MAX) poReqs=poReqs.slice(poReqs.length-PO_REQ_MAX);
+    const { error }=await sb.from('kt_psi_cfg').upsert({ id:PO_REQ_ID, cfg:{ reqs:poReqs },
+      updated_at:new Date().toISOString() },{onConflict:'id'});
+    return !error;
+  }catch(e){ return false; }
+}
+function poReqPending(){ return poReqs.filter(r=>r && r.status==='reported'); }
+function poReqUnseen(uid){
+  return poReqs.filter(r=>r && r.status==='approved' && !(r.seen && r.seen[uid]));
+}
+// 지금 화면에 잡혀 있는 '발주필요' 수기값을 줄로 만든다
+function poReqItems(){
+  const out=[];
+  Object.keys(_simNeed||{}).forEach(k=>{
+    const p=String(k).split('|');
+    const qty=Number(_simNeed[k])||0;
+    if(!p[0] || !p[1] || qty<=0) return;
+    out.push({ rep:p[0], ym:p[1], qty:qty, name:(typeof pnNameKo==='function'?pnNameKo(p[0],''):'') });
+  });
+  out.sort((a,b)=> String(a.ym).localeCompare(String(b.ym)) || String(a.rep).localeCompare(String(b.rep)));
+  return out;
+}
+function poReqText(r){
+  const lines=[];
+  lines.push('보고: '+(r.by||'')+' ('+_ktHistTime(r.at)+')');
+  if(r.approvedBy) lines.push('재가: '+r.approvedBy+' ('+_ktHistTime(r.approvedAt)+')');
+  lines.push('품번 '+(r.items||[]).length+'건 · 수량 합계 '+Number(r.total||0).toLocaleString());
+  lines.push('');
+  lines.push('연월\t대표품번\t수량\t품명');
+  (r.items||[]).forEach(it=>{
+    lines.push(psiYmLabel(it.ym)+'\t'+it.rep+'\t'+Number(it.qty||0).toLocaleString()+'\t'+(it.name||''));
+  });
+  return lines.join('\n');
+}
+// 보고: 지금 적어 둔 발주필요를 한 건으로 올린다
+async function poReqReport(){
+  const ru=(lang==='ru');
+  if(!poReqCanReport()){ alert(ru?'Нет прав на отправку.':'보고할 권한이 없습니다.'); return; }
+  await loadPoReqs(true);
+  const items=poReqItems();
+  if(!items.length){
+    alert(ru?'Нет изменённых вручную «Дозаказ».':'손으로 적은 발주필요가 없습니다.\n발주필요 칸에 수량을 적은 뒤 보고해 주세요.');
+    return;
+  }
+  const total=items.reduce((a,b)=>a+(Number(b.qty)||0),0);
+  if(!confirm(ru ? ('Отправить на согласование? Позиций: '+items.length+', всего '+total.toLocaleString())
+                 : ('신규부품발주를 보고합니다.\n품번 '+items.length+'건 · 수량 합계 '+total.toLocaleString()
+                    +'\n재가자: '+PO_REQ_APPROVER+'\n\n계속할까요?'))) return;
+  const now=new Date().toISOString();
+  poReqs.push({ id:'R'+now.replace(/\D/g,'').slice(0,14), at:now, by:ktUid(),
+                items:items, total:total, status:'reported', seen:{} });
+  if(!await savePoReqs()){ alert(ru?'Не удалось сохранить.':'저장하지 못했습니다.'); return; }
+  poReqBtns();
+  alert(ru ? ('Отправлено на согласование ('+PO_REQ_APPROVER+').')
+           : ('보고했습니다.\n'+PO_REQ_APPROVER+' 아이디에서 재가하면 메일이 나갑니다.'));
+}
+// 재가: 올라온 건을 승인하고 메일을 보낸다
+async function poReqApprove(){
+  const ru=(lang==='ru');
+  if(!poReqCanApprove()){ alert(ru?'Нет прав на согласование.':'재가할 권한이 없습니다.'); return; }
+  await loadPoReqs(true);
+  const pend=poReqPending();
+  if(!pend.length){ alert(ru?'Нет заявок на согласование.':'재가할 보고가 없습니다.'); return; }
+  const nItem=pend.reduce((a,r)=>a+((r.items||[]).length),0);
+  const nQty=pend.reduce((a,r)=>a+(Number(r.total)||0),0);
+  if(!confirm(ru ? ('Согласовать '+pend.length+' заявок? Позиций: '+nItem+', всего '+nQty.toLocaleString())
+                 : ('올라온 보고 '+pend.length+'건을 재가합니다.\n품번 '+nItem+'건 · 수량 합계 '+nQty.toLocaleString()
+                    +'\n재가하면 '+PO_REQ_MAIL_TO+' 로 \''+PO_REQ_SUBJECT+'\' 메일이 나갑니다.\n\n계속할까요?'))) return;
+  const now=new Date().toISOString();
+  pend.forEach(r=>{ r.status='approved'; r.approvedBy=ktUid(); r.approvedAt=now; r.seen=r.seen||{}; });
+  if(!await savePoReqs()){ alert(ru?'Не удалось сохранить.':'저장하지 못했습니다.'); return; }
+  poReqBtns();
+  // 메일 보내기 — 못 보내도 재가는 그대로 둔다(화면 쪽지는 SONG 에게 뜬다)
+  const body=pend.map(r=>poReqText(r)).join('\n\n──────────\n\n');
+  const m=await poReqMail(PO_REQ_SUBJECT, body);
+  if(m.ok) alert(ru?('Согласовано. Письмо отправлено на '+PO_REQ_MAIL_TO):('재가했습니다.\n'+PO_REQ_MAIL_TO+' 로 메일을 보냈습니다.'));
+  else alert(ru ? ('Согласовано, но письмо не ушло ('+m.reason+'). '+PO_REQ_NOTIFY+' увидит уведомление в программе.')
+                : ('재가했습니다.\n다만 메일은 나가지 않았습니다 ('+m.reason+').\n'
+                   +PO_REQ_NOTIFY+' 아이디로 들어가면 화면 쪽지로 뜹니다.'));
+}
+async function poReqMail(subject, text){
+  try{
+    const r=await fetch('/api/notify', { method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({ to:PO_REQ_MAIL_TO, subject:subject, text:text }) });
+    if(!r.ok) return { ok:false, reason:'HTTP '+r.status };
+    const j=await r.json();
+    return j && j.ok ? { ok:true } : { ok:false, reason:(j&&j.reason)||'unknown' };
+  }catch(e){ return { ok:false, reason:'오프라인' }; }
+}
+// 로그인한 뒤 SONG 에게 접수 쪽지를 띄운다
+async function poReqNotifyOnLogin(){
+  const uid=ktUid();
+  if(uid!==PO_REQ_NOTIFY) return;
+  await loadPoReqs(true);
+  const list=poReqUnseen(uid);
+  if(!list.length) return;
+  const ru=(lang==='ru');
+  const nItem=list.reduce((a,r)=>a+((r.items||[]).length),0);
+  const nQty=list.reduce((a,r)=>a+(Number(r.total)||0),0);
+  alert(ru ? ('Поступил новый заказ на детали.\nЗаявок: '+list.length+', позиций: '+nItem+', всего '+nQty.toLocaleString())
+           : (PO_REQ_SUBJECT+'가 접수되었습니다.\n\n보고 '+list.length+'건 · 품번 '+nItem+'건 · 수량 합계 '+nQty.toLocaleString()));
+  const now=new Date().toISOString();
+  list.forEach(r=>{ r.seen=r.seen||{}; r.seen[uid]=now; });
+  await savePoReqs();
+}
+// 도구줄의 보고·재가 단추를 아이디에 맞게 보이고 숨긴다
+function poReqBtns(){
+  const ru=(lang==='ru');
+  const rb=document.getElementById('simReportBtn');
+  if(rb){ rb.style.display=poReqCanReport()?'':'none';
+    const s=rb.querySelector('span'); if(s) s.textContent=(ru?'Отправить':'보고'); }
+  const ab=document.getElementById('simApproveBtn');
+  if(ab){
+    const n=poReqPending().length;
+    ab.style.display=poReqCanApprove()?'':'none';
+    ab.style.opacity=n?'1':'0.45';
+    const s=ab.querySelector('span'); if(s) s.textContent=(ru?'Согласовать':'재가')+(n?(' '+n):'');
+  }
+}
 // ── 손으로 적은 실제선적·발주필요를 담아 둔다 ──────────────
 //   전에는 화면에서만 쓰고 버려서, 새로 고치거나 다른 화면에 다녀오면 사라졌다.
 //   설정 칸(kt_psi_cfg id=97)에 담아 다음에 들어와도 그대로 보이게 한다.
@@ -13473,6 +13635,7 @@ async function loadSimTab(){
   simMoqClear();
   await loadSimMan();                                        // 손으로 적어 둔 실제선적·발주필요
   await loadKtHist();                                        // 수기 수정 이력(칸에 마우스를 올리면 뜬다)
+  await loadPoReqs(true); poReqBtns();                       // 보고·재가 단추
   if(psiPaneFresh('sim')){ updatePaneHBar('sim'); return; }   // 바뀐 게 없으면 그대로 둔다
   renderSIM();
 }
@@ -17300,6 +17463,8 @@ function enterApp(user){
     if(ktPaneOn('pane-pn')) renderPN();
   });
   loadNewsPosts();
+  // 신규부품발주가 재가되어 있으면 SONG 아이디에 쪽지를 띄운다
+  setTimeout(()=>{ try{ poReqNotifyOnLogin(); }catch(e){} }, 1200);
 }
 
 function authInit(){
