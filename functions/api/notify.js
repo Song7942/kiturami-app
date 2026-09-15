@@ -68,8 +68,14 @@ export async function onRequestPost(context) {
 }
 
 // 설정이 되어 있는지 확인용 (키 값은 절대 돌려주지 않습니다)
+//   보내는 도메인만 알려 줍니다 — 메일 머리에 어차피 찍히는 값이라 숨길 것이 없고,
+//   '도메인 인증을 안 한 주소로 보내고 있다' 를 바로 알아채는 데 씁니다.
 export async function onRequestGet(context) {
   const { env } = context;
+  const from = String(env.NOTIFY_FROM || '');
+  const at = from.lastIndexOf('@');
+  const dom = at >= 0 ? from.slice(at + 1).replace(/[>\s]/g, '') : '';
   return json({ ok: true, ready: !!(env.RESEND_API_KEY && env.NOTIFY_FROM),
+                fromDomain: dom || null,
                 to: env.NOTIFY_TO ? 'set' : 'unset' });
 }

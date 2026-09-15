@@ -13587,8 +13587,12 @@ async function poReqMail(subject, text){
       body:JSON.stringify({ to:PO_REQ_MAIL_TO, subject:subject, text:text }) });
     if(!r.ok) return { ok:false, reason:'HTTP '+r.status };
     const j=await r.json();
-    return j && j.ok ? { ok:true } : { ok:false, reason:(j&&j.reason)||'unknown' };
-  }catch(e){ return { ok:false, reason:'오프라인' }; }
+    if(j && j.ok) return { ok:true };
+    // 왜 안 갔는지 그대로 보여 준다(도메인 인증 안 됨 따위를 바로 알아채게)
+    const why=(j&&j.reason)||'unknown';
+    const det=(j&&j.detail)?('\n'+String(j.detail).slice(0,300)):'';
+    return { ok:false, reason:why+det };
+  }catch(e){ return { ok:false, reason:'오프라인(이 파일에서는 메일을 보낼 수 없습니다)' }; }
 }
 // 로그인한 뒤 SONG 에게 접수 쪽지를 띄운다
 async function poReqNotifyOnLogin(){
