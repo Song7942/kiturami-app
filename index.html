@@ -2359,6 +2359,45 @@ function refreshPsiTexts(){
   ttl('#pane-psi label[title],#pane-sim label[title]',
       '보유월 = 그 달 재고 ÷ (다음 달부터 이 개월 수만큼의 출고 합계 ÷ 개월 수)',
       'Мес. = остаток ÷ (сумма расхода за эти месяцы ÷ число месяцев)');
+  // 아직 한글로 남아 있던 말풍선들
+  ttl('[onclick="blkResetFilters()"],[onclick="moqResetFilters()"],[onclick="shipResetFilters()"],[onclick="msResetFilters()"]',
+      '헤더 필터·정렬을 기본값으로','Сбросить фильтры и сортировку');
+  ttl('#blkManBtn','손으로 고친 수량을 고치기 전 값으로 되돌립니다','Вернуть изменённые вручную количества');
+  ttl('#moqManBtn','손으로 고친 MOQ 를 고치기 전 값으로 되돌립니다','Вернуть изменённые вручную MOQ');
+  ttl('#moqClearBtn','MOQ 목록을 통째로 비웁니다','Очистить весь список MOQ');
+  ttl('#blkUploadBtn','Blocked 엑셀을 올리면 수량을 새로 반영합니다','Загрузить Excel «Blocked» — количества будут заменены');
+  ttl('#moqUploadBtn','MOQ 엑셀을 올리면 수량을 새로 반영합니다','Загрузить Excel «MOQ» — количества будут заменены');
+  ttl('[onclick="openPoViewPanel()"]','대표품번끼리 묶어 볼지 고릅니다','Группировать по осн. артикулу');
+  ttl('#poResetManualBtn','손으로 고친 공급수량을 인보이스 기준으로 되돌립니다',
+      'Вернуть «Поставлено» к данным инвойсов');
+  ttl('[onclick="switchTab(\'moq\')"]','품번별 최소 발주수량(MOQ)','Мин. партия заказа (MOQ) по артикулам');
+  ttl('[onclick="switchTab(\'blk\')"]','사용불가 수량(재고에서 고정으로 빠집니다)',
+      'Заблокированное количество (постоянно вычитается из остатка)');
+  ttl('[onclick="openPsiFcPanel()"]','시작월부터의 출고를 지난 해 실적으로 예측하는 산식을 고칩니다',
+      'Формула прогноза расхода по фактам прошлых лет');
+  ttl('[onclick="shipAllPeriod()"]','선적월을 전체로 돌리기','Показать весь период');
+  ttl('#shipAddBtn','선적 줄을 손으로 하나 넣습니다','Добавить строку отгрузки вручную');
+  ttl('#prodUploadBtn','품번·품명 두 열이 있는 엑셀을 올리면 제품목록을 갈아 끼웁니다',
+      'Загрузить Excel с артикулом и наименованием — список изделий будет заменён');
+  // 로그인·가입 칸의 자리글도 화면 말에 맞춘다
+  ph('loginId','아이디','Логин');            ph('loginPw','비밀번호','Пароль');
+  ph('suCompany','회사명','Название компании'); ph('suContactName','담당자명','Контактное лицо');
+  ph('suCountry','국가','Страна');           ph('suRegion','지역(시/도)','Регион (область)');
+  ph('suPhone','휴대폰 번호 (숫자만)','Телефон (только цифры)');
+  ph('suEmail','이메일주소','Эл. почта');
+  ph('suSupplier','구매처(거래처) 회사명','Компания-поставщик');
+  ph('suId','아이디','Логин');               ph('suPw','비밀번호','Пароль');
+  ph('suPw2','비밀번호 확인','Повторите пароль');
+  ph('fiCompany','회사명','Название компании');
+  ph('fpCompany','회사명','Название компании'); ph('fpId','아이디','Логин');
+  ph('fpNewPw','새 비밀번호','Новый пароль');  ph('fpNewPw2','새 비밀번호 확인','Повторите новый пароль');
+  ttl('#adminOrdersIncompleteTri,#recvIncompleteTri,#myOrdersIncompleteTri',
+      '출고 미완료','Отгрузка не завершена');
+  ttl('#pnResetBtn','열 순서·필터를 기본값으로','Сбросить порядок столбцов и фильтры');
+  ttl('#pnUploadBtn','헤더 자동 인식: 품번조회 양식 / 품목코드정보 / N/W·G/W·CBM / 부품 적용모델 / 부품리스트(영문명·단종 등) / 전략물자(수출제한)',
+      'Заголовки распознаются сами: артикулы / коды / N/W·G/W·CBM / модели / список деталей (англ. наим., снятие) / экспортный контроль');
+  ttl('#pnOfflineBtn','부품조회·품번조회·가격정보 3개 화면을 인터넷 없이 쓰는 오프라인 앱(HTML)으로 저장. 내부 공유용',
+      'Сохранить 3 экрана (детали, артикулы, цены) как офлайн-приложение (HTML) для внутреннего обмена');
   // 보고 있는 화면을 그 자리에서 다시 그린다
   const A=id=>{ const e=document.getElementById(id); return !!(e && e.classList.contains('active')); };
   try{
@@ -12955,7 +12994,7 @@ function openPsiFcPanel(){
       + '<label style="display:flex;align-items:center;gap:7px;margin-bottom:9px">'
         + '<input type="checkbox" id="fcOn" '+(psiFc.on?'checked':'')+'> <b>'+(ru?'Использовать прогноз':'예상수량 사용')+'</b></label>'
       + '<label style="display:flex;align-items:center;gap:7px;margin-bottom:9px">'
-        + '<input type="checkbox" id="fcMiss" '+(psiFc.useMiss===false?'':'checked')+'> '+(ru?'Учитывать невыполненные (미출)':'미출도 더해서 계산')+'</label>'
+        + '<input type="checkbox" id="fcMiss" '+(psiFc.useMiss===false?'':'checked')+'> '+(ru?'Учитывать невыполненные отгрузки':'미출도 더해서 계산')+'</label>'
       + '<div style="display:flex;align-items:center;gap:7px;margin-bottom:9px">'
         + (ru?'Начало':'시작월')+' <input type="text" id="fcFrom" maxlength="4" placeholder="'+psiNowYm()+'" value="'+escapeHtml(psiFc.from||'')+'" style="'+inp+';width:62px">'
         + '<span style="color:var(--muted);font-size:11px">'+(ru?'пусто = текущий месяц':'비우면 접속한 달')+' ('+psiYmLabel(psiFcFrom())+')</span></div>'
