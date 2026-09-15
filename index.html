@@ -304,6 +304,10 @@ table.pt td{padding:3px 5px;font-size:11px;overflow:hidden;border-bottom:1px sol
    같은 모양의 세모는 칸 오른쪽 단추(.ym-pick) 하나만 둔다. */
 input[list]::-webkit-calendar-picker-indicator{display:none!important;opacity:0;width:0;height:0}
 input[list]{-webkit-appearance:none;appearance:none;background-image:none}
+/* 지금 보고 있는 화면 이름표 — 도구줄 맨 앞에 붙는다 */
+.pane-name{flex:none;display:inline-flex;align-items:center;padding:3px 10px;border-radius:7px;
+  background:var(--accent2);color:#fff;font-size:12px;font-weight:700;white-space:nowrap;
+  letter-spacing:.2px;margin-right:2px}
 .ym-pick{margin-left:-1px;padding:3px 6px;border:1px solid var(--border);border-radius:0 6px 6px 0;
   background:var(--surface);color:var(--text);font-size:9px;line-height:1;cursor:pointer;vertical-align:middle;height:24px}
 .ym-pick:hover{background:var(--surface2);color:var(--text)}
@@ -2222,6 +2226,7 @@ function switchTab(tab){
   if(tab==='ms'){ loadMSTab(); }
   if(tab==='blk'){ loadBLKTab(); }
   if(tab==='moq'){ loadMOQTab(); }
+  try{ ktPaneTitle(tab); }catch(e){}       // 도구줄 맨 앞에 화면 이름을 붙인다
   if(tab==='sim'){ loadSimTab(); }
   if(tab==='adminOrders'){ loadAdminOrdersTab(); }
   if(tab==='memberManagement'){ loadMemberManagementTab(); }
@@ -2406,6 +2411,7 @@ function refreshPsiTexts(){
   ttl('#simReportBtn','적어 둔 발주필요를 신규부품발주로 보고합니다','Отправить «Дозаказ» на согласование');
   ttl('#simApproveBtn','올라온 신규부품발주를 재가하고 메일을 보냅니다','Согласовать заявку и отправить письмо');
   try{ if(typeof poReqBtns==='function') poReqBtns(); }catch(e){}
+  try{ ktPaneTitle(); }catch(e){}          // 화면 이름표도 말에 맞춰 바꾼다
   ttl('#pnResetBtn','열 순서·필터를 기본값으로','Сбросить порядок столбцов и фильтры');
   ttl('#pnUploadBtn','헤더 자동 인식: 품번조회 양식 / 품목코드정보 / N/W·G/W·CBM / 부품 적용모델 / 부품리스트(영문명·단종 등) / 전략물자(수출제한)',
       'Заголовки распознаются сами: артикулы / коды / N/W·G/W·CBM / модели / список деталей (англ. наим., снятие) / экспортный контроль');
@@ -2878,6 +2884,29 @@ function setupHTableScroll(scrollId,headerId,trackId,thumbId){
 }
 const _hbars={};
 function updatePaneHBar(key){ const f=_hbars[key]; if(f) f(); }
+// ── 지금 보고 있는 화면 이름표 ────────────────────────────
+//   PSI 와 발주시뮬레이션처럼 생김새가 닮은 화면이 많아, 도구줄 맨 앞에 이름을 붙인다.
+const KT_PANE_TITLE={
+  pn:['품번 조회','Артикулы'], parts:['부품 조회','Поиск деталей'], prod:['제품목록','Изделия'],
+  psi:['PSI','PSI'], sim:['발주시뮬레이션','Симуляция заказа'], po:['발주현황','Заказы'],
+  ship:['선적/입고현황','Отгрузка/Приход'], ms:['미출현황','Невыполненные'],
+  moq:['MOQ','MOQ'], blk:['사용불가','Заблокировано'], price:['가격정보','Цены'],
+  inventory:['재고관리','Склад'], shipments:['출고관리','Отгрузки'],
+  order:['주문','Заказ'], adminOrders:['주문관리','Управление заказами'],
+  memberManagement:['회원관리','Пользователи'], reset:['초기화','Сброс']
+};
+function ktPaneTitle(tab){
+  const ids=tab ? [tab] : Object.keys(KT_PANE_TITLE);
+  const ru=(typeof lang!=='undefined' && lang==='ru');
+  ids.forEach(id=>{
+    const t=KT_PANE_TITLE[id]; if(!t) return;
+    const pane=document.getElementById('pane-'+id); if(!pane) return;
+    const bar=pane.querySelector('.search-bar'); if(!bar) return;
+    let el=bar.querySelector('.pane-name');
+    if(!el){ el=document.createElement('span'); el.className='pane-name'; bar.insertBefore(el, bar.firstChild); }
+    el.textContent=(ru?t[1]:t[0]);
+  });
+}
 let updatePartsTableScrollbar=function(){};
 let updateOrderTableScrollbar=function(){};
 let updatePNTableScrollbar=function(){};
