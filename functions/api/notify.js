@@ -46,22 +46,34 @@ export async function onRequestPost(context) {
 
   const html = '<div style="font-family:system-ui,-apple-system,Segoe UI,sans-serif;font-size:13px;'
     + 'line-height:1.6;white-space:pre-line">' + esc(text) + '</div>';
+  const rcpt = to.split(',').map(s => s.trim()).filter(Boolean);
 
-  try {
+  // 보내는 도메인을 아직 인증하지 않았으면 Resend 가 403 으로 막는다.
+  // 그럴 때는 인증이 필요 없는 시험 발신자로 한 번 더 보낸다.
+  //   (이 발신자는 Resend 가입 계정 주소로만 배달된다 — 여기서는 그 주소가 받는 사람이라 문제없다)
+  const fallback = env.NOTIFY_FROM_FALLBACK || 'KITURAMI <onboarding@resend.dev>';
+
+  async function send(sender) {
     const r = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { 'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        from: from,
-        to: to.split(',').map(s => s.trim()).filter(Boolean),
-        subject: subject,
-        text: text,
-        html: html
-      })
+      body: JSON.stringify({ from: sender, to: rcpt, subject: subject, text: text, html: html })
     });
-    const out = await r.text();
-    if (!r.ok) return json({ ok: false, reason: 'send_failed', status: r.status, detail: out.slice(0, 400) });
-    return json({ ok: true, detail: out.slice(0, 200) });
+    return { ok: r.ok, status: r.status, body: await r.text() };
+  }
+
+  try {
+    let a = await send(from);
+    if (a.ok) return json({ ok: true, from: 'primary', detail: a.body.slice(0, 200) });
+
+    const notVerified = a.status === 403 && /not verified/i.test(a.body);
+    if (notVerified && fallback && fallback !== from) {
+      const b = await send(fallback);
+      if (b.ok) return json({ ok: true, from: 'fallback', note: 'domain_not_verified', detail: b.body.slice(0, 200) });
+      return json({ ok: false, reason: 'send_failed', status: b.status,
+                    detail: '1차: ' + a.body.slice(0, 200) + ' / 2차: ' + b.body.slice(0, 200) });
+    }
+    return json({ ok: false, reason: 'send_failed', status: a.status, detail: a.body.slice(0, 400) });
   } catch (e) {
     return json({ ok: false, reason: 'error', detail: String(e && e.message || e).slice(0, 300) });
   }
