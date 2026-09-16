@@ -15404,13 +15404,9 @@ function priceGroupRows(tbodyId){
         const q=head.children[i]?head.children[i].querySelector('input[onchange]'):null;
         const fm=q?String(q.getAttribute('onchange')).match(/,\s*'([a-z_]+)'/):null;
         if(q && fm && nos.length){
-          // 최종품번 줄의 값을 흐린 글씨로 보여 준다(그 값으로 넣겠다는 뜻은 아니다).
-          //   최종품번 줄이 비어 있으면 묶음에서 값이 적힌 첫 줄을 가져다 보여 준다.
-          let same=q.value||'';
-          if(!same){
-            for(let j=0;j<kids.length;j++){ const e=kids[j].children[i]?kids[j].children[i].querySelector('input'):null;
-              if(e && e.value){ same=e.value; break; } }
-          }
+          // 최종품번 줄의 값만 보여 준다(그 값으로 넣겠다는 뜻은 아니다).
+          //   최종품번 줄에 값이 없으면 비워 둔다 — 다른 호환품번 값을 끌어오지 않는다.
+          const same=q.value||'';
           bc[i].textContent='';
           bc[i].innerHTML='<input type="text" inputmode="decimal" class="pc-in" value=""'
             +(same?(' placeholder="'+escapeHtml(same)+'"'):'')
