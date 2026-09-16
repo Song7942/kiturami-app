@@ -2051,7 +2051,7 @@ const T={
        priceThCost:'원가',priceThBuy:'구매가',priceThSupply:'공급가',priceThGp:'GP',
        priceThSupplyA:'공급가A',priceThSupplyB:'공급가B',priceThSupplyC:'공급가C',priceThSupplyD:'공급가D',
        priceCount:n=>`총 ${n}건`,priceNoData:'가격 데이터가 없습니다.',
-       priceBuyHint:'구매가는 구매처 공급가를 자동으로 가져옵니다(직접 입력 시 입력값 우선). 공급가 A~D 는 엑셀 업로드로 등록합니다.',
+       priceBuyHint:'구매가는 구매처 공급가를 자동으로 가져옵니다(직접 입력 시 입력값 우선). 공급가 A~D 는 엑셀 업로드로 올리거나 칸에 바로 적을 수 있습니다.',
        priceThShip:'출고<br>(18y~)',priceThRu:'러시아',priceThKz:'카자흐스탄',priceUpdated:'업데이트: ',
        priceNoCalc:'계산식 데이터가 없습니다. 엑셀 업로드로 계산식 시트를 올려주세요.',
        priceNoSupply:'공급가 데이터가 없습니다. 계산식 탭에서 엑셀을 업로드해 주세요.',
@@ -2144,7 +2144,7 @@ const T={
        priceThCost:'Себестоимость',priceThBuy:'Закупочная цена',priceThSupply:'Цена поставки',priceThGp:'GP',
        priceThSupplyA:'Цена A',priceThSupplyB:'Цена B',priceThSupplyC:'Цена C',priceThSupplyD:'Цена D',
        priceCount:n=>`Всего ${n}`,priceNoData:'Нет данных о ценах.',
-       priceBuyHint:'Закупочная цена подставляется из цены поставщика (ручной ввод имеет приоритет). Цены A~D загружаются через Excel.',
+       priceBuyHint:'Закупочная цена подставляется из цены поставщика (ручной ввод имеет приоритет). Цены A~D можно загрузить из Excel или ввести прямо в ячейке.',
        priceThShip:'Отгрузка<br>(с 18г.)',priceThRu:'Россия',priceThKz:'Казахстан',priceUpdated:'Обновлено: ',
        priceNoCalc:'Нет данных формулы. Загрузите лист формулы через Excel.',
        priceNoSupply:'Нет данных о ценах поставки. Загрузите Excel во вкладке «Формула».',
@@ -14948,9 +14948,11 @@ async function priceResetManual(){
     }
     keys.forEach(k=>{ delete _priceOrig[k]; });
     savePriceOrig();
+    // 공급가 B~D 는 접미사 행에 담겨 있어 화면용 묶음(companySupplyByRep)을 다시 세워야 한다.
+    await loadCompanyPrices();
     priceManBtn(); renderPriceActive();
   }
-  ktHistClearMine('price.');               // 이 아이디가 남긴 수기 이력도 지운다
+  ktHistClearMine(['price.','cprice.']);   // 이 아이디가 남긴 수기 이력도 지운다
   alert(ru?('Возвращено: '+c):(c+'개를 고치기 전 값으로 되돌렸습니다.'));
 }
 function calcPriceRow(r){
@@ -16176,7 +16178,16 @@ function renderPriceCompany(){
   if(!list.length){ tbody.innerHTML=''; setPriceCards(''); emptyEl.textContent=t.priceNoData; emptyEl.style.display='block'; return; }
   emptyEl.style.display='none';
   const inputStyle='width:100%;max-width:80px;box-sizing:border-box;padding:2px 3px;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:var(--text);text-align:right;font-size:11px';
-  const supplyTd=v=>`<td style="text-align:right;padding:3px 6px;font-weight:600">${fmtN(v)}</td>`;
+  // 공급가 A~D 도 손으로 고칠 수 있다. 저장 자리는 A=그 품번 행, B~D=접미사 행(CSUP_SUFFIX).
+  //   수기 표시(주황)·되돌리기는 저장 자리 기준이라 접미사를 붙인 품번으로 묶는다.
+  const co=String(userRole(currentUser).company||'');
+  const supplyTd=(m,g,v,first)=>{
+    const srep=m.rep+CSUP_SUFFIX[g];
+    const man=priceIsMan(priceOrigKey(co, srep),'supply_price',v)?' price-man':'';
+    return `<td class="center${man}" style="padding:3px 2px${first?';border-left:1px solid var(--border)':''}"`
+      +ktHistAttr('cprice.'+g, co+'|'+m.rep)+`><input type="text" inputmode="decimal" style="${inputStyle}"`
+      +` value="${v!=null?fmtN(v):''}" onchange="onCompanySupplyEdit('${String(m.rep).replace(/'/g,"\\'")}','${g}',this.value)"></td>`;
+  };
   tbody.innerHTML=list.map(m=>{
     const repEsc=String(m.rep).replace(/'/g,"\\'");
     return `<tr style="border-bottom:1px solid var(--border);font-size:11px" class="price-row">
@@ -16186,9 +16197,8 @@ function renderPriceCompany(){
       <td style="padding:3px 4px">${m.compats.map(c=>`<span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(pnUpperLead(c))}</span>`).join('<br>')}</td>
       <td style="padding:3px 4px"><span class="code" style="font-size:10px;padding:1px 4px;white-space:nowrap">${escapeHtml(pnUpperLead(m.final))}</span></td>
       ${priceMarkTd(m.compats)}
-      <td class="center${priceIsMan(priceOrigKey(String(userRole(currentUser).company||''),m.rep),'buy_price',m.buyRaw)?' price-man':''}" style="padding:3px 2px;border-left:1px solid var(--border)"><input type="text" inputmode="decimal" style="${inputStyle}" value="${m.buyRaw!=null&&m.buyRaw!==''?fmtN(Number(m.buyRaw)):''}" placeholder="${m.autoBuy!=null?fmtN(m.autoBuy):''}" onchange="onCompanyPriceEdit('${repEsc}','buy_price',this.value)"></td>
-      <td style="border-left:1px solid var(--border);text-align:right;padding:3px 6px;font-weight:600">${fmtN(m.supplyA)}</td>
-      ${supplyTd(m.supplyB)}${supplyTd(m.supplyC)}${supplyTd(m.supplyD)}
+      <td class="center${priceIsMan(priceOrigKey(co,m.rep),'buy_price',m.buyRaw)?' price-man':''}" style="padding:3px 2px;border-left:1px solid var(--border)"${ktHistAttr('cprice.buy', co+'|'+m.rep)}><input type="text" inputmode="decimal" style="${inputStyle}" value="${m.buyRaw!=null&&m.buyRaw!==''?fmtN(Number(m.buyRaw)):''}" placeholder="${m.autoBuy!=null?fmtN(m.autoBuy):''}" onchange="onCompanyPriceEdit('${repEsc}','buy_price',this.value)"></td>
+      ${supplyTd(m,'a',m.supplyA,true)}${supplyTd(m,'b',m.supplyB)}${supplyTd(m,'c',m.supplyC)}${supplyTd(m,'d',m.supplyD)}
     </tr>`;
   }).join('');
   setPriceCards(list.map(m=>priceCardHtml(priceNameFor(m), isKo?priceSpecFor(m):'',
@@ -16209,6 +16219,7 @@ async function onCompanyPriceEdit(rep, field, value){
   if(raw!=='' && isNaN(num)){ alert('숫자를 입력해 주세요.'); renderPriceCompany(); return; }
   const cur=companyPriceData[rep]||{ buy_price:null, supply_price:null };
   const _ck=priceOrigKey(String(role.company||''), rep);
+  ktHistAdd('cprice.'+(field==='buy_price'?'buy':'a'), String(role.company||'')+'|'+rep, cur[field], (num==null?'':num));
   priceRememberOrig(_ck, field, cur[field]);
   cur[field]=num;
   priceForgetIfSame(_ck, field, num);
@@ -16217,6 +16228,40 @@ async function onCompanyPriceEdit(rep, field, value){
     { company:role.company, rep, buy_price:cur.buy_price, supply_price:cur.supply_price, updated_at:new Date().toISOString() },
     { onConflict:'company,rep' });
   if(error){ alert('저장 실패\n['+(error.message||error.code)+']'); return; }
+  priceManBtn();
+  renderPriceCompany();
+}
+// 공급가 A~D 를 손으로 고친다.
+//   컬럼을 늘릴 수 없어 A 는 그 품번 행의 supply_price 에, B~D 는 접미사를 붙인 행에 담는다.
+//   (엑셀 업로드가 쓰는 자리와 같다 — 올려 놓고 한두 칸만 고치는 일이 흔해서다)
+async function onCompanySupplyEdit(rep, grade, value){
+  if(!guardWrite('price')){ renderPriceActive(); return; }
+  const role=userRole(currentUser);
+  if(!role.isCompanyAdmin) return;
+  const g=String(grade||'').toLowerCase();
+  if(!(g in CSUP_SUFFIX)) return;
+  const ru=(lang==='ru');
+  const raw=String(value==null?'':value).replace(/,/g,'').trim();
+  const num=raw===''?null:Number(raw);
+  if(raw!=='' && isNaN(num)){ alert(ru?'Введите число.':'숫자를 입력해 주세요.'); renderPriceCompany(); return; }
+  const srep=rep+CSUP_SUFFIX[g];
+  const cur=companyPriceData[srep]||{ buy_price:null, supply_price:null };
+  // 고치기 전 값은 화면과 같은 자리에서 읽는다.
+  //   B~D 는 접미사 행이라 companyPriceData 에는 담기지 않고 companySupplyByRep 에만 있다.
+  const s4=companySupplyByRep[rep]||{};
+  const before=(g in s4)?s4[g]:cur.supply_price;
+  const key=priceOrigKey(String(role.company||''), srep);
+  ktHistAdd('cprice.'+g, String(role.company||'')+'|'+rep, before, (num==null?'':num));
+  priceRememberOrig(key, 'supply_price', before);
+  cur.supply_price=num;
+  priceForgetIfSame(key, 'supply_price', num);
+  companyPriceData[srep]=cur;
+  if(!companySupplyByRep[rep]) companySupplyByRep[rep]={};
+  companySupplyByRep[rep][g]=num;
+  const { error } = await sb.from('kt_company_prices').upsert(
+    { company:role.company, rep:srep, buy_price:cur.buy_price, supply_price:num, updated_at:new Date().toISOString() },
+    { onConflict:'company,rep' });
+  if(error){ alert((ru?'Ошибка сохранения':'저장 실패')+'\n['+(error.message||error.code)+']'); return; }
   priceManBtn();
   renderPriceCompany();
 }
@@ -16275,6 +16320,12 @@ async function handleCompanyPriceUpload(event){
         itemCount++;
         // 엑셀에 없는 열은 기존 값을 유지한다(빈 값으로 덮어쓰지 않게).
         const prev=companyPriceData[rep]||{};
+        // 엑셀로 바뀐 값도 이력에 남긴다(손으로 고친 줄과 섞이지 않게 (Excel) 꼬리표를 붙인다)
+        const prevS=companySupplyByRep[rep]||{}, hk=String(role.company||'')+'|'+rep;
+        const hv=c=>{ const n=toNum(row[c]); return n==null?'':n; };
+        if(cBuy>=0) ktHistAdd('cprice.buy', hk, prev.buy_price, hv(cBuy), XL_TAG());
+        if(cSup.a>=0) ktHistAdd('cprice.a', hk, prevS.a, hv(cSup.a), XL_TAG());
+        ['b','c','d'].forEach(g=>{ if(cSup[g]>=0) ktHistAdd('cprice.'+g, hk, prevS[g], hv(cSup[g]), XL_TAG()); });
         // A 는 기존 행의 supply_price 에, B~D 는 접미사 행에 저장한다(컬럼을 늘릴 수 없어서).
         rows.push({ company:role.company, rep,
                     buy_price: cBuy>=0?toNum(row[cBuy]):(prev.buy_price!=null?prev.buy_price:null),
