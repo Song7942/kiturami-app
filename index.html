@@ -16354,6 +16354,8 @@ async function onPriceGroupEdit(rowNos, field, value){
   nos.forEach(no=>{
     const r=priceCalcData.find(x=>x.row_no===no); if(!r) return;
     const key=priceOrigKey('calc', r.row_no);
+    // 대표품번 줄에서 한 번에 넣어도 줄마다 이력을 남긴다(한 줄씩 고칠 때와 같은 쪽지가 뜨도록).
+    ktHistAdd('price.'+field, r.row_no, r[field], (num==null?'':num));
     priceRememberOrig(key, field, r[field]);
     if(field==='ru_cost') priceRememberOrig(key, 'kz_supply_krw', r.kz_supply_krw);
     r[field]=num;
