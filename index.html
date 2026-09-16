@@ -9026,6 +9026,8 @@ function _ktHistNum(v){
   const s=String(v==null?'':v).replace(/[,\s]/g,'').trim();
   return s;
 }
+// 엑셀 업로드로 바뀐 줄에 붙이는 꼬리표. 저장돼 남는 글자라 언어를 타지 않게 영문으로 둔다.
+function XL_TAG(){ return '(Excel)'; }
 function ktHistWho(){
   return (typeof currentUser!=='undefined' && currentUser)
     ? String(currentUser.company||currentUser.contact_name||currentUser.id||'') : '';
@@ -9033,12 +9035,13 @@ function ktHistWho(){
 // 아이디마다 한 줄만 남긴다 — 그 아이디가 '처음 고치기 전 값' 에서 '마지막 값' 으로.
 //   여러 번 고쳐도 줄이 늘지 않고, 마지막 값과 시각만 바뀐다.
 //   원래 값으로 되돌려 놓으면 그 아이디 줄은 지운다.
-function ktHistAdd(scope, key, before, after){
+function ktHistAdd(scope, key, before, after, whoTag){
   const b=_ktHistNum(before), a=_ktHistNum(after);
   if(b===a) return;
   const k=ktHistKey(scope, key);
   const arr=Array.isArray(ktHist[k])?ktHist[k]:(ktHist[k]=[]);
-  const who=ktHistWho();
+  // whoTag 는 '어디서 바뀌었는지' 꼬리표(예: 엑셀 업로드). 손으로 고친 줄과 따로 쌓인다.
+  const who=(ktHistWho()+(whoTag?(' '+whoTag):'')).trim();
   const now=new Date().toISOString();
   const i=arr.findIndex(h=>String(h.u||'')===who);
   if(i<0) arr.push({ b, a, t:now, u:who });
@@ -9064,6 +9067,29 @@ function ktHistClearMine(prefix){
 }
 function ktHistOf(scope, key){ const a=ktHist[ktHistKey(scope,key)]; return Array.isArray(a)?a:null; }
 function ktHistHas(scope, key){ const a=ktHistOf(scope,key); return !!(a && a.length); }
+// 가격정보 이력은 줄 번호(row_no)로 묶여 있다. 계산식을 통째로 갈아엎으면 줄 번호가
+// 다시 매겨지므로, 호환품번을 다리 삼아 새 줄 번호로 옮긴다.
+//   옛 줄이 사라진(엑셀에 없는) 품번의 이력은 가리킬 곳이 없으니 버린다.
+function ktHistRemapPriceRows(oldRows, newRows){
+  const keyOf=r=>normPN(r&&r.compat)||('@REP:'+normPN((r&&r.rep)||''));
+  const newNo={};
+  (newRows||[]).forEach(r=>{ const k=keyOf(r); if(k) newNo[k]=r.row_no; });
+  const to={};
+  (oldRows||[]).forEach(r=>{ const k=keyOf(r); const n=k?newNo[k]:null; if(n!=null) to[String(r.row_no)]=String(n); });
+  const scopes=['price.ru_cost','price.ru_supply_krw','price.kz_supply_krw'];
+  const moved={}; let touched=false;
+  Object.keys(ktHist).forEach(k=>{
+    const i=k.lastIndexOf('|'); if(i<0) return;
+    const sc=k.slice(0,i), no=k.slice(i+1);
+    if(scopes.indexOf(sc)<0) return;
+    touched=true;
+    const nn=to[no];
+    if(nn!=null) moved[sc+'|'+nn]=ktHist[k];
+    delete ktHist[k];
+  });
+  Object.keys(moved).forEach(k=>{ ktHist[k]=moved[k]; });
+  if(touched) saveKtHist();
+}
 // 칸에 붙일 표시. data-hist 가 있으면 마우스를 올렸을 때 이력 쪽지가 뜬다.
 function ktHistAttr(scope, key){
   return ktHistHas(scope,key) ? (' data-hist="'+escapeHtml(ktHistKey(scope,key))+'"') : '';
@@ -9097,8 +9123,8 @@ function ktHistShow(el){
     +'border-radius:9px;box-shadow:0 10px 28px #000a;padding:7px 9px;font-size:11px;color:var(--text);'
     +'max-width:320px;pointer-events:none';
   box.innerHTML='<div style="font-size:10px;color:var(--muted);margin-bottom:3px">'
-    +(ru?('Изменено вручную · '+arr.length+' польз.')
-        :('수기 수정 이력 · 아이디 '+arr.length+'개 (처음 값 → 마지막 값)'))+'</div>'+rows;
+    +(ru?('Изменения · '+arr.length+' польз.')
+        :('변경 이력 · 아이디 '+arr.length+'개 (처음 값 → 마지막 값)'))+'</div>'+rows;
   document.body.appendChild(box);
   const r=el.getBoundingClientRect(), bw=box.offsetWidth, bh=box.offsetHeight;
   let left=Math.min(Math.max(6, r.left), window.innerWidth-bw-6);
@@ -16498,7 +16524,12 @@ async function applyCostPriceList(arr, event, cols){
     +`\n계속하시겠습니까?`;
   if(!confirm(msg)){ event.target.value=''; return; }
   const now=new Date().toISOString();
-  const setVals=(r,v)=>{
+  const setVals=(r,v,isNew)=>{
+    // 엑셀로 바뀐 값도 이력에 남긴다(새로 만든 줄은 견줄 값이 없어 빼놓는다).
+    if(!isNew){
+      if(v.cost!=null) ktHistAdd('price.ru_cost', r.row_no, r.ru_cost, Math.ceil(v.cost), XL_TAG());
+      if(v.ruSup!=null) ktHistAdd('price.ru_supply_krw', r.row_no, r.ru_supply_krw, Math.ceil(v.ruSup), XL_TAG());
+    }
     // 엑셀에 값이 있는 항목만 덮어쓴다. 빈칸은 기존 값을 그대로 둔다.
     if(v.cost!=null) r.ru_cost=Math.ceil(v.cost);        // 원가는 원 단위 — 올림
     if(v.ruSup!=null) r.ru_supply_krw=Math.ceil(v.ruSup);
@@ -16518,7 +16549,7 @@ async function applyCostPriceList(arr, event, cols){
               compat:code, final:info.final||'', ship_qty:null,
               ru_cost:null, ru_supply_krw:null, kz_supply_krw:null };
     priceCalcData.push(r);
-    payload.push(setVals(r, byCode[code]));
+    payload.push(setVals(r, byCode[code], true));
   });
   for(let i=0;i<payload.length;i+=500){
     const { error } = await sb.from('kt_price_calc').upsert(payload.slice(i,i+500),{onConflict:'row_no'});
@@ -16842,6 +16873,21 @@ async function handlePriceCalcUpload(event){
         }
         if(error){ alert('업로드 실패\n['+(error.message||error.code)+']'); event.target.value=''; return; }
       }
+      // 엑셀로 바뀐 값도 이력에 남긴다.
+      //   줄 번호가 다시 매겨지므로 옛 이력을 새 줄 번호로 옮긴 뒤,
+      //   호환품번이 같은 옛 줄과 견줘 달라진 값만 적는다(새로 생긴 줄은 견줄 값이 없어 뺀다).
+      try{
+        const oldRows=priceCalcData||[];
+        const keyOf=r=>normPN(r&&r.compat)||('@REP:'+normPN((r&&r.rep)||''));
+        const oldBy={};
+        oldRows.forEach(r=>{ const k=keyOf(r); if(k && oldBy[k]==null) oldBy[k]=r; });
+        ktHistRemapPriceRows(oldRows, rowsFinal);
+        rowsFinal.forEach(r=>{
+          const o=oldBy[keyOf(r)]; if(!o) return;
+          ktHistAdd('price.ru_cost', r.row_no, o.ru_cost, r.ru_cost==null?'':r.ru_cost, XL_TAG());
+          ktHistAdd('price.ru_supply_krw', r.row_no, o.ru_supply_krw, r.ru_supply_krw==null?'':r.ru_supply_krw, XL_TAG());
+        });
+      }catch(err){ console.error(err); }
       priceCalcData=rowsFinal;
       await syncKtPricesFromCalc();
       fillParamInputs();
