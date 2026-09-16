@@ -380,6 +380,11 @@ td.po-man{background:#ffedd5!important;color:#9a3412!important;font-weight:700;b
 tr.kt-grp td{background:var(--tag-bg)!important;font-weight:700}
 /* 가격정보 '묶어 보기' 의 대표품번 줄 */
 tr.price-grp td{background:var(--tag-bg)!important;font-weight:700}
+/* 대표품번 줄의 원가·공급가는 입력칸의 안내값으로 보여 준다.
+   흐리면 비어 보이므로 아래 호환품번 줄처럼 진하게 또렷이 찍는다. */
+tr.price-grp input.pc-in::placeholder{color:var(--text);opacity:1;font-weight:700}
+tr.price-grp input.pc-in::-webkit-input-placeholder{color:var(--text);opacity:1;font-weight:700}
+tr.price-grp input.pc-in{font-weight:700}
 /* 가격정보에서 손으로 고친 칸 — 셈하거나 올린 값이 아니라는 표시 */
 td.price-man{background:#ffedd5!important;border-bottom:1px solid #f97316!important}
 td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-weight:700}
