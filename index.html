@@ -15362,7 +15362,8 @@ function priceGroupRows(tbodyId){
     let head=kids[0];
     for(let j=0;j<kids.length;j++){ const c=txt(kids[j],ci); if(c && c===txt(kids[j],fi)){ head=kids[j]; break; } }
     const band=head.cloneNode(true);
-    band.className='price-grp';
+    // price-row 를 함께 둬야 칸 안 입력칸 크기(.price-row input.pc-in)가 아래 줄과 같아진다
+    band.className='price-row price-grp';
     band.setAttribute('style','border-bottom:1px solid var(--border);font-size:11px');
     // 대표품번 줄에서도 숫자를 넣을 수 있게 한다. 넣으면 그 묶음의 호환품번 줄 전부에 들어간다.
     //   (호환품번 줄에 입력칸이 있는 칸만 — RUB·USD·GP 같은 셈해서 나오는 칸은 그대로 비운다)
