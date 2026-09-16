@@ -15346,7 +15346,7 @@ function priceGroupRows(tbodyId){
   if(!priceGroupOn()) return;
   const rows=[...tbody.children].filter(tr=>!tr.classList.contains('price-grp'));
   if(!rows.length) return;
-  const ri=priceRepColIdx(), ci=ri+1, fi=ri+2, pi=ri+3+priceMarkN();   // 대표·호환·최종품번, 가격 시작
+  const ri=priceRepColIdx(), ci=ri+1, fi=ri+2;   // 대표품번·호환품번·최종품번 자리
   // 값을 읽을 때 innerText 를 쓰면 칸마다 화면 배치를 다시 셈해(강제 리플로우) 몇 초씩 걸린다.
   // textContent 는 배치를 건드리지 않는다.
   const txt=(tr,i)=>{ const td=tr.children[i]; return td?String(td.textContent||'').trim():''; };
@@ -15373,9 +15373,11 @@ function priceGroupRows(tbodyId){
       if(mm) nos.push(mm[1]);
     }
     const bc=band.children;
+    // 대표품번 줄은 최종품번 줄을 그대로 옮겨 적는다(선적·출고·환산 칸까지).
+    //   손으로 넣을 수 있는 칸(원가 KRW·공급가 KRW)만 입력칸으로 바꾼다.
     for(let i=0;i<bc.length;i++){
       if(i===ci){ bc[i].textContent=''; }
-      else if(i>=pi){
+      else{
         const q=head.children[i]?head.children[i].querySelector('input[onchange]'):null;
         const fm=q?String(q.getAttribute('onchange')).match(/,\s*'([a-z_]+)'/):null;
         if(q && fm && nos.length){
@@ -15388,9 +15390,8 @@ function priceGroupRows(tbodyId){
             +(ok&&same?(' placeholder="'+escapeHtml(same)+'"'):'')
             +' title="'+(lang==='ru'?'Значение уйдёт во все артикулы этой позиции':'이 묶음의 호환품번 줄 전부에 들어갑니다')+'"'
             +' onchange="onPriceGroupEdit(\''+nos.join(',')+'\',\''+fm[1]+'\',this.value)">';
-        }else{
-          bc[i].textContent='';
         }
+        // 그 밖의 칸은 최종품번 줄 값을 그대로 둔다(지우지 않는다)
       }
       const cn=bc[i].className;
       if(cn && cn.indexOf('price-man')>=0) bc[i].className=cn.replace(/\bprice-man\b/g,'').trim();
