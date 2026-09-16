@@ -3617,22 +3617,24 @@ function _pnTd(col, inner, cls, style){
 function pnCellHtml(col, r, ctx){
   const isMaster=ctx.isMaster, isKo=ctx.isKo, kw=ctx.kw, hlPN=ctx.hlPN, ed=pnEditSpan;
   const H=(f)=>pnCellHist(r.rep, f);
+  // 호환품번마다 따로 갖는 값(품명·규격·N/W·G/W·CBM·단종)의 변경이력
+  const HC=(f)=>pnCellHist(r.rep, 'cspec:'+f+':'+normPN(r._compat||''));
   if(col.group){ const md=_partsModels(r.rep)||{}; const bl=col.groupStart?'border-left:1px solid var(--border);':'';
     return _pnTd(col, dot(!!md[col.modelKey]), 'center', bl+'text-align:center'); }
   if(col.key==='export_ctrl'){ const on = r._split ? isExportRestricted(r._compat) : (r.compats||[]).some(isExportRestricted);
     return _pnTd(col, on?'<span style="color:#ef4444;font-weight:700;font-size:12px">O</span>':'', 'center', 'text-align:center'); }
   switch(col.key){
     case 'name': {
-      if(isKo && r._split){ const dn=((pnSpecOf(r._compat)||{}).name)||r.name_ko||'';
-        const inner=isMaster?cspecEdit(r._compat,'name',dn):hlPN(dn,kw);
-        return _pnTd(col, inner, 'pn-wrap', 'font-weight:500;font-size:11px'); }
+      if(isKo && r._split){ const dn=((pnSpecOf(r._compat)||{}).name)||r.name_ko||''; const h=HC('name');
+        const inner=(isMaster?cspecEdit(r._compat,'name',dn):hlPN(dn,kw))+h.badge;
+        return _pnTd(col, inner, (h.cls+' pn-wrap').trim(), 'font-weight:500;font-size:11px'); }
       const h=H(isKo?'name_ko':'name_ru');
       const inner=(isMaster?ed(r.rep,isKo?'name_ko':'name_ru',isKo?r.name_ko:r.name_ru):(isKo?hlPN(r.name_ko,kw):hlPN(r.name_ru||r.name_ko,kw)))+h.badge;
       return _pnTd(col, inner, (h.cls+' pn-wrap').trim(), 'font-weight:500;font-size:11px'); }
     case 'spec': {
-      if(r._split){ const ds=((pnSpecOf(r._compat)||{}).spec)||r.spec||'';
-        const inner=isMaster?cspecEdit(r._compat,'spec',ds):hlPN(ds,kw);
-        return _pnTd(col, inner, 'pn-wrap', 'font-size:11px;color:var(--muted)'); }
+      if(r._split){ const ds=((pnSpecOf(r._compat)||{}).spec)||r.spec||''; const h=HC('spec');
+        const inner=(isMaster?cspecEdit(r._compat,'spec',ds):hlPN(ds,kw))+h.badge;
+        return _pnTd(col, inner, (h.cls+' pn-wrap').trim(), 'font-size:11px;color:var(--muted)'); }
       const h=H('spec'); const inner=(isMaster?ed(r.rep,'spec',r.spec):hlPN(r.spec,kw))+h.badge;
       return _pnTd(col, inner, (h.cls+' pn-wrap').trim(), 'font-size:11px;color:var(--muted)'); }
     case 'name_ru': { const h=H('name_ru'); const inner=(isMaster?ed(r.rep,'name_ru',r.name_ru):hlPN(r.name_ru,kw))+h.badge;
@@ -3658,11 +3660,15 @@ function pnCellHtml(col, r, ctx){
     case 'final': { const h=H('final'); const inner=(isMaster?ed(r.rep,'final',pnUpperLead(r.final||'')):(r.final?`<span class="pn-badge pn-fin">${hlPN(pnUpperLead(r.final),kw)}</span>`:''))+h.badge;
       return _pnTd(col, inner, h.cls.trim(), 'font-size:11px'); }
     case 'nw': case 'gw': case 'cbm': { const val=pnSpecVal(r,col.key);
-      const inner=(isMaster && r._split)?cspecEdit(r._compat,col.key,val):escapeHtml(val);
-      return _pnTd(col, inner, '', 'text-align:right;padding:0 6px;font-size:11px;color:var(--muted)'); }
+      if(r._split){ const h=HC(col.key);
+        const inner=(isMaster?cspecEdit(r._compat,col.key,val):escapeHtml(val))+h.badge;
+        return _pnTd(col, inner, h.cls.trim(), 'text-align:right;padding:0 6px;font-size:11px;color:var(--muted)'); }
+      return _pnTd(col, escapeHtml(val), '', 'text-align:right;padding:0 6px;font-size:11px;color:var(--muted)'); }
     case 'note': { const val=pnSpecVal(r,'dan');
-      const inner=(isMaster && r._split)?cspecEdit(r._compat,'dan',val):escapeHtml(val);
-      return _pnTd(col, inner, '', 'font-size:11px;color:var(--muted);text-align:center'); }
+      if(r._split){ const h=HC('dan');
+        const inner=(isMaster?cspecEdit(r._compat,'dan',val):escapeHtml(val))+h.badge;
+        return _pnTd(col, inner, h.cls.trim(), 'font-size:11px;color:var(--muted);text-align:center'); }
+      return _pnTd(col, escapeHtml(val), '', 'font-size:11px;color:var(--muted);text-align:center'); }
     case 'applied_models': { const inner=isMaster?ed(r.rep,'applied_models',r.applied_models||''):escapeHtml(r.applied_models||'');
       return _pnTd(col, inner, '', 'text-align:left;font-size:11px'); }
   }
@@ -4088,7 +4094,14 @@ function openPNHistoryModal(rep, field){
   const T2=ru
     ? {title:'История изменений',before:'До:',after:'После:',empty:'(пусто)',none:'Нет истории изменений.'}
     : {title:'변경이력',before:'변경 전:',after:'변경 후:',empty:'(빈값)',none:'변경이력이 없습니다.'};
-  const fname=labels[field]||field;
+  // 호환품번마다 따로 갖는 값은 'cspec:항목:품번' 모양이다 — 보기 좋게 풀어 적는다
+  let fname=labels[field]||field;
+  if(String(field).indexOf('cspec:')===0){
+    const p=String(field).split(':');
+    const cl=ru ? {name:'Наименование',spec:'Спецификация',nw:'N/W',gw:'G/W',cbm:'CBM',dan:'Снято с пр-ва'}
+                : {name:'품명',spec:'규격',nw:'N/W',gw:'G/W',cbm:'CBM',dan:'단종'};
+    fname=(cl[p[1]]||p[1])+' · '+(p[2]||'');
+  }
   const fmt=iso=>{ try{ const d=new Date(iso), z=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())} ${z(d.getHours())}:${z(d.getMinutes())}`; }catch(e){ return iso; } };
   const rowsHtml=entries.length ? entries.map(h=>`
     <div style="border-bottom:1px solid var(--border);padding:8px 0">
@@ -4251,6 +4264,10 @@ async function onPNCellBlur(el){
     const { error }=await sb.from('kt_pn_specs').upsert({ pn:key, [f]:val },{ onConflict:'pn' });
     if(error){ alert((lang==='ru'?'Ошибка. Нужна таблица kt_pn_specs.':'저장 실패 — kt_pn_specs 테이블이 필요합니다.')+'\n['+(error.message||error.code)+']'); el.textContent=el.getAttribute('data-pnorig')||''; return; }
     _pnSpec.set(key, cur);
+    // 변경이력 — 이 값들은 호환품번마다 따로이므로 열쇠에 품번을 붙여 둔다
+    const oldV=el.getAttribute('data-pnorig')||'';
+    const repOf=(typeof findMasterRep==='function')?findMasterRep(key):'';
+    if(repOf) recordPNHistory(repOf, 'cspec:'+f+':'+key, oldV, val);
     el.setAttribute('data-pnorig', val); el.textContent=val;
     ktAfterPnEdit();
     return;
