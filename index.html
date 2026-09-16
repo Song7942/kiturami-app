@@ -385,6 +385,10 @@ tr.price-grp td{background:var(--tag-bg)!important;font-weight:700}
 tr.price-grp input.pc-in::placeholder{color:var(--text);opacity:1;font-weight:700}
 tr.price-grp input.pc-in::-webkit-input-placeholder{color:var(--text);opacity:1;font-weight:700}
 tr.price-grp input.pc-in{font-weight:700}
+/* 공급가 KRW 칸을 비우면 기준 GP 로 맞춘 공급가를 흐린 숫자로 미리 보여 준다.
+   (묶어 보기의 대표품번 줄 입력칸에는 pc-gp 를 붙이지 않으므로 위 진한 규칙이 그대로 산다) */
+.price-row input.pc-in.pc-gp::placeholder{color:var(--muted);opacity:.6;font-weight:400}
+.price-row input.pc-in.pc-gp::-webkit-input-placeholder{color:var(--muted);opacity:.6;font-weight:400}
 /* 가격정보에서 손으로 고친 칸 — 셈하거나 올린 값이 아니라는 표시 */
 td.price-man{background:#ffedd5!important;border-bottom:1px solid #f97316!important}
 td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-weight:700}
@@ -14935,6 +14939,9 @@ function calcPriceRow(r){
   if((ruSupply==null||ruSupply===0) && ruCost!=null && ruCost>0 && ruGp<1) ruSupply=Math.ceil(ruCost/(1-ruGp));
   const ruRub=(ruSupply!=null&&ruSupply>0&&priceSettings.rub_rate>0)?ceil1(ruSupply/priceSettings.rub_rate):null;
   const ruGpVal=(ruSupply!=null&&ruSupply>0)?((ruSupply-(ruCost||0))/ruSupply):null;
+  // 기준 GP 로 맞춘 공급가 — 이미 담긴 공급가와 상관없이 늘 셈해 둔다.
+  //   공급가 KRW 칸을 비우면 '이 GP 를 맞추려면 얼마여야 하는지' 를 흐린 숫자로 미리 보여 주는 데 쓴다.
+  const ruSupplyGp=(ruCost!=null&&ruCost>0&&ruGp<1)?Math.ceil(ruCost/(1-ruGp)):null;
   // 카자흐스탄 원가 = 러시아 원가 (엑셀 K열 =G열)
   const kzCost=ruCost;
   let kzSupply=(r.kz_supply_krw!=null&&r.kz_supply_krw!=='')?Number(r.kz_supply_krw):null;
@@ -14945,7 +14952,7 @@ function calcPriceRow(r){
   // 계산식·RUSSIA·KAZAK 화면이 모두 이 값을 쓴다.
   const costRub=(ruCost!=null&&ruCost>0&&priceSettings.rub_rate>0)?ceil1(ruCost/priceSettings.rub_rate):null;
   const costUsd=(ruCost!=null&&ruCost>0&&priceSettings.usd_rate>0)?ceil1(ruCost/priceSettings.usd_rate):null;
-  return { ruCost, ruSupply, ruRub, ruGpVal, kzCost, kzSupply, kzUsd, kzGpVal, costRub, costUsd };
+  return { ruCost, ruSupply, ruRub, ruGpVal, ruSupplyGp, kzCost, kzSupply, kzUsd, kzGpVal, costRub, costUsd };
 }
 // 가격 데이터(kt_price_calc)에는 러시아어 품명이 없으므로 PN_DATA에서 대표품번으로 찾는다.
 // 품번조회 탭과 같은 규칙(없으면 한국어 품명)으로 표시한다.
@@ -15810,7 +15817,7 @@ function renderPriceCalc(){
       +`<td class="center pc-e${priceIsMan(priceOrigKey('calc',r.row_no),'ru_cost',r.ru_cost)?' price-man':''}"${ktHistAttr('price.ru_cost', r.row_no)}><input type="text" inputmode="decimal" class="pc-in" value="${c.ruCost!=null?fmtN(c.ruCost):''}" onchange="onPriceCellEdit(${r.row_no},'ru_cost',this.value)"></td>`
       +`<td class="pc-r">${fmtN(c.costRub)}</td>`
       +`<td class="pc-r">${fmtN(c.costUsd)}</td>`
-      +`<td class="center pc-e${priceIsMan(priceOrigKey('calc',r.row_no),'ru_supply_krw',r.ru_supply_krw)?' price-man':''}"${ktHistAttr('price.ru_supply_krw', r.row_no)}><input type="text" inputmode="decimal" class="pc-in" value="${r.ru_supply_krw!=null&&r.ru_supply_krw!==''?fmtN(Number(r.ru_supply_krw)):''}" placeholder="${c.ruSupply!=null?fmtN(c.ruSupply):''}" onchange="onPriceCellEdit(${r.row_no},'ru_supply_krw',this.value)"></td>`
+      +`<td class="center pc-e${priceIsMan(priceOrigKey('calc',r.row_no),'ru_supply_krw',r.ru_supply_krw)?' price-man':''}"${ktHistAttr('price.ru_supply_krw', r.row_no)}><input type="text" inputmode="decimal" class="pc-in pc-gp" value="${r.ru_supply_krw!=null&&r.ru_supply_krw!==''?fmtN(Number(r.ru_supply_krw)):''}" placeholder="${c.ruSupplyGp!=null?fmtN(c.ruSupplyGp):''}"${c.ruSupplyGp!=null?` title="${L2('기준 GP '+fmtGp(priceSettings.ru_gp)+' 로 맞춘 공급가 '+fmtN(c.ruSupplyGp)+' 원','Цена при базовом GP '+fmtGp(priceSettings.ru_gp)+': '+fmtN(c.ruSupplyGp)+' KRW')}"`:''} onchange="onPriceCellEdit(${r.row_no},'ru_supply_krw',this.value)"></td>`
       +`<td class="pc-r2">${fmtN(c.ruRub)}</td>`
       +`<td class="center pc-n">${fmtGp(c.ruGpVal)}</td>`
       +`</tr>`;   /* [임시] 카자흐스탄 공급가KRW/USD/GP 열 제거 */
