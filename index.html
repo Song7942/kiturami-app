@@ -1434,6 +1434,11 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>
         <span id="i18n-sim-confirm">승인</span>
       </button>
+      <button class="dl-btn" id="simNeedUpBtn" onclick="document.getElementById('simNeedFile').click()" title="'발주필요' 머리글과 그 위 연월을 보고 그 달의 발주필요에 넣습니다" style="display:none;background:var(--accent2);border-color:var(--accent2);color:#fff">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <span id="i18n-sim-needup">발주필요 업로드</span>
+      </button>
+      <input type="file" id="simNeedFile" accept=".xlsx,.xls" style="display:none" onchange="handleSimNeedUpload(event)">
       <button class="dl-btn" id="simResetManualBtn" onclick="simResetManual()" title="손으로 고친 실제선적·발주필요를 원래 셈한 값으로 되돌립니다">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/></svg>
         <span id="i18n-sim-manual">수기 초기화</span>
@@ -2328,6 +2333,7 @@ function refreshPsiTexts(){
   set('i18n-sim-report','보고','Отправить');
   set('i18n-sim-approve','재가','Согласовать');
   set('i18n-sim-confirm','승인','Утвердить');
+  set('i18n-sim-needup','발주필요 업로드','Загрузить дозаказ');
   set('i18n-sim-reset','필터 초기화','Сброс фильтров');
   set('i18n-sim-manual','수기 초기화','Сброс ручных');
   set('i18n-price-manual','수기 초기화','Сброс ручных');
@@ -2429,6 +2435,8 @@ function refreshPsiTexts(){
   ttl('#simApproveBtn','올라온 신규부품발주를 재가하고 메일을 보냅니다','Согласовать заявку и отправить письмо');
   ttl('#simConfirmBtn','재가된 신규부품발주를 승인하고 메일을 보냅니다(승인하면 더 고칠 수 없습니다)',
       'Утвердить заявку и отправить письмо (после утверждения изменить нельзя)');
+  ttl('#simNeedUpBtn','\'발주필요\' 머리글과 그 위 연월을 보고 그 달의 발주필요에 넣습니다',
+      'Заголовок «Дозаказ» и месяц над ним — значения уйдут в этот месяц');
   try{ if(typeof poReqBtns==='function') poReqBtns(); }catch(e){}
   try{ ktPaneTitle(); }catch(e){}          // 화면 이름표도 말에 맞춰 바꾼다
   ttl('#pnResetBtn','열 순서·필터를 기본값으로','Сбросить порядок столбцов и фильтры');
@@ -13778,6 +13786,127 @@ function poReqBtns(){
   one('simReportBtn',  poReqCanReport(),  null, '보고', 'Отправить');
   one('simApproveBtn', poReqCanApprove(), poReqPending().length,  '재가', 'Согласовать');
   one('simConfirmBtn', poReqCanConfirm(), poReqApproved().length, '승인', 'Утвердить');
+  const nu=document.getElementById('simNeedUpBtn'); if(nu) nu.style.display=canEditPsi()?'':'none';
+}
+// ══════════════════════════════════════════
+// 발주필요 엑셀 올리기
+//   '발주필요' 머리글을 찾고, 그 바로 위 칸의 연월(2026-09 · Sep-26 · 2609 …)을 읽어
+//   그 달의 발주필요에 넣는다. 품번 열은 머리글에 '품번' 이 든 열을 쓴다.
+//   '발주필요' 열이 여럿이면 각 열의 위 칸 연월대로 한꺼번에 넣는다.
+// ══════════════════════════════════════════
+function simNeedYmOf(v){
+  if(v==null || v==='') return '';
+  if(v instanceof Date && !isNaN(v)){
+    const y=String(v.getFullYear()).slice(2), m=v.getMonth()+1;
+    return y+(m<10?'0':'')+m;
+  }
+  const s=String(v).trim();
+  let m=s.match(/(20)?(\d{2})\s*[-./년]\s*(\d{1,2})/);            // 2026-09 · 26-9 · 2026년 9월
+  if(m){ const mm=parseInt(m[3],10); if(mm>=1&&mm<=12) return m[2]+(mm<10?'0':'')+mm; }
+  m=s.match(/^(\d{2})(\d{2})$/);                                   // 2609
+  if(m){ const mm=parseInt(m[2],10); if(mm>=1&&mm<=12) return m[1]+m[2]; }
+  m=s.match(/^(\d{4})(\d{2})$/);                                   // 202609
+  if(m){ const mm=parseInt(m[2],10); if(mm>=1&&mm<=12) return String(m[1]).slice(2)+m[2]; }
+  const MON={jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
+  m=s.match(/^([A-Za-z]{3})[A-Za-z]*[\s-]*(\d{2,4})$/);            // Sep-26 · September 2026
+  if(m){ const mm=MON[m[1].toLowerCase()]; if(mm) return String(m[2]).slice(-2)+(mm<10?'0':'')+mm; }
+  // 엑셀 날짜값(1900 기준 일련번호)
+  const n=Number(s);
+  if(isFinite(n) && n>20000 && n<80000){
+    const d=new Date(Date.UTC(1899,11,30)+n*86400000);
+    const y=String(d.getUTCFullYear()).slice(2), mm=d.getUTCMonth()+1;
+    return y+(mm<10?'0':'')+mm;
+  }
+  return '';
+}
+async function handleSimNeedUpload(ev){
+  const ru=(lang==='ru');
+  const file=ev.target.files && ev.target.files[0];
+  ev.target.value='';
+  if(!file) return;
+  if(!canEditPsi()){ alert(ru?'Нет прав.':'올릴 권한이 없습니다.'); return; }
+  try{
+    const buf=await file.arrayBuffer();
+    const wb=XLSX.read(new Uint8Array(buf),{type:'array'});
+    let done=null;
+    for(const sn of wb.SheetNames){
+      // 숫자는 raw 로, 머리글·연월은 화면에 보이는 글자로 읽는다.
+      //   (연월 칸은 '2026-09-01' 날짜값이라 raw 로 읽으면 시차 때문에 하루 밀릴 수 있다)
+      const a=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:''});
+      const aT=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:'',raw:false});
+      // '발주필요' 머리글 찾기
+      let hr=-1, pnCol=-1; const need=[];
+      for(let r=0;r<Math.min(aT.length,30) && hr<0;r++){
+        const row=aT[r]||[]; const cols=[]; let pc=-1;
+        row.forEach((v,c)=>{ const s=String(v==null?'':v).replace(/\s+/g,'');
+          if(s.indexOf('발주필요')>=0) cols.push(c);
+          if(pc<0 && s.indexOf('품번')>=0) pc=c; });
+        if(cols.length){ hr=r; pnCol=pc; cols.forEach(c=>need.push(c)); }
+      }
+      if(hr<0) continue;
+      if(pnCol<0) pnCol=Math.max(0, need[0]-1);      // 품번 머리글이 없으면 발주필요 바로 왼쪽 열
+      // 각 발주필요 열의 연월 — 머리글 바로 윗줄에서 찾고, 없으면 위로 더 훑는다
+      const cols=[];
+      need.forEach(c=>{
+        let ym='';
+        for(let r=hr-1;r>=0 && r>=hr-4 && !ym;r--){
+          ym=simNeedYmOf((aT[r]||[])[c]) || simNeedYmOf((a[r]||[])[c]);
+        }
+        if(ym) cols.push({c, ym});
+      });
+      if(!cols.length) continue;
+      const hit={}, missSet={}; let n=0, tot=0;
+      for(let r=hr+1;r<a.length;r++){
+        const row=a[r]||[];
+        const raw=String(row[pnCol]==null?'':row[pnCol]).trim();
+        if(!raw) continue;
+        // 적힌 품번이 대표품번이 아니면(호환품번·최종품번) 그 대표품번을 찾아 쓴다
+        const key=normPN(raw);
+        let rep=(getPNInfo(raw)||getPNInfo(key))?raw:'';
+        if(!rep) rep=findMasterRep(raw)||findMasterRep(key)||'';
+        cols.forEach(cc=>{
+          const q=Math.round(Number(String(row[cc.c]==null?'':row[cc.c]).replace(/[,\s]/g,''))||0);
+          if(!(q>0)) return;
+          if(!rep){ missSet[raw]=1; return; }
+          hit[rep+'|'+cc.ym]=q; n++; tot+=q;
+        });
+      }
+      const miss=Object.keys(missSet);
+      if(n || miss.length){ done={hit, n, tot, sheet:sn, yms:[...new Set(cols.map(x=>x.ym))], miss}; break; }
+    }
+    if(!done){
+      alert(ru?'Не найден заголовок «Дозаказ» или месяц над ним.'
+              :'\'발주필요\' 머리글이나 그 위의 연월을 찾지 못했습니다.\n\n'
+               +'· 머리글 한 칸에 \'발주필요\' 가 있어야 합니다.\n'
+               +'· 그 바로 위 칸에 2026-09 · Sep-26 같은 연월이 있어야 합니다.\n'
+               +'· 품번 열 머리글에 \'품번\' 이 들어가야 합니다.');
+      return;
+    }
+    const ymTxt=done.yms.map(y=>psiYmLabel(y)).join(', ');
+    if(!confirm(ru ? ('Загрузить «Дозаказ»? '+ymTxt+' · позиций '+done.n+', всего '+done.tot.toLocaleString())
+                   : ('발주필요를 넣습니다.\n대상 달: '+ymTxt+'\n품번 '+done.n+'건 · 수량 합계 '+done.tot.toLocaleString()
+                      +'\n\n같은 칸에 적혀 있던 값은 이 값으로 바뀝니다. 계속할까요?'))) return;
+    await loadPoReqs(true);
+    let put=0, locked=0, bumped=0;
+    Object.keys(done.hit).forEach(k=>{
+      const p=k.split('|'), rep=p[0], ym=p[1];
+      if(typeof poReqLockedFor==='function' && poReqLockedFor(rep, ym)){ locked++; return; }
+      const raw=done.hit[k];
+      const q=(typeof simNeedMoq==='function')?simNeedMoq(rep, raw):raw;
+      if(q!==raw) bumped++;
+      const before=_simNeed[k];
+      _simNeed[k]=q; _simNeedNew[k]=1; put++;
+      if(typeof ktHistAdd==='function') ktHistAdd('sim.need', k, (before==null?'':before), q);
+    });
+    saveSimMan();
+    renderSIM();
+    alert(ru ? ('Готово: '+put)
+             : ('발주필요 '+put+'건을 넣었습니다.'
+                +(bumped?('\nMOQ 에 못 미쳐 올려 적은 것 '+bumped+'건'):'')
+                +(locked?('\n승인이 끝나 잠긴 '+locked+'건은 건너뛰었습니다.'):'')
+                +(done.miss.length?('\n품번조회에 없어 넣지 못한 품번 '+done.miss.length+'건: '
+                   +done.miss.slice(0,8).join(', ')+(done.miss.length>8?' …':'')):'')));
+  }catch(e){ console.error(e); alert(ru?'Ошибка чтения файла.':'파일을 읽지 못했습니다.'); }
 }
 // ── 손으로 적은 실제선적·발주필요를 담아 둔다 ──────────────
 //   전에는 화면에서만 쓰고 버려서, 새로 고치거나 다른 화면에 다녀오면 사라졌다.
