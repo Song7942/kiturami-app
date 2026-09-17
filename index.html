@@ -14400,8 +14400,7 @@ function renderPSI(){
       }else if(psiSimOn && man!=null){ nd=simNeedMoq(g.rep, man); }
       // 합계 줄에 더할 값은 일단 묶음마다 담아 두고, 아래에서 남은 묶음만 골라 더한다
       //   (선적계획·발주필요 같은 열로 거르면 빠진 묶음은 합계에서도 빠져야 한다)
-      gAcc[y]=Object.assign(gAcc[y]||{}, {need:nd,
-                                          need0:((man!=null)?ndAuto:0), needd:((man!=null)?(nd-ndAuto):0),
+      gAcc[y]=Object.assign(gAcc[y]||{}, {need:nd, need0:ndAuto, needd:(nd-ndAuto),
                                           addSt, plan, arrIn:arrive[i], sh:realSh});
       if(psiSimOn && i+1<ymsAll.length) shipPlan[i+1]+=nd;   // 이 달 발주분은 다음 달에 나간다
       const sAttr=' data-rep="'+escapeHtml(g.rep)+'" data-ym="'+y+'"'+ktHistAttr('sim.sh', g.rep+'|'+y)
@@ -14419,15 +14418,13 @@ function renderPSI(){
                               '\nMOQ: '+gMoq.toLocaleString())):'')+'"';
       // 발주후 재고 = 그 발주분이 들어오는 달의 재고(발주필요를 더한 값). 보유월과 같은 기준.
       const st2=(psiSimOn && ai>i) ? (arrSt+nd) : null;
-      // 발주필요(자동계산) 칸은 손으로 적거나 엑셀로 올린 칸에만 채운다.
-      //   적지 않은 칸은 발주필요에 이미 자동계산값이 들어가 있으므로 비워 둔다.
-      const hasMan=(man!=null);
-      const nd0Show=hasMan?ndAuto:null;
-      const ndDiff=hasMan?(nd-ndAuto):0;
-      g.sim[y]={plan, need:nd, need0:nd0Show, needd:ndDiff, st2, mo2:m2};   // 거르개·정렬이 볼 수 있게 담아 둔다
+      // 발주필요(자동계산) 칸은 손으로 적었든 아니든 늘 '셈해 낸 값' 을 적는다.
+      //   손으로 적지 않은 달은 발주필요와 자동계산이 같은 값이 된다.
+      const ndDiff=nd-ndAuto;
+      g.sim[y]={plan, need:nd, need0:ndAuto, needd:ndDiff, st2, mo2:m2};   // 거르개·정렬이 볼 수 있게 담아 둔다
       const val={sh:n(sh), plan:(plan?n(plan):''), i:n(inq), o:n(a.o), ms:n(a.ms), st:n(st),
                  mo:(mo==null?'':mo.toFixed(1)),
-                 need:(nd?n(nd):''), need0:(nd0Show!=null?n(nd0Show):''),
+                 need:(nd?n(nd):''), need0:(ndAuto?n(ndAuto):''),
                  needd:(ndDiff?((ndDiff>0?'+':'')+n(ndDiff)):''),
                  st2:(st2==null?'':n(st2)), mo2:(m2==null?'':m2.toFixed(1))};
       const low=psiLow(mo), high=psiHigh(mo);
@@ -14617,7 +14614,7 @@ async function downloadPSI(){
       const mn=(typeof _simNeed!=='undefined')?_simNeed[g.rep+'|'+y]:null;
       const nd=(mn!=null)?((typeof simNeedMoq==='function')?simNeedMoq(g.rep,mn):mn):nd0;
       const val={sh:a.sh, i:a.i, o:a.o, ms:a.ms, st:a.st, mo:moOf(a.st,a.fut),
-                 need:(nd||''), need0:((mn!=null)?(nd0||''):''), needd:((mn!=null)?((nd-nd0)||''):''),
+                 need:(nd||''), need0:(nd0||''), needd:((nd-nd0)||''),
                  st2:(a.st+nd), mo2:moOf(a.st+nd,a.fut)};
       gRaw.push(val); });
     if(SHOWTOT){ const tv=totOf(gRaw); SB.forEach(d=>gRow.push(tv[d.k])); }
@@ -14646,7 +14643,7 @@ async function downloadPSI(){
   const sRaw=[];
   yms.forEach(y=>{ const t=tot[y];
     const tn=needOf(t.st,t.fut);
-    const val={sh:t.sh, i:t.i, o:t.o, ms:t.ms, st:t.st, mo:moOf(t.st,t.fut), need:(tn||''), need0:'', needd:'', st2:(t.st+tn), mo2:moOf(t.st+tn,t.fut)};
+    const val={sh:t.sh, i:t.i, o:t.o, ms:t.ms, st:t.st, mo:moOf(t.st,t.fut), need:(tn||''), need0:(tn||''), needd:'', st2:(t.st+tn), mo2:moOf(t.st+tn,t.fut)};
     sRaw.push(val); });
   if(SHOWTOT){ const tv=totOf(sRaw); SB.forEach(d=>sumRow.push(tv[d.k])); }
   sRaw.forEach(val=>SB.forEach(d=>sumRow.push(val[d.k])));
