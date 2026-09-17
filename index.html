@@ -1439,6 +1439,7 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
         <span id="i18n-sim-needup">발주필요 업로드</span>
       </button>
       <input type="file" id="simNeedFile" accept=".xlsx,.xls" style="display:none" onchange="handleSimNeedUpload(event)">
+      <input type="file" id="simDropFile" accept=".xlsx,.xls" style="display:none" onchange="handleSimDrop(event)">
       <button class="dl-btn" id="simResetManualBtn" onclick="simResetManual()" title="손으로 고친 실제선적·발주필요를 원래 셈한 값으로 되돌립니다">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/></svg>
         <span id="i18n-sim-manual">수기 초기화</span>
@@ -10345,7 +10346,9 @@ function ktDropInitAll(){
   const X=(ko)=>'여기에 '+ko+' 엑셀(.xlsx)을 놓으세요';
   const R=(ru)=>'Отпустите файл Excel ('+ru+') здесь';
   ktDropInit('pane-psi',       'psiFileInput',    X('PSI'),      R('PSI'));
-  ktDropInit('pane-sim',       'psiFileInput',    X('PSI'),      R('PSI'));
+  ktDropInit('pane-sim',       'simDropFile',
+             '여기에 발주필요 또는 PSI 엑셀(.xlsx)을 놓으세요',
+             'Отпустите файл Excel (дозаказ или PSI) здесь');
   ktDropInit('pane-po',        'poFileInput',     X('발주'),     R('заказы'));
   ktDropInit('pane-pn',        'pnFileInput',     X('품번'),     R('артикулы'));
   ktDropInit('pane-prod',      'prodFileInput',   X('제품목록'), R('изделия'));
@@ -13818,6 +13821,27 @@ function simNeedYmOf(v){
     return y+(mm<10?'0':'')+mm;
   }
   return '';
+}
+// 발주시뮬레이션에 파일을 떨궜을 때 — 파일을 들여다보고 갈라 보낸다.
+//   '발주필요' 머리글이 있으면 발주필요 올리기, 아니면 PSI 올리기.
+async function handleSimDrop(ev){
+  const file=ev.target.files && ev.target.files[0];
+  ev.target.value='';
+  if(!file) return;
+  let isNeed=false;
+  try{
+    const wb=XLSX.read(new Uint8Array(await file.arrayBuffer()),{type:'array'});
+    for(const sn of wb.SheetNames){
+      const a=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:'',raw:false});
+      for(let r=0;r<Math.min(a.length,30) && !isNeed;r++){
+        (a[r]||[]).forEach(v=>{ if(String(v==null?'':v).replace(/\s+/g,'').indexOf('발주필요')>=0) isNeed=true; });
+      }
+      if(isNeed) break;
+    }
+  }catch(e){}
+  const pass={ target:{ files:[file], value:'' } };
+  if(isNeed) return handleSimNeedUpload(pass);
+  if(typeof handlePSIUpload==='function') return handlePSIUpload(pass);
 }
 async function handleSimNeedUpload(ev){
   const ru=(lang==='ru');
