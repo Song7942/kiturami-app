@@ -8963,11 +8963,12 @@ function colOrdRow(key, label, checked, ru, chkClass){
     + ' style="display:flex;align-items:center;gap:6px;padding:3px 3px;border-radius:7px">'
     + '<span title="'+(ru?'Перетащите, чтобы изменить порядок':'끌어서 차례를 바꿉니다')+'"'
     + ' style="cursor:grab;color:var(--muted);font-size:11px;user-select:none;flex:none">⠿</span>'
+    // 이름은 줄여서 '대표…' 처럼 보이면 무슨 열인지 알 수 없다. 자리가 좁으면 두 줄로 흘린다.
     + (checked==null
-        ? '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escapeHtml(lab)+'</span>'
-        : ('<label style="display:flex;align-items:center;gap:7px;cursor:pointer;flex:1;min-width:0">'
+        ? '<span title="'+escapeHtml(lab)+'" style="flex:1;min-width:0;word-break:break-word">'+escapeHtml(lab)+'</span>'
+        : ('<label title="'+escapeHtml(lab)+'" style="display:flex;align-items:center;gap:7px;cursor:pointer;flex:1;min-width:0">'
           + '<input type="checkbox" class="'+(chkClass||'mcChk')+'" data-k="'+escapeHtml(String(key))+'" '+(checked?'checked':'')+' style="cursor:pointer;flex:none">'
-          + '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escapeHtml(lab)+'</span></label>'))
+          + '<span style="min-width:0;word-break:break-word">'+escapeHtml(lab)+'</span></label>'))
     + '<button type="button" class="co-up" title="'+(ru?'Вверх':'위로')+'" style="'+COL_ORD_BTN+'">▲</button>'
     + '<button type="button" class="co-dn" title="'+(ru?'Вниз':'아래로')+'" style="'+COL_ORD_BTN+'">▼</button>'
     + '</div>';
@@ -12987,8 +12988,9 @@ function openPsiColsPanel(){
   const ordFix=colOrdApply(psiOrdScope(), PSI_COL_DEFS.filter(d=>d.fixed&&(!d.koOnly||isKo)&&(!d.perm||canViewExportCtrl())));
   const ordSub=colOrdApply(psiOrdScopeSub(), psiColDefsFor().filter(d=>!d.fixed));
   box.innerHTML=
-    '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;width:330px;max-width:92vw;'
-      +'box-shadow:0 16px 44px #000a;font-size:12px;color:var(--text)">'
+    // 두 칸으로 나눠 놓은 창이라 좁으면 열 이름이 잘린다. 이름이 다 보이도록 넉넉히 잡는다.
+    '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;width:470px;max-width:94vw;'
+      +'max-height:92vh;overflow:auto;box-shadow:0 16px 44px #000a;font-size:12px;color:var(--text)">'
     + '<div style="padding:12px 14px;border-bottom:1px solid var(--border);font-weight:700;font-size:13px">'+(ru?'Столбцы':'보기 — 열 선택')+'</div>'
     + '<div style="padding:10px 14px;display:flex;gap:18px">'
       + '<div style="flex:1;min-width:0"><div style="font-size:11px;color:var(--muted);margin-bottom:3px">'+(ru?'Артикул':'품번 정보')+'</div>'
@@ -13892,7 +13894,7 @@ async function handleSimNeedUpload(ev){
         if(ym) cols.push({c, ym});
       });
       if(!cols.length) continue;
-      const hit={}, missSet={}; let n=0, tot=0;
+      const hit={}, missSet={}; let n=0, tot=0, merged=0;
       for(let r=hr+1;r<a.length;r++){
         const row=a[r]||[];
         const raw=String(row[pnCol]==null?'':row[pnCol]).trim();
@@ -13905,11 +13907,15 @@ async function handleSimNeedUpload(ev){
           const q=Math.round(Number(String(row[cc.c]==null?'':row[cc.c]).replace(/[,\s]/g,''))||0);
           if(!(q>0)) return;
           if(!rep){ missSet[raw]=1; return; }
-          hit[rep+'|'+cc.ym]=q; n++; tot+=q;
+          // 발주필요는 대표품번 단위로 담는다. 호환품번이 달라도 대표품번이 같으면
+          //   한 칸으로 모이므로 덮어쓰지 말고 더한다(전에는 나중 줄이 앞 줄을 지웠다).
+          const k=rep+'|'+cc.ym;
+          if(hit[k]==null){ hit[k]=q; n++; } else { hit[k]+=q; merged++; }
+          tot+=q;
         });
       }
       const miss=Object.keys(missSet);
-      if(n || miss.length){ done={hit, n, tot, sheet:sn, yms:[...new Set(cols.map(x=>x.ym))], miss}; break; }
+      if(n || miss.length){ done={hit, n, tot, merged, sheet:sn, yms:[...new Set(cols.map(x=>x.ym))], miss}; break; }
     }
     if(!done){
       alert(ru?'Не найден заголовок «Дозаказ» или месяц над ним.'
@@ -13930,6 +13936,7 @@ async function handleSimNeedUpload(ev){
     if(!confirm(ru ? ('Загрузить «Дозаказ»? '+ymTxt+' · позиций '+done.n+', всего '+done.tot.toLocaleString()
                       +(willDrop.length?('\nБудет удалено (нет в файле): '+willDrop.length):''))
                    : ('발주필요를 넣습니다.\n대상 달: '+ymTxt+'\n품번 '+done.n+'건 · 수량 합계 '+done.tot.toLocaleString()
+                      +(done.merged?('\n(대표품번이 같아 한 칸으로 합친 줄 '+done.merged+'건)'):'')
                       +'\n\n그 달의 발주필요는 이 파일 내용으로 통째로 바뀝니다.'
                       +(willDrop.length?('\n파일에 없어 지워질 칸: '+willDrop.length+'건'):'')
                       +'\n\n계속할까요?'))) return;
@@ -13942,27 +13949,32 @@ async function handleSimNeedUpload(ev){
       if(typeof ktHistAdd==='function') ktHistAdd('sim.need', k, (before==null?'':before), '');
       dropped++;
     });
-    let put=0, locked=0, bumped=0;
+    let put=0, locked=0, bumped=0, putTot=0, lockedTot=0;
     Object.keys(done.hit).forEach(k=>{
       const p=k.split('|'), rep=p[0], ym=p[1];
-      if(typeof poReqLockedFor==='function' && poReqLockedFor(rep, ym)){ locked++; return; }
+      if(typeof poReqLockedFor==='function' && poReqLockedFor(rep, ym)){ locked++; lockedTot+=done.hit[k]; return; }
       const raw=done.hit[k];
       const q=(typeof simNeedMoq==='function')?simNeedMoq(rep, raw):raw;
       if(q!==raw) bumped++;
       const before=_simNeed[k];
-      _simNeed[k]=q; _simNeedNew[k]=1; put++;
+      _simNeed[k]=q; _simNeedNew[k]=1; put++; putTot+=q;
       if(typeof ktHistAdd==='function') ktHistAdd('sim.need', k, (before==null?'':before), q);
     });
-    saveSimMan();
-    renderSIM();
-    alert(ru ? ('Готово: '+put+(dropped?(' / удалено '+dropped):''))
-             : ('발주필요 '+put+'건을 넣었습니다.'
-                +(dropped?('\n파일에 없어 지운 칸 '+dropped+'건'):'')
-                +(bumped?('\nMOQ 에 못 미쳐 올려 적은 것 '+bumped+'건'):'')
-                +(locked?('\n승인이 끝나 잠긴 '+locked+'건은 건너뛰었습니다.'):'')
-                +(done.miss.length?('\n품번조회에 없어 넣지 못한 품번 '+done.miss.length+'건: '
-                   +done.miss.slice(0,8).join(', ')+(done.miss.length>8?' …':'')):'')));
-  }catch(e){ console.error(e); alert(ru?'Ошибка чтения файла.':'파일을 읽지 못했습니다.'); }
+    // 담는 것과 다시 그리는 것이 어긋나도 결과는 알려 준다.
+    //   (전에는 여기서 걸리면 바깥 catch 로 빠져 '파일을 읽지 못했습니다' 만 뜨거나
+    //    아무 알림도 없이 끝나, 넣긴 넣었는데 몇 건인지 알 수 없었다)
+    let failed='';
+    try{ saveSimMan(); }catch(e){ console.error(e); failed=String(e&&e.message||e); }
+    try{ renderSIM(); }catch(e){ console.error(e); failed=failed||String(e&&e.message||e); }
+    alert((ru ? ('Готово: '+put+' · '+putTot.toLocaleString()+(dropped?(' / удалено '+dropped):''))
+              : ('발주필요 '+put+'건 · 수량 합계 '+putTot.toLocaleString()+' 을 넣었습니다.'
+                 +(dropped?('\n파일에 없어 지운 칸 '+dropped+'건'):'')
+                 +(bumped?('\nMOQ 에 못 미쳐 올려 적은 것 '+bumped+'건'):'')
+                 +(locked?('\n승인이 끝나 잠긴 '+locked+'건(수량 '+lockedTot.toLocaleString()+')은 건너뛰었습니다.'):'')
+                 +(done.miss.length?('\n품번조회에 없어 넣지 못한 품번 '+done.miss.length+'건: '
+                    +done.miss.slice(0,8).join(', ')+(done.miss.length>8?' …':'')):'')))
+          +(failed?('\n\n'+(ru?'Ошибка при отрисовке: ':'화면을 다시 그리는 중 오류: ')+failed):''));
+  }catch(e){ console.error(e); alert((ru?'Ошибка чтения файла.':'파일을 읽지 못했습니다.')+'\n['+String(e&&e.message||e)+']'); }
 }
 // ── 손으로 적은 실제선적·발주필요를 담아 둔다 ──────────────
 //   전에는 화면에서만 쓰고 버려서, 새로 고치거나 다른 화면에 다녀오면 사라졌다.
