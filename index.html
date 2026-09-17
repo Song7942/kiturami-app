@@ -14305,6 +14305,11 @@ function renderPSI(){
         if(a && (Number(a.sh)||0)>0) startedYm[ymsAll[yi]]=1; } }
   }
   const planStarted=!!(psiSimOn && _simPlanYm && startedYm[_simPlanYm]);
+  // 그 달에 발주필요를 손으로 적었거나 엑셀로 올렸는가.
+  //   올린 달은 '사람이 정한 달' 로 보아, 적지 않은 품번은 발주하지 않는 것으로 둔다(빈칸).
+  //   올리지 않은 달은 전처럼 셈해 낸 값을 그대로 쓴다.
+  const manYm={};
+  Object.keys(_simNeed||{}).forEach(k=>{ const p=String(k).split('|'); if(p[1]) manYm[p[1]]=1; });
   const shTot={};                         // 달마다 실제선적 합계(손으로 고친 값 포함)
   const shipTot={}, inTot={};             // 달마다 발주분의 선적·입고 합계
   const arrStTot={}, arrFutTot={};        // 달마다 '그 발주분이 들어오는 달'의 재고·앞으로 출고 합계
@@ -14393,8 +14398,9 @@ function renderPSI(){
         // 이것을 빼먹으면 이미 발주한 물량을 또 발주하라고 나온다.
         if(i+1<ymsAll.length) got+=shipPlan[i+1];
         arrSt=at.st+got; arrFut=at.fut;
-        ndAuto=simNeedMoq(g.rep, needOf(arrSt, arrFut));   // 손으로 적은 값이 없을 때 셈해 내는 수량
-        nd=(man!=null)?simNeedMoq(g.rep, man):ndAuto;      // MOQ 아래로는 안 내려간다
+        ndAuto=simNeedMoq(g.rep, needOf(arrSt, arrFut));   // 늘 셈해 내는 수량(자동계산 열)
+        // 그 달을 손으로 정했으면 적은 값만 쓰고, 안 적은 품번은 0(빈칸).
+        nd=(man!=null)?simNeedMoq(g.rep, man):(manYm[y]?0:ndAuto);
         m2=moOf(arrSt+nd, arrFut);            // 발주후 보유월 = 그 발주분이 들어오는 달의 보유월
         gAcc[y]=Object.assign(gAcc[y]||{}, {arrSt, arrFut});
       }else if(psiSimOn && man!=null){ nd=simNeedMoq(g.rep, man); }
@@ -14593,6 +14599,10 @@ async function downloadPSI(){
   const needOf=(st,fut)=>{ const avg=fut/c.avgN;
     if(avg<=0) return Math.max(0, Math.ceil(-st));            // 앞으로 나갈 게 없어도 모자란 재고는 채운다
     return Math.max(0, Math.ceil(avg*c.avgN-st)); };
+  // 그 달을 손으로 정했는가(화면과 같은 규칙으로 발주필요를 적기 위해)
+  const manYmX={};
+  if(typeof _simNeed!=='undefined')
+    Object.keys(_simNeed||{}).forEach(k=>{ const p=String(k).split('|'); if(p[1]) manYmX[p[1]]=1; });
   const tot={}; yms.forEach(y=>tot[y]={sh:0,i:0,o:0,ms:0,st:0,fut:0});
   let totOpen=0;
   const body=[];
@@ -14612,7 +14622,8 @@ async function downloadPSI(){
       // 발주필요: 손으로 적어 둔 값이 있으면 그것을, 없으면 셈해 낸 값을 쓴다(화면과 같은 규칙)
       const nd0=(typeof simNeedMoq==='function')?simNeedMoq(g.rep, needOf(a.st,a.fut)):needOf(a.st,a.fut);
       const mn=(typeof _simNeed!=='undefined')?_simNeed[g.rep+'|'+y]:null;
-      const nd=(mn!=null)?((typeof simNeedMoq==='function')?simNeedMoq(g.rep,mn):mn):nd0;
+      // 화면과 같은 규칙: 그 달을 손으로 정했으면 적은 값만, 안 적은 품번은 0
+      const nd=(mn!=null)?((typeof simNeedMoq==='function')?simNeedMoq(g.rep,mn):mn):(manYmX[y]?0:nd0);
       const val={sh:a.sh, i:a.i, o:a.o, ms:a.ms, st:a.st, mo:moOf(a.st,a.fut),
                  need:(nd||''), need0:(nd0||''), needd:((nd-nd0)||''),
                  st2:(a.st+nd), mo2:moOf(a.st+nd,a.fut)};
