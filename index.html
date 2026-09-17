@@ -14067,7 +14067,13 @@ function renderPSI(){
   //   안 그러면 방금 올린 발주필요가 줄째로 사라져, 넣은 수량과 화면 합계가 어긋난다.
   const hasNeed=r=>psiSimOn && (typeof _simNeed!=='undefined')
     && yms.some(y=>_simNeed[simNeedKey(r.rep, y)]!=null);
-  if(!psiShowZero()) items=items.filter(it=>hasVal(it.v) || hasNeed(it.r));
+  // 발주시뮬레이션 열(선적계획·발주필요·자동계산·차이·발주후 재고·보유월)에 값이 있으면 남긴다.
+  //   이 값들은 화면 밖 달(발주분이 들어오는 달)까지 보고 나오므로 ymsAll 로 본다.
+  //   보유월(mo)이 나온다는 건 앞으로 나갈 몫이 있다는 뜻이라, 발주필요·발주후 값이 붙는다.
+  const simCols=psiSimOn?['plan','need','need0','needd','st2','mo2'].filter(has):[];
+  const hasSimVal=v=>simCols.length>0 && ymsAll.some(y=>{ const x=v[y]||{};
+    return (x.sh||0)||(x.i||0)||(x.o||0)||(x.ms||0)||(x.st||0)||(x.mo!=null); });
+  if(!psiShowZero()) items=items.filter(it=>hasVal(it.v) || hasNeed(it.r) || hasSimVal(it.v));
 
   _psiAllItems=items;
   const fkeys=Object.keys(_psiFilters);
