@@ -14063,7 +14063,11 @@ function renderPSI(){
   // 재고에 숫자가 남아 있으면 움직임이 없어도 보여 준다.
   const hasVal=v=>yms.some(y=>{ const x=v[y]||{};
     return (x.sh||0)||(x.i||0)||(x.o||0)||(x.ms||0)||(x.st||0); });
-  if(!psiShowZero()) items=items.filter(it=>hasVal(it.v));
+  // 발주필요를 손으로 넣어 둔(또는 엑셀로 올린) 품번은 PSI 수치가 0 이어도 보여 준다.
+  //   안 그러면 방금 올린 발주필요가 줄째로 사라져, 넣은 수량과 화면 합계가 어긋난다.
+  const hasNeed=r=>psiSimOn && (typeof _simNeed!=='undefined')
+    && yms.some(y=>_simNeed[simNeedKey(r.rep, y)]!=null);
+  if(!psiShowZero()) items=items.filter(it=>hasVal(it.v) || hasNeed(it.r));
 
   _psiAllItems=items;
   const fkeys=Object.keys(_psiFilters);
