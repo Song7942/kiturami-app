@@ -8939,12 +8939,18 @@ function colOrdApply(scope, defs){
   const saved=colOrdList(scope);
   if(!saved || !saved.length) return defs.slice();
   const pos={}; saved.forEach((k,i)=>{ pos[k]=i; });
-  return defs.map((d,i)=>({d,i})).sort((a,b)=>{
-    const ka=(a.d.k!=null)?a.d.k:a.d[0], kb=(b.d.k!=null)?b.d.k:b.d[0];
-    const pa=(ka in pos)?pos[ka]:(saved.length+a.i);
-    const pb=(kb in pos)?pos[kb]:(saved.length+b.i);
-    return (pa-pb)||(a.i-b.i);
-  }).map(x=>x.d);
+  const keyOf=d=>(d && d.k!=null)?d.k:d[0];
+  // 저장해 둔 차례에 없는 열(뒤에 새로 생긴 열)은 맨 뒤로 보내지 않고,
+  // 원래 목록에서 바로 앞에 있던 열 뒤에 끼워 넣는다.
+  let last=-1, sub=0;
+  const rank=defs.map((d,i)=>{
+    const k=keyOf(d);
+    if(k in pos){ last=pos[k]; sub=0; return [last, 0, i]; }
+    sub++; return [last, sub, i];
+  });
+  return defs.map((d,i)=>({d, r:rank[i]}))
+    .sort((a,b)=> (a.r[0]-b.r[0]) || (a.r[1]-b.r[1]) || (a.r[2]-b.r[2]))
+    .map(x=>x.d);
 }
 function colOrdSet(scope, keys){ colOrdBag()[scope]=keys.slice(); }
 function colOrdClear(scope){ delete colOrdBag()[scope]; }
@@ -12807,6 +12813,10 @@ const PSI_SIM_COL_DEFS=[
   {k:'need', w:70, ko:'발주필요', ru:'Дозаказ',
    hko:'발주필요<br><span style="font-weight:400;font-size:9px;color:var(--muted)">(다음달선적)</span>',
    hru:'Дозаказ<br><span style="font-weight:400;font-size:9px;color:var(--muted)">(отгр. в след. мес.)</span>'},
+  {k:'need0', w:70, ko:'발주필요<br>(자동계산)', ru:'Дозаказ<br>(расчёт)',
+   hko:'발주필요<br><span style="font-weight:400;font-size:9px;color:var(--muted)">(자동계산)</span>',
+   hru:'Дозаказ<br><span style="font-weight:400;font-size:9px;color:var(--muted)">(расчёт)</span>'},
+  {k:'needd', w:64, ko:'발주필요<br>차이', ru:'Дозаказ<br>разница'},
   {k:'st2',  w:66, ko:'발주후<br>재고',   ru:'Остаток<br>после'},
   {k:'mo2',  w:60, ko:'발주후<br>보유월', ru:'Мес.<br>после'}
 ];
@@ -13280,13 +13290,14 @@ function psiFilterIcon(key){
 // 선적계획·발주필요·발주후재고·발주후보유월은 자료에 있는 값이 아니라
 // 그리면서 대표품번 묶음마다 셈해 내는 값이다. 그래서 호환품번 줄(it.v)에는 없고,
 // 거르개·정렬도 줄이 아니라 묶음을 기준으로 해야 한다. 그린 값을 g.sim 에 담아 둔다.
-const PSI_SIM_VAL_COLS={plan:1, need:1, st2:1, mo2:1};
+const PSI_SIM_VAL_COLS={plan:1, need:1, need0:1, needd:1, st2:1, mo2:1};
 function psiIsSimCol(key){ return !!PSI_SIM_VAL_COLS[String(key).split(':')[0]]; }
 function psiSimValStr(f,v){
   if(v==null||v==='') return '';
   const num=Number(v);
   if(f==='mo2') return num.toFixed(1);
   if(f==='st2') return String(num);
+  if(f==='needd') return num ? String(num) : '';   // 차이는 0 이면 빈칸(부호는 그대로 둔다)
   return num ? String(num) : '';                   // 선적계획·발주필요는 0 이면 빈칸으로 찍힌다
 }
 function psiSimNum(g,key){
@@ -14178,7 +14189,7 @@ function renderPSI(){
   const tdS='padding:4px 5px;font-size:11px;overflow:hidden;border-bottom:1px solid var(--border)';
   const numS=tdS+';text-align:right;white-space:nowrap';
   // 기간합계: 선적·선적계획·입고·출고·미출·발주필요는 더하고, 재고·보유월은 마지막 달 값을 쓴다
-  const TOT_SUM={sh:1,plan:1,i:1,o:1,ms:1,need:1}, TOT_LAST={st:1,mo:1,st2:1,mo2:1};
+  const TOT_SUM={sh:1,plan:1,i:1,o:1,ms:1,need:1,need0:1,needd:1}, TOT_LAST={st:1,mo:1,st2:1,mo2:1};
   const totOf=raws=>{ const t={}, last=raws[raws.length-1]||{};
     SB.forEach(d=>{ const k=d.k;
       if(TOT_SUM[k]){ let sm=0; raws.forEach(r=>{ const v=Number(r[k]); if(isFinite(v)) sm+=v; }); t[k]=sm; }
@@ -14275,6 +14286,7 @@ function renderPSI(){
   // 하위 호환품번 줄이 없으면(대표품번만 보기) 띠를 칠하지 않는다 — 모든 줄이 같은 색이면 의미가 없다
   const band=psiShowKids()?' band':'';
   const needTot={};                       // 달마다 발주필요 합계(손으로 고친 값 포함)
+  const need0Tot={}, needdTot={};         // 달마다 발주필요(자동계산)·차이 합계
   const stAdd={};                         // 달마다 '앞선 달 발주분'이 재고에 더해진 양의 합계
   // 어느 달이든 실제선적이 한 줄이라도 잡히면 '그 달부터 나가기 시작했다'고 본다.
   //   그러면 그 달에 못 나간 몫은 품번을 가리지 않고 모두 다음 달 선적계획으로 넘어가고,
@@ -14369,7 +14381,7 @@ function renderPSI(){
       // 이 달 발주분은 ai 달에 들어온다. 그 달 보유월이 N 이 되도록 수량을 잡는다.
       //   그 사이에 들어올 기(旣)선적분·앞선 발주분은 이미 셈에 들어 있다.
       const ai=ymsAll.indexOf(simArriveYm(y));
-      let nd=0, m2=null, arrSt=0, arrFut=0;
+      let nd=0, ndAuto=0, m2=null, arrSt=0, arrFut=0;
       if(psiSimOn && ai>i){
         const at=g.agg[ymsAll[ai]];
         let got=0; for(let k=0;k<=ai;k++) got+=arrive[k];
@@ -14377,14 +14389,15 @@ function renderPSI(){
         // 이것을 빼먹으면 이미 발주한 물량을 또 발주하라고 나온다.
         if(i+1<ymsAll.length) got+=shipPlan[i+1];
         arrSt=at.st+got; arrFut=at.fut;
-        nd=(man!=null)?man:needOf(arrSt, arrFut);
-        nd=simNeedMoq(g.rep, nd);             // MOQ 아래로는 안 내려간다(손으로 고친 값도 마찬가지)
+        ndAuto=simNeedMoq(g.rep, needOf(arrSt, arrFut));   // 손으로 적은 값이 없을 때 셈해 내는 수량
+        nd=(man!=null)?simNeedMoq(g.rep, man):ndAuto;      // MOQ 아래로는 안 내려간다
         m2=moOf(arrSt+nd, arrFut);            // 발주후 보유월 = 그 발주분이 들어오는 달의 보유월
         gAcc[y]=Object.assign(gAcc[y]||{}, {arrSt, arrFut});
       }else if(psiSimOn && man!=null){ nd=simNeedMoq(g.rep, man); }
       // 합계 줄에 더할 값은 일단 묶음마다 담아 두고, 아래에서 남은 묶음만 골라 더한다
       //   (선적계획·발주필요 같은 열로 거르면 빠진 묶음은 합계에서도 빠져야 한다)
-      gAcc[y]=Object.assign(gAcc[y]||{}, {need:nd, addSt, plan, arrIn:arrive[i], sh:realSh});
+      gAcc[y]=Object.assign(gAcc[y]||{}, {need:nd, need0:ndAuto, needd:(nd-ndAuto),
+                                          addSt, plan, arrIn:arrive[i], sh:realSh});
       if(psiSimOn && i+1<ymsAll.length) shipPlan[i+1]+=nd;   // 이 달 발주분은 다음 달에 나간다
       const sAttr=' data-rep="'+escapeHtml(g.rep)+'" data-ym="'+y+'"'+ktHistAttr('sim.sh', g.rep+'|'+y)
         +' onclick="simShipFocus(this)" title="'
@@ -14401,17 +14414,20 @@ function renderPSI(){
                               '\nMOQ: '+gMoq.toLocaleString())):'')+'"';
       // 발주후 재고 = 그 발주분이 들어오는 달의 재고(발주필요를 더한 값). 보유월과 같은 기준.
       const st2=(psiSimOn && ai>i) ? (arrSt+nd) : null;
-      g.sim[y]={plan, need:nd, st2, mo2:m2};   // 거르개·정렬이 볼 수 있게 담아 둔다
+      const ndDiff=nd-ndAuto;
+      g.sim[y]={plan, need:nd, need0:ndAuto, needd:ndDiff, st2, mo2:m2};   // 거르개·정렬이 볼 수 있게 담아 둔다
       const val={sh:n(sh), plan:(plan?n(plan):''), i:n(inq), o:n(a.o), ms:n(a.ms), st:n(st),
                  mo:(mo==null?'':mo.toFixed(1)),
-                 need:(nd?n(nd):''), st2:(st2==null?'':n(st2)), mo2:(m2==null?'':m2.toFixed(1))};
+                 need:(nd?n(nd):''), need0:(ndAuto?n(ndAuto):''),
+                 needd:(ndDiff?((ndDiff>0?'+':'')+n(ndDiff)):''),
+                 st2:(st2==null?'':n(st2)), mo2:(m2==null?'':m2.toFixed(1))};
       const low=psiLow(mo), high=psiHigh(mo);
       const manMark=d=>(psiSimOn && ((d.k==='sh' && manShip!=null) || (d.k==='need' && man!=null)))?' man':'';
       const lockMark=d=>(ndLock && d.k==='need')?' lockd':'';
       const html=SB.map((d,j)=>'<td class="n'+(j===0?b:'')+((low&&d.k==='mo')?' low':'')+((high&&d.k==='mo')?' hi':'')
         +((d.k==='need'||(psiSimOn&&d.k==='sh'))?' ed':'')+manMark(d)+lockMark(d)+'"'
         +(d.k==='need'?nAttr:((psiSimOn&&d.k==='sh')?sAttr:''))+'>'+val[d.k]+'</td>').join('');
-      return {html, raw:{sh:sh, plan:plan, i:inq, o:a.o, ms:a.ms, st:st, mo:mo, need:nd, st2:st2, mo2:m2}};
+      return {html, raw:{sh:sh, plan:plan, i:inq, o:a.o, ms:a.ms, st:st, mo:mo, need:nd, need0:ndAuto, needd:ndDiff, st2:st2, mo2:m2}};
     });
     const gCells=gEach.map(x=>x.html).join('');
     const gTot=totOf(gEach.map(x=>x.raw));
@@ -14433,11 +14449,11 @@ function renderPSI(){
       const kEach=yms.map((y,i)=>{
         const x=v[y]||{sh:0,i:0,o:0,ms:0,st:0};
         const b=i===0?' bl':'';
-        const val={sh:n(x.sh), plan:'', i:n(x.i), o:n(x.o), ms:n(x.ms), st:n(x.st), mo:'', need:'', st2:'', mo2:''};
+        const val={sh:n(x.sh), plan:'', i:n(x.i), o:n(x.o), ms:n(x.ms), st:n(x.st), mo:'', need:'', need0:'', needd:'', st2:'', mo2:''};
         const dim={sh:1, ms:1};
         // 보유월은 대표품번 줄에만 적으므로 하위 줄에는 색을 칠하지 않는다
         const html=SB.map((d,j)=>'<td class="n'+(j===0?b:'')+(dim[d.k]?' dim':'')+'">'+val[d.k]+'</td>').join('');
-        return {html, raw:{sh:x.sh, plan:null, i:x.i, o:x.o, ms:x.ms, st:x.st, mo:null, need:null, st2:null, mo2:null}};
+        return {html, raw:{sh:x.sh, plan:null, i:x.i, o:x.o, ms:x.ms, st:x.st, mo:null, need:null, need0:null, needd:null, st2:null, mo2:null}};
       });
       const cells=kEach.map(z=>z.html).join('');
       const kTot=totOf(kEach.map(z=>z.raw));
@@ -14469,6 +14485,8 @@ function renderPSI(){
     yms.forEach(y=>{ const s=x.gAcc[y]; if(!s) return;
       if(s.arrSt!=null){ arrStTot[y]=(arrStTot[y]||0)+s.arrSt; arrFutTot[y]=(arrFutTot[y]||0)+s.arrFut; }
       needTot[y]=(needTot[y]||0)+(s.need||0);
+      need0Tot[y]=(need0Tot[y]||0)+(s.need0||0);
+      needdTot[y]=(needdTot[y]||0)+(s.needd||0);
       stAdd[y]=(stAdd[y]||0)+(s.addSt||0);
       shipTot[y]=(shipTot[y]||0)+(s.plan||0);
       shTot[y]=(shTot[y]||0)+(s.sh||0);
@@ -14489,6 +14507,7 @@ function renderPSI(){
     const tn=psiSimOn ? (needTot[y]||0) : 0;
     return { sh:(psiSimOn?(shTot[y]||0):t.sh), plan:(shipTot[y]||0), i:t.i+(inTot[y]||0), o:t.o, ms:t.ms, st:tst,
              mo:moOf(tst,t.fut), need:tn,
+             need0:(psiSimOn?(need0Tot[y]||0):0), needd:(psiSimOn?(needdTot[y]||0):0),
              st2:((psiSimOn && arrFutTot[y]) ? ((arrStTot[y]||0)+tn) : null),
              mo2:((psiSimOn && arrFutTot[y]) ? moOf((arrStTot[y]||0)+tn, arrFutTot[y]) : null) }; });
   const sumTot=totOf(sumRaws);
@@ -14503,7 +14522,10 @@ function renderPSI(){
     const ts2=(psiSimOn && arrFutTot[y]) ? ((arrStTot[y]||0)+tn) : null;
     const val={sh:n(psiSimOn?(shTot[y]||0):t.sh), plan:(shipTot[y]?n(shipTot[y]):''), i:n(t.i+(inTot[y]||0)), o:n(t.o), ms:n(t.ms),
                st:n(tst), mo:(mo==null?'':mo.toFixed(1)),
-               need:(tn?n(tn):''), st2:(ts2==null?'':n(ts2)), mo2:(tm2==null?'':tm2.toFixed(1))};
+               need:(tn?n(tn):''),
+               need0:(psiSimOn&&need0Tot[y]?n(need0Tot[y]):''),
+               needd:(psiSimOn&&needdTot[y]?((needdTot[y]>0?'+':'')+n(needdTot[y])):''),
+               st2:(ts2==null?'':n(ts2)), mo2:(tm2==null?'':tm2.toFixed(1))};
     const dim={sh:1, ms:1, mo:1, mo2:1};
     return SB.map((d,j)=>'<th style="'+sumS+';text-align:right'+(j===0?b:'')+(dim[d.k]?';color:var(--muted)':'')+'">'+val[d.k]+'</th>').join('');
   }).join('');
@@ -14552,7 +14574,7 @@ async function downloadPSI(){
   yms.forEach(y=>{ g1.push(psiYmLabel(y)); SB.slice(1).forEach(()=>g1.push('')); SB.forEach(d=>g2.push(String(ru?d.ru:d.ko).replace(/<br>/g,' '))); });
   const moOf=(st,fut)=>{ const avg=fut/c.avgN; return avg>0 ? Math.round((st/avg)*10)/10 : ''; };
   // 기간합계: 더할 열과 마지막 달 값을 쓰는 열(화면과 같은 규칙)
-  const TOT_SUM={sh:1,plan:1,i:1,o:1,ms:1,need:1}, TOT_LAST={st:1,mo:1,st2:1,mo2:1};
+  const TOT_SUM={sh:1,plan:1,i:1,o:1,ms:1,need:1,need0:1,needd:1}, TOT_LAST={st:1,mo:1,st2:1,mo2:1};
   const totOf=raws=>{ const t={}, last=raws[raws.length-1]||{};
     SB.forEach(d=>{ const k=d.k;
       if(TOT_SUM[k]){ let sm=0; raws.forEach(r=>{ const v=Number(r[k]); if(isFinite(v)) sm+=v; }); t[k]=sm; }
@@ -14578,8 +14600,13 @@ async function downloadPSI(){
     const gRaw=[];
     yms.forEach(y=>{ const a=g.agg[y]||{sh:0,i:0,o:0,ms:0,st:0,fut:0}; const t=tot[y];
       t.sh+=a.sh; t.i+=a.i; t.o+=a.o; t.ms+=a.ms; t.st+=a.st; t.fut+=a.fut;
-      const nd=needOf(a.st,a.fut);
-      const val={sh:a.sh, i:a.i, o:a.o, ms:a.ms, st:a.st, mo:moOf(a.st,a.fut), need:(nd||''), st2:(a.st+nd), mo2:moOf(a.st+nd,a.fut)};
+      // 발주필요: 손으로 적어 둔 값이 있으면 그것을, 없으면 셈해 낸 값을 쓴다(화면과 같은 규칙)
+      const nd0=(typeof simNeedMoq==='function')?simNeedMoq(g.rep, needOf(a.st,a.fut)):needOf(a.st,a.fut);
+      const mn=(typeof _simNeed!=='undefined')?_simNeed[g.rep+'|'+y]:null;
+      const nd=(mn!=null)?((typeof simNeedMoq==='function')?simNeedMoq(g.rep,mn):mn):nd0;
+      const val={sh:a.sh, i:a.i, o:a.o, ms:a.ms, st:a.st, mo:moOf(a.st,a.fut),
+                 need:(nd||''), need0:(nd0||''), needd:((nd-nd0)||''),
+                 st2:(a.st+nd), mo2:moOf(a.st+nd,a.fut)};
       gRaw.push(val); });
     if(SHOWTOT){ const tv=totOf(gRaw); SB.forEach(d=>gRow.push(tv[d.k])); }
     gRaw.forEach(val=>SB.forEach(d=>gRow.push(val[d.k])));
@@ -14594,7 +14621,7 @@ async function downloadPSI(){
       if(SHOWOPEN) row.push(v._open||0);
       const kRaw=[];
       yms.forEach(y=>{ const x=v[y]||{};
-        const val={sh:x.sh??'', i:x.i??'', o:x.o??'', ms:x.ms??'', st:x.st??'', mo:'', need:'', st2:'', mo2:''};
+        const val={sh:x.sh??'', i:x.i??'', o:x.o??'', ms:x.ms??'', st:x.st??'', mo:'', need:'', need0:'', needd:'', st2:'', mo2:''};
         kRaw.push(val); });
       if(SHOWTOT){ const tv=totOf(kRaw); SB.forEach(d=>row.push(tv[d.k])); }
       kRaw.forEach(val=>SB.forEach(d=>row.push(val[d.k])));
@@ -14607,7 +14634,7 @@ async function downloadPSI(){
   const sRaw=[];
   yms.forEach(y=>{ const t=tot[y];
     const tn=needOf(t.st,t.fut);
-    const val={sh:t.sh, i:t.i, o:t.o, ms:t.ms, st:t.st, mo:moOf(t.st,t.fut), need:(tn||''), st2:(t.st+tn), mo2:moOf(t.st+tn,t.fut)};
+    const val={sh:t.sh, i:t.i, o:t.o, ms:t.ms, st:t.st, mo:moOf(t.st,t.fut), need:(tn||''), need0:(tn||''), needd:'', st2:(t.st+tn), mo2:moOf(t.st+tn,t.fut)};
     sRaw.push(val); });
   if(SHOWTOT){ const tv=totOf(sRaw); SB.forEach(d=>sumRow.push(tv[d.k])); }
   sRaw.forEach(val=>SB.forEach(d=>sumRow.push(val[d.k])));
