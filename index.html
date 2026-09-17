@@ -13883,10 +13883,28 @@ async function handleSimNeedUpload(ev){
       return;
     }
     const ymTxt=done.yms.map(y=>psiYmLabel(y)).join(', ');
-    if(!confirm(ru ? ('Загрузить «Дозаказ»? '+ymTxt+' · позиций '+done.n+', всего '+done.tot.toLocaleString())
+    // 그 달에 이미 적혀 있는데 엑셀에는 없는 칸 — 지울 대상
+    const months={}; done.yms.forEach(y=>{ months[y]=1; });
+    const willDrop=Object.keys(_simNeed).filter(k=>{
+      const p=k.split('|');
+      return months[p[1]] && !(k in done.hit)
+        && !(typeof poReqLockedFor==='function' && poReqLockedFor(p[0], p[1]));
+    });
+    if(!confirm(ru ? ('Загрузить «Дозаказ»? '+ymTxt+' · позиций '+done.n+', всего '+done.tot.toLocaleString()
+                      +(willDrop.length?('\nБудет удалено (нет в файле): '+willDrop.length):''))
                    : ('발주필요를 넣습니다.\n대상 달: '+ymTxt+'\n품번 '+done.n+'건 · 수량 합계 '+done.tot.toLocaleString()
-                      +'\n\n같은 칸에 적혀 있던 값은 이 값으로 바뀝니다. 계속할까요?'))) return;
+                      +'\n\n그 달의 발주필요는 이 파일 내용으로 통째로 바뀝니다.'
+                      +(willDrop.length?('\n파일에 없어 지워질 칸: '+willDrop.length+'건'):'')
+                      +'\n\n계속할까요?'))) return;
     await loadPoReqs(true);
+    // 1) 파일에 없는 칸 지우기 (승인이 끝나 잠긴 칸은 그대로 둔다)
+    let dropped=0;
+    willDrop.forEach(k=>{
+      const before=_simNeed[k];
+      delete _simNeed[k]; delete _simNeedNew[k];
+      if(typeof ktHistAdd==='function') ktHistAdd('sim.need', k, (before==null?'':before), '');
+      dropped++;
+    });
     let put=0, locked=0, bumped=0;
     Object.keys(done.hit).forEach(k=>{
       const p=k.split('|'), rep=p[0], ym=p[1];
@@ -13900,8 +13918,9 @@ async function handleSimNeedUpload(ev){
     });
     saveSimMan();
     renderSIM();
-    alert(ru ? ('Готово: '+put)
+    alert(ru ? ('Готово: '+put+(dropped?(' / удалено '+dropped):''))
              : ('발주필요 '+put+'건을 넣었습니다.'
+                +(dropped?('\n파일에 없어 지운 칸 '+dropped+'건'):'')
                 +(bumped?('\nMOQ 에 못 미쳐 올려 적은 것 '+bumped+'건'):'')
                 +(locked?('\n승인이 끝나 잠긴 '+locked+'건은 건너뛰었습니다.'):'')
                 +(done.miss.length?('\n품번조회에 없어 넣지 못한 품번 '+done.miss.length+'건: '
