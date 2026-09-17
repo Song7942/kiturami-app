@@ -13949,7 +13949,7 @@ async function handleSimNeedUpload(ev){
       if(typeof ktHistAdd==='function') ktHistAdd('sim.need', k, (before==null?'':before), '');
       dropped++;
     });
-    let put=0, locked=0, bumped=0, putTot=0, lockedTot=0;
+    let put=0, locked=0, bumped=0, putTot=0, lockedTot=0, rawTot=0;
     Object.keys(done.hit).forEach(k=>{
       const p=k.split('|'), rep=p[0], ym=p[1];
       if(typeof poReqLockedFor==='function' && poReqLockedFor(rep, ym)){ locked++; lockedTot+=done.hit[k]; return; }
@@ -13957,7 +13957,7 @@ async function handleSimNeedUpload(ev){
       const q=(typeof simNeedMoq==='function')?simNeedMoq(rep, raw):raw;
       if(q!==raw) bumped++;
       const before=_simNeed[k];
-      _simNeed[k]=q; _simNeedNew[k]=1; put++; putTot+=q;
+      _simNeed[k]=q; _simNeedNew[k]=1; put++; putTot+=q; rawTot+=raw;
       if(typeof ktHistAdd==='function') ktHistAdd('sim.need', k, (before==null?'':before), q);
     });
     // 담는 것과 다시 그리는 것이 어긋나도 결과는 알려 준다.
@@ -13968,6 +13968,8 @@ async function handleSimNeedUpload(ev){
     try{ renderSIM(); }catch(e){ console.error(e); failed=failed||String(e&&e.message||e); }
     alert((ru ? ('Готово: '+put+' · '+putTot.toLocaleString()+(dropped?(' / удалено '+dropped):''))
               : ('발주필요 '+put+'건 · 수량 합계 '+putTot.toLocaleString()+' 을 넣었습니다.'
+                 +(putTot!==rawTot?('\n(파일 '+rawTot.toLocaleString()+' → MOQ 로 올려 '+putTot.toLocaleString()
+                    +', +'+(putTot-rawTot).toLocaleString()+')'):'')
                  +(dropped?('\n파일에 없어 지운 칸 '+dropped+'건'):'')
                  +(bumped?('\nMOQ 에 못 미쳐 올려 적은 것 '+bumped+'건'):'')
                  +(locked?('\n승인이 끝나 잠긴 '+locked+'건(수량 '+lockedTot.toLocaleString()+')은 건너뛰었습니다.'):'')
