@@ -673,7 +673,8 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
   <button class="tab-btn" style="display:none" onclick="switchTab('ship')"      id="tab-ship"><span id="i18n-tab-ship">🚢 선적/입고현황</span></button>
   <button class="tab-btn" style="display:none" onclick="switchTab('ms')"        id="tab-ms"><span id="i18n-tab-ms">⚠ 미출현황</span></button>
   <button class="tab-btn" style="display:none" onclick="switchTab('blk')"       id="tab-blk"><span id="i18n-tab-blk">⛔ 사용불가</span></button>
-  <button class="tab-btn" style="display:none" onclick="switchTab('moq')"       id="tab-moq"><span id="i18n-tab-moq">📦 MOQ</span></button>
+  <button class="tab-btn" style="display:none" onclick="switchTab('moq')"       id="tab-moq"><span id="i18n-tab-moq">ð¦ MOQ</span></button>
+  <button class="tab-btn" style="display:none" onclick="switchTab('ss')"        id="tab-ss"><span id="i18n-tab-ss">🛡 안전재고</span></button>
   <button class="tab-btn" style="display:none" onclick="switchTab('sim')"       id="tab-sim"><span id="i18n-tab-sim">📈 발주시뮬레이션</span></button>
   <button class="tab-btn" style="display:none;position:relative" onclick="switchTab('memberManagement')" id="tab-memberManagement"><span id="i18n-tab-membermgmt">👥 회원관리</span><span id="memberMgmtUnreadDot" style="display:none;position:absolute;top:4px;right:2px;width:8px;height:8px;border-radius:50%;background:#ef4444;box-shadow:0 0 0 2px var(--bg)"></span></button>
   <button class="tab-btn" style="display:none" onclick="switchTab('reset')" id="tab-reset"><span id="i18n-tab-reset">🗑️ 초기화</span></button>
@@ -1197,6 +1198,51 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
   </div>
 </div>
 
+<!-- ══ 안전재고 (PSI 안에서 여는 화면) ══
+     통합문서 SafetyStock 시트의 L·M 열을 그대로 셈해 보여 준다.
+     바탕값은 '최근 12개월 출고 + 미출'(대표품번 기준)이라 달이 바뀌면 저절로 따라간다. -->
+<div class="tab-pane" id="pane-ss">
+  <div class="fixed-top">
+    <div class="search-bar">
+      <div class="search-wrap">
+        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+        <input type="text" id="ssInput" placeholder="대표품번·호환품번·품명·규격으로 검색…" oninput="debouncedRenderSS()">
+      </div>
+      <div class="count-badge" id="ssBadge"></div>
+      <span style="font-size:11px;color:var(--muted)" id="i18n-ss-baselab">기준월</span><input type="text" id="ssBaseYm" list="ktOutYmOpts" placeholder="2026-09" onfocus="this.select()" onchange="ssSetBase()" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"><button type="button" class="ym-pick" onclick="ktYmPickOpen('ssBaseYm',this)">▼</button>
+      <button class="dl-btn" onclick="openSsViewPanel()" title="표에 보일 열과 그 차례를 고릅니다(아이디별로 저장)">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
+        <span id="i18n-ss-cols">보기</span>
+      </button>
+      <button class="dl-btn" onclick="ssResetFilters()" title="헤더 필터·정렬을 기본값으로">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+        <span id="i18n-ss-reset">필터 초기화</span>
+      </button>
+      <button class="dl-btn" onclick="downloadSS()">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        <span id="i18n-ss-dl">엑셀 다운로드</span>
+      </button>
+      <button class="dl-btn" onclick="switchTab('psi')" title="PSI 로 돌아가기" style="background:#0ea5e9;border-color:#0ea5e9;color:#fff">
+        <span id="i18n-ss-psi">PSI</span>
+      </button>
+    </div>
+    <div style="font-size:11px;color:var(--muted);padding:0 4px 4px" id="ssNote"></div>
+      <div class="tbl-scrollbar" id="ssTblScrollbar" style="display:none;margin:4px 0 0">
+        <div class="tbl-scrollbar-thumb" id="ssTblScrollbarThumb"></div>
+      </div>
+  </div>
+  <div class="scroll-body" id="scrollBodySS" style="padding:0 12px 72px">
+    <div class="pn-body-wrap">
+      <table id="ssTable" style="width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed">
+        <colgroup id="ssColgroup"></colgroup>
+        <thead id="ssThead"></thead>
+        <tbody id="ssTbody"></tbody>
+      </table>
+    </div>
+    <div id="ssEmpty" class="no-result" style="display:none"></div>
+  </div>
+</div>
+
 <!-- ══ 사용불가 (PSI 안에서 여는 화면) ══
      품번조회의 목록에 '수량'(엑셀 Blocked 열)을 붙여 보여 준다.
      이 수량은 달마다 PSI 재고에서 고정으로 빠진다(달마다 쌓이지 않는다). -->
@@ -1515,6 +1561,10 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
       <button class="dl-btn" onclick="switchTab('moq')" title="품번별 최소 발주수량(MOQ)" style="background:#0d9488;border-color:#0d9488;color:#fff">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a4 4 0 018 0v2"/></svg>
         <span id="i18n-moq-tab">MOQ</span>
+      </button>
+      <button class="dl-btn" onclick="switchTab('ss')" title="최근 12개월 출고+미출로 셈한 안전재고(통합문서 SafetyStock 과 같은 산식)" style="background:#059669;border-color:#059669;color:#fff">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 4.5-3.2 7.9-8 9-4.8-1.1-8-4.5-8-9V6l8-3z"/></svg>
+        <span id="i18n-ss-tab">안전재고</span>
       </button>
       <button class="dl-btn" onclick="switchTab('blk')" title="사용불가 수량(재고에서 고정으로 빠집니다)" style="background:#78716c;border-color:#78716c;color:#fff">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -2248,6 +2298,7 @@ function switchTab(tab){
   if(tab==='ms'){ loadMSTab(); }
   if(tab==='blk'){ loadBLKTab(); }
   if(tab==='moq'){ loadMOQTab(); }
+  if(tab==='ss'){ loadSSTab(); }
   try{ ktPaneTitle(tab); }catch(e){}       // 도구줄 맨 앞에 화면 이름을 붙인다
   if(tab==='sim'){ loadSimTab(); }
   if(tab==='adminOrders'){ loadAdminOrdersTab(); }
@@ -2310,6 +2361,15 @@ function refreshPsiTexts(){
   set('i18n-moq-man','수기 초기화','Сброс ручных');
   set('i18n-moq-clear','전체 지우기','Очистить всё');
   set('i18n-moq-cols',COLS[0],COLS[1]);
+  // 안전재고
+  set('i18n-tab-ss','🛡 안전재고','🛡 Страховой запас');
+  set('i18n-ss-tab','안전재고','Страховой запас');
+  set('i18n-ss-cols',COLS[0],COLS[1]);
+  set('i18n-ss-reset','필터 초기화','Сброс фильтров');
+  set('i18n-ss-dl',DL[0],DL[1]);
+  set('i18n-ss-baselab','기준월','Базовый месяц');
+  ph('ssInput','대표품번·호환품번·품명·규격으로 검색…','Поиск: артикул, наименование, хар-ки…');
+  if(ktPaneOn('pane-ss') && typeof renderSS==='function') renderSS();
   set('i18n-moq-up','엑셀 업로드','Загрузить Excel');
   set('i18n-moq-dl',DL[0],DL[1]);
   ph('moqInput','대표품번·호환품번·품명·규격으로 검색…','Поиск: артикул, наименование, хар-ки…');
@@ -6647,7 +6707,7 @@ function applyPermTabVisibility(skipSwitch){
   if(!pobj){
     // 권한을 아직 부여하지 않은 회원: 품번조회 하나만 연다.
     // 종전에는 역할 기본값을 그대로 써서 주문·재고관리·가격정보까지 다 보였다.
-    ['tab-order','tab-parts','tab-adminOrders','tab-inventory','tab-shipments','tab-price','tab-psi','tab-po','tab-ship','tab-ms','tab-blk','tab-moq','tab-sim','tab-memberManagement']
+    ['tab-order','tab-parts','tab-adminOrders','tab-inventory','tab-shipments','tab-price','tab-psi','tab-po','tab-ship','tab-ms','tab-blk','tab-moq','tab-ss','tab-sim','tab-memberManagement']
       .forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display='none'; });
     const pnEl=document.getElementById('tab-pn'); if(pnEl) pnEl.style.display='';
     // KITURAMI(본사)는 권한 기록이 없어도 PSI 를 본다
@@ -6663,6 +6723,7 @@ function applyPermTabVisibility(skipSwitch){
   const msEl=document.getElementById('tab-ms'); if(msEl) msEl.style.display='none';
   const blkEl=document.getElementById('tab-blk'); if(blkEl) blkEl.style.display='none';
   const moqEl=document.getElementById('tab-moq'); if(moqEl) moqEl.style.display='none';
+  const ssEl=document.getElementById('tab-ss'); if(ssEl) ssEl.style.display='none';
   const simEl=document.getElementById('tab-sim'); if(simEl) simEl.style.display='none';
   const map={ 'tab-pn':'pn','tab-inventory':'inventory','tab-shipments':'shipments','tab-price':'price','tab-memberManagement':'memberManagement' };
   Object.keys(map).forEach(tabId=>{ const el=document.getElementById(tabId); if(el) el.style.display = pobj[map[tabId]].v ? '' : 'none'; });
@@ -12095,6 +12156,313 @@ async function handleMoqUpload(ev){
     alert(ru ? ('Загружено: '+done.n+' арт.') : ('MOQ 를 반영했습니다.\n품번 '+done.n+'개'));
   }catch(e){ console.error(e); alert(ru?'Ошибка чтения файла.':'파일을 읽지 못했습니다.'); }
 }
+// ══════════════════════════════════════════
+// 안전재고 — 통합문서 SafetyStock 시트의 L·M 열
+//   바탕값: 대표품번마다 '최근 12개월 출고 + 미출' (기준월 앞의 12개월)
+//   L = 12개월 합이 0→0, 3이하→3, 5이하→5, 7이하→7, 10이하→10, 그 위→12
+//   M = 12개월 가운데 둘째로 큰 달 + 셋째로 큰 달
+//   달이 바뀌면 12개월 창이 저절로 밀려 숫자가 따라 바뀐다.
+// ══════════════════════════════════════════
+function ssBaseYm(){
+  const el=document.getElementById('ssBaseYm');
+  const v=el?String(el.value||'').replace(/\D/g,''):'';
+  if(v.length===4) return v;
+  if(v.length===6) return v.slice(2);
+  return (typeof psiNowYm==='function')?psiNowYm():'';
+}
+// 기준월 바로 앞의 12개월 (오래된 달부터)
+function ssYms(){
+  const base=ssBaseYm(); if(!base) return [];
+  const out=[];
+  for(let i=12;i>=1;i--) out.push(psiYmAdd(base,-i));
+  return out;
+}
+function ssSetBase(){ renderSS(); }
+// 대표품번 한 개의 12개월 값 — 그 묶음의 호환품번을 모두 더한다(통합문서 피벗과 같은 단위)
+function ssMonthly(p, yms){
+  const out=yms.map(()=>0);
+  const seen={};
+  ((p&&p.compats)||[]).forEach(c=>{
+    const k=normPN(c); if(!k || seen[k]) return; seen[k]=1;
+    const rec=psiData[k]; const d=rec?rec.data:null; if(!d) return;
+    yms.forEach((y,i)=>{ out[i]+=psiOutRaw(d,y)+psiMissOf(d,y); });
+  });
+  return out;
+}
+function ssCalcL(v){
+  const s=v.reduce((a,b)=>a+(Number(b)||0),0);
+  if(s===0) return 0;
+  if(s<=3) return 3;
+  if(s<=5) return 5;
+  if(s<=7) return 7;
+  if(s<=10) return 10;
+  return 12;
+}
+function ssCalcM(v){
+  const s=v.map(x=>Number(x)||0).sort((a,b)=>b-a);
+  return (s[1]||0)+(s[2]||0);
+}
+const SS_COL_DEFS=[
+  {k:'name',  w:200, ko:'품명',        ru:'Наименование', koOnly:1},
+  {k:'spec',  w:170, ko:'규격',        ru:'Хар-ки',       koOnly:1},
+  {k:'nameRu',w:250, ko:'러시아어 품명', ru:'Наименование', ruOnly:1},
+  {k:'rep',   w:112, ko:'대표품번',    ru:'Осн. артикул'},
+  {k:'final', w:112, ko:'최종품번',    ru:'Конечный артикул'},
+  {k:'exp',   w:70,  ko:'수출제한',    ru:'Эксп.контроль'},
+  {k:'note',  w:64,  ko:'단종',        ru:'Снято'},
+  {k:'sum',   w:92,  ko:'12개월 합',   ru:'Сумма 12 мес.'},
+  {k:'ss1',   w:92,  ko:'안전재고 L',  ru:'Страх. запас L'},
+  {k:'ss2',   w:92,  ko:'안전재고 M',  ru:'Страх. запас M'}
+];
+function ssColsMap(){
+  const src=(psiCols && psiCols.__ss && typeof psiCols.__ss==='object')?psiCols.__ss:null;
+  const m={}; SS_COL_DEFS.forEach(d=>m[d.k]=true);
+  if(src) SS_COL_DEFS.forEach(d=>{ if(typeof src[d.k]==='boolean') m[d.k]=src[d.k]; });
+  return m;
+}
+function ssVisCols(){
+  const isKo=(lang!=='ru'), m=ssColsMap();
+  const base=SS_COL_DEFS.filter(d=>(!d.koOnly||isKo) && (!d.ruOnly||!isKo) && (d.k!=='exp'||canViewExportCtrl()));
+  const v=base.filter(d=>m[d.k]!==false);
+  return colOrdApply('ss', v.length?v:base.filter(d=>d.k==='ss1'));
+}
+// 한 줄의 값. 대표품번 줄이라 품명·규격·단종·수출제한은 최종품번 것을 쓴다(PSI 와 같은 규칙).
+function ssCellVal(key, r){
+  switch(key){
+    case 'rep':   return String(r.rep||'');
+    case 'final': return normBadgePN(r.final||'');
+    case 'sum':   return String(r._sum);
+    case 'ss1':   return String(r._l);
+    case 'ss2':   return String(r._m);
+  }
+  const fin=String(r.final||'');
+  const fr=Object.assign({}, r, {_split:true, _compat:fin});
+  switch(key){
+    case 'name':   return pnColText('name', fr);
+    case 'spec':   return pnColText('spec', fr);
+    case 'nameRu': return String(pnNameRu(r.rep,'')||'');
+    case 'exp':    return (fin && isExportRestricted(fin))?'O':'';
+    case 'note':   return pnColText('note', fr);
+  }
+  return '';
+}
+let _ssFilters={}, _ssSort={key:null,dir:'asc'}, _ssAll=[], _ssFiltered=[];
+function ssColLabel(k){ const d=SS_COL_DEFS.find(x=>x.k===k); return d?(lang==='ru'?d.ru:d.ko):k; }
+function ssResetFilters(){ _ssFilters={}; _ssSort={key:null,dir:'asc'}; closeSSFilter(); renderSS(); }
+function debouncedRenderSS(){ clearTimeout(window._ssT); window._ssT=setTimeout(renderSS,220); }
+function ssIsNum(k){ return k==='sum'||k==='ss1'||k==='ss2'; }
+function ssFilterIcon(key){
+  const on=(_ssFilters[key]!=null)||(_ssSort.key===key);
+  const glyph=(_ssSort.key===key)?(_ssSort.dir==='desc'?'▼':'▲'):'▾';
+  return '<span onclick="event.stopPropagation();openSSFilter(&quot;'+key+'&quot;,this)"'
+    + ' title="'+(lang==='ru'?'Фильтр и сортировка':'필터·정렬')+'"'
+    + ' style="display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:16px;margin-left:4px;'
+    + 'border-radius:4px;border:1px solid '+(on?'var(--accent2)':'var(--border)')+';'
+    + 'background:'+(on?'var(--accent2)':'var(--bg)')+';color:'+(on?'#fff':'var(--muted)')+';'
+    + 'font-size:10px;line-height:1;cursor:pointer;vertical-align:middle">'+glyph+'</span>'
+    + ((_ssFilters[key]!=null)?PSI_DOT:'');
+}
+function _ssEsc(e){ if(e.key==='Escape') closeSSFilter(); }
+function _ssOutside(e){ const b=document.getElementById('ssFilterPop'); if(b && !b.contains(e.target)) closeSSFilter(); }
+function closeSSFilter(){ const b=document.getElementById('ssFilterPop'); if(b) b.remove();
+  document.removeEventListener('mousedown', _ssOutside); document.removeEventListener('keydown', _ssEsc); }
+function openSSFilter(key, anchor){
+  closeSSFilter();
+  const ru=(lang==='ru');
+  const set=new Set(); (_ssAll||[]).forEach(r=>set.add(ssCellVal(key,r)));
+  let vals=[...set];
+  vals = ssIsNum(key) ? vals.sort((a,b)=>{ if(a==='') return 1; if(b==='') return -1; return parseFloat(a)-parseFloat(b); })
+                      : vals.sort((a,b)=>a.localeCompare(b,'ko'));
+  const cur=_ssFilters[key]?new Set(_ssFilters[key]):null;
+  const rect=anchor.getBoundingClientRect(), W=258;
+  const box=document.createElement('div'); box.id='ssFilterPop';
+  box.style.cssText='position:fixed;top:'+(rect.bottom+4)+'px;left:'+Math.max(6,Math.min(rect.left, window.innerWidth-W-6))+'px;'
+    + 'z-index:9999;background:var(--surface2);border:1px solid var(--border);border-radius:10px;box-shadow:0 10px 30px #0009;'
+    + 'width:'+W+'px;font-size:12px;color:var(--text);overflow:hidden';
+  const sortBtn=(dir,txt)=>'<button class="ssf-sort" data-dir="'+dir+'" style="width:100%;text-align:left;padding:6px 8px;border:none;'
+    + 'background:'+((_ssSort.key===key&&_ssSort.dir===dir)?'var(--accent2)':'none')+';'
+    + 'color:'+((_ssSort.key===key&&_ssSort.dir===dir)?'#fff':'var(--text)')+';cursor:pointer;border-radius:6px;font-size:12px">'+txt+'</button>';
+  box.innerHTML='<div style="padding:8px 8px 6px;border-bottom:1px solid var(--border)">'
+    + '<div style="font-size:11px;color:var(--muted);margin:0 2px 5px">'+escapeHtml(ssColLabel(key))+'</div>'
+    + sortBtn('asc','▲ '+(ru?'По возрастанию':'오름차순 정렬'))
+    + sortBtn('desc','▼ '+(ru?'По убыванию':'내림차순 정렬'))+'</div>'
+    + '<div style="padding:8px">'
+    + '<input id="ssfSearch" type="text" placeholder="'+(ru?'Поиск значений…':'값 검색…')+'" style="width:100%;box-sizing:border-box;padding:5px 8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:12px">'
+    + '<label style="display:flex;align-items:center;gap:6px;padding:5px 4px 4px;cursor:pointer;font-weight:600;border-bottom:1px solid var(--border);margin-top:4px">'
+    + '<input type="checkbox" id="ssfAll" checked style="cursor:pointer;flex:none"><span>'+(ru?'(Выбрать все)':'(모두 선택)')+'</span></label>'
+    + '<div id="ssfList" style="max-height:230px;overflow:auto;margin-top:2px">'
+    + vals.map(v=>'<label class="ssf-item" data-v="'+escapeHtml(v)+'" style="display:flex;align-items:center;gap:6px;padding:4px 8px;cursor:pointer;line-height:1.3">'
+        +'<input type="checkbox" class="ssf-chk" '+((!cur||cur.has(v))?'checked':'')+' style="cursor:pointer;flex:none">'
+        +'<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(v===''?(ru?'(пусто)':'(비어 있음)'):escapeHtml(v))+'</span></label>').join('')
+    + '</div></div>'
+    + '<div style="display:flex;gap:6px;padding:8px;border-top:1px solid var(--border)">'
+    + '<button id="ssfApply" style="flex:1;padding:6px;border:none;border-radius:7px;background:var(--accent2);color:#fff;cursor:pointer;font-size:12px;font-weight:600">'+(ru?'ОК':'적용')+'</button>'
+    + '<button id="ssfClear" style="flex:1;padding:6px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);cursor:pointer;font-size:12px">'+(ru?'Сброс':'해제')+'</button>'
+    + '<button id="ssfCancel" style="flex:none;padding:6px 10px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);cursor:pointer;font-size:12px">'+(ru?'✕':'취소')+'</button>'
+    + '</div>';
+  document.body.appendChild(box);
+  box.querySelectorAll('.ssf-sort').forEach(b=>{ b.onclick=()=>{ _ssSort={key, dir:b.getAttribute('data-dir')}; closeSSFilter(); renderSS(); }; });
+  const listEl=box.querySelector('#ssfList'), allChk=box.querySelector('#ssfAll'), search=box.querySelector('#ssfSearch');
+  const items=()=>[...listEl.querySelectorAll('.ssf-item')];
+  const visItems=()=>items().filter(it=>it.style.display!=='none');
+  const syncAll=()=>{ const v=visItems(), c=v.filter(it=>it.querySelector('.ssf-chk').checked);
+    allChk.checked=v.length>0&&c.length===v.length; allChk.indeterminate=c.length>0&&c.length<v.length; };
+  search.oninput=()=>{ const q=search.value.trim().toLowerCase();
+    items().forEach(it=>{ const v=(it.getAttribute('data-v')||'').toLowerCase(); it.style.display=(!q||v.includes(q))?'':'none'; }); syncAll(); };
+  allChk.onchange=()=>{ visItems().forEach(it=> it.querySelector('.ssf-chk').checked=allChk.checked); };
+  listEl.addEventListener('change', syncAll); syncAll(); search.focus();
+  box.querySelector('#ssfApply').onclick=()=>{
+    const all=items(), checked=all.filter(it=>it.querySelector('.ssf-chk').checked).map(it=>it.getAttribute('data-v'));
+    if(checked.length===all.length) delete _ssFilters[key]; else _ssFilters[key]=checked;
+    closeSSFilter(); renderSS();
+  };
+  box.querySelector('#ssfClear').onclick=()=>{ delete _ssFilters[key]; if(_ssSort.key===key) _ssSort={key:null,dir:'asc'}; closeSSFilter(); renderSS(); };
+  box.querySelector('#ssfCancel').onclick=()=> closeSSFilter();
+  document.addEventListener('keydown', _ssEsc);
+  setTimeout(()=>document.addEventListener('mousedown', _ssOutside), 0);
+}
+function closeSsViewPanel(){ const b=document.getElementById('ssViewPop'); if(b) b.remove(); }
+function openSsViewPanel(){
+  closeSsViewPanel();
+  const ru=(lang==='ru'), isKo=(lang!=='ru'), m=ssColsMap();
+  const list=colOrdApply('ss', SS_COL_DEFS.filter(d=>(!d.koOnly||isKo) && (!d.ruOnly||!isKo) && (d.k!=='exp'||canViewExportCtrl())));
+  const box=document.createElement('div'); box.id='ssViewPop';
+  box.style.cssText='position:fixed;inset:0;z-index:10000;background:#0008;display:flex;align-items:center;justify-content:center';
+  box.innerHTML=
+    '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;width:320px;max-width:92vw;'
+      +'max-height:86vh;overflow:auto;box-shadow:0 16px 44px #000a;font-size:12px;color:var(--text)">'
+    + '<div style="padding:12px 14px;border-bottom:1px solid var(--border);font-weight:700;font-size:13px">'+(ru?'Вид — столбцы':'보기 — 열 선택·차례')+'</div>'
+    + '<div style="padding:10px 14px">'
+      + colOrdHint(ru)
+      + '<div id="ssColList" style="border:1px solid var(--border);border-radius:8px;padding:4px 6px">'
+      + list.map(d=>colOrdRow(d.k, (ru?d.ru:d.ko), m[d.k]!==false, ru, 'ssChk')).join('')
+      + '</div></div>'
+    + '<div style="display:flex;gap:7px;padding:11px 14px;border-top:1px solid var(--border)">'
+      + '<button id="svAll" style="flex:none;padding:7px 10px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);cursor:pointer;font-size:12px">'+(ru?'Все':'전체 선택')+'</button>'
+      + '<button id="svOrd" style="flex:none;padding:7px 10px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);cursor:pointer;font-size:12px">'+(ru?'Порядок по умолч.':'차례 되돌리기')+'</button>'
+      + '<button id="svClose" style="flex:1;padding:7px;border:none;border-radius:7px;background:var(--accent2);color:#fff;cursor:pointer;font-size:12px;font-weight:700">'+(ru?'Закрыть':'닫기')+'</button>'
+    + '</div></div>';
+  document.body.appendChild(box);
+  colOrdWire(box.querySelector('#ssColList'));
+  let done=false;
+  const commit=async()=>{
+    if(done) return; done=true;
+    const v={}; box.querySelectorAll('.ssChk').forEach(c=>{ v[c.getAttribute('data-k')]=c.checked; });
+    if(!psiCols || typeof psiCols!=='object') psiCols={};
+    psiCols.__ss=v;
+    colOrdSet('ss', colOrdRead(box.querySelector('#ssColList')));
+    closeSsViewPanel(); renderSS();
+    await savePsiCols();
+  };
+  box.querySelector('#svAll').onclick=()=>box.querySelectorAll('.ssChk').forEach(c=>c.checked=true);
+  box.querySelector('#svOrd').onclick=async()=>{ colOrdClear('ss'); done=true; closeSsViewPanel(); renderSS(); await savePsiCols(); };
+  box.querySelector('#svClose').onclick=commit;
+  box.onmousedown=(e)=>{ if(e.target===box) commit(); };
+}
+function ssBuildRows(){
+  const yms=ssYms();
+  const kwEl=document.getElementById('ssInput');
+  const kw=(kwEl?kwEl.value:'').trim().toLowerCase();
+  let list=(PN_DATA||[]).filter(p=>p && p.rep);
+  if(kw) list=list.filter(p=>searchRow(p.rep, kw, [p.name_ko,p.name_ru,p.spec,p.final].concat(p.compats||[])));
+  const out=[];
+  list.forEach(p=>{
+    const v=ssMonthly(p, yms);
+    const sum=v.reduce((a,b)=>a+b,0);
+    out.push(Object.assign({}, p, { _v:v, _sum:sum, _l:ssCalcL(v), _m:ssCalcM(v) }));
+  });
+  return out;
+}
+function renderSS(){
+  const pane=document.getElementById('pane-ss'); if(!pane) return;
+  const ru=(lang==='ru'), L=(ko,rr)=>(ru?rr:ko);
+  const yms=ssYms();
+  const el=document.getElementById('ssBaseYm');
+  if(el && !el.value) el.value=psiYmLabel(ssBaseYm());
+  let rows=ssBuildRows();
+  _ssAll=rows;
+  const fk=Object.keys(_ssFilters);
+  if(fk.length){ const sets=fk.map(k=>({k,set:new Set((_ssFilters[k]||[]).map(String))}));
+    rows=rows.filter(r=>sets.every(a=>a.set.has(ssCellVal(a.k,r)))); }
+  if(_ssSort.key){ const k=_ssSort.key, dir=(_ssSort.dir==='desc')?-1:1, num=ssIsNum(k);
+    rows=rows.slice().sort((a,b)=>{ const va=ssCellVal(k,a), vb=ssCellVal(k,b);
+      const ea=va==='', eb=vb==='';
+      if(ea&&eb) return 0; if(ea) return 1; if(eb) return -1;
+      return (num?((parseFloat(va)||0)-(parseFloat(vb)||0)):va.localeCompare(vb,'ko'))*dir; });
+  }else{
+    rows=rows.slice().sort((a,b)=>String(a.rep).localeCompare(String(b.rep)));
+  }
+  _ssFiltered=rows;
+  const CO=ssVisCols();
+  const badge=document.getElementById('ssBadge'); if(badge) badge.innerHTML='<b>'+rows.length+'</b>';
+  const note=document.getElementById('ssNote');
+  if(note){
+    const rng=yms.length?(psiYmLabel(yms[0])+' ~ '+psiYmLabel(yms[yms.length-1])):'';
+    note.textContent=L('최근 12개월('+rng+') 출고+미출로 셈합니다. '
+                       +'L = 합계 0→0, 3이하→3, 5이하→5, 7이하→7, 10이하→10, 그 위→12. '
+                       +'M = 둘째로 큰 달 + 셋째로 큰 달.',
+                       'Расчёт по расходу+невып. за 12 мес. ('+rng+'). L — по сумме, M — 2-й + 3-й максимум.');
+  }
+  const cg=document.getElementById('ssColgroup');
+  if(cg) cg.innerHTML=CO.map(d=>'<col style="width:'+d.w+'px">').join('');
+  const thS='padding:6px 5px;text-align:center;vertical-align:middle;position:sticky;top:0;z-index:3;'
+    +'background:var(--surface2);font-size:11px;white-space:nowrap;border-bottom:1px solid var(--border)';
+  const tSum=rows.reduce((a,r)=>a+r._sum,0), tL=rows.reduce((a,r)=>a+r._l,0), tM=rows.reduce((a,r)=>a+r._m,0);
+  const sumS=thS+';font-weight:700;background:var(--surface);top:27px';
+  const iFirst=CO.findIndex(d=>ssIsNum(d.k));
+  const lead=(iFirst<0?CO.length:iFirst);
+  const tail=CO.slice(lead).map(d=>{
+    const v=(d.k==='sum')?tSum:((d.k==='ss1')?tL:((d.k==='ss2')?tM:''));
+    return '<th style="'+sumS+';text-align:right">'+(v===''?'':v.toLocaleString())+'</th>'; }).join('');
+  const thead=document.getElementById('ssThead');
+  if(thead) thead.innerHTML='<tr>'+CO.map(d=>'<th style="'+thS+'">'+(ru?d.ru:d.ko)+ssFilterIcon(d.k)+'</th>').join('')+'</tr>'
+    + '<tr>'+(lead?('<th colspan="'+lead+'" style="'+sumS+';text-align:right">'
+        +escapeHtml(L('합계 '+rows.length+'개 품번','Итого '+rows.length))+'</th>'):'')+tail+'</tr>';
+  const tdS='padding:4px 6px;font-size:11px;border-bottom:1px solid var(--border)';
+  const codeS="font-family:'Courier New',monospace;font-size:9.5px;white-space:nowrap";
+  const sty={ name:tdS+';word-break:break-all', spec:tdS+';color:var(--muted);font-size:10px;word-break:break-all',
+              nameRu:tdS+';word-break:break-all', rep:tdS, final:tdS,
+              exp:tdS+';text-align:center;color:#ef4444;font-weight:700',
+              note:tdS+';text-align:center;color:#ef4444;font-weight:700',
+              sum:tdS+';text-align:right;color:var(--muted);white-space:nowrap',
+              ss1:tdS+';text-align:right;font-weight:700;white-space:nowrap',
+              ss2:tdS+';text-align:right;font-weight:700;white-space:nowrap' };
+  const tbody=document.getElementById('ssTbody');
+  if(tbody) tbody.innerHTML=rows.map(r=>'<tr>'+CO.map(d=>{
+      const v=ssCellVal(d.k,r);
+      const inner=(d.k==='rep'||d.k==='final')
+        ? (v?'<span style="'+codeS+'">'+escapeHtml(v)+'</span>':'')
+        : (ssIsNum(d.k) ? (Number(v)||0).toLocaleString() : escapeHtml(v));
+      return '<td style="'+sty[d.k]+'">'+inner+'</td>';
+    }).join('')+'</tr>').join('');
+  const empty=document.getElementById('ssEmpty');
+  if(empty){ empty.textContent=L('보여 줄 품번이 없습니다.','Нет данных.');
+             empty.style.display=rows.length?'none':'block'; }
+  updatePaneHBar('ss');
+}
+async function loadSSTab(){
+  if(!Object.keys(psiData).length) await loadPSI();
+  if(!PN_DATA.length) await loadPNOverrides();
+  if(typeof loadPsiCols==='function') await loadPsiCols();
+  psiFillOutRange();
+  renderSS();
+}
+function downloadSS(){
+  const ru=(lang==='ru');
+  const CO=ssVisCols();
+  const yms=ssYms();
+  const head=CO.map(d=>String(ru?d.ru:d.ko).replace(/<br>/g,' '))
+    .concat(yms.map(y=>psiYmLabel(y)));
+  const aoa=[head];
+  (_ssFiltered||[]).forEach(r=>{
+    aoa.push(CO.map(d=>{ const v=ssCellVal(d.k,r); return ssIsNum(d.k)?(Number(v)||0):v; })
+      .concat(r._v));
+  });
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols']=CO.map(d=>({wch:Math.max(8, Math.round(d.w/7))})).concat(yms.map(()=>({wch:9})));
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'SafetyStock');
+  XLSX.writeFile(wb, xlsxName('안전재고','Страховой_запас'));
+}
 // ── 사용불가 화면 ────────────────────────────────────────
 const BLK_COL_DEFS=[
   {k:'name',   w:200, ko:'품명',     ru:'Наименование', koOnly:1},
@@ -17292,7 +17660,7 @@ updatePNTableScrollbar=setupHTableScroll('scrollBodyPN','pnHdrWrap','pnTblScroll
 // PSI 계열 화면(PSI·발주시뮬레이션·발주현황·선적/입고현황·미출현황)도 같은 가로 슬라이드 막대를 쓴다.
 // 이 화면들은 머리글이 표 안에 있어서 따로 맞출 헤더가 없다 — 스크롤 칸을 헤더 자리에 그대로 넘긴다.
 [['psi','scrollBodyPSI'],['sim','scrollBodySIM'],['po','scrollBodyPO'],
- ['ship','scrollBodySHIP'],['ms','scrollBodyMS'],['blk','scrollBodyBLK'],['moq','scrollBodyMOQ']].forEach(function(x){
+ ['ship','scrollBodySHIP'],['ms','scrollBodyMS'],['blk','scrollBodyBLK'],['moq','scrollBodyMOQ'],['ss','scrollBodySS']].forEach(function(x){
   _hbars[x[0]]=setupHTableScroll(x[1], x[1], x[0]+'TblScrollbar', x[0]+'TblScrollbarThumb');
 });
 setupSimpleHeaderScrollSync('scrollBodyPrice','priceCalcHdrWrap');
@@ -17942,6 +18310,8 @@ function enterApp(user){
   const tabMs=document.getElementById('tab-ms');
   if(tabMs) tabMs.style.display='none';
   const tabBlk=document.getElementById('tab-blk');
+  const tabSs=document.getElementById('tab-ss');
+  if(tabSs) tabSs.style.display='none';
   const tabMoq=document.getElementById('tab-moq');
   if(tabMoq) tabMoq.style.display='none';
   if(tabBlk) tabBlk.style.display='none';
