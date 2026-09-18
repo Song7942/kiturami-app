@@ -869,6 +869,10 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
           <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
           <input type="text" id="pnInput" placeholder="대표품번, 호환품번, 최종품번으로 검색…" oninput="debouncedRenderPN()">
         </div>
+        <button class="dl-btn" onclick="openPnViewPanel()" title="표에 보일 열과 그 차례를 고릅니다(아이디별로 저장)">
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
+          <span id="i18n-pn-cols">보기</span>
+        </button>
         <div class="count-badge" id="pnBadge"></div>
         <button class="dl-btn" id="pnAddBtn" onclick="addPNItem()" style="display:none;background:#22c55e;border-color:#22c55e;color:#fff">
           <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -2314,7 +2318,8 @@ function switchTab(tab){
   try{ ktDropInitAll(); }catch(e){}   // 엑셀을 화면에 끌어다 놓아 올리는 길(화면마다 한 번만 단다)
   // 탭을 옮길 때마다 주문 알림 점을 가볍게 새로고침 — 로그인 중 새 주문/배분도 바로 보이게.
   if(currentUser){ loadOrderFeedStamps().then(updateOrderUnreadDots); refreshSignupDot(); }
-  if(tab==='pn'){ renderPN(); loadPnAlt().then(()=>{ if(ktPaneOn('pane-pn')) renderPN(); }); }
+  if(tab==='pn'){ renderPN();
+    Promise.all([loadPnAlt(), loadPsiCols()]).then(()=>{ if(ktPaneOn('pane-pn')) renderPN(); }); }
   if(tab==='prod') loadProdTab();
   // KAZAK 은 주문탭 공급가로 카자흐스탄 USD 를 쓰므로 계산식 데이터도 함께 읽는다.
   if(tab==='order'){ mountModelDiag('order'); syncDiagram(); refreshCurrentUser().then(()=>Promise.all([loadMyOrderTotals(), loadInventory(), loadGlobalSuppliedTotals(), loadReceivedOrderTotals(), loadPrices(), loadCompanyPrices(), (userRole(currentUser).region==='kz'?Promise.all([loadPriceSettings(),loadPriceCalc()]):Promise.resolve())])).then(renderOrderTable); renderOrderTable(); }
@@ -2407,6 +2412,7 @@ function refreshPsiTexts(){
   set('i18n-moq-clear','전체 지우기','Очистить всё');
   set('i18n-moq-cols',COLS[0],COLS[1]);
   // 안전재고
+  set('i18n-pn-cols',COLS[0],COLS[1]);
   // 품번확인
   set('i18n-tab-pnchk','🧾 품번확인','🧾 Проверка артикулов');
   set('i18n-pnchk-up','엑셀 업로드','Загрузить Excel');
@@ -3823,8 +3829,69 @@ function pnBaseCols(isKo, showEng){
   (typeof MODEL_DEFS!=='undefined'?MODEL_DEFS:[]).forEach(m=> c.push({key:'m:'+m.key, cap:36, group:m.group, color:m.color, capLabel:m.label, modelKey:m.key}));
   return c;
 }
+// ── 품번조회 '보기' — 표에 보일 열 고르기(아이디별 저장, PSI 계열과 같은 칸을 쓴다) ──
+function pnColsMap(){
+  const src=(typeof psiCols!=='undefined' && psiCols && psiCols.__pn && typeof psiCols.__pn==='object')?psiCols.__pn:null;
+  const m={};
+  if(src) Object.keys(src).forEach(k=>{ if(typeof src[k]==='boolean') m[k]=src[k]; });
+  return m;
+}
+// 보기에서 꺼 둔 열을 걷어낸다. 하나도 남지 않으면 대표품번만이라도 세운다.
+function pnColsVisible(cols){
+  const m=pnColsMap();
+  const v=cols.filter(c=>m[c.key]!==false);
+  return v.length?v:cols.filter(c=>c.key==='rep');
+}
+function openPnViewPanel(){
+  closePnViewPanel();
+  const ru=(lang==='ru'), isKo=(lang==='ko');
+  const list=pnColMetaOrdered(isKo, canViewEngName(), false, true);   // 끈 열까지 모두
+  const m=pnColsMap();
+  const box=document.createElement('div'); box.id='pnViewPop';
+  box.style.cssText='position:fixed;inset:0;z-index:10000;background:#0008;display:flex;align-items:center;justify-content:center';
+  box.innerHTML=
+    '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;width:330px;max-width:92vw;'
+      +'max-height:86vh;display:flex;flex-direction:column;box-shadow:0 16px 44px #000a;font-size:12px;color:var(--text)">'
+    + '<div style="padding:12px 14px;border-bottom:1px solid var(--border);font-weight:700;font-size:13px">'+(ru?'Вид — столбцы':'보기 — 열 선택·차례')+'</div>'
+    + '<div style="padding:10px 14px;overflow:auto">'
+      + colOrdHint(ru)
+      + '<div id="pnColList" style="border:1px solid var(--border);border-radius:8px;padding:4px 6px">'
+      + list.map(c=>colOrdRow(c.key, pnColLabelShort(c.key), m[c.key]!==false, ru, 'pnChk2')).join('')
+      + '</div></div>'
+    + '<div style="display:flex;gap:7px;padding:11px 14px;border-top:1px solid var(--border)">'
+      + '<button id="pvAll" style="flex:none;padding:7px 10px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);cursor:pointer;font-size:12px">'+(ru?'Все':'전체 선택')+'</button>'
+      + '<button id="pvOrd" style="flex:none;padding:7px 10px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);cursor:pointer;font-size:12px">'+(ru?'По умолч.':'되돌리기')+'</button>'
+      + '<button id="pvClose" style="flex:1;padding:7px;border:none;border-radius:7px;background:var(--accent2);color:#fff;cursor:pointer;font-size:12px;font-weight:700">'+(ru?'Закрыть':'닫기')+'</button>'
+    + '</div></div>';
+  document.body.appendChild(box);
+  colOrdWire(box.querySelector('#pnColList'));
+  let done=false;
+  const commit=async()=>{
+    if(done) return; done=true;
+    const v={}; box.querySelectorAll('.pnChk2').forEach(c=>{ v[c.getAttribute('data-k')]=c.checked; });
+    if(!psiCols || typeof psiCols!=='object') psiCols={};
+    psiCols.__pn=v;
+    closePnViewPanel();
+    await setPNColOrder(colOrdRead(box.querySelector('#pnColList')));   // 차례는 품번조회 제 칸에 담는다
+    renderPN();
+    await savePsiCols();
+  };
+  box.querySelector('#pvAll').onclick=()=>box.querySelectorAll('.pnChk2').forEach(c=>c.checked=true);
+  box.querySelector('#pvOrd').onclick=async()=>{        // 열 선택·차례를 모두 기본값으로
+    done=true;
+    if(psiCols && typeof psiCols==='object') delete psiCols.__pn;
+    closePnViewPanel();
+    await setPNColOrder(null);
+    renderPN();
+    await savePsiCols();
+  };
+  box.querySelector('#pvClose').onclick=commit;
+  box.onmousedown=(e)=>{ if(e.target===box) commit(); };
+}
+function closePnViewPanel(){ const b=document.getElementById('pnViewPop'); if(b) b.remove(); }
 // 저장된 순서를 적용한 열 목록(+ 그룹경계·고정열 계산).
-function pnColMetaOrdered(isKo, showEng, isMaster){
+//   showAll=true 면 '보기'에서 꺼 둔 열까지 모두 돌려준다(보기 창에서 쓴다).
+function pnColMetaOrdered(isKo, showEng, isMaster, showAll){
   const base=pnBaseCols(isKo, showEng);
   const saved=getPNColOrder();
   let ordered=base;
@@ -3841,6 +3908,7 @@ function pnColMetaOrdered(isKo, showEng, isMaster){
     const ei=ordered.findIndex(c=>c.key==='export_ctrl');
     if(ei>=0){ const ec=ordered.splice(ei,1)[0]; const ci=ordered.findIndex(c=>c.key==='compat'); if(ci>=0) ordered.splice(ci+1,0,ec); else ordered.unshift(ec); }
   }
+  if(!showAll) ordered=pnColsVisible(ordered);        // '보기' 에서 꺼 둔 열은 뺀다
   ordered.forEach((c,i)=>{ c.groupStart = !!c.group && (i===0 || ordered[i-1].group!==c.group); c.freezeLeft=null; });
   let left = isMaster?40:0;   // '삭제' 열 폭
   for(let k=0;k<Math.min(2,ordered.length);k++){ ordered[k].freezeLeft=left; left+=ordered[k].cap; }
@@ -4065,7 +4133,15 @@ function pnReorderCols(dragKey, targetKey){
   order.splice(to,0,dragKey);
   setPNColOrder(order); renderPN();
 }
-async function pnResetColOrder(){ const uid=_pnUid(); _pnColOrderCache=null; _pnColOrderLoadedFor=uid; _pnFilters={}; _pnSort={key:null,dir:'asc'}; if(uid){ try{ await sb.from('kt_user_prefs').delete().eq('user_id',uid); }catch(e){} } renderPN(); }
+// 열 차례·보기 선택·머리글 필터를 품번조회만 기본값으로 되돌린다.
+//   (종전에는 kt_user_prefs 줄을 통째로 지워 PSI 계열 보기 설정까지 함께 날아갔다)
+async function pnResetColOrder(){
+  _pnFilters={}; _pnSort={key:null,dir:'asc'};
+  if(typeof psiCols==='object' && psiCols) delete psiCols.__pn;
+  await setPNColOrder(null);
+  renderPN();
+  try{ await savePsiCols(); }catch(e){}
+}
 
 // ── 품번조회 페이지 렌더 (청크 방식) ──
 let _pnFiltered=[], _pnChunk=100;
