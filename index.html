@@ -8820,42 +8820,115 @@ function appliedModelsGridHtml(rep){
   }).join('');
 }
 // ── 품목 추가/삭제 (MASTER 전용) ──
-async function addPNItem(){
+// ── 품목 추가 ───────────────────────────────────────────
+//   종전에는 prompt() 를 두 번 띄웠다. 크롬은 다른 창을 누르면 prompt 를 저 혼자 닫아 버려서
+//   대표품번만 적고 자리를 비우면 처음부터 다시 해야 했다.
+//   그래서 화면 안 창으로 바꾸고, 적던 값은 이 기기에 적어 둔다(새로고침·자리비움에도 이어짐).
+const PN_ADD_DRAFT='kt_pnadd_draft';
+function pnAddDraft(){ try{ const o=JSON.parse(localStorage.getItem(PN_ADD_DRAFT)||'{}'); return (o&&typeof o==='object')?o:{}; }catch(e){ return {}; } }
+function pnAddDraftSave(o){ try{ localStorage.setItem(PN_ADD_DRAFT, JSON.stringify(o||{})); }catch(e){} }
+function pnAddDraftClear(){ try{ localStorage.removeItem(PN_ADD_DRAFT); }catch(e){} }
+function closePnAddModal(){ const b=document.getElementById('pnAddPop'); if(b) b.remove(); }
+function addPNItem(){
   if(!userRole(currentUser).isMaster){ alert('MASTER 만 추가할 수 있습니다.'); return; }
-  let rep=prompt('추가할 대표품번을 입력하세요');
-  if(rep==null) return;
-  rep=String(rep).trim().toUpperCase();
-  if(!rep) return;
-  // 이미 있는 대표품번이면 막지 않고, 그 대표품번에 호환품번을 한 줄 더 붙인다.
-  // 대표품번은 kt_pn_overrides 의 키라서 같은 값으로 품목을 둘 만들 수 없다(둘째가 첫째를 덮어써 사라진다).
-  // 품번조회는 호환품번마다 한 줄이므로, 같은 대표품번에 줄을 늘리는 올바른 방법이 호환품번 추가다.
-  const cur=PN_DATA.find(p=>p.rep===rep);
-  if(cur){
-    let pn=prompt('이미 등록된 대표품번입니다: '+rep+'\n\n이 대표품번에 추가할 호환품번을 입력하세요.\n같은 대표품번 아래 새 줄로 들어갑니다.');
-    if(pn==null) return;
-    pn=String(pn).trim().toUpperCase();
-    if(!pn) return;
-    const cs=(cur.compats||[]).slice();
-    if(cs.some(c=>normPN(c)===normPN(pn))){ alert('이 대표품번에 이미 있는 호환품번입니다: '+pn); return; }
-    cs.push(pn);
-    const { error } = await sb.from('kt_pn_overrides').upsert({ rep, compats:cs },{onConflict:'rep'});
-    if(error){ alert('저장 실패\n['+(error.message||error.code)+']'); return; }
-    cur.compats=cs;
+  closePnAddModal();
+  const ru=(lang==='ru'), L=(ko,rr)=>(ru?rr:ko), d=pnAddDraft();
+  const fld=(id,lab,ph,val,ta)=>
+     '<div style="margin:0 0 9px">'
+    +'<div style="font-size:11px;color:var(--muted);margin:0 2px 3px">'+lab+'</div>'
+    +(ta
+      ? '<textarea id="'+id+'" rows="3" placeholder="'+escapeHtml(ph)+'" style="width:100%;box-sizing:border-box;padding:6px 8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:12px;resize:vertical">'+escapeHtml(val||'')+'</textarea>'
+      : '<input id="'+id+'" type="text" placeholder="'+escapeHtml(ph)+'" value="'+escapeHtml(val||'')+'" style="width:100%;box-sizing:border-box;padding:6px 8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:12px">')
+    +'</div>';
+  const box=document.createElement('div'); box.id='pnAddPop';
+  box.style.cssText='position:fixed;inset:0;z-index:10000;background:#0008;display:flex;align-items:center;justify-content:center;padding:16px';
+  box.innerHTML=
+    '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;width:380px;max-width:100%;'
+      +'max-height:88vh;display:flex;flex-direction:column;box-shadow:0 16px 44px #000a;font-size:12px;color:var(--text)">'
+    +'<div style="padding:12px 14px;border-bottom:1px solid var(--border);font-weight:700;font-size:13px">'+L('품목 추가','Добавить изделие')+'</div>'
+    +'<div style="padding:12px 14px;overflow:auto">'
+      +fld('paRep', L('대표품번','Осн. артикул'), 'AS414100015', d.rep)
+      +'<div id="paRepMsg" style="font-size:11px;margin:-6px 2px 8px;min-height:14px"></div>'
+      +fld('paCmp', L('호환품번 (여러 개면 줄을 바꿔 적습니다)','Артикулы замены (по одному в строке)'), 'S422100004\nS521100026', d.cmp, true)
+      +fld('paFin', L('최종품번 (비워 두어도 됩니다)','Актуальный артикул (необязательно)'), 'S422100004', d.fin)
+      +fld('paName', L('품명 (비워 두어도 됩니다)','Наименование (необязательно)'), '', d.name)
+      +fld('paSpec', L('규격 (비워 두어도 됩니다)','Спецификация (необязательно)'), '', d.spec)
+      +'<div style="font-size:11px;color:var(--muted);line-height:1.5">'
+        +L('· 적던 값은 저절로 남아 있습니다. 다른 창을 보다 돌아와도 이어서 적으면 됩니다.<br>· 이미 있는 대표품번이면 그 품목에 호환품번을 새 줄로 붙입니다.',
+           '· Введённое сохраняется — можно вернуться и продолжить.<br>· Если осн. артикул уже есть, артикулы добавятся к нему.')
+      +'</div>'
+    +'</div>'
+    +'<div style="display:flex;gap:7px;padding:11px 14px;border-top:1px solid var(--border)">'
+      +'<button id="paDrop" style="flex:none;padding:7px 10px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--muted);cursor:pointer;font-size:12px">'+L('적은 값 지우기','Очистить')+'</button>'
+      +'<button id="paCancel" style="flex:none;padding:7px 10px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);cursor:pointer;font-size:12px">'+L('닫기','Закрыть')+'</button>'
+      +'<button id="paSave" style="flex:1;padding:7px;border:none;border-radius:7px;background:var(--accent2);color:#fff;cursor:pointer;font-size:12px;font-weight:700">'+L('저장','Сохранить')+'</button>'
+    +'</div></div>';
+  document.body.appendChild(box);
+  const g=id=>box.querySelector('#'+id);
+  const keep=()=>pnAddDraftSave({ rep:g('paRep').value, cmp:g('paCmp').value, fin:g('paFin').value, name:g('paName').value, spec:g('paSpec').value });
+  const tell=()=>{
+    const rep=pnUpAll(g('paRep').value), m=g('paRepMsg');
+    if(!rep){ m.textContent=''; return; }
+    const cur=PN_DATA.find(p=>p.rep===rep);
+    m.style.color=cur?'#f59e0b':'#22c55e';
+    m.textContent=cur?L('이미 있는 대표품번입니다 — 이 품목에 호환품번을 붙입니다.','Такой осн. артикул уже есть — артикулы добавятся к нему.')
+                     :L('새 품목으로 만듭니다.','Будет создано новое изделие.');
+  };
+  ['paRep','paCmp','paFin','paName','paSpec'].forEach(id=>{ g(id).addEventListener('input', ()=>{ keep(); if(id==='paRep') tell(); }); });
+  g('paRep').addEventListener('blur', ()=>{ g('paRep').value=pnUpAll(g('paRep').value); keep(); });
+  g('paFin').addEventListener('blur', ()=>{ g('paFin').value=pnUpAll(g('paFin').value); keep(); });
+  g('paDrop').onclick=()=>{ ['paRep','paCmp','paFin','paName','paSpec'].forEach(id=>g(id).value=''); pnAddDraftClear(); tell(); g('paRep').focus(); };
+  g('paCancel').onclick=()=>{ keep(); closePnAddModal(); };     // 적던 값은 남겨 둔다
+  g('paSave').onclick=pnAddSave;
+  box.addEventListener('keydown', e=>{ if(e.key==='Escape'){ keep(); closePnAddModal(); } });
+  tell(); g('paRep').focus();
+}
+async function pnAddSave(){
+  const box=document.getElementById('pnAddPop'); if(!box) return;
+  const ru=(lang==='ru'), L=(ko,rr)=>(ru?rr:ko);
+  const g=id=>box.querySelector('#'+id);
+  const rep=pnUpAll(g('paRep').value);
+  if(!rep){ alert(L('대표품번을 적어 주세요.','Укажите осн. артикул.')); g('paRep').focus(); return; }
+  const cs=[...new Set(pnAltSplit(g('paCmp').value).map(pnUpAll))];
+  const fin=pnUpAll(g('paFin').value);
+  const nm=String(g('paName').value||'').trim(), sp=String(g('paSpec').value||'').trim();
+  const btn=g('paSave'); btn.disabled=true; btn.textContent=L('저장 중…','Сохранение…');
+  try{
+    // 대표품번은 kt_pn_overrides 의 열쇠라, 같은 값으로 품목을 둘 만들 수 없다.
+    // 이미 있는 대표품번이면 그 품목에 호환품번을 붙인다(품번조회는 호환품번마다 한 줄이다).
+    const cur=PN_DATA.find(p=>p.rep===rep);
+    if(cur){
+      const arr=(cur.compats||[]).slice(), added=[];
+      cs.forEach(c=>{ if(!arr.some(x=>normPN(x)===normPN(c))){ arr.push(c); added.push(c); } });
+      const patch={ rep, compats:arr };
+      if(fin) patch.final=fin;
+      if(nm) patch.name_ko=nm;
+      if(sp) patch.spec=sp;
+      const { error }=await sb.from('kt_pn_overrides').upsert(patch,{onConflict:'rep'});
+      if(error) throw error;
+      const oldFin=cur.final||'';
+      cur.compats=arr; if(fin) cur.final=fin; if(nm) cur.name_ko=nm; if(sp) cur.spec=sp;
+      for(const c of added) await recordPNHistory(rep,'compat','',c);
+      if(fin && fin!==oldFin) await recordPNHistory(rep,'final',oldFin,fin);
+      if(!added.length && !fin && !nm && !sp) alert(L('새로 붙일 값이 없습니다.','Нечего добавлять.'));
+    } else {
+      const row={ rep, name_ko:nm, name_ru:'', spec:sp, final:fin, compats:cs };
+      const { error }=await sb.from('kt_pn_overrides').upsert(row,{onConflict:'rep'});
+      if(error) throw error;
+      PN_DATA.unshift({ ...row });                 // 목록 맨 위에 추가(바로 보이게)
+      await recordPNHistory(rep,'rep','',rep);     // 품목 추가를 변경이력에 남긴다
+      for(const c of cs) await recordPNHistory(rep,'compat','',c);
+      if(fin) await recordPNHistory(rep,'final','',fin);
+    }
     _pnLookupMap=null; _pnByRepMap=null; _nameRuByRep=null;
-    await recordPNHistory(rep, 'compat', '', pn);
-    const inp2=document.getElementById('pnInput'); if(inp2) inp2.value=pn;   // 새로 만든 줄이 바로 보이게
+    pnAddDraftClear(); closePnAddModal();
+    try{ if(typeof pnSpecTopUp==='function') await pnSpecTopUp(); }catch(e){}
+    const inp=document.getElementById('pnInput'); if(inp) inp.value=rep;   // 새 줄이 바로 보이게
     renderPN();
-    return;
+  }catch(e){
+    alert('저장 실패\n['+((e&&(e.message||e.code))||e)+']');
+    btn.disabled=false; btn.textContent=L('저장','Сохранить');
   }
-  // 최종품번(final)은 대표품번을 자동으로 따라가지 않는다 — 빈 값으로 두고 직접 입력.
-  const row={ rep, name_ko:'', name_ru:'', spec:'', final:'', compats:[] };
-  PN_DATA.unshift({ ...row });        // 목록 맨 위에 추가(바로 보이게)
-  _pnLookupMap=null; _pnByRepMap=null; _nameRuByRep=null;
-  const { error } = await sb.from('kt_pn_overrides').upsert(row,{onConflict:'rep'});
-  if(error){ alert('저장 실패\n['+(error.message||error.code)+']'); return; }
-  await recordPNHistory(rep, 'rep', '', rep);   // 품목 추가를 변경이력에 기록(대표품번 셀에 배지 표시)
-  const inp=document.getElementById('pnInput'); if(inp) inp.value='';   // 검색어 지워 새 품목이 보이게
-  renderPN();
 }
 // 품번조회·PSI 에서 품목(또는 그 줄)을 지우면 선적/입고현황에서도 그 품번 줄을 함께 지운다.
 // 지운 뒤 그 줄이 걸려 있던 선적월·입고월을 PSI 에 다시 셈하고 발주 공급수량도 맞춘다.
