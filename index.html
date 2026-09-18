@@ -680,6 +680,7 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
   <button class="tab-btn" style="display:none" onclick="switchTab('blk')"       id="tab-blk"><span id="i18n-tab-blk">⛔ 사용불가</span></button>
   <button class="tab-btn" style="display:none" onclick="switchTab('moq')"       id="tab-moq"><span id="i18n-tab-moq">ð¦ MOQ</span></button>
   <button class="tab-btn" style="display:none" onclick="switchTab('ss')"        id="tab-ss"><span id="i18n-tab-ss">🛡 안전재고</span></button>
+  <button class="tab-btn" style="display:none" onclick="switchTab('report')"    id="tab-report"><span id="i18n-tab-report">📑 보고서</span></button>
   <button class="tab-btn" style="display:none" onclick="switchTab('sim')"       id="tab-sim"><span id="i18n-tab-sim">📈 발주시뮬레이션</span></button>
   <button class="tab-btn" style="display:none;position:relative" onclick="switchTab('memberManagement')" id="tab-memberManagement"><span id="i18n-tab-membermgmt">👥 회원관리</span><span id="memberMgmtUnreadDot" style="display:none;position:absolute;top:4px;right:2px;width:8px;height:8px;border-radius:50%;background:#ef4444;box-shadow:0 0 0 2px var(--bg)"></span></button>
   <button class="tab-btn" style="display:none" onclick="switchTab('reset')" id="tab-reset"><span id="i18n-tab-reset">🗑️ 초기화</span></button>
@@ -1227,6 +1228,37 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
       </table>
     </div>
     <div id="moqEmpty" class="no-result" style="display:none"></div>
+  </div>
+</div>
+
+<!-- ══ 보고서 — PSI 결과 보고서 ══
+     고른 기간의 출고·재고·미출·발주 자료를 모아 글로 풀어 준다. -->
+<div class="tab-pane" id="pane-report">
+  <div class="fixed-top">
+    <div class="search-bar">
+      <span style="font-size:11px;color:var(--muted)" id="i18n-rep-perlab">기간</span>
+      <input type="text" id="repFromYm" list="ktOutYmOpts" placeholder="2025-10" onfocus="this.select()" onchange="renderReport()" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"><button type="button" class="ym-pick" onclick="ktYmPickOpen('repFromYm',this)">▼</button>
+      <span style="color:var(--muted)">~</span>
+      <input type="text" id="repToYm" list="ktOutYmOpts" placeholder="2026-09" onfocus="this.select()" onchange="renderReport()" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"><button type="button" class="ym-pick" onclick="ktYmPickOpen('repToYm',this)">▼</button>
+      <label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--muted)" title="이 개월 수보다 보유월이 적으면 '재고 부족' 으로 봅니다"><span id="i18n-rep-lowlab">재고 기준(개월)</span><input type="number" id="repLowMo" min="1" max="24" step="1" value="6" onchange="renderReport()" style="width:48px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"></label>
+      <label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--muted)" title="보유월 = 그 달 재고 ÷ (다음 달부터 이 개월 수만큼의 출고 평균)"><span id="i18n-rep-avglab">보유월 향후</span><input type="number" id="repAvgN" min="1" max="24" step="1" value="6" onchange="renderReport()" style="width:48px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"></label>
+      <div class="count-badge" id="repBadge"></div>
+      <button class="dl-btn" onclick="renderReport()">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+        <span id="i18n-rep-run">다시 만들기</span>
+      </button>
+      <button class="dl-btn" onclick="downloadReport()">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        <span id="i18n-rep-dl">엑셀 다운로드</span>
+      </button>
+      <button class="dl-btn" onclick="printReport()">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+        <span id="i18n-rep-print">인쇄</span>
+      </button>
+    </div>
+  </div>
+  <div class="scroll-body" id="scrollBodyREPORT" style="padding:0 12px 72px">
+    <div id="repOut" style="max-width:980px;margin:0 auto"></div>
   </div>
 </div>
 
@@ -2386,6 +2418,7 @@ function switchTab(tab){
   if(tab==='moq'){ loadMOQTab(); }
   if(tab==='ss'){ loadSSTab(); }
   if(tab==='pnchk'){ loadPnChkTab(); }
+  if(tab==='report'){ loadReportTab(); }
   try{ ktPaneTitle(tab); }catch(e){}       // 도구줄 맨 앞에 화면 이름을 붙인다
   if(tab==='sim'){ loadSimTab(); }
   if(tab==='adminOrders'){ loadAdminOrdersTab(); }
@@ -2450,6 +2483,15 @@ function refreshPsiTexts(){
   set('i18n-moq-cols',COLS[0],COLS[1]);
   // 안전재고
   set('i18n-pn-cols',COLS[0],COLS[1]);
+  // 보고서
+  set('i18n-tab-report','📑 보고서','📑 Отчёт');
+  set('i18n-rep-perlab','기간','Период');
+  set('i18n-rep-lowlab','재고 기준(개월)','Норма запаса (мес.)');
+  set('i18n-rep-avglab','보유월 향후','Мес. вперёд');
+  set('i18n-rep-run','다시 만들기','Обновить');
+  set('i18n-rep-dl',DL[0],DL[1]);
+  set('i18n-rep-print','인쇄','Печать');
+  if(ktPaneOn('pane-report') && typeof renderReport==='function') renderReport();
   try{ paintDanLegend(); }catch(e){}      // 단종 표기 안내(O·△·□)
   // 품번확인
   set('i18n-tab-pnchk','🧾 품번확인','🧾 Проверка артикулов');
@@ -3475,6 +3517,7 @@ const KT_PANE_TITLE={
   ship:['선적/입고현황','Отгрузка/Приход'], ms:['미출현황','Невыполненные'],
   moq:['MOQ','MOQ'], blk:['사용불가','Заблокировано'], price:['가격정보','Цены'],
   ss:['안전재고','Страховой запас'], pnchk:['품번확인','Проверка артикулов'],
+  report:['보고서','Отчёт'],
   inventory:['재고관리','Склад'], shipments:['출고관리','Отгрузки'],
   order:['주문','Заказ'], adminOrders:['주문관리','Управление заказами'],
   memberManagement:['회원관리','Пользователи'], reset:['초기화','Сброс']
@@ -7544,18 +7587,20 @@ function applyPermTabVisibility(skipSwitch){
   if(!pobj){
     // 권한을 아직 부여하지 않은 회원: 품번조회 하나만 연다.
     // 종전에는 역할 기본값을 그대로 써서 주문·재고관리·가격정보까지 다 보였다.
-    ['tab-order','tab-parts','tab-adminOrders','tab-inventory','tab-shipments','tab-price','tab-psi','tab-po','tab-ship','tab-ms','tab-blk','tab-moq','tab-ss','tab-sim','tab-memberManagement']
+    ['tab-order','tab-parts','tab-adminOrders','tab-inventory','tab-shipments','tab-price','tab-psi','tab-po','tab-ship','tab-ms','tab-blk','tab-moq','tab-ss','tab-report','tab-sim','tab-memberManagement']
       .forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display='none'; });
     const pnEl=document.getElementById('tab-pn'); if(pnEl) pnEl.style.display='';
     const pcEl=document.getElementById('tab-pnchk'); if(pcEl) pcEl.style.display='';   // 품번확인은 품번조회를 따라간다
     // KITURAMI(본사)는 권한 기록이 없어도 PSI 를 본다
     const psi0=document.getElementById('tab-psi'); if(psi0 && canSeePsi()) psi0.style.display='block';
+    const rep0=document.getElementById('tab-report'); if(rep0 && canSeePsi()) rep0.style.display='block';
     if(!skipSwitch) ensureVisibleTab();
     return;
   }
   // 권한이 설정된 회원은 매핑된 탭을 권한값대로 부여/제한한다(체크=보임, 미체크=숨김).
   // PSI 는 회원관리에서 준 'PSI 보기' 권한을 따른다(역할이 MASTER·KITURAMI 면 늘 열림).
   const psiEl=document.getElementById('tab-psi'); if(psiEl) psiEl.style.display = canSeePsi() ? 'block' : 'none';
+  const repEl=document.getElementById('tab-report'); if(repEl) repEl.style.display = canSeePsi() ? 'block' : 'none';
   const poEl=document.getElementById('tab-po'); if(poEl) poEl.style.display='none';
   const shipEl=document.getElementById('tab-ship'); if(shipEl) shipEl.style.display='none';
   const msEl=document.getElementById('tab-ms'); if(msEl) msEl.style.display='none';
@@ -13155,6 +13200,295 @@ async function handleMoqUpload(ev){
     renderMOQ();
     alert(ru ? ('Загружено: '+done.n+' арт.') : ('MOQ 를 반영했습니다.\n품번 '+done.n+'개'));
   }catch(e){ console.error(e); alert(ru?'Ошибка чтения файла.':'파일을 읽지 못했습니다.'); }
+}
+// ══════════════════════════════════════════
+// 보고서 — PSI 결과 보고서
+//   고른 기간의 출고·재고·미출·발주 자료를 대표품번 단위로 모아
+//   ① 많이 나간 부품 ② 재고가 모자랐던 부품 ③ 모자랐던 까닭 ④ 달별 흐름 으로 적는다.
+//   숫자는 PSI 화면과 같은 산식을 쓴다(재고 = 이월 + 입고 − 출고, 보유월 = 재고 ÷ 앞으로의 평균 출고).
+// ══════════════════════════════════════════
+let _repData=null;
+function repYmNorm(s){
+  const d=String(s==null?'':s).replace(/\D/g,'');
+  if(d.length>=6) return d.slice(0,6).slice(2);   // YYYYMM → YYMM
+  if(d.length===4) return d;                      // YYMM
+  return '';
+}
+function repCfg(){
+  const g=id=>document.getElementById(id);
+  const toV=psiOutBound(g('repToYm')?g('repToYm').value:'', true) || psiMaxYm() || psiNowYm();
+  let fromV=psiOutBound(g('repFromYm')?g('repFromYm').value:'', false);
+  if(!fromV) fromV=psiYmAdd(toV,-11);
+  if(fromV>toV) fromV=toV;
+  const low=Math.max(1, Math.min(24, Number(g('repLowMo')?g('repLowMo').value:6)||6));
+  const avg=Math.max(1, Math.min(24, Number(g('repAvgN')?g('repAvgN').value:6)||6));
+  return { from:fromV, to:toV, low, avg };
+}
+// 대표품번마다 달별 선적·입고·출고·미출·재고·보유월
+function repAgg(from,to,avgN){
+  const yms=[]; for(let y=from;y<=to;y=psiYmAdd(y,1)) yms.push(y);
+  const ext=yms.slice(); for(let i=1;i<=avgN;i++) ext.push(psiYmAdd(to,i));
+  const out=[];
+  (PN_DATA||[]).forEach(p=>{
+    const mon={}; ext.forEach(y=>mon[y]={sh:0,i:0,o:0,ms:0});
+    let open=0, blk=0, any=false;
+    (p.compats||[]).forEach(c=>{
+      const k=normPN(c); if(!k) return;
+      const rec=(typeof psiData!=='undefined')?psiData[k]:null; if(!rec) return;
+      const d=rec.data||{};
+      open+=psiOpenOf(d, from);
+      if(typeof blkQtyOf==='function') blk+=Number(blkQtyOf(k))||0;
+      ext.forEach(y=>{ const M=mon[y];
+        M.sh+=psiShipOf(d,y); M.i+=psiInOf(d,y,k); M.o+=psiOutOf(d,y); M.ms+=psiMissOf(d,y);
+        if(M.sh||M.i||M.o||M.ms) any=true; });
+    });
+    if(!any && !open) return;
+    const rows={}; let st=open;
+    ext.forEach(y=>{ const M=mon[y]; st+=M.i-M.o; rows[y]=Object.assign({}, M, { st:st-blk }); });
+    yms.forEach(y=>{
+      let s=0; for(let i=1;i<=avgN;i++){ const yy=psiYmAdd(y,i); s+=(mon[yy]?mon[yy].o:0); }
+      const avg=s/avgN;
+      rows[y].mo = avg>0 ? Math.round((rows[y].st/avg)*10)/10 : null;
+    });
+    out.push({ rep:p.rep, final:p.final||'', name:pnNameKo(p.rep,p.name_ko), spec:pnSpec(p.rep,p.spec), rows, open, yms });
+  });
+  return { yms, items:out };
+}
+// 그 대표품번에 아직 안 들어온 발주(미공급)와 가장 오래된 발주월
+function repPoOpen(rep){
+  let qty=0, oldest=null;
+  (typeof poData!=='undefined'?poData:[]).forEach(r=>{
+    const li=(typeof poLookup==='function')?poLookup(r.pn):null;
+    if(!li || li.rep!==rep) return;
+    const rem=(Number(r.qty)||0)-(Number(r.supplied)||0);
+    if(rem<=0) return;
+    qty+=rem;
+    const m=repYmNorm(r.mon);
+    if(m && (!oldest || m<oldest)) oldest=m;
+  });
+  return { qty, oldest };
+}
+// 모자랐던 까닭을 헤아린다(앞의 것부터 우선)
+function repReason(it, worstYm, yms, po){
+  const r=it.rows, cur=r[worstYm]||{};
+  const msSum=yms.reduce((a,y)=>a+((r[y]||{}).ms||0),0);
+  const i3=[1,2,3].map(k=>psiYmAdd(worstYm,-k));
+  const shPrev=i3.reduce((a,y)=>a+((r[y]||{}).sh||0),0);
+  const inPrev=i3.reduce((a,y)=>a+((r[y]||{}).i||0),0);
+  const oPrev=i3.reduce((a,y)=>a+((r[y]||{}).o||0),0)/3;
+  const list=[];
+  if(po.qty>0){
+    const late=po.oldest?('발주 '+psiYmLabel(po.oldest)+' 분 '+psiFmt(po.qty)+'개가 아직 안 들어옴'):('발주 잔량 '+psiFmt(po.qty)+'개 미도착');
+    list.push({ k:'po', t:'발주 대비 선적 지연', d:late });
+  }
+  if(msSum>0) list.push({ k:'ms', t:'미출 발생', d:'기간 중 미출 '+psiFmt(msSum)+'개' });
+  if(shPrev===0 && inPrev===0) list.push({ k:'noship', t:'선적·입고 없음', d:'앞선 3개월 동안 들어온 수량이 없음' });
+  if(oPrev>0 && (cur.o||0) >= oPrev*1.5) list.push({ k:'surge', t:'출고 급증', d:'앞선 3개월 평균 '+psiFmt(Math.round(oPrev))+'개 → '+psiFmt(cur.o||0)+'개' });
+  if(!list.length) list.push({ k:'base', t:'기초 재고 부족', d:'들어온 양보다 나간 양이 꾸준히 많음' });
+  return list;
+}
+function repFmtMo(v){ return (v==null)?'-':(Math.round(v*10)/10).toFixed(1); }
+function renderReport(){
+  const pane=document.getElementById('pane-report'); if(!pane) return;
+  const out=document.getElementById('repOut'); if(!out) return;
+  const c=repCfg();
+  const fEl=document.getElementById('repFromYm'), tEl=document.getElementById('repToYm');
+  if(fEl && document.activeElement!==fEl) fEl.value=psiYmLabel(c.from);
+  if(tEl && document.activeElement!==tEl) tEl.value=psiYmLabel(c.to);
+  if(typeof psiData==='undefined' || !Object.keys(psiData||{}).length){
+    out.innerHTML='<div class="no-result" style="display:block">PSI 자료를 읽는 중입니다…</div>';
+    return;
+  }
+  const A=repAgg(c.from, c.to, c.avg), yms=A.yms;
+  const items=A.items;
+  // ① 출고 순위
+  const outs=items.map(it=>({ it, q:yms.reduce((a,y)=>a+((it.rows[y]||{}).o||0),0) }))
+                  .filter(x=>x.q>0).sort((a,b)=>b.q-a.q);
+  const totOut=outs.reduce((a,x)=>a+x.q,0);
+  // ② 재고 부족
+  const lows=[];
+  items.forEach(it=>{
+    const bad=yms.filter(y=>{ const m=(it.rows[y]||{}).mo; return m!=null && m<c.low; });
+    if(!bad.length) return;
+    let worst=bad[0];
+    bad.forEach(y=>{ const a=(it.rows[y]||{}).mo, b=(it.rows[worst]||{}).mo; if(a!=null && (b==null || a<b)) worst=y; });
+    const q=yms.reduce((a,y)=>a+((it.rows[y]||{}).o||0),0);
+    lows.push({ it, n:bad.length, worst, mo:(it.rows[worst]||{}).mo, q });
+  });
+  lows.sort((a,b)=> (b.n-a.n) || ((a.mo==null?99:a.mo)-(b.mo==null?99:b.mo)) || (b.q-a.q));
+  // ③ 까닭
+  const reasonCnt={};
+  lows.forEach(L=>{ L.po=repPoOpen(L.it.rep); L.rs=repReason(L.it, L.worst, yms, L.po);
+    L.rs.forEach(r=>{ reasonCnt[r.t]=(reasonCnt[r.t]||0)+1; }); });
+  // ④ 달별 흐름
+  const mrows=yms.map(y=>{
+    const s={ym:y, sh:0, i:0, o:0, ms:0, low:0};
+    items.forEach(it=>{ const r=it.rows[y]||{}; s.sh+=r.sh||0; s.i+=r.i||0; s.o+=r.o||0; s.ms+=r.ms||0;
+      if(r.mo!=null && r.mo<c.low) s.low++; });
+    return s;
+  });
+  _repData={ c, yms, items, outs, totOut, lows, mrows, reasonCnt };
+  const badge=document.getElementById('repBadge'); if(badge) badge.innerHTML='<b>'+items.length+'</b>';
+
+  const TOPN=20;
+  const H=s=>escapeHtml(String(s==null?'':s));
+  const N=v=>psiFmt(Math.round(Number(v)||0));
+  const per=q=>totOut>0?((q/totOut)*100):0;
+  const card=(lab,val,sub)=>'<div style="flex:1;min-width:120px;border:1px solid var(--border);border-radius:10px;padding:9px 11px;background:var(--surface)">'
+    +'<div style="font-size:11px;color:var(--muted)">'+H(lab)+'</div>'
+    +'<div style="font-size:18px;font-weight:700;margin-top:2px">'+H(val)+'</div>'
+    +(sub?'<div style="font-size:10px;color:var(--muted);margin-top:1px">'+H(sub)+'</div>':'')+'</div>';
+  const tSh=mrows.reduce((a,m)=>a+m.sh,0), tIn=mrows.reduce((a,m)=>a+m.i,0),
+        tOut=mrows.reduce((a,m)=>a+m.o,0), tMs=mrows.reduce((a,m)=>a+m.ms,0);
+  const th='padding:6px 8px;font-size:11px;color:var(--muted);border-bottom:1px solid var(--border);text-align:right;white-space:nowrap';
+  const thL=th+';text-align:left';
+  const td='padding:5px 8px;font-size:11px;border-bottom:1px solid var(--border);text-align:right;white-space:nowrap';
+  const tdL=td+';text-align:left';
+  const code="font-family:'Courier New',monospace;font-size:10px";
+  let h='';
+  h+='<div style="padding:14px 2px 6px">'
+    +'<div style="font-size:19px;font-weight:800">PSI 결과 보고서</div>'
+    +'<div style="font-size:12px;color:var(--muted);margin-top:3px">'
+      +'기간 '+H(psiYmLabel(c.from))+' ~ '+H(psiYmLabel(c.to))+' ('+yms.length+'개월)'
+      +' · 재고 기준 '+c.low+'개월 · 보유월 향후 '+c.avg+'개월'
+      +' · 만든 날 '+H(new Date().toISOString().slice(0,10))+'</div></div>';
+  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 14px">'
+    +card('대상 품목', N(items.length)+'개')
+    +card('총 출고', N(tOut)+'개')
+    +card('총 입고', N(tIn)+'개', '선적 '+N(tSh)+'개')
+    +card('총 미출', N(tMs)+'개')
+    +card('재고 부족 품목', N(lows.length)+'개', '보유월 '+c.low+'개월 미만')
+    +'</div>';
+  // ① 많이 나간 부품
+  h+='<h3 style="font-size:14px;margin:16px 0 6px">1. 많이 나간 부품 (상위 '+Math.min(TOPN,outs.length)+')</h3>';
+  if(!outs.length) h+='<div style="font-size:12px;color:var(--muted)">기간 중 출고가 없습니다.</div>';
+  else{
+    let acc=0;
+    h+='<table style="width:100%;border-collapse:collapse"><thead><tr>'
+      +'<th style="'+th+';text-align:center">순위</th><th style="'+thL+'">대표품번</th><th style="'+thL+'">최종품번</th>'
+      +'<th style="'+thL+'">품명</th><th style="'+th+'">출고</th><th style="'+th+'">비중</th><th style="'+th+'">누적</th>'
+      +'<th style="'+thL+'" width="120"></th></tr></thead><tbody>';
+    outs.slice(0,TOPN).forEach((x,i)=>{
+      const pc=per(x.q); acc+=pc;
+      h+='<tr><td style="'+td+';text-align:center">'+(i+1)+'</td>'
+        +'<td style="'+tdL+'"><span style="'+code+'">'+H(x.it.rep)+'</span></td>'
+        +'<td style="'+tdL+'"><span style="'+code+'">'+H(x.it.final)+'</span></td>'
+        +'<td style="'+tdL+'">'+H(x.it.name)+'</td>'
+        +'<td style="'+td+'">'+N(x.q)+'</td>'
+        +'<td style="'+td+'">'+pc.toFixed(1)+'%</td>'
+        +'<td style="'+td+';color:var(--muted)">'+acc.toFixed(1)+'%</td>'
+        +'<td style="'+td+'"><div style="height:8px;border-radius:4px;background:var(--border)"><div style="height:8px;border-radius:4px;background:var(--accent2);width:'+Math.max(2,Math.min(100,pc*3)).toFixed(1)+'%"></div></div></td></tr>';
+    });
+    h+='</tbody></table>';
+    const top10=outs.slice(0,10).reduce((a,x)=>a+x.q,0);
+    h+='<div style="font-size:11px;color:var(--muted);margin:6px 2px">상위 10개 품목이 전체 출고의 '
+      +(totOut>0?((top10/totOut)*100).toFixed(1):'0')+'% 를 차지합니다.</div>';
+  }
+  // ② 재고가 모자랐던 부품
+  h+='<h3 style="font-size:14px;margin:18px 0 6px">2. 재고가 모자랐던 부품 (보유월 '+c.low+'개월 미만, 상위 '+Math.min(TOPN,lows.length)+')</h3>';
+  if(!lows.length) h+='<div style="font-size:12px;color:var(--muted)">기간 중 보유월이 '+c.low+'개월 아래로 내려간 품목이 없습니다.</div>';
+  else{
+    h+='<table style="width:100%;border-collapse:collapse"><thead><tr>'
+      +'<th style="'+th+';text-align:center">순위</th><th style="'+thL+'">대표품번</th><th style="'+thL+'">품명</th>'
+      +'<th style="'+th+'">부족 달</th><th style="'+th+'">최저 보유월</th><th style="'+thL+'">그 달</th>'
+      +'<th style="'+th+'">그 달 재고</th><th style="'+th+'">그 달 출고</th><th style="'+thL+'">까닭</th></tr></thead><tbody>';
+    lows.slice(0,TOPN).forEach((L,i)=>{
+      const w=L.it.rows[L.worst]||{};
+      h+='<tr><td style="'+td+';text-align:center">'+(i+1)+'</td>'
+        +'<td style="'+tdL+'"><span style="'+code+'">'+H(L.it.rep)+'</span></td>'
+        +'<td style="'+tdL+'">'+H(L.it.name)+'</td>'
+        +'<td style="'+td+'">'+L.n+'/'+yms.length+'</td>'
+        +'<td style="'+td+';color:#ef4444;font-weight:700">'+repFmtMo(L.mo)+'</td>'
+        +'<td style="'+tdL+'">'+H(psiYmLabel(L.worst))+'</td>'
+        +'<td style="'+td+'">'+N(w.st)+'</td>'
+        +'<td style="'+td+'">'+N(w.o)+'</td>'
+        +'<td style="'+tdL+'">'+L.rs.map(r=>'<div><b>'+H(r.t)+'</b> <span style="color:var(--muted)">'+H(r.d)+'</span></div>').join('')+'</td></tr>';
+    });
+    h+='</tbody></table>';
+  }
+  // ③ 까닭 모음
+  const rk=Object.keys(reasonCnt).sort((a,b)=>reasonCnt[b]-reasonCnt[a]);
+  h+='<h3 style="font-size:14px;margin:18px 0 6px">3. 모자랐던 까닭</h3>';
+  if(!rk.length) h+='<div style="font-size:12px;color:var(--muted)">헤아릴 것이 없습니다.</div>';
+  else{
+    h+='<table style="width:100%;border-collapse:collapse"><thead><tr><th style="'+thL+'">까닭</th><th style="'+th+'">품목 수</th><th style="'+thL+'" width="260"></th></tr></thead><tbody>';
+    rk.forEach(k=>{
+      const n=reasonCnt[k], pc=lows.length?((n/lows.length)*100):0;
+      h+='<tr><td style="'+tdL+'">'+H(k)+'</td><td style="'+td+'">'+N(n)+'</td>'
+        +'<td style="'+td+'"><div style="height:8px;border-radius:4px;background:var(--border)"><div style="height:8px;border-radius:4px;background:#ef4444;width:'+Math.max(2,Math.min(100,pc)).toFixed(1)+'%"></div></div></td></tr>';
+    });
+    h+='</tbody></table>';
+    h+='<div style="font-size:11px;color:var(--muted);margin:6px 2px;line-height:1.6">'
+      +'· <b>발주 대비 선적 지연</b> — 발주는 넣었는데 아직 안 들어온 수량이 남아 있는 품목입니다(발주현황의 미공급).<br>'
+      +'· <b>미출 발생</b> — 그 기간에 달라는 만큼 못 준 수량이 있었습니다.<br>'
+      +'· <b>선적·입고 없음</b> — 모자라기 앞선 석 달 동안 들어온 것이 없었습니다.<br>'
+      +'· <b>출고 급증</b> — 앞선 석 달 평균보다 1.5배 넘게 나갔습니다.<br>'
+      +'· <b>기초 재고 부족</b> — 들어온 양보다 나간 양이 꾸준히 많았습니다.</div>';
+  }
+  // ④ 달별 흐름
+  h+='<h3 style="font-size:14px;margin:18px 0 6px">4. 달별 흐름</h3>';
+  h+='<table style="width:100%;border-collapse:collapse"><thead><tr>'
+    +'<th style="'+thL+'">연월</th><th style="'+th+'">선적</th><th style="'+th+'">입고</th><th style="'+th+'">출고</th>'
+    +'<th style="'+th+'">미출</th><th style="'+th+'">재고 부족 품목</th></tr></thead><tbody>';
+  mrows.forEach(m=>{
+    h+='<tr><td style="'+tdL+'">'+H(psiYmLabel(m.ym))+'</td>'
+      +'<td style="'+td+'">'+N(m.sh)+'</td><td style="'+td+'">'+N(m.i)+'</td><td style="'+td+'">'+N(m.o)+'</td>'
+      +'<td style="'+td+(m.ms?';color:#ef4444':'')+'">'+N(m.ms)+'</td>'
+      +'<td style="'+td+(m.low?';color:#ef4444':'')+'">'+N(m.low)+'</td></tr>';
+  });
+  h+='<tr><td style="'+tdL+';font-weight:700">합계</td>'
+    +'<td style="'+td+';font-weight:700">'+N(tSh)+'</td><td style="'+td+';font-weight:700">'+N(tIn)+'</td>'
+    +'<td style="'+td+';font-weight:700">'+N(tOut)+'</td><td style="'+td+';font-weight:700">'+N(tMs)+'</td>'
+    +'<td style="'+td+'">-</td></tr>';
+  h+='</tbody></table>';
+  h+='<div style="font-size:11px;color:var(--muted);margin:14px 2px 0;line-height:1.6">'
+    +'재고 = 이월재고 + 입고 − 출고, 보유월 = 그 달 재고 ÷ (다음 달부터 '+c.avg+'개월 출고 평균). PSI 화면과 같은 산식입니다.<br>'
+    +'대표품번마다 호환품번의 값을 모두 더해 셈했고, 사용불가 수량은 재고에서 뺐습니다.</div>';
+  out.innerHTML=h;
+}
+function downloadReport(){
+  if(!_repData) renderReport();
+  const R=_repData; if(!R) return;
+  const wb=XLSX.utils.book_new();
+  const add=(name,aoa)=>XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), name);
+  const tOut=R.mrows.reduce((a,m)=>a+m.o,0);
+  add('요약', [
+    ['PSI 결과 보고서'], [],
+    ['기간', psiYmLabel(R.c.from)+' ~ '+psiYmLabel(R.c.to)],
+    ['재고 기준(개월)', R.c.low], ['보유월 향후(개월)', R.c.avg],
+    ['대상 품목', R.items.length], ['총 선적', R.mrows.reduce((a,m)=>a+m.sh,0)],
+    ['총 입고', R.mrows.reduce((a,m)=>a+m.i,0)], ['총 출고', tOut],
+    ['총 미출', R.mrows.reduce((a,m)=>a+m.ms,0)], ['재고 부족 품목', R.lows.length]
+  ]);
+  add('출고순위', [['순위','대표품번','최종품번','품명','규격','출고','비중(%)']].concat(
+    R.outs.map((x,i)=>[i+1, x.it.rep, x.it.final, x.it.name, x.it.spec, x.q, tOut>0?Math.round((x.q/tOut)*1000)/10:0])));
+  add('재고부족', [['순위','대표품번','최종품번','품명','부족 달','기간 달수','최저 보유월','그 달','그 달 재고','그 달 출고','기간 출고','미공급 발주','까닭']].concat(
+    R.lows.map((L,i)=>{ const w=L.it.rows[L.worst]||{};
+      return [i+1, L.it.rep, L.it.final, L.it.name, L.n, R.yms.length, L.mo, psiYmLabel(L.worst),
+              Math.round(w.st||0), Math.round(w.o||0), L.q, (L.po&&L.po.qty)||0,
+              L.rs.map(r=>r.t+'('+r.d+')').join(' / ')]; })));
+  add('달별흐름', [['연월','선적','입고','출고','미출','재고 부족 품목']].concat(
+    R.mrows.map(m=>[psiYmLabel(m.ym), m.sh, m.i, m.o, m.ms, m.low])));
+  XLSX.writeFile(wb, xlsxName('PSI결과보고서','Отчет_PSI'));
+}
+function printReport(){
+  if(!_repData) renderReport();
+  const el=document.getElementById('repOut'); if(!el) return;
+  const w=window.open('', '_blank'); if(!w){ alert('인쇄 창을 열지 못했습니다. 팝업 차단을 풀어 주세요.'); return; }
+  const css='body{font-family:"Malgun Gothic","Segoe UI",sans-serif;margin:24px;color:#111;background:#fff}'
+    +'table{border-collapse:collapse;width:100%}th,td{border-bottom:1px solid #ddd;padding:5px 8px;font-size:11px}'
+    +'h3{font-size:14px;margin:16px 0 6px}'
+    +':root{--border:#ddd;--muted:#666;--text:#111;--surface:#fff;--accent2:#4f46e5}';
+  w.document.write('<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>PSI 결과 보고서</title><style>'+css+'</style></head><body>'+el.innerHTML+'</body></html>');
+  w.document.close();
+  setTimeout(()=>{ try{ w.focus(); w.print(); }catch(e){} }, 400);
+}
+async function loadReportTab(){
+  if(typeof loadPSI==='function' && (typeof psiData==='undefined' || !Object.keys(psiData||{}).length)) await loadPSI();
+  if(!PN_DATA.length) await loadPNOverrides();
+  try{ if(typeof loadPO==='function' && (typeof poData==='undefined' || !poData.length)) await loadPO(); }catch(e){}
+  try{ if(typeof loadBlocked==='function') await loadBlocked(); }catch(e){}
+  renderReport();
 }
 // ══════════════════════════════════════════
 // 품번확인 — 엑셀을 떨구면 품번 열 오른쪽에 '최종품번'·'단종' 을 붙여 준다
@@ -19494,6 +19828,9 @@ function enterApp(user){
   // PSI: 수입·출고 실적과 재고를 다루므로 MASTER·KITURAMI(본사)만 본다.
   const tabPsi=document.getElementById('tab-psi');
   if(tabPsi) tabPsi.style.display = canSeePsi() ? 'block' : 'none';
+  // 보고서도 PSI 를 보는 사람만
+  const tabRep=document.getElementById('tab-report');
+  if(tabRep) tabRep.style.display = canSeePsi() ? 'block' : 'none';
   // 발주현황은 위 탭줄이 아니라 PSI 화면의 단추로 연다(탭 요소는 switchTab 을 위해 남겨 두고 감춘다)
   const tabPo=document.getElementById('tab-po');
   if(tabPo) tabPo.style.display='none';
