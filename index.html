@@ -3680,6 +3680,13 @@ const PN_ALT_LH=17;                                  // 세 칸의 줄 높이(�
 function pnAltLine(html, style){
   return `<div style="height:${PN_ALT_LH}px;line-height:${PN_ALT_LH}px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${style||''}">${html}</div>`;
 }
+// 품목 사이에 옅은 가로줄을 깐다 — 품번·품명·필요수량 세 칸이 한 줄로 읽히게.
+//   줄은 칸 옆 여백까지 늘여 칸과 칸이 이어져 보이게 하고, 글자 입력을 막지 않게 눌러도 통과시킨다.
+function pnAltBox(inner, n){
+  let sep='';
+  for(let i=1;i<n;i++) sep+=`<div style="position:absolute;left:-10px;right:-10px;top:${i*PN_ALT_LH}px;height:1px;background:var(--border);pointer-events:none"></div>`;
+  return `<div style="position:relative;min-height:${Math.max(1,n)*PN_ALT_LH}px">${sep}${inner}</div>`;
+}
 function pnAltEdit(rep, list, fld){
   const txt=(list||[]).join('\n'), v=escapeHtml(txt), raw=escapeHtml(rep||'');
   const qty=(fld==='altq');
@@ -3884,19 +3891,20 @@ function pnCellHtml(col, r, ctx){
   if(col.key==='alt'||col.key==='alt_name'||col.key==='alt_qty'){
     const bl=col.groupStart?'border-left:1px solid var(--border);':'';
     const ents=pnAltEntries(r.rep);
+    const n=ents.length;
     if(col.key==='alt_name'){          // 품명은 품번조회에서 따온다(고칠 수 없다)
       const inner=ents.map(e=>{ const nm=pnAltName(e.p);
         return pnAltLine(escapeHtml(nm), 'color:var(--muted)').replace('<div ','<div title="'+escapeHtml(nm)+'" '); }).join('');
-      return _pnTd(col, inner, '', bl+'font-size:11px'); }
+      return _pnTd(col, pnAltBox(inner,n), '', bl+'font-size:11px'); }
     if(col.key==='alt_qty'){
       const h=pnCellHist(r.rep,'altq');
       const inner=(isMaster?pnAltEdit(r.rep, ents.map(e=>e.q), 'altq')
-                           :ents.map(e=>pnAltLine(escapeHtml(e.q),'text-align:right')).join(''))+h.badge;
-      return _pnTd(col, inner, h.cls.trim(), bl+'font-size:11px;text-align:right;padding:0 6px'); }
+                           :ents.map(e=>pnAltLine(escapeHtml(e.q),'text-align:right')).join(''));
+      return _pnTd(col, pnAltBox(inner,n)+h.badge, h.cls.trim(), bl+'font-size:11px;text-align:right'); }
     const h=pnCellHist(r.rep,'alt');
     const inner=(isMaster?pnAltEdit(r.rep, ents.map(e=>pnAltResolve(e.p)), 'alt')
-                         :ents.map(e=>pnAltLine(hlPN(pnAltResolve(e.p),kw))).join(''))+h.badge;
-    return _pnTd(col, inner, h.cls.trim(), bl+'font-size:11px'); }
+                         :ents.map(e=>pnAltLine(hlPN(pnAltResolve(e.p),kw))).join(''));
+    return _pnTd(col, pnAltBox(inner,n)+h.badge, h.cls.trim(), bl+'font-size:11px'); }
   if(col.key==='export_ctrl'){ const on = r._split ? isExportRestricted(r._compat) : (r.compats||[]).some(isExportRestricted);
     return _pnTd(col, on?'<span style="color:#ef4444;font-weight:700;font-size:12px">O</span>':'', 'center', 'text-align:center'); }
   switch(col.key){
