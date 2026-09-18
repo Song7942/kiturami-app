@@ -10676,6 +10676,94 @@ function shipDropInit(){
   document.addEventListener('dragover', guard);
   document.addEventListener('drop', e=>{ guard(e); if(pane.classList.contains('active')) hide(); });
 }
+// ══════════════════════════════════════════
+// 검색창 최근 기록 — 검색창을 다시 누르면 최근에 찾은 말이 차례로 뜬다
+//   창마다 따로, 최근 10개. 아이디별로 이 기기에 담는다(localStorage).
+// ══════════════════════════════════════════
+const SRCH_MAX=10;
+const SRCH_INPUTS=['searchInput','orderSearchInput','prodInput','pnInput','invSearchInput',
+  'shipSearchInput','priceSearchInput','moqInput','pnChkInput','ssInput','blkInput','msInput',
+  'shipInput','poInput','simInput','psiInput'];
+function srchKey(id){
+  const uid=(typeof currentUser!=='undefined' && currentUser && currentUser.id)?currentUser.id:'anon';
+  return 'kt_srch:'+uid+':'+id;
+}
+function srchList(id){
+  try{ const a=JSON.parse(localStorage.getItem(srchKey(id))||'[]');
+    return Array.isArray(a)?a.filter(x=>typeof x==='string' && x.trim()):[]; }catch(e){ return []; }
+}
+function srchStore(id, arr){ try{ localStorage.setItem(srchKey(id), JSON.stringify(arr.slice(0,SRCH_MAX))); }catch(e){} }
+function srchAdd(id, v){
+  v=String(v==null?'':v).trim(); if(!v) return;
+  const a=srchList(id).filter(x=>x.toLowerCase()!==v.toLowerCase());
+  a.unshift(v); srchStore(id, a);
+}
+function srchDel(id, v){ srchStore(id, srchList(id).filter(x=>x!==v)); }
+function srchClearAll(id){ try{ localStorage.removeItem(srchKey(id)); }catch(e){} }
+let _srchOut=null, _srchScroll=null;
+function srchClose(){
+  const b=document.getElementById('srchPop'); if(b) b.remove();
+  if(_srchOut){ document.removeEventListener('mousedown', _srchOut, true); _srchOut=null; }
+  if(_srchScroll){ window.removeEventListener('scroll', _srchScroll, true); window.removeEventListener('resize', _srchScroll); _srchScroll=null; }
+}
+function srchOpen(inp){
+  srchClose();
+  const list=srchList(inp.id); if(!list.length) return;
+  const ru=(lang==='ru');
+  const r=inp.getBoundingClientRect();
+  const w=Math.max(200, Math.min(400, Math.round(r.width)));
+  const box=document.createElement('div'); box.id='srchPop';
+  box.style.cssText='position:fixed;top:'+Math.round(r.bottom+4)+'px;left:'+Math.round(Math.max(6,Math.min(r.left, window.innerWidth-w-6)))
+    +'px;width:'+w+'px;z-index:10001;background:var(--surface2);border:1px solid var(--border);border-radius:10px;'
+    +'box-shadow:0 10px 30px #0009;font-size:12px;color:var(--text);overflow:hidden';
+  box.innerHTML=
+     '<div style="padding:6px 10px;font-size:11px;color:var(--muted);border-bottom:1px solid var(--border)">'+(ru?'Недавние запросы':'최근 검색')+'</div>'
+    +'<div style="max-height:240px;overflow:auto">'
+    + list.map((v,i)=>'<div class="srch-it" data-v="'+escapeHtml(v)+'" style="display:flex;align-items:center;gap:7px;padding:6px 10px;cursor:pointer">'
+        +'<span style="flex:none;width:11px;color:var(--muted);font-size:10px">'+(i+1)+'</span>'
+        +'<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escapeHtml(v)+'</span>'
+        +'<span class="srch-x" title="'+(ru?'Удалить':'지우기')+'" style="flex:none;color:var(--muted);padding:0 2px">✕</span></div>').join('')
+    +'</div>'
+    +'<div style="border-top:1px solid var(--border);padding:6px 10px;text-align:right">'
+      +'<span id="srchClr" style="cursor:pointer;color:var(--muted);font-size:11px">'+(ru?'Очистить всё':'모두 지우기')+'</span></div>';
+  document.body.appendChild(box);
+  box.querySelectorAll('.srch-it').forEach(it=>{
+    it.addEventListener('mouseenter',()=>{ it.style.background='var(--row-hover)'; });
+    it.addEventListener('mouseleave',()=>{ it.style.background=''; });
+    // 누름(mousedown)에서 처리한다 — 클릭까지 기다리면 검색창이 먼저 풀려 팝업이 닫힌다
+    it.addEventListener('mousedown', e=>{
+      e.preventDefault();
+      const v=it.getAttribute('data-v')||'';
+      if(e.target.classList && e.target.classList.contains('srch-x')){ srchDel(inp.id, v); srchOpen(inp); return; }
+      srchClose();
+      inp.value=v; srchAdd(inp.id, v);
+      inp.dispatchEvent(new Event('input',{bubbles:true}));
+      inp.dispatchEvent(new Event('change',{bubbles:true}));
+      inp.focus();
+    });
+  });
+  box.querySelector('#srchClr').addEventListener('mousedown', e=>{ e.preventDefault(); srchClearAll(inp.id); srchClose(); });
+  _srchOut=e=>{ if(!box.contains(e.target) && e.target!==inp) srchClose(); };
+  document.addEventListener('mousedown', _srchOut, true);
+  _srchScroll=()=>srchClose();
+  window.addEventListener('scroll', _srchScroll, true);
+  window.addEventListener('resize', _srchScroll);
+}
+function srchWire(id){
+  const inp=document.getElementById(id);
+  if(!inp || inp._srchOn) return;
+  inp._srchOn=true;
+  inp.setAttribute('autocomplete','off');
+  inp.addEventListener('focus', ()=>srchOpen(inp));
+  inp.addEventListener('click', ()=>srchOpen(inp));
+  inp.addEventListener('input', ()=>srchClose());         // 글을 치는 동안은 가리지 않게 닫는다
+  inp.addEventListener('keydown', e=>{
+    if(e.key==='Enter'){ srchAdd(id, inp.value); srchClose(); }
+    else if(e.key==='Escape'){ srchClose(); }
+  });
+  inp.addEventListener('blur', ()=>{ srchAdd(id, inp.value); setTimeout(srchClose, 120); });
+}
+function srchWireAll(){ SRCH_INPUTS.forEach(srchWire); }
 // ── 엑셀을 화면에 끌어다 놓아 올리기 (업로드 단추가 있는 화면 공용) ──
 //   놓은 파일을 그 화면의 '파일 고르기' 칸에 그대로 넣고 change 를 울린다.
 //   그러면 단추로 올릴 때와 똑같은 길을 타므로 권한 검사도 그대로 걸린다.
@@ -18165,6 +18253,7 @@ updatePNTableScrollbar=setupHTableScroll('scrollBodyPN','pnHdrWrap','pnTblScroll
 setupSimpleHeaderScrollSync('scrollBodyPrice','priceCalcHdrWrap');
 setupSimpleHeaderScrollSync('scrollBodyPrice','priceSupplyHdrWrap');
 updatePartsTableScrollbar();updateOrderTableScrollbar();
+try{ srchWireAll(); }catch(e){}          // 검색창 최근 기록
 // ══════════════════════════════════════════
 // 인증 (로그인 / 회원가입 / 아이디·비밀번호 찾기)
 // ══════════════════════════════════════════
