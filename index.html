@@ -3618,14 +3618,42 @@ function savePnAlt(){
 function pnAltSplit(s){
   return String(s==null?'':s).split(/[,;\/\n\r\t ]+/).map(x=>x.trim()).filter(Boolean);
 }
-function pnAltList(pn){ const k=normPN(pn); return k?pnAltSplit(pnAlt[k]):[]; }
-function pnAltText(pn){ return pnAltList(pn).join(', '); }
-// 한 줄 값으로 다듬는다 — 대문자·중복 제거
-function pnAltNorm(raw){
-  const seen=new Set(), out=[];
-  pnAltSplit(raw).forEach(v=>{ const u=pnUpAll(v); if(u && !seen.has(u)){ seen.add(u); out.push(u); } });
-  return out.join(', ');
+// 담는 꼴: { '<대표품번>': [ {p:'품번', q:'필요수량'}, … ] }  (예전 한 줄 글도 받아 준다)
+//   열쇠가 대표품번이라, 같은 대표품번의 줄들은 모두 같은 내용을 보여 준다.
+function pnAltEntries(pn){
+  const k=normPN(pn); if(!k) return [];
+  const v=pnAlt[k];
+  if(Array.isArray(v)) return v.map(e=>({ p:pnUpAll(e&&e.p||''), q:String((e&&e.q)==null?'':e.q).trim() })).filter(e=>e.p);
+  return pnAltSplit(v).map(p=>({ p:pnUpAll(p), q:'' }));
 }
+function pnAltSetEntries(pn, arr){
+  const k=normPN(pn); if(!k) return;
+  const seen=new Set(), out=[];
+  (arr||[]).forEach(e=>{ const p=pnUpAll(e&&e.p||''); if(!p||seen.has(p)) return; seen.add(p);
+    out.push({ p, q:String((e&&e.q)==null?'':e.q).trim() }); });
+  if(out.length) pnAlt[k]=out; else delete pnAlt[k];
+}
+// 여기에 적은 품번은 '지금의 최종품번'으로 보여 준다.
+//   품목추가로 대표품번·호환품번이 엮여 있으면, 최종품번이 바뀌는 대로 저절로 따라간다.
+function pnAltResolve(p){
+  const raw=pnUpAll(p); if(!raw) return '';
+  const rep=(getPNInfo(raw)?raw:'') || findMasterRep(raw) || '';
+  if(!rep) return raw;                                  // 아직 품번조회에 없는 품번은 적은 그대로
+  return pnUpAll((getPNInfo(rep)||{}).final||'') || raw;
+}
+// 품명은 품번조회에서 가져온다(호환품번 단위 값이 있으면 그것을 먼저).
+function pnAltName(p){
+  const k=pnAltResolve(p); if(!k) return '';
+  const s=pnSpecOf(k);
+  if(lang==='ko'){ if(s&&s.name) return s.name; } else if(s&&s.name_ru) return s.name_ru;
+  const rep=(getPNInfo(k)?k:'') || findMasterRep(k) || '';
+  const i=rep?getPNInfo(rep):null;
+  return i?(lang==='ko'?(i.name_ko||''):(i.name_ru||i.name_ko||'')):'';
+}
+function pnAltList(pn){ return pnAltEntries(pn).map(e=>pnAltResolve(e.p)); }
+function pnAltText(pn){ return pnAltList(pn).join(', '); }
+function pnAltNameText(pn){ return pnAltEntries(pn).map(e=>pnAltName(e.p)).join(', '); }
+function pnAltQtyText(pn){ return pnAltEntries(pn).map(e=>e.q).join(', '); }
 // 분할 보기에서 호환품번(품번) 단위 편집 span
 // 품번 정보(대표·호환·최종품번 / 품명 / 규격 / 러품 / 영문품명 / 단종)는 여러 화면이 같은 자리에서
 // 가져다 쓴다. 어디서 고치든 지금 보고 있는 화면이 바로 따라오게 다시 그린다.
@@ -3646,13 +3674,19 @@ function pnCompatEdit(rep, raw){
   const disp=escapeHtml(pnUpperLead(raw||'')), rw=escapeHtml(raw||'');
   return `<span contenteditable="true" class="pn-edit" data-pnrep="${escapeHtml(rep)}" data-pnfield="compat_one" data-pnorig="${disp}" data-pnrawold="${rw}" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()" onblur="onPNCellBlur(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}" style="display:inline-block;min-width:20px;outline:none;border-bottom:1px dashed var(--accent2);cursor:text;padding:0 2px">${disp}</span>`;
 }
-// 대체품목 칸 — 한 칸에 품번을 여러 개 적는다(쉼표·빈칸으로 나눠 적으면 된다)
-//   한 줄에 품번 하나씩 적는다. Enter 를 치면 줄이 바뀌고, 칸 밖을 누르면 저장된다.
-function pnAltEdit(compat, list){
-  const txt=(list||[]).join('\n'), v=escapeHtml(txt), raw=escapeHtml(compat||'');
-  const tip=(lang==='ru')?'По одному артикулу в строке. Enter — новая строка, клик вне ячейки — сохранить.'
-                         :'한 줄에 품번 하나씩 적습니다. Enter 로 줄바꿈, 칸 밖을 누르면 저장됩니다.';
-  return `<span contenteditable="true" class="pn-edit pn-alt" data-pncompat="${raw}" data-pnfield="alt" data-pnorig="${v}" title="${escapeHtml(tip)}" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()" onblur="onPnAltBlur(this)" onpaste="pnAltPaste(event)" onkeydown="if(event.key==='Enter'){event.preventDefault();document.execCommand('insertText',false,'\\n');}else if(event.key==='Escape'){event.preventDefault();this.blur();}" style="display:block;min-width:40px;min-height:15px;width:100%;box-sizing:border-box;outline:none;border-bottom:1px dashed var(--accent2);cursor:text;padding:0 2px;white-space:pre-wrap;word-break:break-all;line-height:1.45">${v}</span>`;
+// 대체품목 칸 — 품번·품명·필요수량 세 칸이 줄을 맞춰 선다.
+//   한 줄에 하나씩 적고, Enter 로 줄을 바꾼다. 칸 밖을 누르면 저장.
+const PN_ALT_LH=17;                                  // 세 칸의 줄 높이(맞물려야 줄이 어긋나지 않는다)
+function pnAltLine(html, style){
+  return `<div style="height:${PN_ALT_LH}px;line-height:${PN_ALT_LH}px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${style||''}">${html}</div>`;
+}
+function pnAltEdit(rep, list, fld){
+  const txt=(list||[]).join('\n'), v=escapeHtml(txt), raw=escapeHtml(rep||'');
+  const qty=(fld==='altq');
+  const tip=(lang==='ru')?'По одной строке. Enter — новая строка, клик вне ячейки — сохранить.'
+                         :'한 줄에 하나씩 적습니다. Enter 로 줄바꿈, 칸 밖을 누르면 저장됩니다.';
+  const blur=qty?'onPnAltQtyBlur(this)':'onPnAltBlur(this)';
+  return `<span contenteditable="true" class="pn-edit pn-alt" data-pnaltrep="${raw}" data-pnfield="${qty?'altq':'alt'}" data-pnorig="${v}" title="${escapeHtml(tip)}" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()" onblur="${blur}" onpaste="pnAltPaste(event)" onkeydown="if(event.key==='Enter'){event.preventDefault();document.execCommand('insertText',false,'\\n');}else if(event.key==='Escape'){event.preventDefault();this.blur();}" style="display:block;min-width:30px;min-height:${PN_ALT_LH}px;width:100%;box-sizing:border-box;outline:none;border-bottom:1px dashed var(--accent2);cursor:text;padding:0 2px;white-space:pre;overflow:hidden;line-height:${PN_ALT_LH}px${qty?';text-align:right':''}">${v}</span>`;
 }
 // 붙여넣기는 글자만 받는다(서식·표가 통째로 들어오면 줄이 엉킨다)
 function pnAltPaste(ev){
@@ -3668,19 +3702,39 @@ function pnAltReadCell(el){
     .replace(/<\/(div|p|li|tr)>/gi,'\n')
     .replace(/<(div|p|li|tr)[^>]*>/gi,'\n');
   const d=document.createElement('div'); d.innerHTML=h;
-  return d.textContent||'';
+  // 태그를 줄바꿈으로 바꾸며 생긴 빈 줄은 접는다(줄 차례가 밀리지 않게)
+  return String(d.textContent||'').replace(/\r\n?/g,'\n').replace(/\n{2,}/g,'\n').replace(/^\n+|\n+$/g,'');
 }
-// 대체품목 칸 저장
+// 대체품목 '품번' 칸 저장 — 줄마다 품번 하나. 이미 적어 둔 필요수량은 품번을 따라 남는다.
 async function onPnAltBlur(el){
-  const key=normPN(el.getAttribute('data-pncompat')||'');
+  const rep=String(el.getAttribute('data-pnaltrep')||'').trim();
   const oldV=el.getAttribute('data-pnorig')||'';               // 줄바꿈 꼴
-  const txt=pnAltNorm(pnAltReadCell(el));                      // 'A, B, C' 꼴
-  const disp=pnAltSplit(txt).join('\n');
-  if(!key || disp===oldV){ el.textContent=oldV; return; }      // 그대로면 편집 중 생긴 태그만 씻어 낸다
-  if(txt) pnAlt[key]=txt; else delete pnAlt[key];
+  const lines=[]; const seen=new Set();
+  pnAltReadCell(el).split('\n').forEach(s=>{
+    pnAltSplit(s).forEach(v=>{ const u=pnUpAll(v); if(u && !seen.has(u)){ seen.add(u); lines.push(u); } });
+  });
+  const disp=lines.join('\n');
+  if(!rep || disp===oldV){ el.textContent=oldV; return; }      // 그대로면 편집 중 생긴 태그만 씻어 낸다
+  const prev=pnAltEntries(rep);
+  const qOf={}; prev.forEach(e=>{ qOf[pnAltResolve(e.p)]=e.q; });
+  pnAltSetEntries(rep, lines.map(p=>({ p, q:qOf[pnAltResolve(p)]||'' })));
   savePnAlt();
-  const repOf=(typeof findMasterRep==='function')?findMasterRep(key):'';
-  if(repOf) recordPNHistory(repOf, 'alt:'+key, pnAltSplit(oldV).join(', '), txt);
+  recordPNHistory(rep, 'alt', pnAltSplit(oldV).join(', '), lines.join(', '));
+  el.setAttribute('data-pnorig', disp); el.textContent=disp;
+  ktAfterPnEdit();
+}
+// 대체품목 '필요수량' 칸 저장 — 품번 줄 차례대로 받는다.
+async function onPnAltQtyBlur(el){
+  const rep=String(el.getAttribute('data-pnaltrep')||'').trim();
+  const oldV=el.getAttribute('data-pnorig')||'';
+  const ents=pnAltEntries(rep);
+  const qs=pnAltReadCell(el).split('\n').map(s=>String(s).replace(/[^\d.\-]/g,'').trim());
+  const next=ents.map((e,i)=>({ p:e.p, q:qs[i]==null?'':qs[i] }));
+  const disp=next.map(e=>e.q).join('\n');
+  if(!rep || disp===oldV){ el.textContent=oldV; return; }
+  pnAltSetEntries(rep, next);
+  savePnAlt();
+  recordPNHistory(rep, 'altq', pnAltSplit(oldV).join(', '), next.map(e=>e.q).join(', '));
   el.setAttribute('data-pnorig', disp); el.textContent=disp;
   ktAfterPnEdit();
 }
@@ -3744,7 +3798,11 @@ function pnBaseCols(isKo, showEng){
   c.push({key:'gw', cap:78, label:ru?'G/W ср.(kg)':'G/W<br>평균(kg)'});
   c.push({key:'cbm', cap:84, label:ru?'CBM ср.(m³)':'CBM<br>평균(m³)'});
   c.push({key:'note', cap:56, label:ru?'Снято':'단종'});
-  c.push({key:'alt', cap:200, label:ru?'Замена<br>(вкл. узлы в сборе)':'대체품목<br>(연결조립필요품목포함)'});
+  // 대체품목 — 품번·품명·필요수량 세 칸을 한 묶음으로 세운다
+  { const g=ru?'Замена (вкл. узлы в сборе)':'대체품목(연결조립필요품목포함)';
+    c.push({key:'alt',      cap:112, group:g, color:'#f59e0b', capLabel:ru?'Артикул':'품번'});
+    c.push({key:'alt_name', cap:150, group:g, color:'#f59e0b', capLabel:ru?'Наименование':'품명'});
+    c.push({key:'alt_qty',  cap:74,  group:g, color:'#f59e0b', capLabel:ru?'Кол-во':'필요수량'}); }
   c.push({key:'applied_models', cap:150, label:ru?'Модели (врем.)':'적용모델<br>(임시)'});
   (typeof MODEL_DEFS!=='undefined'?MODEL_DEFS:[]).forEach(m=> c.push({key:'m:'+m.key, cap:36, group:m.group, color:m.color, capLabel:m.label, modelKey:m.key}));
   return c;
@@ -3790,7 +3848,9 @@ function pnColText(key, r){
     case 'gw': return pnSpecVal(r,'gw');
     case 'cbm': return pnSpecVal(r,'cbm');
     case 'note': return pnSpecVal(r,'dan');
-    case 'alt': return r._split ? pnAltText(r._compat) : (r.compats||[]).map(pnAltText).filter(Boolean).join(' / ');
+    case 'alt': return pnAltText(r.rep);
+    case 'alt_name': return pnAltNameText(r.rep);
+    case 'alt_qty': return pnAltQtyText(r.rep);
     case 'applied_models': return r.applied_models||'';
     case 'export_ctrl': return r._split ? (isExportRestricted(r._compat)?'O':'') : ((r.compats||[]).some(isExportRestricted)?'O':'');
   }
@@ -3800,7 +3860,7 @@ function pnColText(key, r){
 function pnColLabelShort(key){
   const t=T[lang];
   if(key && key.indexOf('m:')===0){ const mk=key.slice(2); const md=(typeof MODEL_DEFS!=='undefined'?MODEL_DEFS:[]).find(m=>m.key===mk); return md?(md.group+' '+md.label):key; }
-  const M={export_ctrl:(lang==='ru'?'Эксп.контроль':'수출제한'), name:t.pnH0, spec:t.pnH0s, name_ru:(lang==='ru'?'Рус.название':'러시아어 품명'), name_en:(lang==='ru'?'Англ.название':'영문품명'), rep:t.pnH1, compat:t.pnH2, final:t.pnH3, nw:'N/W', gw:'G/W', cbm:'CBM', note:(lang==='ru'?'Снято с пр-ва':'단종'), alt:(lang==='ru'?'Замена (вкл. узлы в сборе)':'대체품목(연결조립필요품목포함)'), applied_models:(lang==='ru'?'Модели':'적용모델(임시)')};
+  const M={export_ctrl:(lang==='ru'?'Эксп.контроль':'수출제한'), name:t.pnH0, spec:t.pnH0s, name_ru:(lang==='ru'?'Рус.название':'러시아어 품명'), name_en:(lang==='ru'?'Англ.название':'영문품명'), rep:t.pnH1, compat:t.pnH2, final:t.pnH3, nw:'N/W', gw:'G/W', cbm:'CBM', note:(lang==='ru'?'Снято с пр-ва':'단종'), alt:(lang==='ru'?'Замена — артикул':'대체품목 품번'), alt_name:(lang==='ru'?'Замена — наименование':'대체품목 품명'), alt_qty:(lang==='ru'?'Замена — кол-во':'대체품목 필요수량'), applied_models:(lang==='ru'?'Модели':'적용모델(임시)')};
   return String(M[key]||key).replace(/<br>/g,' ');
 }
 // 모델 열용 소형 필터 아이콘(셀이 좁아 콤팩트하게)
@@ -3818,8 +3878,25 @@ function pnCellHtml(col, r, ctx){
   const H=(f)=>pnCellHist(r.rep, f);
   // 호환품번마다 따로 갖는 값(품명·규격·N/W·G/W·CBM·단종)의 변경이력
   const HC=(f)=>pnCellHist(r.rep, 'cspec:'+f+':'+normPN(r._compat||''));
-  if(col.group){ const md=_partsModels(r.rep)||{}; const bl=col.groupStart?'border-left:1px solid var(--border);':'';
+  if(col.group && col.modelKey){ const md=_partsModels(r.rep)||{}; const bl=col.groupStart?'border-left:1px solid var(--border);':'';
     return _pnTd(col, dot(!!md[col.modelKey]), 'center', bl+'text-align:center'); }
+  // 대체품목 묶음(품번·품명·필요수량) — 대표품번마다 같은 내용을 보여 준다
+  if(col.key==='alt'||col.key==='alt_name'||col.key==='alt_qty'){
+    const bl=col.groupStart?'border-left:1px solid var(--border);':'';
+    const ents=pnAltEntries(r.rep);
+    if(col.key==='alt_name'){          // 품명은 품번조회에서 따온다(고칠 수 없다)
+      const inner=ents.map(e=>{ const nm=pnAltName(e.p);
+        return pnAltLine(escapeHtml(nm), 'color:var(--muted)').replace('<div ','<div title="'+escapeHtml(nm)+'" '); }).join('');
+      return _pnTd(col, inner, '', bl+'font-size:11px'); }
+    if(col.key==='alt_qty'){
+      const h=pnCellHist(r.rep,'altq');
+      const inner=(isMaster?pnAltEdit(r.rep, ents.map(e=>e.q), 'altq')
+                           :ents.map(e=>pnAltLine(escapeHtml(e.q),'text-align:right')).join(''))+h.badge;
+      return _pnTd(col, inner, h.cls.trim(), bl+'font-size:11px;text-align:right;padding:0 6px'); }
+    const h=pnCellHist(r.rep,'alt');
+    const inner=(isMaster?pnAltEdit(r.rep, ents.map(e=>pnAltResolve(e.p)), 'alt')
+                         :ents.map(e=>pnAltLine(hlPN(pnAltResolve(e.p),kw))).join(''))+h.badge;
+    return _pnTd(col, inner, h.cls.trim(), bl+'font-size:11px'); }
   if(col.key==='export_ctrl'){ const on = r._split ? isExportRestricted(r._compat) : (r.compats||[]).some(isExportRestricted);
     return _pnTd(col, on?'<span style="color:#ef4444;font-weight:700;font-size:12px">O</span>':'', 'center', 'text-align:center'); }
   switch(col.key){
@@ -3868,16 +3945,6 @@ function pnCellHtml(col, r, ctx){
         const inner=(isMaster?cspecEdit(r._compat,'dan',val):escapeHtml(val))+h.badge;
         return _pnTd(col, inner, h.cls.trim(), 'font-size:11px;color:var(--muted);text-align:center'); }
       return _pnTd(col, escapeHtml(val), '', 'font-size:11px;color:var(--muted);text-align:center'); }
-    case 'alt': {
-      const pn = r._split ? (r._compat||'') : '';
-      if(!pn){   // 묶어 보기: 호환품번마다 적힌 값을 한 줄에 하나씩 늘어놓는다(편집은 분할 보기에서)
-        const all=[]; (r.compats||[]).forEach(c=>pnAltList(c).forEach(v=>{ if(all.indexOf(v)<0) all.push(v); }));
-        return _pnTd(col, all.map(v=>`<div style="line-height:1.45">${escapeHtml(v)}</div>`).join(''), 'pn-wrap', 'font-size:11px;color:var(--muted)'); }
-      const h=pnCellHist(r.rep, 'alt:'+normPN(pn));
-      const list=pnAltList(pn);
-      const inner=(isMaster?pnAltEdit(pn, list)
-                           :list.map(v=>`<div style="line-height:1.45"><span class="pn-badge pn-cur">${hlPN(v,kw)}</span></div>`).join(''))+h.badge;
-      return _pnTd(col, inner, (h.cls+' pn-wrap').trim(), 'font-size:11px'); }
     case 'applied_models': { const inner=isMaster?ed(r.rep,'applied_models',r.applied_models||''):escapeHtml(r.applied_models||'');
       return _pnTd(col, inner, '', 'text-align:left;font-size:11px'); }
   }
@@ -4062,7 +4129,7 @@ function renderPN(){
   _pnSplit=true;                        // 항상 호환품번 단위(한 셀에 여러 품번 묶지 않음)
   const isMasterPN=pnDelVisible();
   let rows=PN_DATA;
-  if(kw)rows=rows.filter(r=>searchRow(r.rep, kw, [r.name_ko,r.name_ru,r.spec,r.final,...(r.compats||[]),...(r.compats||[]).map(pnAltText)]));
+  if(kw)rows=rows.filter(r=>searchRow(r.rep, kw, [r.name_ko,r.name_ru,r.spec,r.final,...(r.compats||[]), pnAltText(r.rep), pnAltNameText(r.rep)]));
   if(_pnSplit) rows=pnExpandRows(rows);  // 각 호환품번을 한 행씩 분리(검색 후 확장)
   // 헤더 열 필터(엑셀식: 선택된 값 집합만 표시, 여러 열은 AND)
   const fkeys=Object.keys(_pnFilters);
@@ -4311,9 +4378,8 @@ function openPNHistoryModal(rep, field){
                 : {name:'품명',spec:'규격',nw:'N/W',gw:'G/W',cbm:'CBM',dan:'단종'};
     fname=(cl[p[1]]||p[1])+' · '+(p[2]||'');
   }
-  if(String(field).indexOf('alt:')===0){
-    fname=(ru?'Замена':'대체품목')+' · '+String(field).slice(4);
-  }
+  if(field==='alt')  fname=ru?'Замена — артикул':'대체품목 품번';
+  if(field==='altq') fname=ru?'Замена — кол-во':'대체품목 필요수량';
   const fmt=iso=>{ try{ const d=new Date(iso), z=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())} ${z(d.getHours())}:${z(d.getMinutes())}`; }catch(e){ return iso; } };
   const rowsHtml=entries.length ? entries.map(h=>`
     <div style="border-bottom:1px solid var(--border);padding:8px 0">
@@ -4468,6 +4534,7 @@ async function onPNCellBlur(el){
   if(val===(el.getAttribute('data-pnorig')||'')) return;
   // 대체품목: 한 칸에 여러 품번. kt_psi_cfg(id=100)에 호환품번을 열쇠로 모아 둔다.
   if(field==='alt'){ return await onPnAltBlur(el); }
+  if(field==='altq'){ return await onPnAltQtyBlur(el); }
   // 호환품번 단위 값(N/W·G/W·CBM·단종) 편집 → kt_pn_specs(품번 키)에 저장.
   if(field && field.indexOf('cspec:')===0){
     const f=field.slice(6);   // nw|gw|cbm|dan
