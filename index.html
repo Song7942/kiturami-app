@@ -192,6 +192,7 @@ main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0}
 .myorder-row .qty{flex-shrink:0;font-weight:700;color:var(--text)}
 .diag-num.active{background:#f59e0b;color:#1a1a00;border-color:#fde68a;transform:translate(-50%,-50%) scale(1.2);z-index:20}
 .diag-num.no-match{background:rgba(15,17,23,.6);color:rgba(199,210,254,.35);cursor:default;border-color:rgba(99,102,241,.15)}
+.dm-num.diag-picked{background:#22c55e;color:#062b12;border-color:#86efac;z-index:21}
 .diag-num.diag-picked{background:#22c55e;color:#062b12;border-color:#86efac;transform:translate(-50%,-50%) scale(1.25);z-index:21}
 .diag-group-label{flex-shrink:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:10px 8px;border-radius:6px;white-space:nowrap;cursor:pointer;transition:filter .15s}
 .diag-group-label:hover{filter:brightness(1.25)}
@@ -799,6 +800,10 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
           <input type="text" id="orderSearchInput" placeholder="도면번호, 품명, 대표품번으로 검색…">
         </div>
         <div class="count-badge" id="orderCountBadge"></div>
+        <button class="dl-btn" id="orderModelBtn" onclick="openModelEditor()" title="표 머리줄의 모델 칸(A.P 10~24 …)을 더하거나 고칩니다" style="display:none">
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 10v10M15 10v10"/></svg>
+          <span id="i18n-modeledit">모델 편집</span>
+        </button>
         <button class="dl-btn" id="orderPartAddBtn" onclick="openPartEditor('')" title="도면 아래 목록에 부품을 새로 넣습니다" style="display:none;background:#22c55e;border-color:#22c55e;color:#fff">
           <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           <span id="i18n-partadd">부품 추가</span>
@@ -1742,6 +1747,16 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
       <div class="dm-nums" id="dmNums"></div>
     </div>
     <div class="dm-label" id="dmLabel"></div>
+    <!-- 확대해서 본 상태에서도 도면을 고칠 수 있게 하는 도구줄 -->
+    <div id="dmEditBar" style="display:none;position:absolute;left:8px;top:8px;z-index:30;align-items:center;gap:5px;flex-wrap:wrap;max-width:calc(100% - 60px);padding:5px 7px;border-radius:9px;background:var(--surface2);border:1px solid var(--border);box-shadow:0 6px 18px #0007;font-size:11px" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()">
+      <label style="display:flex;align-items:center;gap:4px">번호<input type="text" id="dmEditNum" oninput="diagNumRename(this.value)" style="width:52px;padding:2px 5px;border:1px solid var(--border);border-radius:5px;background:var(--bg);color:var(--text);font-size:11px;text-align:center"></label>
+      <button class="diag-hide-btn" onclick="diagPickLineStart()">선 끝 지정</button>
+      <button class="diag-hide-btn" onclick="diagLineClear()">선 지우기</button>
+      <button class="diag-hide-btn" onclick="diagNumDelete()">번호 삭제</button>
+      <button class="diag-hide-btn" onclick="openPartEditor(document.getElementById('dmEditNum').value)">부품 정보</button>
+      <button class="diag-hide-btn" onclick="diagSaveNums()" style="background:var(--accent2);color:#fff;border-color:var(--accent2)">저장</button>
+      <span id="dmEditMsg" style="color:var(--muted)">번호를 끌어 옮기고, 빈 곳을 눌러 새 번호를 찍습니다.</span>
+    </div>
     <div class="dm-zoom-hint" id="dmZoomHint">👆 <span id="i18n-dmzoomhint">손가락으로 확대/이동</span></div>
     <button class="dm-close" onclick="closeDiagModal()">✕</button>
   </div>
@@ -2985,16 +3000,19 @@ function diagKeepBase(){
   if(!_partsBase) _partsBase=JSON.parse(JSON.stringify(PARTS));
 }
 async function loadDiagEdits(){
-  diagKeepBase();
+  diagKeepBase(); modelsKeepBase();
   if(_diagLoaded) return; _diagLoaded=true;
   try{
-    const { data, error }=await sb.from('kt_psi_cfg').select('id,cfg').in('id',[DIAG_CFG_ID,PARTS_CFG_ID]);
+    const { data, error }=await sb.from('kt_psi_cfg').select('id,cfg').in('id',[DIAG_CFG_ID,PARTS_CFG_ID,MODELS_CFG_ID]);
     if(error) return;
+    let models=false;
     (data||[]).forEach(r=>{
       const c=r.cfg||{};
       if(Number(r.id)===DIAG_CFG_ID && c.nums) DIAG_TYPES.forEach(t=>{ if(Array.isArray(c.nums[t])) _setArr(diagNumsOf(t), c.nums[t]); });
       if(Number(r.id)===PARTS_CFG_ID && Array.isArray(c.parts) && c.parts.length) _setArr(PARTS, c.parts);
+      if(Number(r.id)===MODELS_CFG_ID && Array.isArray(c.groups) && c.groups.length){ _setArr(MODEL_GROUPS, c.groups); models=true; }
     });
+    if(models){ modelsRebuild(); try{ renderModelBar(); }catch(e){} }
   }catch(e){}
   _partsByRep=null;
 }
@@ -3013,7 +3031,7 @@ async function savePartsList(){
 // ── 분해도 편집 ──
 let diagEdit=false, diagSel=null, diagPickLine=false;
 function diagCanEdit(){ return userRole(currentUser).isMaster; }
-function diagEditMsg(s){ const el=document.getElementById('diagEditSel'); if(el) el.textContent=s; }
+function diagEditMsg(s){ ['diagEditSel','dmEditMsg'].forEach(id=>{ const el=document.getElementById(id); if(el) el.textContent=s; }); }
 function diagEditBtnSync(){
   const b=document.getElementById('diagEditBtn'); if(!b) return;
   b.style.display=diagCanEdit()?'':'none';
@@ -3028,6 +3046,12 @@ function diagEditToggle(){
   if(diagEdit) diagEditMsg('번호를 누르면 고르고, 끌어서 옮깁니다. 빈 곳을 누르면 새 번호가 생깁니다.');
   buildDiagram(diagTypes.length?diagTypes:['ap']);
 }
+// 지금 쓰는 번호 칸 — 확대 창이 떠 있으면 그쪽 것을 본다
+function diagNumBox(){
+  const m=document.getElementById('diagModal');
+  const inModal=!!(m && m.classList.contains('show'));
+  return document.getElementById(inModal?'dmEditNum':'diagEditNum');
+}
 function diagSelEntry(){
   if(!diagSel) return null;
   const arr=diagNumsOf(diagSel.type);
@@ -3036,17 +3060,17 @@ function diagSelEntry(){
 function diagSelect(type, idx){
   diagSel={type, idx};
   const e=diagSelEntry(); if(!e) return;
-  const inp=document.getElementById('diagEditNum'); if(inp) inp.value=String(e[0]);
+  ['diagEditNum','dmEditNum'].forEach(id=>{ const inp=document.getElementById(id); if(inp) inp.value=String(e[0]); });
   diagEditMsg('고른 번호: '+e[0]+'  (끌어서 옮기고, 번호 칸을 고치면 바뀝니다)');
-  document.querySelectorAll('.diag-num.diag-picked').forEach(b=>b.classList.remove('diag-picked'));
-  const btn=document.querySelector('.diag-num[data-type="'+type+'"][data-idx="'+idx+'"]');
-  if(btn) btn.classList.add('diag-picked');
+  document.querySelectorAll('.diag-picked').forEach(b=>b.classList.remove('diag-picked'));
+  document.querySelectorAll('.diag-num[data-type="'+type+'"][data-idx="'+idx+'"], .dm-num[data-type="'+type+'"][data-idx="'+idx+'"]')
+    .forEach(b=>b.classList.add('diag-picked'));
 }
 function diagNumDelete(){
   const e=diagSelEntry(); if(!e){ alert('먼저 번호를 고르세요.'); return; }
   if(!confirm('번호 '+e[0]+' 을(를) 도면에서 지울까요?')) return;
   diagNumsOf(diagSel.type).splice(diagSel.idx,1);
-  diagSel=null; buildDiagram(diagTypes); diagEditMsg('지웠습니다. 저장을 눌러야 남습니다.');
+  diagSel=null; diagRepaint(); diagEditMsg('지웠습니다. 저장을 눌러야 남습니다.');
 }
 function diagPickLineStart(){
   if(!diagSelEntry()){ alert('먼저 번호를 고르세요.'); return; }
@@ -3054,13 +3078,13 @@ function diagPickLineStart(){
 }
 function diagLineClear(){
   const e=diagSelEntry(); if(!e){ alert('먼저 번호를 고르세요.'); return; }
-  e.length=4; buildDiagram(diagTypes); diagEditMsg('선을 지웠습니다.');
+  e.length=4; diagRepaint(); diagEditMsg('선을 지웠습니다.');
 }
 function diagRestoreBase(){
   if(!_diagBase) return;
   if(!confirm('이 도면의 번호를 처음 상태로 되돌릴까요?')) return;
   DIAG_TYPES.forEach(t=>_setArr(diagNumsOf(t), JSON.parse(JSON.stringify(_diagBase[t]))));
-  diagSel=null; buildDiagram(diagTypes); diagEditMsg('처음 상태로 되돌렸습니다. 저장을 눌러야 남습니다.');
+  diagSel=null; diagRepaint(); diagEditMsg('처음 상태로 되돌렸습니다. 저장을 눌러야 남습니다.');
 }
 // 도면 위에서 누른 자리를 백분율로
 function diagPct(wrap, ev){
@@ -3073,20 +3097,21 @@ function diagWrapClick(wrap, type, ii, ev){
   if(diagPickLine){
     const e=diagSelEntry();
     if(e){ e[4]=p.x; e[5]=p.y; }
-    diagPickLine=false; buildDiagram(diagTypes);
+    diagPickLine=false; diagRepaint();
     if(diagSel) diagSelect(diagSel.type, diagSel.idx);
     diagEditMsg('선을 그었습니다. 저장을 눌러야 남습니다.');
     return;
   }
   const arr=diagNumsOf(type);
-  const inp=document.getElementById('diagEditNum');
+  const inp=diagNumBox();
   let n=String((inp&&inp.value||'')).trim();
   if(!n){                                   // 번호를 안 적었으면 가장 큰 번호 다음으로
     const mx=arr.reduce((m,x)=>Math.max(m, Number(x[0])||0), 0);
     n=String(mx+1);
   }
   arr.push([n, ii, p.x, p.y]);
-  buildDiagram(diagTypes);
+  diagSel={type, idx:arr.length-1};
+  diagRepaint();
   diagSelect(type, arr.length-1);
   diagEditMsg('번호 '+n+' 을(를) 찍었습니다. 저장을 눌러야 남습니다.');
 }
@@ -3094,8 +3119,9 @@ function diagNumRename(v){
   const e=diagSelEntry(); if(!e) return;
   const n=String(v||'').trim(); if(!n) return;
   e[0]=n;
-  const btn=document.querySelector('.diag-num[data-type="'+diagSel.type+'"][data-idx="'+diagSel.idx+'"]');
-  if(btn){ btn.textContent=n; btn.dataset.diag=n; }
+  document.querySelectorAll('.diag-num[data-type="'+diagSel.type+'"][data-idx="'+diagSel.idx+'"], .dm-num[data-type="'+diagSel.type+'"][data-idx="'+diagSel.idx+'"]')
+    .forEach(btn=>{ btn.textContent=n; btn.dataset.diag=n; });
+  ['diagEditNum','dmEditNum'].forEach(id=>{ const inp=document.getElementById(id); if(inp && inp.value!==n) inp.value=n; });
   diagEditMsg('번호를 '+n+' 로 바꿨습니다. 저장을 눌러야 남습니다.');
 }
 // ── 부품목록 편집 ─────────────────────────────────────
@@ -3167,6 +3193,161 @@ function openPartEditor(diag){
   };
   g('peDiag').focus();
 }
+// ── 모델 열 편집 (MASTER) ─────────────────────────────
+//   부품 표 머리줄의 모델 칸(A.P 10~24, 30, 35 …)을 더하고 고치고 지운다.
+//   바탕값은 MODEL_GROUPS 하나뿐이고, 여기서 MODEL_DEFS·GC·모델별 열쇠묶음을 다시 만든다.
+const MODELS_CFG_ID=103;
+const MODEL_KEYSETS={'A.P':AP_KEYS,'A.P S':APS_KEYS,'A.P T':APT_KEYS,'A.N S':ANS_KEYS,'A.N C':ANC_KEYS,'A.N CH':ANCH_KEYS};
+let _modelsBase=null;
+function modelsKeepBase(){ if(!_modelsBase) _modelsBase=JSON.parse(JSON.stringify(MODEL_GROUPS)); }
+function modelKeyMake(g, label, used){
+  const pre=String((g.keys&&g.keys[0])||g.abbr).toLowerCase().split('_')[0].replace(/[^a-z]/g,'')||'m';
+  const tail=String(label||'').replace(/[^0-9A-Za-z]/g,'')||'x';
+  let k=pre+'_'+tail, i=2;
+  while(used.has(k)){ k=pre+'_'+tail+'_'+i; i++; }
+  used.add(k); return k;
+}
+// MODEL_GROUPS → MODEL_DEFS · GC · *_KEYS 다시 만들기
+function modelsRebuild(){
+  const oldColor={}; MODEL_DEFS.forEach(d=>{ oldColor[d.key]=d.color; });
+  const defs=[];
+  MODEL_GROUPS.forEach(g=>{
+    GC[g.abbr]=g.color;
+    (g.subs||[]).forEach((lab,i)=>{
+      const k=(g.keys||[])[i]; if(!k) return;
+      defs.push({ key:k, group:g.abbr, label:String(lab), color:oldColor[k]||g.color });
+    });
+    const st=MODEL_KEYSETS[g.abbr];
+    if(st){ st.clear(); (g.keys||[]).forEach(k=>st.add(k)); }
+  });
+  _setArr(MODEL_DEFS, defs);
+  _partsByRep=null;
+}
+async function modelsSave(){
+  const { error }=await sb.from('kt_psi_cfg').upsert({ id:MODELS_CFG_ID, cfg:{ groups:MODEL_GROUPS } },{ onConflict:'id' });
+  if(error){ alert('저장 실패\n['+(error.message||error.code)+']'); return false; }
+  return true;
+}
+function modelsAfterEdit(){
+  modelsRebuild();
+  try{ renderModelBar(); }catch(e){}
+  try{ if(ktPaneOn('pane-order')) renderOrderTable(); }catch(e){}
+  try{ if(ktPaneOn('pane-parts')) renderTable(); }catch(e){}
+  try{ if(ktPaneOn('pane-pn')) renderPN(); }catch(e){}
+  try{ if(diagBuilt) buildDiagram(diagTypes.length?diagTypes:['ap']); }catch(e){}
+}
+let _meWork=null;                     // 편집 중인 사본
+function closeModelEditor(){ const b=document.getElementById('modelEditPop'); if(b) b.remove(); _meWork=null; }
+function openModelEditor(){
+  if(!diagCanEdit()){ alert('MASTER 만 고칠 수 있습니다.'); return; }
+  modelsKeepBase();
+  _meWork=JSON.parse(JSON.stringify(MODEL_GROUPS));
+  _meWork.forEach(g=>{ g._src=(g.subs||[]).map(()=>''); });   // 새 열이 베껴 올 기존 열
+  closeModelEditor._open=true;
+  const box=document.createElement('div'); box.id='modelEditPop';
+  box.style.cssText='position:fixed;inset:0;z-index:10002;background:#0008;display:flex;align-items:center;justify-content:center;padding:16px';
+  box.innerHTML='<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;width:460px;max-width:100%;max-height:88vh;'
+    +'display:flex;flex-direction:column;box-shadow:0 16px 44px #000a;font-size:12px;color:var(--text)">'
+    +'<div style="padding:12px 14px;border-bottom:1px solid var(--border);font-weight:700;font-size:13px">모델 열 편집</div>'
+    +'<div id="meBody" style="padding:10px 14px;overflow:auto"></div>'
+    +'<div style="display:flex;gap:7px;padding:11px 14px;border-top:1px solid var(--border)">'
+      +'<button id="meBase" style="flex:none;padding:7px 10px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);cursor:pointer;font-size:12px">기본값</button>'
+      +'<button id="meCancel" style="flex:none;padding:7px 10px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);cursor:pointer;font-size:12px">닫기</button>'
+      +'<button id="meSave" style="flex:1;padding:7px;border:none;border-radius:7px;background:var(--accent2);color:#fff;cursor:pointer;font-size:12px;font-weight:700">저장</button>'
+    +'</div></div>';
+  document.body.appendChild(box);
+  box.querySelector('#meCancel').onclick=closeModelEditor;
+  box.onmousedown=e=>{ if(e.target===box) closeModelEditor(); };
+  box.querySelector('#meBase').onclick=()=>{
+    if(!_modelsBase || !confirm('모델 열을 처음 상태로 되돌릴까요?')) return;
+    _meWork=JSON.parse(JSON.stringify(_modelsBase)); _meWork.forEach(g=>{ g._src=(g.subs||[]).map(()=>''); });
+    meRender();
+  };
+  box.querySelector('#meSave').onclick=meCommit;
+  meRender();
+}
+function meRender(){
+  const body=document.getElementById('meBody'); if(!body||!_meWork) return;
+  body.innerHTML='<div style="font-size:11px;color:var(--muted);margin:0 2px 8px">열을 더하거나 이름을 고치고, ▲▼ 로 차례를 바꿉니다. 새 열은 \'부품 베끼기\' 로 기존 열의 적용 부품을 그대로 가져올 수 있습니다.</div>'
+   + _meWork.map((g,gi)=>{
+      const rows=(g.subs||[]).map((lab,i)=>{
+        const isNew=!(g.keys||[])[i];
+        const opts=['<option value="">부품 베끼기…</option>'].concat((g.subs||[]).map((s,j)=>{
+          const kj=(g.keys||[])[j];
+          if(j===i || !kj) return '';
+          return '<option value="'+escapeHtml(String(kj))+'"'+(((g._src||[])[i]===kj)?' selected':'')+'>'+escapeHtml(String(s))+' 에서</option>';
+        }).filter(Boolean)).join('');
+        return '<div style="display:flex;align-items:center;gap:5px;padding:2px 0">'
+          +'<input type="text" value="'+escapeHtml(String(lab))+'" oninput="meSet('+gi+','+i+',this.value)" style="width:82px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:12px">'
+          +(isNew?('<select onchange="meSrc('+gi+','+i+',this.value)" style="flex:1;min-width:0;padding:4px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:11px">'+opts+'</select>')
+                 :('<span style="flex:1;min-width:0;color:var(--muted);font-size:10px;font-family:monospace">'+escapeHtml(String((g.keys||[])[i]||''))+'</span>'))
+          +'<button onclick="meMove('+gi+','+i+',-1)" style="'+COL_ORD_BTN+'">▲</button>'
+          +'<button onclick="meMove('+gi+','+i+',1)" style="'+COL_ORD_BTN+'">▼</button>'
+          +'<button onclick="meDel('+gi+','+i+')" title="이 열 지우기" style="'+COL_ORD_BTN+';color:#ef4444">✕</button>'
+          +'</div>';
+      }).join('');
+      return '<div style="border:1px solid var(--border);border-radius:9px;padding:7px 9px;margin:0 0 8px">'
+        +'<div style="display:flex;align-items:center;gap:6px;margin:0 0 5px">'
+          +'<b style="color:'+escapeHtml(g.color||'#888')+'">'+escapeHtml(g.abbr)+'</b>'
+          +'<span style="color:var(--muted);font-size:11px">'+escapeHtml(g.name||'')+'</span>'
+          +'<span style="flex:1"></span>'
+          +'<input type="color" value="'+escapeHtml(g.color||'#6366f1')+'" onchange="meColor('+gi+',this.value)" title="묶음 색" style="width:26px;height:20px;padding:0;border:1px solid var(--border);border-radius:5px;background:var(--bg)">'
+          +'<button onclick="meAdd('+gi+')" style="padding:3px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);cursor:pointer;font-size:11px">+ 열 추가</button>'
+        +'</div>'+rows+'</div>';
+    }).join('');
+}
+function meSet(gi,i,v){ _meWork[gi].subs[i]=v; }
+function meSrc(gi,i,v){ _meWork[gi]._src[i]=v; }
+function meColor(gi,v){ _meWork[gi].color=v; meRender(); }
+function meAdd(gi){
+  const g=_meWork[gi];
+  g.subs=g.subs||[]; g.keys=g.keys||[]; g._src=g._src||[];
+  g.subs.push(''); g.keys.push(''); g._src.push('');
+  meRender();
+}
+function meMove(gi,i,d){
+  const g=_meWork[gi], j=i+d;
+  if(j<0||j>=g.subs.length) return;
+  [g.subs[i],g.subs[j]]=[g.subs[j],g.subs[i]];
+  [g.keys[i],g.keys[j]]=[g.keys[j],g.keys[i]];
+  [g._src[i],g._src[j]]=[g._src[j],g._src[i]];
+  meRender();
+}
+function meDel(gi,i){
+  const g=_meWork[gi];
+  if((g.keys||[])[i] && !confirm('열 \''+(g.subs[i]||'')+'\' 을(를) 지울까요?\n부품마다 적어 둔 표시도 화면에서 사라집니다.')) return;
+  g.subs.splice(i,1); g.keys.splice(i,1); g._src.splice(i,1);
+  meRender();
+}
+async function meCommit(){
+  if(!_meWork) return;
+  const used=new Set();
+  _meWork.forEach(g=>(g.keys||[]).forEach(k=>{ if(k) used.add(k); }));
+  const copies=[];                     // [새 열쇠, 베껴 올 열쇠]
+  for(const g of _meWork){
+    const subs=[], keys=[];
+    (g.subs||[]).forEach((lab,i)=>{
+      const s=String(lab==null?'':lab).trim(); if(!s) return;      // 이름이 빈 줄은 버린다
+      let k=(g.keys||[])[i];
+      if(!k){
+        k=modelKeyMake(g, s, used);
+        const sk=(g._src||[])[i];
+        if(sk) copies.push([k, sk]);          // 베껴 올 열은 열쇠로 적어 두어 차례가 바뀌어도 어긋나지 않는다
+      }
+      subs.push(s); keys.push(k);
+    });
+    g.subs=subs; g.keys=keys; delete g._src;
+  }
+  _setArr(MODEL_GROUPS, _meWork);
+  modelsRebuild();
+  // 새 열에 기존 열의 적용 부품을 그대로 베낀다
+  if(copies.length){
+    PARTS.forEach(p=>{ p.models=p.models||{}; copies.forEach(([nk,sk])=>{ if(p.models[sk]) p.models[nk]=true; }); });
+  }
+  const ok=await modelsSave();
+  if(ok && copies.length) await savePartsList();
+  if(ok){ closeModelEditor(); modelsAfterEdit(); }
+}
 // 목록을 고친 뒤 화면을 다시 그린다(도면 번호의 '있음/없음' 표시까지)
 function partsAfterEdit(){
   _partsByRep=null;
@@ -3178,7 +3359,8 @@ function partsAfterEdit(){
 function diagDragStart(btn, type, idx, ev){
   if(!diagEdit) return;
   ev.preventDefault(); ev.stopPropagation();
-  const wrap=btn.closest('.diag-wrap'); if(!wrap) return;
+  const wrap=btn.closest('.diag-wrap') || btn.parentElement;   // 옆 그림이면 .diag-wrap, 확대 창이면 #dmNums
+  if(!wrap) return;
   diagSelect(type, idx);
   let moved=false;
   const mv=e=>{
@@ -3439,40 +3621,70 @@ function buildDiagram(types){
   updateDiagScrollbar();
 }
 // ── 분해도 확대 모달 ──
-function openDiagModal(imgIdx,type){
+function openDiagModal(imgIdx,type,keepZoom){
   const _dm={ap:[AP_IMGS,AP_NUMS],aps:[APS_IMGS,APS_NUMS],apt:[APT_IMGS,APT_NUMS],ans:[ANS_IMGS,ANS_NUMS],anc:[ANC_IMGS,ANC_NUMS],anch:[ANCH_IMGS,ANCH_NUMS]};
   const activeType=type||(diagTypes&&diagTypes[0])||'ap';
   const [IMGS,NUMS]=_dm[activeType]||_dm['ap'];
-  currentModalType=activeType;
+  currentModalType=activeType; currentModalImg=imgIdx;
   const labels=['분해도 1','분해도 2','분해도 3'];
   document.getElementById('dmImg').src=IMGS[imgIdx];
   document.getElementById('dmLabel').textContent=(DIAG_NAMES[activeType]?DIAG_NAMES[activeType]+' — ':'')+labels[imgIdx];
   // 번호 오버레이
   const numsEl=document.getElementById('dmNums');
   numsEl.innerHTML='';
-  NUMS.filter(function(n){return n[1]===imgIdx && n[4]!=null && n[5]!=null;}).forEach(function(n){ numsEl.appendChild(diagLeader(n[2],n[3],n[4],n[5])); });
-  NUMS.filter(function(n){return n[1]===imgIdx;}).forEach(function(n){
+  const edit=(diagEdit && diagCanEdit());
+  NUMS.forEach(function(n,idx){ if(n[1]===imgIdx && n[4]!=null && n[5]!=null){
+    const sv=diagLeader(n[2],n[3],n[4],n[5]); sv.dataset.idx=String(idx); numsEl.appendChild(sv); } });
+  NUMS.forEach(function(n,idx){
+    if(n[1]!==imgIdx) return;
     const [dn,,xp,yp]=n;
     const d=document.createElement('div');
     d.className='dm-num'+(activeDiagNum===String(dn)?' active':'');
+    d.dataset.type=activeType; d.dataset.idx=String(idx); d.dataset.diag=String(dn);
     d.style.left=xp+'%';d.style.top=yp+'%';
     d.textContent=String(dn);
-    d.addEventListener('click',function(e){
-      e.stopPropagation();
-      closeDiagModal();
-      // 해당 번호 클릭 효과
-      const dotBtn=document.querySelector('.diag-num[data-diag="'+dn+'"][data-type="'+activeType+'"]')||document.querySelector('.diag-num[data-diag="'+dn+'"]');
-      if(dotBtn&&!dotBtn.classList.contains('no-match')) onDiagClick(String(dn),dotBtn);
-    });
+    if(edit){
+      d.style.cursor='move';
+      d.addEventListener('mousedown',function(e){ e.stopPropagation(); diagDragStart(d,activeType,idx,e); });
+      d.addEventListener('click',function(e){ e.stopPropagation(); diagSelect(activeType,idx); });
+    } else {
+      d.addEventListener('click',function(e){
+        e.stopPropagation();
+        closeDiagModal();
+        // 해당 번호 클릭 효과
+        const dotBtn=document.querySelector('.diag-num[data-diag="'+dn+'"][data-type="'+activeType+'"]')||document.querySelector('.diag-num[data-diag="'+dn+'"]');
+        if(dotBtn&&!dotBtn.classList.contains('no-match')) onDiagClick(String(dn),dotBtn);
+      });
+    }
     numsEl.appendChild(d);
   });
+  // 확대해서 본 상태에서도 고칠 수 있게 — 빈 곳을 누르면 번호를 찍는다
+  const dmBar=document.getElementById('dmEditBar');
+  if(dmBar) dmBar.style.display=edit?'flex':'none';
+  if(edit){
+    numsEl.style.pointerEvents='auto';
+    numsEl.onclick=function(ev){ if(ev.target===numsEl){ ev.stopPropagation(); diagWrapClick(numsEl, activeType, imgIdx, ev); } };
+    const zi=document.getElementById('dmImg');
+    if(zi) zi.onclick=function(ev){ ev.stopPropagation(); diagWrapClick(numsEl, activeType, imgIdx, ev); };
+  } else {
+    numsEl.style.pointerEvents='';
+    numsEl.onclick=null;
+    const zi=document.getElementById('dmImg'); if(zi) zi.onclick=null;
+  }
   document.getElementById('diagModal').classList.add('show');
   document.body.style.overflow='hidden';
+  if(keepZoom){ if(diagSel) diagSelect(diagSel.type, diagSel.idx); return; }   // 고치는 중이면 보던 배율을 지킨다
   dmResetZoom();
   const hintEl=document.getElementById('dmZoomHint');
   if(hintEl){ hintEl.classList.remove('fade'); clearTimeout(dmHintTimer); dmHintTimer=setTimeout(()=>hintEl.classList.add('fade'),2500); }
 }
-let currentModalType=null;
+// 도면을 고친 뒤 화면 두 곳(옆 그림·확대 창)을 함께 다시 그린다
+function diagRepaint(){
+  try{ buildDiagram(diagTypes.length?diagTypes:['ap']); }catch(e){}
+  const m=document.getElementById('diagModal');
+  if(m && m.classList.contains('show')) openDiagModal(currentModalImg, currentModalType, true);
+}
+let currentModalType=null, currentModalImg=0;
 function closeDiagModal(e){
   if(e&&e.target!==document.getElementById('diagModal')) return;
   document.getElementById('diagModal').classList.remove('show');
@@ -5480,7 +5692,7 @@ function renderOrderTable(){
   // 주문을 넣을 수 없는 역할이면 주문 제출·주문서 업로드 버튼도 감춘다.
   const canOrderNow = orderColVis().qty;
   ['orderSubmitBtn','orderUploadBtn'].forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display = canOrderNow?'':'none'; });
-  const paBtn=document.getElementById('orderPartAddBtn'); if(paBtn) paBtn.style.display=userRole(currentUser).isMaster?'':'none';
+  ['orderPartAddBtn','orderModelBtn'].forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display=userRole(currentUser).isMaster?'':'none'; });
 
   const hw=document.getElementById('orderTblHeaderWrap');
   const bw=document.getElementById('orderTblBodyWrap');
