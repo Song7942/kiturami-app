@@ -3626,41 +3626,52 @@ function savePnAlt(){
 function pnAltSplit(s){
   return String(s==null?'':s).split(/[,;\/\n\r\t ]+/).map(x=>x.trim()).filter(Boolean);
 }
-// 담는 꼴: { '<대표품번>': [ {p:'품번', q:'필요수량'}, … ] }  (예전 한 줄 글도 받아 준다)
+// 담는 꼴: { '<대표품번>': [ {p:'적은 품번', q:'필요수량', f:'적을 때의 최종품번'}, … ] }
 //   열쇠가 대표품번이라, 같은 대표품번의 줄들은 모두 같은 내용을 보여 준다.
+//   f 는 '적어 넣던 때의 최종품번'. 적은 품번은 그대로 두되, 그 뒤로 최종품번이
+//   바뀌면(f 와 지금 값이 다르면) 바뀐 최종품번으로 따라간다.
 function pnAltEntries(pn){
   const k=normPN(pn); if(!k) return [];
   const v=pnAlt[k];
-  if(Array.isArray(v)) return v.map(e=>({ p:pnUpAll(e&&e.p||''), q:String((e&&e.q)==null?'':e.q).trim() })).filter(e=>e.p);
-  return pnAltSplit(v).map(p=>({ p:pnUpAll(p), q:'' }));
+  const mk=(p,q,f)=>{ p=pnUpAll(p); return { p, q:String(q==null?'':q).trim(),
+                        f:(f==null||f==='')?pnAltFinalOf(p):pnUpAll(f) }; };   // 예전 자료는 지금 값으로 메운다
+  if(Array.isArray(v)) return v.map(e=>mk(e&&e.p||'', e&&e.q, e&&e.f)).filter(e=>e.p);
+  return pnAltSplit(v).map(p=>mk(p,'',''));
 }
 function pnAltSetEntries(pn, arr){
   const k=normPN(pn); if(!k) return;
   const seen=new Set(), out=[];
   (arr||[]).forEach(e=>{ const p=pnUpAll(e&&e.p||''); if(!p||seen.has(p)) return; seen.add(p);
-    out.push({ p, q:String((e&&e.q)==null?'':e.q).trim() }); });
+    out.push({ p, q:String((e&&e.q)==null?'':e.q).trim(), f:pnUpAll((e&&e.f)||'')||pnAltFinalOf(p) }); });
   if(out.length) pnAlt[k]=out; else delete pnAlt[k];
 }
-// 여기에 적은 품번은 '지금의 최종품번'으로 보여 준다.
-//   품목추가로 대표품번·호환품번이 엮여 있으면, 최종품번이 바뀌는 대로 저절로 따라간다.
-function pnAltResolve(p){
+// 그 품번이 속한 품목의 '지금 최종품번'(품번조회에 없는 품번이면 빈값)
+function pnAltFinalOf(p){
   const raw=pnUpAll(p); if(!raw) return '';
   const rep=(getPNInfo(raw)?raw:'') || findMasterRep(raw) || '';
-  if(!rep) return raw;                                  // 아직 품번조회에 없는 품번은 적은 그대로
-  return pnUpAll((getPNInfo(rep)||{}).final||'') || raw;
+  return rep?pnUpAll((getPNInfo(rep)||{}).final||''):'';
+}
+// 화면에 보일 품번 — 적은 그대로 둔다. 다만 적은 뒤로 최종품번이 바뀌었으면 바뀐 값으로 보여 준다.
+function pnAltResolve(p, f){
+  const raw=pnUpAll(p); if(!raw) return '';
+  const cur=pnAltFinalOf(raw);
+  if(!cur) return raw;                       // 아직 품번조회에 없는 품번은 적은 그대로
+  const at=pnUpAll(f==null?'':f);
+  if(!at) return raw;                        // 언제 적었는지 모르면 적은 그대로
+  return (cur===at)?raw:cur;                 // 최종품번이 바뀐 품목만 새 값으로
 }
 // 품명은 품번조회에서 가져온다(호환품번 단위 값이 있으면 그것을 먼저).
-function pnAltName(p){
-  const k=pnAltResolve(p); if(!k) return '';
+function pnAltName(p, f){
+  const k=pnAltResolve(p, f); if(!k) return '';
   const s=pnSpecOf(k);
   if(lang==='ko'){ if(s&&s.name) return s.name; } else if(s&&s.name_ru) return s.name_ru;
   const rep=(getPNInfo(k)?k:'') || findMasterRep(k) || '';
   const i=rep?getPNInfo(rep):null;
   return i?(lang==='ko'?(i.name_ko||''):(i.name_ru||i.name_ko||'')):'';
 }
-function pnAltList(pn){ return pnAltEntries(pn).map(e=>pnAltResolve(e.p)); }
+function pnAltList(pn){ return pnAltEntries(pn).map(e=>pnAltResolve(e.p, e.f)); }
 function pnAltText(pn){ return pnAltList(pn).join(', '); }
-function pnAltNameText(pn){ return pnAltEntries(pn).map(e=>pnAltName(e.p)).join(', '); }
+function pnAltNameText(pn){ return pnAltEntries(pn).map(e=>pnAltName(e.p, e.f)).join(', '); }
 function pnAltQtyText(pn){ return pnAltEntries(pn).map(e=>e.q).join(', '); }
 // 분할 보기에서 호환품번(품번) 단위 편집 span
 // 품번 정보(대표·호환·최종품번 / 품명 / 규격 / 러품 / 영문품명 / 단종)는 여러 화면이 같은 자리에서
@@ -3733,13 +3744,14 @@ async function onPnAltBlur(el){
   const vals=pnAltSplit(pnAltReadCell(el)).map(pnUpAll);
   if(!rep || vals.join(', ')===oldV){ el.textContent=oldV; return; }
   const ents=pnAltEntries(rep);
-  const keyOf=p=>pnAltResolve(p);
+  // 같은 품목(대표품번)을 가리키면 같은 줄로 본다 — 호환품번을 달리 적어도 두 번 서지 않게
+  const keyOf=p=>{ const u=pnUpAll(p); return ((getPNInfo(u)?u:'')||findMasterRep(u)||u); };
   const dup=new Set(ents.filter((e,j)=>j!==i).map(e=>keyOf(e.p)));
   const add=[]; vals.forEach(v=>{ const k=keyOf(v); if(!dup.has(k)){ dup.add(k); add.push(v); } });
   if(i<ents.length){
-    if(add.length) ents.splice(i, 1, ...add.map((p,n)=>({ p, q:n===0?ents[i].q:'' })));
+    if(add.length) ents.splice(i, 1, ...add.map((p,n)=>({ p, q:n===0?ents[i].q:'', f:pnAltFinalOf(p) })));
     else ents.splice(i, 1);                                   // 비우면 그 줄을 지운다
-  } else if(add.length) add.forEach(p=>ents.push({ p, q:'' }));
+  } else if(add.length) add.forEach(p=>ents.push({ p, q:'', f:pnAltFinalOf(p) }));
   pnAltSetEntries(rep, ents);
   savePnAlt();
   recordPNHistory(rep, 'alt', oldV, add.join(', '));
@@ -3973,13 +3985,13 @@ function pnCellHtml(col, r, ctx){
     for(let i=0;i<nRow;i++){
       const e=ents[i], last=(i===nRow-1);
       if(col.key==='alt_name'){
-        const nm=e?pnAltName(e.p):'';
+        const nm=e?pnAltName(e.p, e.f):'';
         out.push(pnAltRow(`<span title="${escapeHtml(nm)}" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(nm)}</span>`, last, 'color:var(--muted)'));
       } else if(col.key==='alt_qty'){
         const q=e?e.q:'';
         out.push(pnAltRow((isMaster&&e)?pnAltEdit(r.rep,i,q,'altq'):`<span style="margin-left:auto">${escapeHtml(q)}</span>`, last));
       } else {
-        const v=e?pnAltResolve(e.p):'';
+        const v=e?pnAltResolve(e.p, e.f):'';
         out.push(pnAltRow(isMaster?pnAltEdit(r.rep,i,v,'alt',!e):hlPN(v,kw), last));
       }
     }
