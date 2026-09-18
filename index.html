@@ -2312,7 +2312,7 @@ function switchTab(tab){
   try{ ktDropInitAll(); }catch(e){}   // 엑셀을 화면에 끌어다 놓아 올리는 길(화면마다 한 번만 단다)
   // 탭을 옮길 때마다 주문 알림 점을 가볍게 새로고침 — 로그인 중 새 주문/배분도 바로 보이게.
   if(currentUser){ loadOrderFeedStamps().then(updateOrderUnreadDots); refreshSignupDot(); }
-  if(tab==='pn') renderPN();
+  if(tab==='pn'){ renderPN(); loadPnAlt().then(()=>{ if(ktPaneOn('pane-pn')) renderPN(); }); }
   if(tab==='prod') loadProdTab();
   // KAZAK 은 주문탭 공급가로 카자흐스탄 USD 를 쓰므로 계산식 데이터도 함께 읽는다.
   if(tab==='order'){ mountModelDiag('order'); syncDiagram(); refreshCurrentUser().then(()=>Promise.all([loadMyOrderTotals(), loadInventory(), loadGlobalSuppliedTotals(), loadReceivedOrderTotals(), loadPrices(), loadCompanyPrices(), (userRole(currentUser).region==='kz'?Promise.all([loadPriceSettings(),loadPriceCalc()]):Promise.resolve())])).then(renderOrderTable); renderOrderTable(); }
@@ -3591,6 +3591,41 @@ function pnSpecVal(r, f){   // f: nw|gw|cbm|dan
   if(r._split){ const s=pnSpecOf(r._compat); return s?(s[f]!=null?String(s[f]):''):''; }
   return pnSpecAgg(r, f);
 }
+// ── 대체품목(연결조립필요품목 포함) ───────────────────────────
+//   호환품번마다 '대신 쓸 수 있는 품번'을 여러 개 적어 둔다.
+//   kt_pn_specs 에는 자리가 없어 kt_psi_cfg(id=100) 한 칸에 모아 둔다.
+const PN_ALT_ID=100;
+let pnAlt={}, _pnAltLoaded=false, _pnAltT=null;
+async function loadPnAlt(){
+  if(_pnAltLoaded) return;
+  _pnAltLoaded=true;
+  try{
+    const { data, error }=await sb.from('kt_psi_cfg').select('cfg').eq('id',PN_ALT_ID).limit(1);
+    const c=(!error && data && data[0])?data[0].cfg:null;
+    if(c && typeof c==='object' && c.alt && typeof c.alt==='object') pnAlt=c.alt;
+  }catch(e){}
+}
+function savePnAlt(){
+  clearTimeout(_pnAltT);
+  _pnAltT=setTimeout(async()=>{
+    try{
+      const { error }=await sb.from('kt_psi_cfg').upsert({ id:PN_ALT_ID, cfg:{ alt:pnAlt } },{ onConflict:'id' });
+      if(error) console.error('대체품목 저장 실패:', error.message||error.code);
+    }catch(e){}
+  }, 400);
+}
+// 적어 둔 글을 품번 목록으로 푼다(쉼표·빈칸·줄바꿈 아무거나 구분자로 받는다)
+function pnAltSplit(s){
+  return String(s==null?'':s).split(/[,;\/\n\r\t ]+/).map(x=>x.trim()).filter(Boolean);
+}
+function pnAltList(pn){ const k=normPN(pn); return k?pnAltSplit(pnAlt[k]):[]; }
+function pnAltText(pn){ return pnAltList(pn).join(', '); }
+// 한 줄 값으로 다듬는다 — 대문자·중복 제거
+function pnAltNorm(raw){
+  const seen=new Set(), out=[];
+  pnAltSplit(raw).forEach(v=>{ const u=pnUpAll(v); if(u && !seen.has(u)){ seen.add(u); out.push(u); } });
+  return out.join(', ');
+}
 // 분할 보기에서 호환품번(품번) 단위 편집 span
 // 품번 정보(대표·호환·최종품번 / 품명 / 규격 / 러품 / 영문품명 / 단종)는 여러 화면이 같은 자리에서
 // 가져다 쓴다. 어디서 고치든 지금 보고 있는 화면이 바로 따라오게 다시 그린다.
@@ -3610,6 +3645,12 @@ function ktAfterPnEdit(){
 function pnCompatEdit(rep, raw){
   const disp=escapeHtml(pnUpperLead(raw||'')), rw=escapeHtml(raw||'');
   return `<span contenteditable="true" class="pn-edit" data-pnrep="${escapeHtml(rep)}" data-pnfield="compat_one" data-pnorig="${disp}" data-pnrawold="${rw}" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()" onblur="onPNCellBlur(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}" style="display:inline-block;min-width:20px;outline:none;border-bottom:1px dashed var(--accent2);cursor:text;padding:0 2px">${disp}</span>`;
+}
+// 대체품목 칸 — 한 칸에 품번을 여러 개 적는다(쉼표·빈칸으로 나눠 적으면 된다)
+function pnAltEdit(compat, val){
+  const v=escapeHtml(val||''), raw=escapeHtml(compat||'');
+  const tip=(lang==='ru')?'Несколько артикулов через запятую':'품번을 여러 개 적을 수 있습니다 (쉼표로 구분)';
+  return `<span contenteditable="true" class="pn-edit" data-pncompat="${raw}" data-pnfield="alt" data-pnorig="${v}" title="${escapeHtml(tip)}" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()" onblur="onPNCellBlur(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}" style="display:inline-block;min-width:40px;width:100%;box-sizing:border-box;outline:none;border-bottom:1px dashed var(--accent2);cursor:text;padding:0 2px;white-space:normal;word-break:break-all">${v}</span>`;
 }
 function cspecEdit(compat, f, val){
   const v=escapeHtml(val||''), raw=escapeHtml(compat||'');
@@ -3671,6 +3712,7 @@ function pnBaseCols(isKo, showEng){
   c.push({key:'gw', cap:78, label:ru?'G/W ср.(kg)':'G/W<br>평균(kg)'});
   c.push({key:'cbm', cap:84, label:ru?'CBM ср.(m³)':'CBM<br>평균(m³)'});
   c.push({key:'note', cap:56, label:ru?'Снято':'단종'});
+  c.push({key:'alt', cap:200, label:ru?'Замена<br>(вкл. узлы в сборе)':'대체품목<br>(연결조립필요품목포함)'});
   c.push({key:'applied_models', cap:150, label:ru?'Модели (врем.)':'적용모델<br>(임시)'});
   (typeof MODEL_DEFS!=='undefined'?MODEL_DEFS:[]).forEach(m=> c.push({key:'m:'+m.key, cap:36, group:m.group, color:m.color, capLabel:m.label, modelKey:m.key}));
   return c;
@@ -3716,6 +3758,7 @@ function pnColText(key, r){
     case 'gw': return pnSpecVal(r,'gw');
     case 'cbm': return pnSpecVal(r,'cbm');
     case 'note': return pnSpecVal(r,'dan');
+    case 'alt': return r._split ? pnAltText(r._compat) : (r.compats||[]).map(pnAltText).filter(Boolean).join(' / ');
     case 'applied_models': return r.applied_models||'';
     case 'export_ctrl': return r._split ? (isExportRestricted(r._compat)?'O':'') : ((r.compats||[]).some(isExportRestricted)?'O':'');
   }
@@ -3725,7 +3768,7 @@ function pnColText(key, r){
 function pnColLabelShort(key){
   const t=T[lang];
   if(key && key.indexOf('m:')===0){ const mk=key.slice(2); const md=(typeof MODEL_DEFS!=='undefined'?MODEL_DEFS:[]).find(m=>m.key===mk); return md?(md.group+' '+md.label):key; }
-  const M={export_ctrl:(lang==='ru'?'Эксп.контроль':'수출제한'), name:t.pnH0, spec:t.pnH0s, name_ru:(lang==='ru'?'Рус.название':'러시아어 품명'), name_en:(lang==='ru'?'Англ.название':'영문품명'), rep:t.pnH1, compat:t.pnH2, final:t.pnH3, nw:'N/W', gw:'G/W', cbm:'CBM', note:(lang==='ru'?'Снято с пр-ва':'단종'), applied_models:(lang==='ru'?'Модели':'적용모델(임시)')};
+  const M={export_ctrl:(lang==='ru'?'Эксп.контроль':'수출제한'), name:t.pnH0, spec:t.pnH0s, name_ru:(lang==='ru'?'Рус.название':'러시아어 품명'), name_en:(lang==='ru'?'Англ.название':'영문품명'), rep:t.pnH1, compat:t.pnH2, final:t.pnH3, nw:'N/W', gw:'G/W', cbm:'CBM', note:(lang==='ru'?'Снято с пр-ва':'단종'), alt:(lang==='ru'?'Замена (вкл. узлы в сборе)':'대체품목(연결조립필요품목포함)'), applied_models:(lang==='ru'?'Модели':'적용모델(임시)')};
   return String(M[key]||key).replace(/<br>/g,' ');
 }
 // 모델 열용 소형 필터 아이콘(셀이 좁아 콤팩트하게)
@@ -3793,6 +3836,16 @@ function pnCellHtml(col, r, ctx){
         const inner=(isMaster?cspecEdit(r._compat,'dan',val):escapeHtml(val))+h.badge;
         return _pnTd(col, inner, h.cls.trim(), 'font-size:11px;color:var(--muted);text-align:center'); }
       return _pnTd(col, escapeHtml(val), '', 'font-size:11px;color:var(--muted);text-align:center'); }
+    case 'alt': {
+      const pn = r._split ? (r._compat||'') : '';
+      if(!pn){   // 묶어 보기: 호환품번마다 적힌 값을 그대로 늘어놓는다(편집은 분할 보기에서)
+        const txt=pnColText('alt', r);
+        return _pnTd(col, escapeHtml(txt), 'pn-wrap', 'font-size:11px;color:var(--muted)'); }
+      const h=pnCellHist(r.rep, 'alt:'+normPN(pn));
+      const txt=pnAltText(pn);
+      const inner=(isMaster?pnAltEdit(pn, txt)
+                           :pnAltList(pn).map(v=>`<span class="pn-badge pn-cur">${hlPN(v,kw)}</span>`).join(' '))+h.badge;
+      return _pnTd(col, inner, (h.cls+' pn-wrap').trim(), 'font-size:11px'); }
     case 'applied_models': { const inner=isMaster?ed(r.rep,'applied_models',r.applied_models||''):escapeHtml(r.applied_models||'');
       return _pnTd(col, inner, '', 'text-align:left;font-size:11px'); }
   }
@@ -3977,7 +4030,7 @@ function renderPN(){
   _pnSplit=true;                        // 항상 호환품번 단위(한 셀에 여러 품번 묶지 않음)
   const isMasterPN=pnDelVisible();
   let rows=PN_DATA;
-  if(kw)rows=rows.filter(r=>searchRow(r.rep, kw, [r.name_ko,r.name_ru,r.spec,r.final,...(r.compats||[])]));
+  if(kw)rows=rows.filter(r=>searchRow(r.rep, kw, [r.name_ko,r.name_ru,r.spec,r.final,...(r.compats||[]),...(r.compats||[]).map(pnAltText)]));
   if(_pnSplit) rows=pnExpandRows(rows);  // 각 호환품번을 한 행씩 분리(검색 후 확장)
   // 헤더 열 필터(엑셀식: 선택된 값 집합만 표시, 여러 열은 AND)
   const fkeys=Object.keys(_pnFilters);
@@ -4226,6 +4279,9 @@ function openPNHistoryModal(rep, field){
                 : {name:'품명',spec:'규격',nw:'N/W',gw:'G/W',cbm:'CBM',dan:'단종'};
     fname=(cl[p[1]]||p[1])+' · '+(p[2]||'');
   }
+  if(String(field).indexOf('alt:')===0){
+    fname=(ru?'Замена':'대체품목')+' · '+String(field).slice(4);
+  }
   const fmt=iso=>{ try{ const d=new Date(iso), z=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())} ${z(d.getHours())}:${z(d.getMinutes())}`; }catch(e){ return iso; } };
   const rowsHtml=entries.length ? entries.map(h=>`
     <div style="border-bottom:1px solid var(--border);padding:8px 0">
@@ -4378,6 +4434,20 @@ async function onPNCellBlur(el){
   const rep=el.getAttribute('data-pnrep'), field=el.getAttribute('data-pnfield');
   const val=el.textContent.replace(/\s+/g,' ').trim();
   if(val===(el.getAttribute('data-pnorig')||'')) return;
+  // 대체품목: 한 칸에 여러 품번. kt_psi_cfg(id=100)에 호환품번을 열쇠로 모아 둔다.
+  if(field==='alt'){
+    const key=normPN(el.getAttribute('data-pncompat')||'');
+    if(!key){ el.textContent=el.getAttribute('data-pnorig')||''; return; }
+    const oldV=el.getAttribute('data-pnorig')||'';
+    const txt=pnAltNorm(val);
+    if(txt) pnAlt[key]=txt; else delete pnAlt[key];
+    savePnAlt();
+    const repOf=(typeof findMasterRep==='function')?findMasterRep(key):'';
+    if(repOf) recordPNHistory(repOf, 'alt:'+key, oldV, txt);
+    el.setAttribute('data-pnorig', txt); el.textContent=txt;
+    ktAfterPnEdit();
+    return;
+  }
   // 호환품번 단위 값(N/W·G/W·CBM·단종) 편집 → kt_pn_specs(품번 키)에 저장.
   if(field && field.indexOf('cspec:')===0){
     const f=field.slice(6);   // nw|gw|cbm|dan
@@ -18581,7 +18651,7 @@ function enterApp(user){
   loadAllMemberPerms().then(()=>{ applyPermTabVisibility(); return loadEngNames(); }).then(rerenderActiveTab);   // 권한→탭노출→영문명 로드→재렌더
   startLive();                                         // 폴링(8초)으로 실시간처럼 갱신
   startRealtime();                                     // Realtime 구독(활성화 시 즉시 반영)
-  Promise.all([loadMyOrderTotals(), loadInventory(), loadGlobalSuppliedTotals(), loadReceivedOrderTotals(), loadPrices(), loadPNOverrides(), loadExportCtrl(), loadPnSpecs(), loadCompanyPrices(),
+  Promise.all([loadMyOrderTotals(), loadInventory(), loadGlobalSuppliedTotals(), loadReceivedOrderTotals(), loadPrices(), loadPNOverrides(), loadExportCtrl(), loadPnSpecs(), loadPnAlt(), loadCompanyPrices(),
                (role.region==='kz'?Promise.all([loadPriceSettings(),loadPriceCalc()]):Promise.resolve())]).then(async()=>{
     // 오버라이드가 얹힌 뒤 새로 생긴 호환품번의 품명·규격을 뒤늦게 채운다
     const added=await pnSpecTopUp();
