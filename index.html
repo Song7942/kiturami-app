@@ -896,6 +896,8 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
           <span>열/필터 초기화</span>
         </button>
       </div>
+      <!-- 단종 칸 표기 안내 -->
+      <div id="pnDanLegend" style="padding:0 4px 5px;font-size:11px;color:var(--muted)"></div>
       <!-- 가로 스크롤바 (검색창과 헤더 사이). 열이 많아 가로로 넘칠 때만 보인다. -->
       <div class="tbl-scrollbar" id="pnTblScrollbar" style="display:none">
         <div class="tbl-scrollbar-thumb" id="pnTblScrollbarThumb"></div>
@@ -2413,6 +2415,7 @@ function refreshPsiTexts(){
   set('i18n-moq-cols',COLS[0],COLS[1]);
   // 안전재고
   set('i18n-pn-cols',COLS[0],COLS[1]);
+  try{ paintDanLegend(); }catch(e){}      // 단종 표기 안내(O·△·□)
   // 품번확인
   set('i18n-tab-pnchk','🧾 품번확인','🧾 Проверка артикулов');
   set('i18n-pnchk-up','엑셀 업로드','Загрузить Excel');
@@ -3818,6 +3821,21 @@ async function setPNColOrder(arr){
   if(!uid) return;
   try{ await sb.from('kt_user_prefs').upsert({ user_id:uid, pn_col_order:arr, updated_at:new Date().toISOString() }, { onConflict:'user_id' }); }catch(e){}
 }
+// ── 단종 칸 표기 안내 ─────────────────────────────────
+//   O 단종 · △ 주문 불필요 · □ 변경예정. 화면마다 같은 글귀를 쓴다.
+function danLegendText(){
+  return (lang==='ru')
+    ? 'O — снято с производства · △ — заказ не требуется · □ — плановая замена'
+    : 'O 단종 · △ 주문 불필요 · □ 변경예정';
+}
+function danLegendLabel(){ return (lang==='ru')?'Снято':'단종'; }
+// 단종 머리글에 붙일 설명(마우스를 올리면 뜬다)
+function danTip(k){ return (k==='note'||k==='dan') ? (' title="'+escapeHtml(danLegendLabel()+' — '+danLegendText())+'"') : ''; }
+function paintDanLegend(){
+  const el=document.getElementById('pnDanLegend'); if(!el) return;
+  const head=(lang==='ru')?'Обозначения «Снято»':'단종 표기';
+  el.innerHTML='<b style="color:var(--text)">'+escapeHtml(head)+'</b> &nbsp;'+escapeHtml(danLegendText());
+}
 // 기본(정본) 열 정의. '삭제' 열은 항상 맨 앞(재배치 대상 아님).
 function pnBaseCols(isKo, showEng){
   const t=T[lang], ru=(lang==='ru'); const c=[];
@@ -4258,6 +4276,7 @@ function renderPN(){
     });
   }
   document.getElementById('pnBadge').innerHTML=`<b>${rows.length}</b>`;
+  paintDanLegend();
   const noR=document.getElementById('pnNoResult');noR.textContent=t.pnNoResult;noR.style.display=rows.length?'none':'block';
 
   // colgroup & 헤더 (사용자별 열 순서 반영: 데이터-드리븐)
@@ -4275,7 +4294,7 @@ function renderPN(){
       const frz=c.freezeLeft!=null?`position:sticky;left:${c.freezeLeft}px;z-index:7;background:var(--surface2);`:'';
       const dnd=`draggable="true" data-colkey="${c.key}" ondragstart="pnColDragStart(event)" ondragover="pnColDragOver(event)" ondragleave="pnColDragLeave(event)" ondrop="pnColDrop(event)" ondragend="pnColDragEnd(event)"`;
       if(!c.group){
-        row1+=`<th rowspan="2" ${dnd} class="pn-dcol" style="${frz}cursor:grab">${c.label}${pnFilterIcon(c.key)}</th>`;
+        row1+=`<th rowspan="2" ${dnd}${danTip(c.key)} class="pn-dcol" style="${frz}cursor:grab">${c.label}${pnFilterIcon(c.key)}</th>`;
         i++;
       } else {
         let j=i; while(j<meta.length && meta[j].group===c.group) j++;
@@ -10025,7 +10044,7 @@ function renderMS(){
       + '<th style="'+sumS+';text-align:right">'+tot.toLocaleString()+'</th>'
       + (right?('<th colspan="'+right+'" style="'+sumS+';text-align:left">'+(left?'':sumLab)+'</th>'):'');
   }
-  const head='<tr>'+CO.map(d=>'<th style="'+thS+'">'+(ru?(d.hru||d.ru):(d.hko||d.ko))+msFilterIcon(d.k)+'</th>').join('')+'</tr>'
+  const head='<tr>'+CO.map(d=>'<th'+danTip(d.k)+' style="'+thS+'">'+(ru?(d.hru||d.ru):(d.hko||d.ko))+msFilterIcon(d.k)+'</th>').join('')+'</tr>'
     + '<tr>'+sumRow+'</tr>';
   const thead=document.getElementById('msThead'); if(thead) thead.innerHTML=head;
   const tbody=document.getElementById('msTbody'); if(tbody) tbody.innerHTML=body;
@@ -10643,7 +10662,7 @@ function openShipColsPanel(){
   else { labAt=tailArr.findIndex(v=>v===''); if(labAt>=0) tailArr[labAt]=sumLabel; }
   const tail=tailArr.map((v,i)=>'<th style="'+sumS+(i===labAt?';text-align:left':'')+'">'+v+'</th>').join('');
   const edCol=shipEditable()?'<th style="'+thS+';width:26px"></th>':'';
-  if(thead) thead.innerHTML='<tr>'+CO.map(d=>'<th style="'+thS+'">'+(ru?d.ru:d.ko)+shipFilterIcon(d.k)+'</th>').join('')+edCol+'</tr>'
+  if(thead) thead.innerHTML='<tr>'+CO.map(d=>'<th'+danTip(d.k)+' style="'+thS+'">'+(ru?d.ru:d.ko)+shipFilterIcon(d.k)+'</th>').join('')+edCol+'</tr>'
     + '<tr>'+leadCell+tail+edCol+'</tr>';
   const tbody=document.getElementById('shipTbody'); if(tbody) tbody.innerHTML=body;
   if(shipGroupOn()){
@@ -12541,7 +12560,7 @@ function renderMOQ(){
     +'background:var(--surface2);font-size:11px;white-space:nowrap;border-bottom:1px solid var(--border)';
   const thead=document.getElementById('moqThead');
   if(thead) thead.innerHTML='<tr>'+(ED?'<th style="'+thS+'"></th>':'')
-    +CO.map(d=>'<th style="'+thS+'">'+(ru?d.ru:d.ko)+moqFilterIcon(d.k)+'</th>').join('')+'</tr>'
+    +CO.map(d=>'<th'+danTip(d.k)+' style="'+thS+'">'+(ru?d.ru:d.ko)+moqFilterIcon(d.k)+'</th>').join('')+'</tr>'
     +'<tr><th colspan="'+Math.max(1,CO.length+(ED?1:0))+'" style="'+thS+';font-weight:700;background:var(--surface);top:27px;text-align:right">'
     +escapeHtml(L('합계 '+rows.length+'건','Итого '+rows.length))+'</th></tr>';
   const tdS='padding:4px 6px;font-size:11px;border-bottom:1px solid var(--border)';
@@ -12778,7 +12797,7 @@ function renderPnChk(){
   const thS='padding:6px 8px;text-align:center;vertical-align:middle;position:sticky;top:0;z-index:3;'
     +'background:var(--surface2);font-size:11px;white-space:nowrap;border-bottom:1px solid var(--border)';
   const hi=';background:var(--tag-bg);font-weight:700';
-  if(thead) thead.innerHTML='<tr>'+head.map(h=>'<th style="'+thS+((h.k==='fin'||h.k==='dan')?hi:'')+'">'+escapeHtml(h.t)+'</th>').join('')+'</tr>';
+  if(thead) thead.innerHTML='<tr>'+head.map(h=>'<th'+danTip(h.k)+' style="'+thS+((h.k==='fin'||h.k==='dan')?hi:'')+'">'+escapeHtml(h.t)+'</th>').join('')+'</tr>';
   const tdS='padding:4px 8px;font-size:11px;border-bottom:1px solid var(--border);white-space:nowrap';
   const codeS="font-family:'Courier New',monospace;font-size:10px";
   if(tbody) tbody.innerHTML=rows.map(r=>{
@@ -13087,7 +13106,7 @@ function renderSS(){
     const v=(d.k==='sum')?tSum:((d.k==='ss1')?tL:((d.k==='ss2')?tM:''));
     return '<th style="'+sumS+';text-align:right">'+(v===''?'':v.toLocaleString())+'</th>'; }).join('');
   const thead=document.getElementById('ssThead');
-  if(thead) thead.innerHTML='<tr>'+CO.map(d=>'<th style="'+thS+'">'+(ru?d.ru:d.ko)+ssFilterIcon(d.k)+'</th>').join('')+'</tr>'
+  if(thead) thead.innerHTML='<tr>'+CO.map(d=>'<th'+danTip(d.k)+' style="'+thS+'">'+(ru?d.ru:d.ko)+ssFilterIcon(d.k)+'</th>').join('')+'</tr>'
     + '<tr>'+(lead?('<th colspan="'+lead+'" style="'+sumS+';text-align:right">'
         +escapeHtml(L('합계 '+rows.length+'개 품번','Итого '+rows.length))+'</th>'):'')+tail+'</tr>';
   const tdS='padding:4px 6px;font-size:11px;border-bottom:1px solid var(--border)';
@@ -13320,7 +13339,7 @@ function renderBLK(){
   const thS='padding:6px 5px;text-align:center;vertical-align:middle;position:sticky;top:0;z-index:3;'
     +'background:var(--surface2);font-size:11px;white-space:nowrap;border-bottom:1px solid var(--border)';
   const thead=document.getElementById('blkThead');
-  if(thead) thead.innerHTML='<tr>'+CO.map(d=>'<th style="'+thS+'">'+(ru?d.ru:d.ko)+blkFilterIcon(d.k)+'</th>').join('')+'</tr>'
+  if(thead) thead.innerHTML='<tr>'+CO.map(d=>'<th'+danTip(d.k)+' style="'+thS+'">'+(ru?d.ru:d.ko)+blkFilterIcon(d.k)+'</th>').join('')+'</tr>'
     +'<tr><th colspan="'+Math.max(1,CO.length-1)+'" style="'+thS+';font-weight:700;background:var(--surface);top:27px;text-align:right">'
     +escapeHtml(L('합계 '+rows.length+'건','Итого '+rows.length))+'</th>'
     +'<th style="'+thS+';font-weight:700;background:var(--surface);top:27px;text-align:right">'+tot.toLocaleString()+'</th></tr>';
@@ -15239,7 +15258,7 @@ function renderPSI(){
             : ';background:#eff6ff'+(d.year?';font-weight:700':';color:var(--muted)'))
     +'">'+escapeHtml(d.lab)+'</th>').join('');
   let head=['<tr>',
-    FX.map((d,k)=>'<th rowspan="2" class="'+fxCls(k).trim()+'" style="'+thS+'">'+L(d.hko||d.ko,d.hru||d.ru)+psiFilterIcon(d.k)+'</th>').join(''),
+    FX.map((d,k)=>'<th rowspan="2"'+danTip(d.k)+' class="'+fxCls(k).trim()+'" style="'+thS+'">'+L(d.hko||d.ko,d.hru||d.ru)+psiFilterIcon(d.k)+'</th>').join(''),
     outHead,(SHOWTOT?totHead:''),grp,'</tr><tr>',outSub,(SHOWTOT?totSub:''),sub,'</tr>'].join('');
 
   if(!items.length){
@@ -17031,12 +17050,12 @@ function priceExpText(compats){ return _priceMarks(compats, c=>isExportRestricte
 function priceMarkN(){ return canViewExportCtrl()?2:1; }
 function priceMarkTh(thS){
   const ru=(lang==='ru');
-  return '<th style="'+thS+'">'+(ru?'Снято':'단종')+'</th>'
+  return '<th'+danTip('dan')+' style="'+thS+'">'+(ru?'Снято':'단종')+'</th>'
        + (canViewExportCtrl()?('<th style="'+thS+'">'+(ru?'Эксп.<br>контр.':'수출<br>제한')+'</th>'):'');
 }
 function priceMarkTh2(thS){
   const ru=(lang==='ru');
-  return '<th rowspan="2" style="'+thS+'">'+(ru?'Снято':'단종')+'</th>'
+  return '<th rowspan="2"'+danTip('dan')+' style="'+thS+'">'+(ru?'Снято':'단종')+'</th>'
        + (canViewExportCtrl()?('<th rowspan="2" style="'+thS+'">'+(ru?'Эксп.<br>контр.':'수출<br>제한')+'</th>'):'');
 }
 function priceMarkTd(compats){
