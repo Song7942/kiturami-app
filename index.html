@@ -401,6 +401,8 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
 .pn-dcol:active{cursor:grabbing}
 .pn-hist-badge{display:inline-block;margin-left:3px;color:#f59e0b;cursor:pointer;font-size:10px;vertical-align:middle;user-select:none}
 .pn-hist-badge:hover{color:#d97706}
+/* 대체품목 맨 아랫줄(새로 적는 빈 칸)에 옅은 길잡이 글 */
+.pn-alt-add:empty::before{content:attr(data-ph);color:var(--muted);opacity:.6}
   .pn-hdr-wrap{background:var(--surface);border:1px solid var(--border);border-radius:10px 10px 0 0;border-bottom:none;overflow:hidden}
   .pn-hdr-wrap table{border-collapse:collapse;table-layout:auto;width:auto;min-width:100%}
   .pn-hdr-wrap th{background:var(--surface2);padding:7px 10px;font-size:11px;font-weight:600;color:var(--muted);text-align:left;border-bottom:1px solid var(--border);border-right:1px solid var(--border);white-space:normal;word-break:keep-all;line-height:1.3}
@@ -3676,24 +3678,27 @@ function pnCompatEdit(rep, raw){
 }
 // 대체품목 칸 — 품번·품명·필요수량 세 칸이 줄을 맞춰 선다.
 //   한 줄에 하나씩 적고, Enter 로 줄을 바꾼다. 칸 밖을 누르면 저장.
-const PN_ALT_LH=17;                                  // 세 칸의 줄 높이(맞물려야 줄이 어긋나지 않는다)
-function pnAltLine(html, style){
-  return `<div style="height:${PN_ALT_LH}px;line-height:${PN_ALT_LH}px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${style||''}">${html}</div>`;
+// 품목 한 줄의 높이. 품번·품명·필요수량 세 칸이 같은 높이의 칸을 쌓아 올리므로
+// 줄이 절대 어긋나지 않고, 글자는 그 줄 한가운데에 놓인다.
+const PN_ALT_LH=24;
+// 한 줄 칸. 아래 가로줄은 옆 여백까지 늘여(음수 여백) 세 칸이 하나로 이어져 보인다.
+function pnAltRow(inner, last, style){
+  return `<div style="box-sizing:border-box;height:${PN_ALT_LH}px;display:flex;align-items:center;`
+    +`margin:0 -10px;padding:0 10px;${last?'':'border-bottom:1px solid var(--border);'}${style||''}">${inner}</div>`;
 }
-// 품목 사이에 옅은 가로줄을 깐다 — 품번·품명·필요수량 세 칸이 한 줄로 읽히게.
-//   줄은 칸 옆 여백까지 늘여 칸과 칸이 이어져 보이게 하고, 글자 입력을 막지 않게 눌러도 통과시킨다.
-function pnAltBox(inner, n){
-  let sep='';
-  for(let i=1;i<n;i++) sep+=`<div style="position:absolute;left:-10px;right:-10px;top:${i*PN_ALT_LH}px;height:1px;background:var(--border);pointer-events:none"></div>`;
-  return `<div style="position:relative;min-height:${Math.max(1,n)*PN_ALT_LH}px">${sep}${inner}</div>`;
-}
-function pnAltEdit(rep, list, fld){
-  const txt=(list||[]).join('\n'), v=escapeHtml(txt), raw=escapeHtml(rep||'');
+// 한 줄짜리 편집 칸(품번 또는 필요수량)
+function pnAltEdit(rep, i, val, fld, isAdd){
+  const v=escapeHtml(val||''), raw=escapeHtml(rep||'');
   const qty=(fld==='altq');
-  const tip=(lang==='ru')?'По одной строке. Enter — новая строка, клик вне ячейки — сохранить.'
-                         :'한 줄에 하나씩 적습니다. Enter 로 줄바꿈, 칸 밖을 누르면 저장됩니다.';
-  const blur=qty?'onPnAltQtyBlur(this)':'onPnAltBlur(this)';
-  return `<span contenteditable="true" class="pn-edit pn-alt" data-pnaltrep="${raw}" data-pnfield="${qty?'altq':'alt'}" data-pnorig="${v}" title="${escapeHtml(tip)}" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()" onblur="${blur}" onpaste="pnAltPaste(event)" onkeydown="if(event.key==='Enter'){event.preventDefault();document.execCommand('insertText',false,'\\n');}else if(event.key==='Escape'){event.preventDefault();this.blur();}" style="display:block;min-width:30px;min-height:${PN_ALT_LH}px;width:100%;box-sizing:border-box;outline:none;border-bottom:1px dashed var(--accent2);cursor:text;padding:0 2px;white-space:pre;overflow:hidden;line-height:${PN_ALT_LH}px${qty?';text-align:right':''}">${v}</span>`;
+  const tip=(lang==='ru')?'Enter — сохранить':'Enter 로 저장';
+  const ph=isAdd?((lang==='ru')?'+ артикул':'+ 품번'):'';
+  return `<span contenteditable="true" class="pn-edit pn-alt${isAdd?' pn-alt-add':''}" data-pnaltrep="${raw}" data-alti="${i}" data-pnfield="${qty?'altq':'alt'}" data-pnorig="${v}"`
+    +(ph?` data-ph="${escapeHtml(ph)}"`:'')
+    +` title="${escapeHtml(tip)}" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()"`
+    +` onblur="${qty?'onPnAltQtyBlur(this)':'onPnAltBlur(this)'}" onpaste="pnAltPaste(event)"`
+    +` onkeydown="if(event.key==='Enter'||event.key==='Escape'){event.preventDefault();this.blur();}"`
+    +` style="display:inline-block;${qty?'min-width:26px;text-align:right;margin-left:auto':'min-width:64px'};outline:none;`
+    +`border-bottom:1px dashed var(--accent2);cursor:text;padding:0 2px;line-height:14px;white-space:pre">${v}</span>`;
 }
 // 붙여넣기는 글자만 받는다(서식·표가 통째로 들어오면 줄이 엉킨다)
 function pnAltPaste(ev){
@@ -3712,37 +3717,41 @@ function pnAltReadCell(el){
   // 태그를 줄바꿈으로 바꾸며 생긴 빈 줄은 접는다(줄 차례가 밀리지 않게)
   return String(d.textContent||'').replace(/\r\n?/g,'\n').replace(/\n{2,}/g,'\n').replace(/^\n+|\n+$/g,'');
 }
-// 대체품목 '품번' 칸 저장 — 줄마다 품번 하나. 이미 적어 둔 필요수량은 품번을 따라 남는다.
+// 대체품목 '품번' 한 줄 저장.
+//   맨 아랫줄(빈 줄)에 적으면 품목이 하나 늘고, 지우면 그 줄이 빠진다.
+//   여러 품번을 한꺼번에 적어 넣으면(쉼표·빈칸) 줄로 나눠 담는다.
 async function onPnAltBlur(el){
   const rep=String(el.getAttribute('data-pnaltrep')||'').trim();
-  const oldV=el.getAttribute('data-pnorig')||'';               // 줄바꿈 꼴
-  const lines=[]; const seen=new Set();
-  pnAltReadCell(el).split('\n').forEach(s=>{
-    pnAltSplit(s).forEach(v=>{ const u=pnUpAll(v); if(u && !seen.has(u)){ seen.add(u); lines.push(u); } });
-  });
-  const disp=lines.join('\n');
-  if(!rep || disp===oldV){ el.textContent=oldV; return; }      // 그대로면 편집 중 생긴 태그만 씻어 낸다
-  const prev=pnAltEntries(rep);
-  const qOf={}; prev.forEach(e=>{ qOf[pnAltResolve(e.p)]=e.q; });
-  pnAltSetEntries(rep, lines.map(p=>({ p, q:qOf[pnAltResolve(p)]||'' })));
+  const i=parseInt(el.getAttribute('data-alti'),10);
+  const oldV=el.getAttribute('data-pnorig')||'';
+  const vals=pnAltSplit(pnAltReadCell(el)).map(pnUpAll);
+  if(!rep || vals.join(', ')===oldV){ el.textContent=oldV; return; }
+  const ents=pnAltEntries(rep);
+  const keyOf=p=>pnAltResolve(p);
+  const dup=new Set(ents.filter((e,j)=>j!==i).map(e=>keyOf(e.p)));
+  const add=[]; vals.forEach(v=>{ const k=keyOf(v); if(!dup.has(k)){ dup.add(k); add.push(v); } });
+  if(i<ents.length){
+    if(add.length) ents.splice(i, 1, ...add.map((p,n)=>({ p, q:n===0?ents[i].q:'' })));
+    else ents.splice(i, 1);                                   // 비우면 그 줄을 지운다
+  } else if(add.length) add.forEach(p=>ents.push({ p, q:'' }));
+  pnAltSetEntries(rep, ents);
   savePnAlt();
-  recordPNHistory(rep, 'alt', pnAltSplit(oldV).join(', '), lines.join(', '));
-  el.setAttribute('data-pnorig', disp); el.textContent=disp;
+  recordPNHistory(rep, 'alt', oldV, add.join(', '));
   ktAfterPnEdit();
 }
-// 대체품목 '필요수량' 칸 저장 — 품번 줄 차례대로 받는다.
+// 대체품목 '필요수량' 한 줄 저장
 async function onPnAltQtyBlur(el){
   const rep=String(el.getAttribute('data-pnaltrep')||'').trim();
+  const i=parseInt(el.getAttribute('data-alti'),10);
   const oldV=el.getAttribute('data-pnorig')||'';
+  const v=String(pnAltReadCell(el)).replace(/[^\d.\-]/g,'').trim();
+  if(!rep || v===oldV){ el.textContent=oldV; return; }
   const ents=pnAltEntries(rep);
-  const qs=pnAltReadCell(el).split('\n').map(s=>String(s).replace(/[^\d.\-]/g,'').trim());
-  const next=ents.map((e,i)=>({ p:e.p, q:qs[i]==null?'':qs[i] }));
-  const disp=next.map(e=>e.q).join('\n');
-  if(!rep || disp===oldV){ el.textContent=oldV; return; }
-  pnAltSetEntries(rep, next);
+  if(!(i>=0 && i<ents.length)){ el.textContent=oldV; return; }
+  ents[i].q=v;
+  pnAltSetEntries(rep, ents);
   savePnAlt();
-  recordPNHistory(rep, 'altq', pnAltSplit(oldV).join(', '), next.map(e=>e.q).join(', '));
-  el.setAttribute('data-pnorig', disp); el.textContent=disp;
+  recordPNHistory(rep, 'altq', (ents[i].p+' '+oldV).trim(), (ents[i].p+' '+v).trim());
   ktAfterPnEdit();
 }
 function cspecEdit(compat, f, val){
@@ -3891,20 +3900,25 @@ function pnCellHtml(col, r, ctx){
   if(col.key==='alt'||col.key==='alt_name'||col.key==='alt_qty'){
     const bl=col.groupStart?'border-left:1px solid var(--border);':'';
     const ents=pnAltEntries(r.rep);
-    const n=ents.length;
-    if(col.key==='alt_name'){          // 품명은 품번조회에서 따온다(고칠 수 없다)
-      const inner=ents.map(e=>{ const nm=pnAltName(e.p);
-        return pnAltLine(escapeHtml(nm), 'color:var(--muted)').replace('<div ','<div title="'+escapeHtml(nm)+'" '); }).join('');
-      return _pnTd(col, pnAltBox(inner,n), '', bl+'font-size:11px'); }
-    if(col.key==='alt_qty'){
-      const h=pnCellHist(r.rep,'altq');
-      const inner=(isMaster?pnAltEdit(r.rep, ents.map(e=>e.q), 'altq')
-                           :ents.map(e=>pnAltLine(escapeHtml(e.q),'text-align:right')).join(''));
-      return _pnTd(col, pnAltBox(inner,n)+h.badge, h.cls.trim(), bl+'font-size:11px;text-align:right'); }
-    const h=pnCellHist(r.rep,'alt');
-    const inner=(isMaster?pnAltEdit(r.rep, ents.map(e=>pnAltResolve(e.p)), 'alt')
-                         :ents.map(e=>pnAltLine(hlPN(pnAltResolve(e.p),kw))).join(''));
-    return _pnTd(col, pnAltBox(inner,n)+h.badge, h.cls.trim(), bl+'font-size:11px'); }
+    const nRow=ents.length+(isMaster?1:0);        // MASTER 에게는 새로 적을 빈 줄 하나를 더 준다
+    const out=[];
+    for(let i=0;i<nRow;i++){
+      const e=ents[i], last=(i===nRow-1);
+      if(col.key==='alt_name'){
+        const nm=e?pnAltName(e.p):'';
+        out.push(pnAltRow(`<span title="${escapeHtml(nm)}" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(nm)}</span>`, last, 'color:var(--muted)'));
+      } else if(col.key==='alt_qty'){
+        const q=e?e.q:'';
+        out.push(pnAltRow((isMaster&&e)?pnAltEdit(r.rep,i,q,'altq'):`<span style="margin-left:auto">${escapeHtml(q)}</span>`, last));
+      } else {
+        const v=e?pnAltResolve(e.p):'';
+        out.push(pnAltRow(isMaster?pnAltEdit(r.rep,i,v,'alt',!e):hlPN(v,kw), last));
+      }
+    }
+    // 변경이력 딱지는 칸 모서리에 띄워 둔다 — 줄 높이에 끼어들면 세 칸이 어긋난다
+    const h=(col.key==='alt_name')?{cls:'',badge:''}:pnCellHist(r.rep, col.key==='alt_qty'?'altq':'alt');
+    const badge=h.badge?`<span style="position:absolute;right:1px;top:0;line-height:1">${h.badge}</span>`:'';
+    return _pnTd(col, out.join('')+badge, h.cls.trim(), bl+'font-size:11px;position:relative'); }
   if(col.key==='export_ctrl'){ const on = r._split ? isExportRestricted(r._compat) : (r.compats||[]).some(isExportRestricted);
     return _pnTd(col, on?'<span style="color:#ef4444;font-weight:700;font-size:12px">O</span>':'', 'center', 'text-align:center'); }
   switch(col.key){
