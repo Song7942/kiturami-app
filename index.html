@@ -664,6 +664,7 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
   <button class="tab-btn active" onclick="switchTab('order')" id="tab-order">📦 주문</button>
   <button class="tab-btn" style="display:none;position:relative" onclick="switchTab('adminOrders')" id="tab-adminOrders"><span id="i18n-tab-adminorders">🗂️ 주문관리</span><span id="adminOrdersIncompleteTri" title="출고 미완료" style="display:none;margin-left:4px;vertical-align:middle;color:#f59e0b;font-size:11px;line-height:1">▲</span><span id="adminOrdersUnreadDot" style="display:none;position:absolute;top:4px;right:2px;width:8px;height:8px;border-radius:50%;background:#ef4444;box-shadow:0 0 0 2px var(--bg)"></span></button>
   <button class="tab-btn"        onclick="switchTab('pn')"    id="tab-pn">🔄 품번 조회</button>
+  <button class="tab-btn"        onclick="switchTab('pnchk')" id="tab-pnchk"><span id="i18n-tab-pnchk">🧾 품번확인</span></button>
   <button class="tab-btn"        onclick="switchTab('prod')"  id="tab-prod"><span id="i18n-tab-prod">🏷️ 제품목록</span></button>
   <button class="tab-btn" style="display:none" onclick="switchTab('inventory')" id="tab-inventory">📊 재고관리</button>
   <button class="tab-btn" style="display:none" onclick="switchTab('shipments')" id="tab-shipments"><span id="i18n-tab-shipments">🚚 출고관리</span></button>
@@ -1195,6 +1196,47 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
       </table>
     </div>
     <div id="moqEmpty" class="no-result" style="display:none"></div>
+  </div>
+</div>
+
+<!-- ══ 품번확인 ══
+     엑셀을 떨구면 그 표를 그대로 보여 주되, 품번 열 오른쪽에
+     '최종품번' 과 '단종' 두 열을 끼워 품번조회 기준 값을 채운다. -->
+<div class="tab-pane" id="pane-pnchk">
+  <div class="fixed-top">
+    <div class="search-bar">
+      <div class="search-wrap">
+        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+        <input type="text" id="pnChkInput" placeholder="품번·최종품번으로 검색…" oninput="debouncedRenderPnChk()">
+      </div>
+      <div class="count-badge" id="pnChkBadge"></div>
+      <button class="dl-btn" id="pnChkUpBtn" onclick="document.getElementById('pnChkFile').click()" title="품번이 든 엑셀을 올리면 최종품번·단종을 붙여 줍니다" style="background:var(--accent2);border-color:var(--accent2);color:#fff">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <span id="i18n-pnchk-up">엑셀 업로드</span>
+      </button>
+      <input type="file" id="pnChkFile" accept=".xlsx,.xls" style="display:none" onchange="handlePnChkUpload(event)">
+      <button class="dl-btn" id="pnChkDlBtn" onclick="downloadPnChk()" style="display:none">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        <span id="i18n-pnchk-dl">엑셀 다운로드</span>
+      </button>
+      <button class="dl-btn" id="pnChkClrBtn" onclick="pnChkClear()" style="display:none">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
+        <span id="i18n-pnchk-clr">지우기</span>
+      </button>
+    </div>
+    <div style="font-size:11px;color:var(--muted);padding:0 4px 4px" id="pnChkNote"></div>
+      <div class="tbl-scrollbar" id="pnchkTblScrollbar" style="display:none;margin:4px 0 0">
+        <div class="tbl-scrollbar-thumb" id="pnchkTblScrollbarThumb"></div>
+      </div>
+  </div>
+  <div class="scroll-body" id="scrollBodyPNCHK" style="padding:0 12px 72px">
+    <div class="pn-body-wrap">
+      <table id="pnChkTable" style="width:auto;min-width:100%;border-collapse:separate;border-spacing:0">
+        <thead id="pnChkThead"></thead>
+        <tbody id="pnChkTbody"></tbody>
+      </table>
+    </div>
+    <div id="pnChkEmpty" class="no-result"></div>
   </div>
 </div>
 
@@ -2299,6 +2341,7 @@ function switchTab(tab){
   if(tab==='blk'){ loadBLKTab(); }
   if(tab==='moq'){ loadMOQTab(); }
   if(tab==='ss'){ loadSSTab(); }
+  if(tab==='pnchk'){ loadPnChkTab(); }
   try{ ktPaneTitle(tab); }catch(e){}       // 도구줄 맨 앞에 화면 이름을 붙인다
   if(tab==='sim'){ loadSimTab(); }
   if(tab==='adminOrders'){ loadAdminOrdersTab(); }
@@ -2362,6 +2405,13 @@ function refreshPsiTexts(){
   set('i18n-moq-clear','전체 지우기','Очистить всё');
   set('i18n-moq-cols',COLS[0],COLS[1]);
   // 안전재고
+  // 품번확인
+  set('i18n-tab-pnchk','🧾 품번확인','🧾 Проверка артикулов');
+  set('i18n-pnchk-up','엑셀 업로드','Загрузить Excel');
+  set('i18n-pnchk-dl',DL[0],DL[1]);
+  set('i18n-pnchk-clr','지우기','Очистить');
+  ph('pnChkInput','품번·최종품번으로 검색…','Поиск: артикул, конечный артикул…');
+  if(ktPaneOn('pane-pnchk') && typeof renderPnChk==='function') renderPnChk();
   set('i18n-tab-ss','🛡 안전재고','🛡 Страховой запас');
   set('i18n-ss-tab','안전재고','Страховой запас');
   set('i18n-ss-cols',COLS[0],COLS[1]);
@@ -2979,6 +3029,7 @@ const KT_PANE_TITLE={
   psi:['PSI','PSI'], sim:['발주시뮬레이션','Симуляция заказа'], po:['발주현황','Заказы'],
   ship:['선적/입고현황','Отгрузка/Приход'], ms:['미출현황','Невыполненные'],
   moq:['MOQ','MOQ'], blk:['사용불가','Заблокировано'], price:['가격정보','Цены'],
+  ss:['안전재고','Страховой запас'], pnchk:['품번확인','Проверка артикулов'],
   inventory:['재고관리','Склад'], shipments:['출고관리','Отгрузки'],
   order:['주문','Заказ'], adminOrders:['주문관리','Управление заказами'],
   memberManagement:['회원관리','Пользователи'], reset:['초기화','Сброс']
@@ -6710,6 +6761,7 @@ function applyPermTabVisibility(skipSwitch){
     ['tab-order','tab-parts','tab-adminOrders','tab-inventory','tab-shipments','tab-price','tab-psi','tab-po','tab-ship','tab-ms','tab-blk','tab-moq','tab-ss','tab-sim','tab-memberManagement']
       .forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display='none'; });
     const pnEl=document.getElementById('tab-pn'); if(pnEl) pnEl.style.display='';
+    const pcEl=document.getElementById('tab-pnchk'); if(pcEl) pcEl.style.display='';   // 품번확인은 품번조회를 따라간다
     // KITURAMI(본사)는 권한 기록이 없어도 PSI 를 본다
     const psi0=document.getElementById('tab-psi'); if(psi0 && canSeePsi()) psi0.style.display='block';
     if(!skipSwitch) ensureVisibleTab();
@@ -6725,7 +6777,7 @@ function applyPermTabVisibility(skipSwitch){
   const moqEl=document.getElementById('tab-moq'); if(moqEl) moqEl.style.display='none';
   const ssEl=document.getElementById('tab-ss'); if(ssEl) ssEl.style.display='none';
   const simEl=document.getElementById('tab-sim'); if(simEl) simEl.style.display='none';
-  const map={ 'tab-pn':'pn','tab-inventory':'inventory','tab-shipments':'shipments','tab-price':'price','tab-memberManagement':'memberManagement' };
+  const map={ 'tab-pn':'pn','tab-pnchk':'pn','tab-inventory':'inventory','tab-shipments':'shipments','tab-price':'price','tab-memberManagement':'memberManagement' };
   Object.keys(map).forEach(tabId=>{ const el=document.getElementById(tabId); if(el) el.style.display = pobj[map[tabId]].v ? '' : 'none'; });
   // 주문관리 탭: '주문접수' 또는 '주문' 서브탭 권한이 있으면 노출. 서브탭 버튼도 권한대로.
   const aoEl=document.getElementById('tab-adminOrders');
@@ -10419,6 +10471,7 @@ function ktDropInitAll(){
              'Отпустите файл Excel (дозаказ или PSI) здесь');
   ktDropInit('pane-po',        'poFileInput',     X('발주'),     R('заказы'));
   ktDropInit('pane-pn',        'pnFileInput',     X('품번'),     R('артикулы'));
+  ktDropInit('pane-pnchk',     'pnChkFile',       X('품번확인'), R('проверка артикулов'));
   ktDropInit('pane-prod',      'prodFileInput',   X('제품목록'), R('изделия'));
   ktDropInit('pane-price',     'priceFileInput',  X('가격'),     R('цены'));
   ktDropInit('pane-inventory', 'invFileInput',    X('재고'),     R('остатки'));
@@ -12155,6 +12208,197 @@ async function handleMoqUpload(ev){
     renderMOQ();
     alert(ru ? ('Загружено: '+done.n+' арт.') : ('MOQ 를 반영했습니다.\n품번 '+done.n+'개'));
   }catch(e){ console.error(e); alert(ru?'Ошибка чтения файла.':'파일을 읽지 못했습니다.'); }
+}
+// ══════════════════════════════════════════
+// 품번확인 — 엑셀을 떨구면 품번 열 오른쪽에 '최종품번'·'단종' 을 붙여 준다
+//   머리글이 없어도 된다. 품번처럼 생긴 값이 가장 많은 열을 품번 열로 본다.
+// ══════════════════════════════════════════
+let _pnChk=null;      // { head:[...], rows:[[...]], pnCol, name }
+const PNCHK_RE=/^[A-Za-z]{0,3}[0-9][A-Za-z0-9._\-\/]{4,}$/;
+function pnChkLooksPn(v){
+  const s=String(v==null?'':v).trim();
+  if(!s || s.length<5 || s.length>30) return false;
+  return PNCHK_RE.test(s);
+}
+// 품번조회에서 최종품번과 단종을 찾는다. 적힌 값이 대표품번이든 호환품번이든 받아 준다.
+function pnChkLookup(code){
+  const raw=String(code==null?'':code).trim();
+  if(!raw) return { rep:'', fin:'', dan:'', found:false };
+  const rep=(getPNInfo(raw)?raw:'') || findMasterRep(raw) || findMasterRep(normPN(raw)) || '';
+  if(!rep) return { rep:'', fin:'', dan:'', found:false };
+  const info=getPNInfo(rep)||{};
+  const fin=String(info.final||'');
+  const sp=fin?pnSpecOf(fin):null;
+  return { rep, fin, dan:String((sp&&sp.dan)||''), found:true };
+}
+function pnChkClear(){ _pnChk=null; renderPnChk(); }
+function debouncedRenderPnChk(){ clearTimeout(window._pnChkT); window._pnChkT=setTimeout(renderPnChk,200); }
+function pnChkColName(i){    // 머리글이 없을 때 쓰는 이름: 엑셀 열 글자(A,B,…)
+  let n=i, s='';
+  do{ s=String.fromCharCode(65+(n%26))+s; n=Math.floor(n/26)-1; }while(n>=0);
+  return s;
+}
+async function handlePnChkUpload(ev){
+  const ru=(lang==='ru');
+  const file=ev.target.files && ev.target.files[0];
+  ev.target.value='';
+  if(!file) return;
+  try{
+    const wb=XLSX.read(new Uint8Array(await file.arrayBuffer()),{type:'array'});
+    let best=null;
+    for(const sn of wb.SheetNames){
+      const ws=wb.Sheets[sn];
+      const ref=ws['!ref']||'A1';
+      const a=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',blankrows:false});
+      if(!a.length) continue;
+      const width=a.reduce((m,r)=>Math.max(m,(r||[]).length),0);
+      // 1) 머리글 줄 찾기 — '품번' 같은 말이 든 칸이 있으면 그 줄을 머리글로 본다
+      let hr=-1, pnCol=-1;
+      for(let r=0;r<Math.min(a.length,30) && hr<0;r++){
+        (a[r]||[]).forEach((v,c)=>{
+          const s=String(v==null?'':v).replace(/\s+/g,'');
+          if(hr<0 && (s.indexOf('품번')>=0 || s.indexOf('품목코드')>=0 || s.indexOf('검색용')>=0
+                      || /^артикул/i.test(s))){ hr=r; pnCol=c; }
+        });
+      }
+      // 2) 머리글이 없으면 품번처럼 생긴 값이 가장 많은 열을 고른다
+      if(pnCol<0){
+        const score=new Array(width).fill(0);
+        a.forEach(r=>{ for(let c=0;c<width;c++){ if(pnChkLooksPn((r||[])[c])) score[c]++; } });
+        let mx=0; for(let c=0;c<width;c++){ if(score[c]>mx){ mx=score[c]; pnCol=c; } }
+        if(mx<1){ pnCol=-1; }
+      }
+      if(pnCol<0) continue;
+      const start=(hr>=0)?hr+1:0;
+      const rows=[];
+      for(let r=start;r<a.length;r++){
+        const row=a[r]||[];
+        const code=String(row[pnCol]==null?'':row[pnCol]).trim();
+        if(!code) continue;
+        if(hr<0 && !pnChkLooksPn(code)) continue;   // 머리글이 없으면 품번 모양인 줄만 받는다
+        const cells=[];
+        for(let c=0;c<width;c++) cells.push(row[c]==null?'':row[c]);
+        rows.push(cells);
+      }
+      if(rows.length){
+        const head=[];
+        for(let c=0;c<width;c++){
+          const h=(hr>=0)?String((a[hr]||[])[c]==null?'':(a[hr]||[])[c]).trim():'';
+          // 머리글이 없는 파일이면 품번 열만 '품번' 으로 적고 나머지는 엑셀 열 글자를 쓴다
+          head.push(h || ((c===pnCol && hr<0) ? ((lang==='ru')?'Артикул':'품번') : pnChkColName(c)));
+        }
+        best={ head, rows, pnCol, name:file.name, sheet:sn };
+        break;
+      }
+    }
+    if(!best){
+      alert(ru?'Не удалось найти столбец с артикулами.'
+              :'품번 열을 찾지 못했습니다.\n품번이 적힌 열이 있는 엑셀을 올려 주세요.');
+      return;
+    }
+    _pnChk=best;
+    renderPnChk();
+  }catch(e){ console.error(e); alert(ru?'Ошибка чтения файла.':'파일을 읽지 못했습니다.'); }
+}
+function renderPnChk(){
+  const pane=document.getElementById('pane-pnchk'); if(!pane) return;
+  const ru=(lang==='ru'), L=(ko,rr)=>(ru?rr:ko);
+  const thead=document.getElementById('pnChkThead');
+  const tbody=document.getElementById('pnChkTbody');
+  const empty=document.getElementById('pnChkEmpty');
+  const note=document.getElementById('pnChkNote');
+  const badge=document.getElementById('pnChkBadge');
+  const dl=document.getElementById('pnChkDlBtn'), clr=document.getElementById('pnChkClrBtn');
+  if(!_pnChk){
+    if(thead) thead.innerHTML=''; if(tbody) tbody.innerHTML='';
+    if(badge) badge.innerHTML='';
+    if(dl) dl.style.display='none';
+    if(clr) clr.style.display='none';
+    if(note) note.textContent=L('품번이 든 엑셀을 이 화면에 끌어다 놓거나 \'엑셀 업로드\' 로 올려 주세요. '
+                                +'품번 열 오른쪽에 최종품번과 단종을 붙여 드립니다.',
+                                'Перетащите файл Excel с артикулами сюда — добавим конечный артикул и снятие.');
+    if(empty){ empty.textContent=L('아직 올린 파일이 없습니다.','Файл ещё не загружен.'); empty.style.display='block'; }
+    updatePaneHBar('pnchk');
+    return;
+  }
+  const kw=((document.getElementById('pnChkInput')||{}).value||'').trim().toLowerCase();
+  const pc=_pnChk.pnCol;
+  let rows=_pnChk.rows.map(cells=>{
+    const code=String(cells[pc]==null?'':cells[pc]).trim();
+    const f=pnChkLookup(code);
+    return { cells, code, fin:f.fin, dan:f.dan, found:f.found, rep:f.rep };
+  });
+  const nAll=rows.length;
+  const miss=rows.filter(r=>!r.found).length;
+  const noFin=rows.filter(r=>r.found && !r.fin).length;
+  const nDan=rows.filter(r=>r.dan).length;
+  if(kw) rows=rows.filter(r=> String(r.code).toLowerCase().includes(kw) || String(r.fin).toLowerCase().includes(kw));
+  if(badge) badge.innerHTML='<b>'+rows.length+'</b>';
+  if(dl) dl.style.display='';
+  if(clr) clr.style.display='';
+  if(note) note.textContent=L(_pnChk.name+' · 품번 '+nAll+'건'
+      +(miss?(' · 품번조회에 없음 '+miss+'건'):'')
+      +(noFin?(' · 최종품번 비어 있음 '+noFin+'건'):'')
+      +(nDan?(' · 단종 '+nDan+'건'):''),
+      _pnChk.name+' · '+nAll+(miss?(' · нет в базе: '+miss):''));
+  // 머리글: 원래 열들 + 품번 열 오른쪽에 최종품번·단종
+  const head=[];
+  _pnChk.head.forEach((h,i)=>{
+    head.push({t:h, k:'c'+i});
+    if(i===pc){ head.push({t:L('최종품번','Конечный артикул'), k:'fin'}); head.push({t:L('단종','Снято'), k:'dan'}); }
+  });
+  const thS='padding:6px 8px;text-align:center;vertical-align:middle;position:sticky;top:0;z-index:3;'
+    +'background:var(--surface2);font-size:11px;white-space:nowrap;border-bottom:1px solid var(--border)';
+  const hi=';background:var(--tag-bg);font-weight:700';
+  if(thead) thead.innerHTML='<tr>'+head.map(h=>'<th style="'+thS+((h.k==='fin'||h.k==='dan')?hi:'')+'">'+escapeHtml(h.t)+'</th>').join('')+'</tr>';
+  const tdS='padding:4px 8px;font-size:11px;border-bottom:1px solid var(--border);white-space:nowrap';
+  const codeS="font-family:'Courier New',monospace;font-size:10px";
+  if(tbody) tbody.innerHTML=rows.map(r=>{
+    const tds=[];
+    _pnChk.head.forEach((h,i)=>{
+      const v=r.cells[i];
+      const isPn=(i===pc);
+      tds.push('<td style="'+tdS+(isPn?'':';text-align:right')+'">'
+        +(isPn?('<span style="'+codeS+'">'+escapeHtml(String(v))+'</span>'):escapeHtml(String(v)))+'</td>');
+      if(i===pc){
+        tds.push('<td style="'+tdS+';background:var(--tag-bg)">'
+          +(r.fin?('<span style="'+codeS+';font-weight:700">'+escapeHtml(normBadgePN(r.fin))+'</span>')
+                 :('<span style="color:#ef4444">'+escapeHtml(r.found?L('(최종품번 없음)','(нет)'):L('(품번조회에 없음)','(нет в базе)'))+'</span>'))
+          +'</td>');
+        tds.push('<td style="'+tdS+';background:var(--tag-bg);text-align:center;color:#ef4444;font-weight:700">'
+          +escapeHtml(r.dan||'')+'</td>');
+      }
+    });
+    return '<tr>'+tds.join('')+'</tr>';
+  }).join('');
+  if(empty){ empty.style.display=rows.length?'none':'block';
+             empty.textContent=L('찾는 품번이 없습니다.','Ничего не найдено.'); }
+  updatePaneHBar('pnchk');
+}
+function downloadPnChk(){
+  if(!_pnChk) return;
+  const ru=(lang==='ru'), L=(ko,rr)=>(ru?rr:ko);
+  const pc=_pnChk.pnCol;
+  const head=[];
+  _pnChk.head.forEach((h,i)=>{ head.push(h);
+    if(i===pc){ head.push(L('최종품번','Конечный артикул')); head.push(L('단종','Снято')); } });
+  const aoa=[head];
+  _pnChk.rows.forEach(cells=>{
+    const f=pnChkLookup(String(cells[pc]==null?'':cells[pc]).trim());
+    const row=[];
+    _pnChk.head.forEach((h,i)=>{ row.push(cells[i]);
+      if(i===pc){ row.push(f.fin||''); row.push(f.dan||''); } });
+    aoa.push(row);
+  });
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols']=head.map(()=>({wch:16}));
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'품번확인');
+  XLSX.writeFile(wb, xlsxName('품번확인','Проверка_артикулов'));
+}
+async function loadPnChkTab(){
+  if(!PN_DATA.length) await loadPNOverrides();
+  if(typeof loadPnSpecs==='function'){ try{ await loadPnSpecs(); }catch(e){} }
+  renderPnChk();
 }
 // ══════════════════════════════════════════
 // 안전재고 — 통합문서 SafetyStock 시트의 L·M 열
@@ -17660,7 +17904,7 @@ updatePNTableScrollbar=setupHTableScroll('scrollBodyPN','pnHdrWrap','pnTblScroll
 // PSI 계열 화면(PSI·발주시뮬레이션·발주현황·선적/입고현황·미출현황)도 같은 가로 슬라이드 막대를 쓴다.
 // 이 화면들은 머리글이 표 안에 있어서 따로 맞출 헤더가 없다 — 스크롤 칸을 헤더 자리에 그대로 넘긴다.
 [['psi','scrollBodyPSI'],['sim','scrollBodySIM'],['po','scrollBodyPO'],
- ['ship','scrollBodySHIP'],['ms','scrollBodyMS'],['blk','scrollBodyBLK'],['moq','scrollBodyMOQ'],['ss','scrollBodySS']].forEach(function(x){
+ ['ship','scrollBodySHIP'],['ms','scrollBodyMS'],['blk','scrollBodyBLK'],['moq','scrollBodyMOQ'],['ss','scrollBodySS'],['pnchk','scrollBodyPNCHK']].forEach(function(x){
   _hbars[x[0]]=setupHTableScroll(x[1], x[1], x[0]+'TblScrollbar', x[0]+'TblScrollbarThumb');
 });
 setupSimpleHeaderScrollSync('scrollBodyPrice','priceCalcHdrWrap');
