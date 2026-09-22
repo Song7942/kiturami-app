@@ -1270,7 +1270,7 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
     <div class="search-bar">
       <div class="search-wrap">
         <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-        <input type="text" id="pnChkInput" placeholder="품번·최종품번으로 검색…" oninput="debouncedRenderPnChk()">
+        <input type="text" id="pnChkInput" placeholder="품번·최종품번·품명·규격으로 검색…" oninput="debouncedRenderPnChk()">
       </div>
       <div class="count-badge" id="pnChkBadge"></div>
       <button class="dl-btn" id="pnChkUpBtn" onclick="document.getElementById('pnChkFile').click()" title="품번이 든 엑셀을 올리면 최종품번·단종을 붙여 줍니다" style="background:var(--accent2);border-color:var(--accent2);color:#fff">
@@ -2498,7 +2498,7 @@ function refreshPsiTexts(){
   set('i18n-pnchk-up','엑셀 업로드','Загрузить Excel');
   set('i18n-pnchk-dl',DL[0],DL[1]);
   set('i18n-pnchk-clr','지우기','Очистить');
-  ph('pnChkInput','품번·최종품번으로 검색…','Поиск: артикул, конечный артикул…');
+  ph('pnChkInput','품번·최종품번·품명·규격으로 검색…','Поиск: артикул, наименование, хар-ки…');
   if(ktPaneOn('pane-pnchk') && typeof renderPnChk==='function') renderPnChk();
   set('i18n-tab-ss','🛡 안전재고','🛡 Страховой запас');
   set('i18n-ss-tab','안전재고','Страховой запас');
@@ -13504,13 +13504,18 @@ function pnChkLooksPn(v){
 // 품번조회에서 최종품번과 단종을 찾는다. 적힌 값이 대표품번이든 호환품번이든 받아 준다.
 function pnChkLookup(code){
   const raw=String(code==null?'':code).trim();
-  if(!raw) return { rep:'', fin:'', dan:'', found:false };
+  const none={ rep:'', fin:'', dan:'', name:'', spec:'', found:false };
+  if(!raw) return none;
   const rep=(getPNInfo(raw)?raw:'') || findMasterRep(raw) || findMasterRep(normPN(raw)) || '';
-  if(!rep) return { rep:'', fin:'', dan:'', found:false };
+  if(!rep) return none;
   const info=getPNInfo(rep)||{};
   const fin=String(info.final||'');
   const sp=fin?pnSpecOf(fin):null;
-  return { rep, fin, dan:String((sp&&sp.dan)||''), found:true };
+  // 품명·규격은 최종품번 것을 먼저 쓰고, 없으면 그 품목(대표품번) 값을 쓴다 — 품번조회와 같은 규칙
+  const ru=(lang==='ru');
+  const name=(sp&&(ru?sp.name_ru:sp.name)) || (ru?(info.name_ru||info.name_ko):(info.name_ko||'')) || '';
+  const spec=(sp&&sp.spec) || info.spec || '';
+  return { rep, fin, dan:String((sp&&sp.dan)||''), name:String(name||''), spec:String(spec||''), found:true };
 }
 function pnChkClear(){ _pnChk=null; renderPnChk(); }
 function debouncedRenderPnChk(){ clearTimeout(window._pnChkT); window._pnChkT=setTimeout(renderPnChk,200); }
@@ -13607,13 +13612,13 @@ function renderPnChk(){
   let rows=_pnChk.rows.map(cells=>{
     const code=String(cells[pc]==null?'':cells[pc]).trim();
     const f=pnChkLookup(code);
-    return { cells, code, fin:f.fin, dan:f.dan, found:f.found, rep:f.rep };
+    return { cells, code, fin:f.fin, dan:f.dan, name:f.name, spec:f.spec, found:f.found, rep:f.rep };
   });
   const nAll=rows.length;
   const miss=rows.filter(r=>!r.found).length;
   const noFin=rows.filter(r=>r.found && !r.fin).length;
   const nDan=rows.filter(r=>r.dan).length;
-  if(kw) rows=rows.filter(r=> String(r.code).toLowerCase().includes(kw) || String(r.fin).toLowerCase().includes(kw));
+  if(kw) rows=rows.filter(r=> [r.code,r.fin,r.name,r.spec].some(v=>String(v||'').toLowerCase().includes(kw)));
   if(badge) badge.innerHTML='<b>'+rows.length+'</b>';
   if(dl) dl.style.display='';
   if(clr) clr.style.display='';
@@ -13622,16 +13627,22 @@ function renderPnChk(){
       +(noFin?(' · 최종품번 비어 있음 '+noFin+'건'):'')
       +(nDan?(' · 단종 '+nDan+'건'):''),
       _pnChk.name+' · '+nAll+(miss?(' · нет в базе: '+miss):''));
-  // 머리글: 원래 열들 + 품번 열 오른쪽에 최종품번·단종
+  // 머리글: 원래 열들 + 품번 열 오른쪽에 최종품번·단종·품명·규격
   const head=[];
   _pnChk.head.forEach((h,i)=>{
     head.push({t:h, k:'c'+i});
-    if(i===pc){ head.push({t:L('최종품번','Конечный артикул'), k:'fin'}); head.push({t:L('단종','Снято'), k:'dan'}); }
+    if(i===pc){
+      head.push({t:L('최종품번','Конечный артикул'), k:'fin'});
+      head.push({t:L('단종','Снято'), k:'dan'});
+      head.push({t:L('품명','Наименование'), k:'nm'});
+      head.push({t:L('규격','Хар-ки'), k:'sp'});
+    }
   });
   const thS='padding:6px 8px;text-align:center;vertical-align:middle;position:sticky;top:0;z-index:3;'
     +'background:var(--surface2);font-size:11px;white-space:nowrap;border-bottom:1px solid var(--border)';
   const hi=';background:var(--tag-bg);font-weight:700';
-  if(thead) thead.innerHTML='<tr>'+head.map(h=>'<th'+danTip(h.k)+' style="'+thS+((h.k==='fin'||h.k==='dan')?hi:'')+'">'+escapeHtml(h.t)+'</th>').join('')+'</tr>';
+  const isAdd=k=>(k==='fin'||k==='dan'||k==='nm'||k==='sp');
+  if(thead) thead.innerHTML='<tr>'+head.map(h=>'<th'+danTip(h.k)+' style="'+thS+(isAdd(h.k)?hi:'')+'">'+escapeHtml(h.t)+'</th>').join('')+'</tr>';
   const tdS='padding:4px 8px;font-size:11px;border-bottom:1px solid var(--border);white-space:nowrap';
   const codeS="font-family:'Courier New',monospace;font-size:10px";
   if(tbody) tbody.innerHTML=rows.map(r=>{
@@ -13648,6 +13659,8 @@ function renderPnChk(){
           +'</td>');
         tds.push('<td style="'+tdS+';background:var(--tag-bg);text-align:center;color:#ef4444;font-weight:700">'
           +escapeHtml(r.dan||'')+'</td>');
+        tds.push('<td style="'+tdS+';background:var(--tag-bg)">'+escapeHtml(r.name||'')+'</td>');
+        tds.push('<td style="'+tdS+';background:var(--tag-bg);color:var(--muted)">'+escapeHtml(r.spec||'')+'</td>');
       }
     });
     return '<tr>'+tds.join('')+'</tr>';
@@ -13662,17 +13675,17 @@ function downloadPnChk(){
   const pc=_pnChk.pnCol;
   const head=[];
   _pnChk.head.forEach((h,i)=>{ head.push(h);
-    if(i===pc){ head.push(L('최종품번','Конечный артикул')); head.push(L('단종','Снято')); } });
+    if(i===pc){ head.push(L('최종품번','Конечный артикул')); head.push(L('단종','Снято')); head.push(L('품명','Наименование')); head.push(L('규격','Хар-ки')); } });
   const aoa=[head];
   _pnChk.rows.forEach(cells=>{
     const f=pnChkLookup(String(cells[pc]==null?'':cells[pc]).trim());
     const row=[];
     _pnChk.head.forEach((h,i)=>{ row.push(cells[i]);
-      if(i===pc){ row.push(f.fin||''); row.push(f.dan||''); } });
+      if(i===pc){ row.push(f.fin||''); row.push(f.dan||''); row.push(f.name||''); row.push(f.spec||''); } });
     aoa.push(row);
   });
   const ws=XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols']=head.map(()=>({wch:16}));
+  ws['!cols']=head.map(h=>({wch:(String(h).indexOf('규격')>=0||String(h).indexOf('품명')>=0)?22:16}));
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'품번확인');
   XLSX.writeFile(wb, xlsxName('품번확인','Проверка_артикулов'));
 }
