@@ -13619,10 +13619,21 @@ async function handlePnChkUpload(ev){
       }
       if(rows.length){
         const head=[];
+        // 머리글이 없는 파일이면 품번 열은 '품번', 숫자만 든 열은 '수량' 으로 적는다
+        const numCol=c=>{
+          let n=0, t=0;
+          rows.forEach(rr=>{ const v=rr[c]; if(v===''||v==null) return; t++; if(!isNaN(Number(String(v).replace(/,/g,'')))) n++; });
+          return t>0 && n===t;
+        };
         for(let c=0;c<width;c++){
           const h=(hr>=0)?String((a[hr]||[])[c]==null?'':(a[hr]||[])[c]).trim():'';
-          // 머리글이 없는 파일이면 품번 열만 '품번' 으로 적고 나머지는 엑셀 열 글자를 쓴다
-          head.push(h || ((c===pnCol && hr<0) ? ((lang==='ru')?'Артикул':'품번') : pnChkColName(c)));
+          let nm=h;
+          if(!nm){
+            if(c===pnCol) nm=(lang==='ru')?'Артикул':'품번';
+            else if(numCol(c)) nm=(lang==='ru')?'Кол-во':'수량';
+            else nm=pnChkColName(c);
+          }
+          head.push(nm);
         }
         best={ head, rows, pnCol, name:file.name, sheet:sn };
         break;
@@ -13692,30 +13703,30 @@ function renderPnChk(){
       head.push({t:L('규격','Хар-ки'), k:'sp'});
     }
   });
+  // 표는 칸마다 줄을 긋고, 글자는 칸 가운데에 놓는다(품번 열과 같은 모양)
   const thS='padding:6px 8px;text-align:center;vertical-align:middle;position:sticky;top:0;z-index:3;'
-    +'background:var(--surface2);font-size:11px;white-space:nowrap;border-bottom:1px solid var(--border)';
-  const hi=';background:var(--tag-bg);font-weight:700';
-  const isAdd=k=>(k==='fin'||k==='dan'||k==='nm'||k==='sp');
-  if(thead) thead.innerHTML='<tr>'+head.map(h=>'<th'+danTip(h.k)+' style="'+thS+(isAdd(h.k)?hi:'')+'">'+escapeHtml(h.t)+'</th>').join('')+'</tr>';
-  const tdS='padding:4px 8px;font-size:11px;border-bottom:1px solid var(--border);white-space:nowrap';
+    +'background:var(--surface2);font-size:11px;white-space:nowrap;font-weight:700;'
+    +'border-bottom:1px solid var(--border);border-right:1px solid var(--border)';
+  if(thead) thead.innerHTML='<tr>'+head.map(h=>'<th'+danTip(h.k)+' style="'+thS+'">'+escapeHtml(h.t)+'</th>').join('')+'</tr>';
+  const tdS='padding:4px 8px;font-size:11px;text-align:center;vertical-align:middle;white-space:nowrap;'
+    +'border-bottom:1px solid var(--border);border-right:1px solid var(--border)';
   const codeS="font-family:'Courier New',monospace;font-size:10px";
   if(tbody) tbody.innerHTML=rows.map(r=>{
     const tds=[];
     _pnChk.head.forEach((h,i)=>{
       const v=r.cells[i];
       const isPn=(i===pc);
-      tds.push('<td style="'+tdS+(isPn?'':';text-align:right')+'">'
+      tds.push('<td style="'+tdS+'">'
         +(isPn?('<span style="'+codeS+'">'+escapeHtml(String(v))+'</span>'):escapeHtml(String(v)))+'</td>');
       if(i===pc){
-        tds.push('<td style="'+tdS+';background:var(--tag-bg)"'
+        tds.push('<td style="'+tdS+'"'
           +(r.used?(' title="'+escapeHtml(L(r.used+' 로 찾았습니다', 'найдено по '+r.used))+'"'):'')+'>'
           +(r.fin?('<span style="'+codeS+';font-weight:700">'+escapeHtml(normBadgePN(r.fin))+'</span>'+(r.used?'<span style="color:var(--muted);font-size:9px"> ↩</span>':''))
                  :('<span style="color:#ef4444">'+escapeHtml(r.found?L('(최종품번 없음)','(нет)'):L('(품번조회에 없음)','(нет в базе)'))+'</span>'))
           +'</td>');
-        tds.push('<td style="'+tdS+';background:var(--tag-bg);text-align:center;color:#ef4444;font-weight:700">'
-          +escapeHtml(r.dan||'')+'</td>');
-        tds.push('<td style="'+tdS+';background:var(--tag-bg)">'+escapeHtml(r.name||'')+'</td>');
-        tds.push('<td style="'+tdS+';background:var(--tag-bg);color:var(--muted)">'+escapeHtml(r.spec||'')+'</td>');
+        tds.push('<td style="'+tdS+';color:#ef4444;font-weight:700">'+escapeHtml(r.dan||'')+'</td>');
+        tds.push('<td style="'+tdS+'">'+escapeHtml(r.name||'')+'</td>');
+        tds.push('<td style="'+tdS+';color:var(--muted)">'+escapeHtml(r.spec||'')+'</td>');
       }
     });
     return '<tr>'+tds.join('')+'</tr>';
