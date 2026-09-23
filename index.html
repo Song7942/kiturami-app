@@ -4221,6 +4221,7 @@ function pnAltQtyText(pn){ return pnAltEntries(pn).map(e=>e.q).join(', '); }
 // 가져다 쓴다. 어디서 고치든 지금 보고 있는 화면이 바로 따라오게 다시 그린다.
 function ktAfterPnEdit(){
   _pnLookupMap=null; _pnByRepMap=null; _nameRuByRep=null;
+  if(typeof _pnChkMap!=='undefined') _pnChkMap=null;
   const on=id=>{ const e=document.getElementById(id); return !!(e && e.classList.contains('active')); };
   const go=(id,fn)=>{ try{ if(on(id) && typeof fn==='function') fn(); }catch(e){} };
   go('pane-pn',    typeof renderPN==='function'?renderPN:null);
@@ -13501,12 +13502,22 @@ function pnChkLooksPn(v){
   if(!s || s.length<5 || s.length>30) return false;
   return PNCHK_RE.test(s);
 }
+// 대표품번·호환품번·최종품번을 모두 다듬은 꼴(대문자·빈칸 없음)로 담아 둔 찾기표.
+//   엑셀에 소문자나 빈칸이 섞여 있어도 걸리게 한다.
+let _pnChkMap=null;
+function pnChkMap(){
+  if(_pnChkMap) return _pnChkMap;
+  _pnChkMap=new Map();
+  const put=(k,rep)=>{ const n=normPN(k); if(n && !_pnChkMap.has(n)) _pnChkMap.set(n, rep); };
+  (PN_DATA||[]).forEach(p=>{ put(p.rep,p.rep); if(p.final) put(p.final,p.rep); (p.compats||[]).forEach(c=>put(c,p.rep)); });
+  return _pnChkMap;
+}
 // 품번조회에서 최종품번과 단종을 찾는다. 적힌 값이 대표품번이든 호환품번이든 받아 준다.
 function pnChkLookup(code){
   const raw=String(code==null?'':code).trim();
   const none={ rep:'', fin:'', dan:'', name:'', spec:'', found:false };
   if(!raw) return none;
-  const rep=(getPNInfo(raw)?raw:'') || findMasterRep(raw) || findMasterRep(normPN(raw)) || '';
+  const rep=(getPNInfo(raw)?raw:'') || findMasterRep(raw) || findMasterRep(normPN(raw)) || pnChkMap().get(normPN(raw)) || '';
   if(!rep) return none;
   const info=getPNInfo(rep)||{};
   const fin=String(info.final||'');
@@ -13516,6 +13527,20 @@ function pnChkLookup(code){
   const name=(sp&&(ru?sp.name_ru:sp.name)) || (ru?(info.name_ru||info.name_ko):(info.name_ko||'')) || '';
   const spec=(sp&&sp.spec) || info.spec || '';
   return { rep, fin, dan:String((sp&&sp.dan)||''), name:String(name||''), spec:String(spec||''), found:true };
+}
+// 한 줄을 푼다. 품번 칸으로 못 찾으면 그 줄의 다른 칸(대표·호환·최종품번 아무거나)도 훑는다.
+function pnChkResolveRow(cells, pc){
+  const code=String((cells||[])[pc]==null?'':cells[pc]).trim();
+  let f=pnChkLookup(code), used='';
+  if(!f.found){
+    for(let i=0;i<(cells||[]).length;i++){
+      if(i===pc) continue;
+      const v=String(cells[i]==null?'':cells[i]).trim(); if(!v) continue;
+      const g=pnChkLookup(v);
+      if(g.found){ f=g; used=v; break; }
+    }
+  }
+  return { f, used, code };
 }
 function pnChkClear(){ _pnChk=null; renderPnChk(); }
 function debouncedRenderPnChk(){ clearTimeout(window._pnChkT); window._pnChkT=setTimeout(renderPnChk,200); }
@@ -13529,6 +13554,8 @@ async function handlePnChkUpload(ev){
   const file=ev.target.files && ev.target.files[0];
   ev.target.value='';
   if(!file) return;
+  // 품번조회 자료가 아직 없으면 먼저 읽는다 — 열을 고를 때 '찾히는지' 를 보기 때문
+  try{ if(!PN_DATA.length) await loadPNOverrides(); if(typeof loadPnSpecs==='function' && !_pnSpec.size) await loadPnSpecs(); }catch(e){}
   try{
     const wb=XLSX.read(new Uint8Array(await file.arrayBuffer()),{type:'array'});
     let best=null;
@@ -13554,14 +13581,38 @@ async function handlePnChkUpload(ev){
         let mx=0; for(let c=0;c<width;c++){ if(score[c]>mx){ mx=score[c]; pnCol=c; } }
         if(mx<1){ pnCol=-1; }
       }
+      // 3) 머리글 이름이 무엇이든(대표품번·호환품번·최종품번·품목코드…),
+      //    품번조회에서 실제로 찾히는 값이 가장 많은 열을 품번 열로 삼는다.
+      {
+        const hit=new Array(width).fill(0);
+        const from=(hr>=0)?hr+1:0;
+        for(let r=from;r<a.length;r++){
+          const row=a[r]||[];
+          for(let c=0;c<width;c++){
+            const v=row[c]; if(v==null||v==='') continue;
+            if(pnChkLookup(String(v)).found) hit[c]++;
+          }
+        }
+        let bc=-1, bh=0;
+        for(let c=0;c<width;c++){ if(hit[c]>bh){ bh=hit[c]; bc=c; } }
+        if(bc>=0 && (pnCol<0 || (hit[pnCol]||0)===0 || bh>(hit[pnCol]||0))) pnCol=bc;
+      }
       if(pnCol<0) continue;
+      // 첫 줄이 품번이 아닌 글이면 머리글로 본다(예: '수량 | 부품코드')
+      if(hr<0 && a.length>1){
+        const v0=String((a[0]||[])[pnCol]==null?'':(a[0]||[])[pnCol]).trim();
+        const v1=String((a[1]||[])[pnCol]==null?'':(a[1]||[])[pnCol]).trim();
+        const ok=s=>!!s && (pnChkLooksPn(s) || pnChkLookup(s).found);
+        if(v0 && !ok(v0) && ok(v1)) hr=0;
+      }
       const start=(hr>=0)?hr+1:0;
       const rows=[];
       for(let r=start;r<a.length;r++){
         const row=a[r]||[];
         const code=String(row[pnCol]==null?'':row[pnCol]).trim();
         if(!code) continue;
-        if(hr<0 && !pnChkLooksPn(code)) continue;   // 머리글이 없으면 품번 모양인 줄만 받는다
+        // 머리글이 없으면 품번 모양이거나 품번조회에서 찾히는 줄만 받는다
+        if(hr<0 && !pnChkLooksPn(code) && !pnChkLookup(code).found) continue;
         const cells=[];
         for(let c=0;c<width;c++) cells.push(row[c]==null?'':row[c]);
         rows.push(cells);
@@ -13611,18 +13662,21 @@ function renderPnChk(){
   const pc=_pnChk.pnCol;
   let rows=_pnChk.rows.map(cells=>{
     const code=String(cells[pc]==null?'':cells[pc]).trim();
-    const f=pnChkLookup(code);
-    return { cells, code, fin:f.fin, dan:f.dan, name:f.name, spec:f.spec, found:f.found, rep:f.rep };
+    const R=pnChkResolveRow(cells, pc);
+    const f=R.f;
+    return { cells, code, used:R.used, fin:f.fin, dan:f.dan, name:f.name, spec:f.spec, found:f.found, rep:f.rep };
   });
   const nAll=rows.length;
   const miss=rows.filter(r=>!r.found).length;
   const noFin=rows.filter(r=>r.found && !r.fin).length;
   const nDan=rows.filter(r=>r.dan).length;
+  const nUsed=rows.filter(r=>r.used).length;
   if(kw) rows=rows.filter(r=> [r.code,r.fin,r.name,r.spec].some(v=>String(v||'').toLowerCase().includes(kw)));
   if(badge) badge.innerHTML='<b>'+rows.length+'</b>';
   if(dl) dl.style.display='';
   if(clr) clr.style.display='';
   if(note) note.textContent=L(_pnChk.name+' · 품번 '+nAll+'건'
+      +(nUsed?(' · 다른 칸의 품번으로 찾음 '+nUsed+'건'):'')
       +(miss?(' · 품번조회에 없음 '+miss+'건'):'')
       +(noFin?(' · 최종품번 비어 있음 '+noFin+'건'):'')
       +(nDan?(' · 단종 '+nDan+'건'):''),
@@ -13653,8 +13707,9 @@ function renderPnChk(){
       tds.push('<td style="'+tdS+(isPn?'':';text-align:right')+'">'
         +(isPn?('<span style="'+codeS+'">'+escapeHtml(String(v))+'</span>'):escapeHtml(String(v)))+'</td>');
       if(i===pc){
-        tds.push('<td style="'+tdS+';background:var(--tag-bg)">'
-          +(r.fin?('<span style="'+codeS+';font-weight:700">'+escapeHtml(normBadgePN(r.fin))+'</span>')
+        tds.push('<td style="'+tdS+';background:var(--tag-bg)"'
+          +(r.used?(' title="'+escapeHtml(L(r.used+' 로 찾았습니다', 'найдено по '+r.used))+'"'):'')+'>'
+          +(r.fin?('<span style="'+codeS+';font-weight:700">'+escapeHtml(normBadgePN(r.fin))+'</span>'+(r.used?'<span style="color:var(--muted);font-size:9px"> ↩</span>':''))
                  :('<span style="color:#ef4444">'+escapeHtml(r.found?L('(최종품번 없음)','(нет)'):L('(품번조회에 없음)','(нет в базе)'))+'</span>'))
           +'</td>');
         tds.push('<td style="'+tdS+';background:var(--tag-bg);text-align:center;color:#ef4444;font-weight:700">'
@@ -13678,7 +13733,7 @@ function downloadPnChk(){
     if(i===pc){ head.push(L('최종품번','Конечный артикул')); head.push(L('단종','Снято')); head.push(L('품명','Наименование')); head.push(L('규격','Хар-ки')); } });
   const aoa=[head];
   _pnChk.rows.forEach(cells=>{
-    const f=pnChkLookup(String(cells[pc]==null?'':cells[pc]).trim());
+    const f=pnChkResolveRow(cells, pc).f;
     const row=[];
     _pnChk.head.forEach((h,i)=>{ row.push(cells[i]);
       if(i===pc){ row.push(f.fin||''); row.push(f.dan||''); row.push(f.name||''); row.push(f.spec||''); } });
