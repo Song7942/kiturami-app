@@ -12131,9 +12131,12 @@ function poAllPeriod(){
 function poColDefs(){ return colOrdApply('po', poColDefsBase()); }
 function poColDefsBase(){
   const ru=(lang==='ru'), L=(ko,rr)=>(ru?rr:ko);
+  // 단종·수출제한은 발주코드(호환품번) 기준이다 — 품번조회·가격정보와 같은 규칙.
   return [['cha',L('차수','Партия'),90],['mon',L('발주년월','Мес. заказа'),68],
           ['rep',L('대표코드','Осн. код'),104],['pn',L('발주코드','Код заказа'),104],
-          ['chg',L('변경코드(공급)','Код замены'),104],['name',L('품명','Наименование'),170]]
+          ['chg',L('변경코드(공급)','Код замены'),104],['dan',L('단종','Снято'),44]]
+    .concat(canViewExportCtrl()?[['exp',L('수출제한','Эксп.контроль'),ru?86:58]]:[])
+    .concat([['name',L('품명','Наименование'),170]])
     .concat(ru?[]:[['spec','규격',150]])
     .concat([['qty',L('수주수량','Заказано'),70],['sup',L('공급수량','Поставлено'),70],
              ['rest',L('미공급수량','Недопоставка'),78]]);
@@ -12149,6 +12152,8 @@ function poCellVal(key, r){
     case 'rep':  return i.rep||'';
     case 'pn':   return normBadgePN(r.pn)||'';
     case 'chg':  return (i.fin && i.fin!==normPN(r.pn)) ? normBadgePN(i.fin) : '';
+    case 'dan':  return String((pnSpecOf(r.pn)||{}).dan||'');
+    case 'exp':  return isExportRestricted(r.pn) ? 'O' : '';
     case 'name': return poName(r.pn)||'';
     case 'spec': return poSpec(r.pn)||'';
     case 'qty':  return String(Number(r.qty)||0);
@@ -12331,6 +12336,8 @@ function renderPO(){
       chg:'<td style="'+tdS+'">'+(EDPO
           ? poChgEdit(r.pn, chg)
           : (chg?('<span style="'+codeS+';color:#b91c1c;font-weight:600">'+escapeHtml(normBadgePN(chg))+'</span>'):''))+'</td>',
+      dan:'<td style="'+tdS+';text-align:center;color:var(--muted)">'+escapeHtml(String((pnSpecOf(r.pn)||{}).dan||''))+'</td>',
+      exp:'<td style="'+tdS+';text-align:center;color:#ef4444;font-weight:700">'+(isExportRestricted(r.pn)?'O':'')+'</td>',
       name:'<td style="'+tdS+';word-break:break-all;font-size:10.5px;line-height:1.25">'+escapeHtml(poName(r.pn))+'</td>',
       spec:'<td style="'+tdS+';word-break:break-all;font-size:10.5px;line-height:1.25;color:var(--muted)">'+escapeHtml(poSpec(r.pn))+'</td>',
       qty:'<td style="'+numS+'">'+(EDPO?poNumEdit(r.cha,r.pn,'qty',r.qty):(r.qty?r.qty.toLocaleString():'0'))+'</td>',
@@ -12355,7 +12362,7 @@ function renderPO(){
   if(poLead) poLeadCell='<th colspan="'+poLead+'" style="'+poSumS+'">'+poSumLab+'</th>';
   else { poLabAt=poTailArr.findIndex(v=>v===''); if(poLabAt>=0) poTailArr[poLabAt]=poSumLab; }
   const poEdCol=EDPO?('<th style="'+thS+';width:26px"></th>'):'';
-  if(thead) thead.innerHTML='<tr>'+heads.map(h=>'<th style="'+thS+'">'+h[1]+poFilterIcon(h[0])+'</th>').join('')+poEdCol+'</tr>'
+  if(thead) thead.innerHTML='<tr>'+heads.map(h=>'<th'+danTip(h[0])+' style="'+thS+'">'+h[1]+poFilterIcon(h[0])+'</th>').join('')+poEdCol+'</tr>'
     + '<tr>'+poLeadCell
     + poTailArr.map((v,i)=>'<th style="'+poSumS+(i===poLabAt?';text-align:left':'')+'">'+v+'</th>').join('')
     + poEdCol+'</tr>';
@@ -12834,27 +12841,24 @@ function handlePOUpload(event, mode){
 function downloadPO(){
   renderPO();
   const ru=(lang==='ru');
-  const head=[ru?'Партия':'차수', ru?'Мес. заказа':'발주년월', ru?'Осн. код':'대표코드', ru?'Код заказа':'발주코드',
-              ru?'Код замены':'변경코드(공급)', ru?'Наименование':'품명']
-    .concat(ru?[]:['규격'])
-    .concat([ru?'Заказано':'수주수량', ru?'Поставлено':'공급수량', ru?'Недопоставка':'미공급수량']);
-  const aoa=[head];
+  // 내려받는 열은 화면과 같다 — 보기에서 바꾼 차례도, 수출제한 권한도 그대로 따른다.
+  const xh=poColDefs();
+  const aoa=[xh.map(h=>String(h[1]).replace(/<br>/g,' '))];
   let tq=0, ts=0;
   (_poFiltered||[]).forEach(r=>{
-    const i=poLookup(r.pn);
-    const chg=(i.fin && i.fin!==normPN(r.pn)) ? normBadgePN(i.fin) : '';
     tq+=r.qty; ts+=r.supplied;
-    aoa.push([poChaLabel(r.cha), poYmOf(r), i.rep||'', normBadgePN(r.pn), chg, poName(r.pn)]
-      .concat(ru?[]:[poSpec(r.pn)])
-      .concat([r.qty, r.supplied, r.qty-r.supplied]));
+    aoa.push(xh.map(h=>{
+      if(h[0]==='qty')  return r.qty;
+      if(h[0]==='sup')  return r.supplied;
+      if(h[0]==='rest') return r.qty-r.supplied;
+      return poCellVal(h[0], r);
+    }));
   });
-  aoa.splice(1,0,[(ru?'Итого ':'합계 ')+(_poFiltered||[]).length+(ru?'':'건'),'','','','','']
-    .concat(ru?[]:[''])
-    .concat([tq,ts,tq-ts]));
+  const xtot={qty:tq, sup:ts, rest:tq-ts};
+  aoa.splice(1,0, xh.map((h,i)=> (xtot[h[0]]!=null) ? xtot[h[0]]
+    : (i===0 ? ((ru?'Итого ':'합계 ')+(_poFiltered||[]).length+(ru?'':'건')) : '')));
   const ws=XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols']=[{wch:12},{wch:8},{wch:14},{wch:14},{wch:14},{wch:26}]
-    .concat(ru?[]:[{wch:22}])
-    .concat([{wch:10},{wch:10},{wch:12}]);
+  ws['!cols']=xh.map(h=>({wch:Math.max(7, Math.round(h[2]/7))}));
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'PO');
   XLSX.writeFile(wb, xlsxName('발주현황','Заказы'));
 }
