@@ -12343,7 +12343,8 @@ function renderPO(){
       exp:'<td style="'+tdS+';text-align:center;color:#ef4444;font-weight:700">'+(isExportRestricted(r.pn)?'O':'')+'</td>',
       name:'<td style="'+tdS+';word-break:break-all;font-size:10.5px;line-height:1.25">'+escapeHtml(poName(r.pn))+'</td>',
       spec:'<td style="'+tdS+';word-break:break-all;font-size:10.5px;line-height:1.25;color:var(--muted)">'+escapeHtml(poSpec(r.pn))+'</td>',
-      qty:'<td style="'+numS+'">'+(EDPO?poNumEdit(r.cha,r.pn,'qty',r.qty):(r.qty?r.qty.toLocaleString():'0'))+'</td>',
+      qty:'<td class="'+(poIsManQ(r.cha,r.pn)?'po-man':'')+'" style="'+numS+'">'
+        +(EDPO?poNumEdit(r.cha,r.pn,'qty',r.qty):(r.qty?r.qty.toLocaleString():'0'))+'</td>',
       sup:'<td class="'+(poIsMan(r.cha,r.pn)?'po-man':'')+'" style="'+numS+'">'
         +(EDPO?poNumEdit(r.cha,r.pn,'supplied',r.supplied):(r.supplied?r.supplied.toLocaleString():''))+'</td>',
       rest:'<td style="'+numS+';font-weight:600'+(rest>0?';color:#b91c1c':'')+'">'+(rest?rest.toLocaleString():'0')+'</td>'
@@ -12382,13 +12383,15 @@ function renderPO(){
 //   수주수량은 원래 손으로 넣는 값이라 그대로 저장한다.
 //   공급수량은 인보이스에서 저절로 셈하는 값이라, 손으로 고친 줄을 적어 두고
 //   다시 셈할 때 그 줄은 건드리지 않는다(안 그러면 다음 업로드에 지워진다).
-//   보관은 설정 칸(kt_psi_cfg id=94). '차수\u0000발주코드' 를 열쇠로 쓴다.
+//   보관은 설정 칸(kt_psi_cfg id=94). '차수|발주코드' 를 열쇠로 쓴다.
+//   ※ 열쇠에 NUL(\u0000)을 쓰면 Supabase 가 통째로 뱉어 내 하나도 저장되지 않는다.
 const PO_MAN_ID=94;
-let _poMan={};          // '차수\u0000발주코드' -> 1  (손으로 고친 공급수량)
+let _poMan={};          // '차수|발주코드' -> 1  (손으로 고친 공급수량)
+let _poManQ={};         // '차수|발주코드' -> 1  (손으로 고친 수주수량 — 표시만 한다)
 let _poSince='';        // 이 시각 뒤에 올린 인보이스만 공급수량에 센다(비면 전부)
 let _poFromYm='';       // 이 달부터 실제로 선적된 것만 공급수량에 센다(YYMM, 비면 전부)
 let _poManLoaded=false;
-function poManKey(cha,pn){ return String(cha||'')+'\u0000'+normPN(pn); }
+function poManKey(cha,pn){ return String(cha||'')+'|'+normPN(pn); }
 async function loadPoMan(){
   if(_poManLoaded) return;
   _poManLoaded=true;
@@ -12396,7 +12399,8 @@ async function loadPoMan(){
     const { data }=await sb.from('kt_psi_cfg').select('cfg').eq('id',PO_MAN_ID).maybeSingle();
     const c=(data && data.cfg && typeof data.cfg==='object') ? data.cfg : null;
     if(c){
-      if(c.man && typeof c.man==='object'){ _poMan=c.man; _poSince=String(c.since||''); _poFromYm=String(c.fromYm||''); }
+      if(c.man && typeof c.man==='object'){ _poMan=c.man; _poSince=String(c.since||''); _poFromYm=String(c.fromYm||'');
+        _poManQ=(c.manQ && typeof c.manQ==='object')?c.manQ:{}; }
       else { _poMan=c; _poSince=''; }        // 옛 모양(맵만 있던 것)도 읽는다
     }
   }catch(e){}
@@ -12405,12 +12409,16 @@ let _poManT=null;
 function savePoMan(){
   clearTimeout(_poManT);
   _poManT=setTimeout(async function(){
-    try{ await sb.from('kt_psi_cfg').upsert({ id:PO_MAN_ID, cfg:{ since:_poSince, fromYm:_poFromYm, man:_poMan },
-      updated_at:new Date().toISOString() },{onConflict:'id'}); }catch(e){}
+    try{ const { error }=await sb.from('kt_psi_cfg').upsert({ id:PO_MAN_ID,
+      cfg:{ since:_poSince, fromYm:_poFromYm, man:_poMan, manQ:_poManQ },
+      updated_at:new Date().toISOString() },{onConflict:'id'});
+      if(error) console.error('발주현황 수기 표시 저장 실패', error);
+    }catch(e){ console.error('발주현황 수기 표시 저장 실패', e); }
   }, 400);
 }
 function poIsMan(cha,pn){ return !!_poMan[poManKey(cha,pn)]; }
-function poManCount(){ return Object.keys(_poMan).length; }
+function poIsManQ(cha,pn){ return !!_poManQ[poManKey(cha,pn)]; }
+function poManCount(){ return Object.keys(_poMan).length+Object.keys(_poManQ).length; }
 // 이 인보이스 줄을 공급수량에 셀 것인가(기준 시각 뒤에 올린 것만)
 function poCountShip(r){
   // 기준 선적월을 정해 두면 그 달부터 실제로 선적된 것만 공급수량에 센다
@@ -12454,6 +12462,7 @@ async function onPoNumBlur(el){
   if(!row){ el.textContent=before; return; }
   row[field]=Math.round(num);
   if(field==='supplied'){ _poMan[poManKey(cha,pn)]=1; savePoMan(); }
+  if(field==='qty'){ _poManQ[poManKey(cha,pn)]=1; savePoMan(); }   // 손으로 고친 자리에 바탕색
   const { error }=await sb.from('kt_po').upsert(
     { cha:row.cha, pn:row.pn, mon:row.mon, qty:row.qty, supplied:row.supplied, updated_at:new Date().toISOString() },
     {onConflict:'cha,pn'});
@@ -12473,9 +12482,12 @@ async function poResetManual(){
   const ru=(lang==='ru');
   const c=poManCount();
   if(!c){ alert(ru?'Ручных значений нет.':'손으로 고친 값이 없습니다.'); return; }
+  const cq=Object.keys(_poManQ).length;
   if(!confirm(ru?('Сбросить '+c+' ручных значений?')
-               :('손으로 고친 공급수량 '+c+'개를 인보이스 기준으로 되돌립니다.\n계속할까요?'))) return;
-  _poMan={}; savePoMan();
+               :('손으로 고친 공급수량 '+Object.keys(_poMan).length+'개를 인보이스 기준으로 되돌립니다.'
+                 +(cq?('\n수주수량에 칠한 바탕색 '+cq+'개도 함께 지웁니다(숫자는 그대로).'):'')
+                 +'\n계속할까요?'))) return;
+  _poMan={}; _poManQ={}; savePoMan();
   ktHistClearMine('po.');                  // 이 아이디가 남긴 수기 이력도 지운다
   const r=await poRecalcSupply();
   if(!r.ok){ alert((ru?'Ошибка':'실패')+'\n['+r.msg+']'); return; }
@@ -12748,7 +12760,8 @@ async function poDeleteRow(cha, pn){
                     +'\n발주시뮬레이션의 선적계획·입고도 다시 셈합니다.\n\n계속할까요?'))) return;
   const { error }=await sb.from('kt_po').delete().eq('cha',row.cha).eq('pn',row.pn);
   if(error){ alert((ru?'Ошибка':'삭제 실패')+'\n['+(error.message||error.code)+']'); return; }
-  if(_poMan[poManKey(row.cha,row.pn)]){ delete _poMan[poManKey(row.cha,row.pn)]; savePoMan(); }
+  { const k=poManKey(row.cha,row.pn);
+    if(_poMan[k] || _poManQ[k]){ delete _poMan[k]; delete _poManQ[k]; savePoMan(); } }
   await loadPO();
   renderPO(); poManBtn();
   if(typeof renderSIM==='function' && ktPaneOn('pane-sim')) renderSIM();
@@ -16151,6 +16164,10 @@ async function handleSimReqUpload(ev){
         if(!poData.length) await loadPO();
         const mon=String(Number(String(poYm).slice(2))||'');
         await sb.from('kt_po').delete().eq('cha',cha);       // 그 차수를 이 파일 내용으로 새로 세운다
+        // 그 차수의 수기 표시는 옛 줄의 것이므로 걷어낸다
+        Object.keys(_poMan ).forEach(k=>{ if(k.split('|')[0]===cha) delete _poMan[k];  });
+        Object.keys(_poManQ).forEach(k=>{ if(k.split('|')[0]===cha) delete _poManQ[k]; });
+        savePoMan();
         const put=rows.map(x=>({ cha, pn:pnUpAll(x.code), mon, qty:x.qty, supplied:0,
                                  updated_at:new Date().toISOString() }));
         for(let i=0;i<put.length;i+=300){
