@@ -15537,6 +15537,14 @@ let psiSimOn=false;
 //   전에는 psiData[pn].data 객체를 열쇠로 삼았는데, 8초마다 도는 새로고침이
 //   psiData 를 통째로 새로 만들면 열쇠가 죄다 남의 것이 되어 입고가 안 붙었다.
 let _simZ={};
+// 수출작업의뢰서로 올린 선적계획 — { '대표품번|연월': 수량 }
+//   올린 달은 그 달 계산값을 무시하고 올린 값만 쓴다(적지 않은 품번은 0).
+let _simPlanUp={};
+function simPlanKey(rep, ym){ return String(rep)+'|'+String(ym); }
+function simPlanUpYms(){
+  const s={}; Object.keys(_simPlanUp||{}).forEach(k=>{ const p=String(k).split('|'); if(p[1]) s[p[1]]=1; });
+  return s;
+}
 const _simPlan=new Map();       // 대표품번 → 발주현황 미공급수량(그 달 '선적계획' 열에 얹는다)
 let _simPlanYm='';              // 미공급분을 선적하는 것으로 보는 달
 let _simInfo=null;
@@ -15593,14 +15601,14 @@ function renderSIM(){
   }
 }
 // 손으로 고친 값(실제선적·발주필요)을 셈한 값으로 되돌린다
-function simManualCount(){ return Object.keys(_simNeed).length + Object.keys(_simShip).length; }
+function simManualCount(){ return Object.keys(_simNeed).length + Object.keys(_simShip).length + Object.keys(_simPlanUp||{}).length; }
 function simResetManual(){
   const ru=(lang==='ru');
   const c=simManualCount();
   if(!c){ alert(ru?'Ручных значений нет.':'손으로 고친 값이 없습니다.'); return; }
   if(!confirm(ru ? ('Сбросить '+c+' ручных значений?')
                  : ('손으로 고친 '+c+'개를 원래 셈한 값으로 되돌립니다.\n계속할까요?'))) return;
-  _simNeed={}; _simShip={}; _simNeedNew={}; saveSimMan();
+  _simNeed={}; _simShip={}; _simNeedNew={}; _simPlanUp={}; saveSimMan();
   ktHistClearMine('sim.');                 // 이 아이디가 남긴 수기 이력도 지운다
   renderSIM();
 }
@@ -15871,20 +15879,138 @@ async function handleSimDrop(ev){
   const file=ev.target.files && ev.target.files[0];
   ev.target.value='';
   if(!file) return;
-  let isNeed=false;
+  let isNeed=false, isReq=false;
   try{
     const wb=XLSX.read(new Uint8Array(await file.arrayBuffer()),{type:'array'});
     for(const sn of wb.SheetNames){
+      if(String(sn).replace(/\s+/g,'').indexOf('출하요청서')>=0) isReq=true;
       const a=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:'',raw:false});
-      for(let r=0;r<Math.min(a.length,30) && !isNeed;r++){
-        (a[r]||[]).forEach(v=>{ if(String(v==null?'':v).replace(/\s+/g,'').indexOf('발주필요')>=0) isNeed=true; });
+      for(let r=0;r<Math.min(a.length,30);r++){
+        (a[r]||[]).forEach(v=>{ const s=String(v==null?'':v).replace(/\s+/g,'');
+          if(s.indexOf('발주필요')>=0) isNeed=true;
+          if(s.indexOf('수출작업의뢰서')>=0 || s.indexOf('출고일자')>=0) isReq=true; });
       }
-      if(isNeed) break;
+      if(isNeed || isReq) break;
     }
   }catch(e){}
   const pass={ target:{ files:[file], value:'' } };
+  if(isReq) return handleSimReqUpload(pass);
   if(isNeed) return handleSimNeedUpload(pass);
   if(typeof handlePSIUpload==='function') return handlePSIUpload(pass);
+}
+// ── 수출작업의뢰서(출하요청서) 올리기 → 그 달 '선적계획' ────────────
+//   · 출고일자('10월내', '2026-10', '10/15' …)로 달을 정한다
+//   · Code 와 수량을 읽어 대표품번마다 더한다(호환·최종품번 모두 받는다)
+//   · 그 달 선적계획은 이 파일 내용으로 통째 갈아 끼운다(적지 않은 품번은 0)
+function simReqYm(aoa, fname){
+  const now=new Date();
+  let refYm='', dateYm='', askY=0;
+  const grab=(s)=>String(s==null?'':s).replace(/\s+/g,'');
+  for(let r=0;r<Math.min(aoa.length,30);r++){
+    const row=aoa[r]||[];
+    for(let c=0;c<row.length;c++){
+      const s=grab(row[c]);
+      if(s.indexOf('의뢰일자')>=0){
+        for(let k=c+1;k<Math.min(row.length,c+4);k++){
+          const m=String(row[k]||'').match(/(20\d{2})[-.\/ ]?(\d{1,2})/); if(m){ askY=+m[1]; break; } }
+      }
+      if(s.indexOf('출고일자')>=0){
+        for(let k=c+1;k<Math.min(row.length,c+4);k++){
+          const v=String(row[k]==null?'':row[k]).trim(); if(!v) continue;
+          let m=v.match(/(20\d{2})[-.\/ ]?(\d{1,2})/);                 // 2026-10
+          if(m){ dateYm=String(m[1]).slice(2)+String(m[2]).padStart(2,'0'); break; }
+          m=v.match(/(\d{1,2})\s*월/);                                  // 10월내
+          if(m){ dateYm='M'+String(m[1]).padStart(2,'0'); break; }
+          m=v.match(/^(\d{1,2})[\/.](\d{1,2})/);                        // 10/15
+          if(m){ dateYm='M'+String(m[1]).padStart(2,'0'); break; }
+        }
+      }
+    }
+  }
+  const mRef=String(fname||'').match(/(\d{2})(\d{2})(\d{2})/);           // RUMOSKRUS261001 → 2610
+  if(mRef) refYm=mRef[1]+mRef[2];
+  if(dateYm && dateYm.charAt(0)==='M'){                                  // 달만 적힌 경우 해를 찾는다
+    const mm=dateYm.slice(1);
+    let y=askY || (refYm ? 2000+Number(refYm.slice(0,2)) : now.getFullYear());
+    const askM=askY?0:0;
+    // 의뢰한 달보다 앞선 달이면 이듬해로 본다(12월에 의뢰하고 1월내 출고 같은 경우)
+    if(refYm && refYm.slice(2)===mm) return refYm;
+    const nowM=now.getMonth()+1;
+    if(askY && Number(mm)<nowM-6) y=askY+1;
+    return String(y).slice(2)+mm;
+  }
+  return dateYm || refYm || '';
+}
+function simReqRows(aoa){
+  const out=[]; let cCode=-1, cQty=-1;
+  const grab=(s)=>String(s==null?'':s).replace(/\s+/g,'');
+  for(let r=0;r<aoa.length;r++){
+    const row=aoa[r]||[];
+    // 머리글(Code … 수량)을 만나면 그 아래를 읽는다. 표가 여러 개면 그때마다 다시 잡는다.
+    let hc=-1, hq=-1;
+    row.forEach((v,c)=>{ const s=grab(v).toLowerCase();
+      if(hc<0 && (s==='code'||s==='품목코드'||s==='품번')) hc=c;
+      if(hq<0 && (s==='수량'||s==='qty'||s==='q\'ty')) hq=c; });
+    if(hc>=0 && hq>=0){ cCode=hc; cQty=hq; continue; }
+    if(cCode<0) continue;
+    const code=String(row[cCode]==null?'':row[cCode]).trim();
+    const qraw=String(row[cQty]==null?'':row[cQty]).replace(/,/g,'').trim();
+    if(!code){ continue; }
+    if(/^t\s*o\s*t\s*a\s*l$/i.test(code.replace(/\s+/g,' '))) { cCode=-1; cQty=-1; continue; }  // 합계 줄에서 끊는다
+    const q=Number(qraw);
+    if(!qraw || isNaN(q) || q<=0) continue;
+    if(!/^[A-Za-z0-9._\-\/]{5,}$/.test(code)) continue;
+    out.push({ code, qty:Math.round(q) });
+  }
+  return out;
+}
+async function handleSimReqUpload(ev){
+  const ru=(lang==='ru');
+  const file=ev.target.files && ev.target.files[0];
+  ev.target.value='';
+  if(!file) return;
+  if(!canEditPsi()){ alert(ru?'Нет прав.':'권한이 없습니다.'); return; }
+  try{
+    if(!PN_DATA.length) await loadPNOverrides();
+    await loadSimMan();
+    const wb=XLSX.read(new Uint8Array(await file.arrayBuffer()),{type:'array'});
+    let aoa=null;
+    for(const sn of wb.SheetNames){
+      const a=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:'',raw:false});
+      const has=a.some(r=>(r||[]).some(v=>{ const s=String(v==null?'':v).replace(/\s+/g,'').toLowerCase(); return s==='code'||s==='품목코드'; }));
+      if(has){ aoa=a; break; }
+    }
+    if(!aoa){ alert(ru?'Не найден список (Code/수량).':'Code·수량 표를 찾지 못했습니다.'); return; }
+    const ym=simReqYm(aoa, file.name);
+    if(!ym || !/^\d{4}$/.test(ym)){ alert(ru?'Не удалось определить месяц отгрузки.':'출고일자(달)를 알아내지 못했습니다.\n예: 10월내 / 2026-10'); return; }
+    const rows=simReqRows(aoa);
+    if(!rows.length){ alert(ru?'Строк нет.':'Code·수량 줄을 찾지 못했습니다.'); return; }
+    // 대표품번으로 모은다
+    const byRep={}; const miss=[]; let tot=0;
+    rows.forEach(x=>{
+      const raw=pnUpAll(x.code);
+      const rep=(getPNInfo(raw)?raw:'') || findMasterRep(raw) || findMasterRep(normPN(raw)) || (pnChkMap?pnChkMap().get(normPN(raw)):'') || '';
+      tot+=x.qty;
+      if(!rep){ miss.push(x.code); return; }
+      byRep[rep]=(byRep[rep]||0)+x.qty;
+    });
+    const reps=Object.keys(byRep);
+    if(!reps.length){ alert(ru?'Ничего не найдено в справочнике.':'품번조회에서 찾은 품번이 없습니다.'); return; }
+    const okQty=reps.reduce((a,r)=>a+byRep[r],0);
+    if(!confirm('수출작업의뢰서 — '+psiYmLabel(ym)+' 선적계획\n\n'
+      +'· 줄 '+rows.length+'개 / 수량 '+psiFmt(tot)+'개\n'
+      +'· 품번조회에서 찾음: 대표품번 '+reps.length+'개 / 수량 '+psiFmt(okQty)+'개\n'
+      +(miss.length?('· 못 찾은 품번 '+miss.length+'개: '+miss.slice(0,6).join(', ')+(miss.length>6?' …':'')+'\n'):'')
+      +'\n'+psiYmLabel(ym)+' 의 선적계획을 이 내용으로 바꿉니다(그 달의 기존 값은 지웁니다). 계속할까요?')) return;
+    // 그 달 값을 싹 비우고 새로 넣는다
+    Object.keys(_simPlanUp).forEach(k=>{ if(String(k).split('|')[1]===ym) delete _simPlanUp[k]; });
+    reps.forEach(r=>{ _simPlanUp[simPlanKey(r,ym)]=byRep[r]; });
+    saveSimMan();
+    if(typeof renderSIM==='function') renderSIM();
+    alert('반영했습니다 — '+psiYmLabel(ym)+' 선적계획\n'
+      +'대표품번 '+reps.length+'개 / 수량 '+psiFmt(okQty)+'개'
+      +(miss.length?('\n※ 품번조회에 없어 넣지 못한 품번 '+miss.length+'개: '+miss.slice(0,10).join(', ')+(miss.length>10?' …':'')):''));
+  }catch(e){ console.error(e); alert(ru?'Ошибка чтения файла.':'파일을 읽지 못했습니다.\n'+(e&&e.message||e)); }
 }
 async function handleSimNeedUpload(ev){
   const ru=(lang==='ru');
@@ -16022,6 +16148,7 @@ async function loadSimMan(){
       if(c.ship && typeof c.ship==='object') _simShip=c.ship;
       if(c.need && typeof c.need==='object') _simNeed=c.need;
       if(c.needNew && typeof c.needNew==='object') _simNeedNew=c.needNew;
+      if(c.plan && typeof c.plan==='object') _simPlanUp=c.plan;
     }
   }catch(e){}
 }
@@ -16030,7 +16157,7 @@ function saveSimMan(){
   clearTimeout(_simManT);
   _simManT=setTimeout(async()=>{
     try{
-      await sb.from('kt_psi_cfg').upsert({ id:SIM_MAN_ID, cfg:{ ship:_simShip, need:_simNeed, needNew:_simNeedNew },
+      await sb.from('kt_psi_cfg').upsert({ id:SIM_MAN_ID, cfg:{ ship:_simShip, need:_simNeed, needNew:_simNeedNew, plan:_simPlanUp },
         updated_at:new Date().toISOString() },{onConflict:'id'});
     }catch(e){ console.log('sim_man: 저장 실패'); }
   }, 600);
@@ -16357,6 +16484,7 @@ function renderPSI(){
         if(a && (Number(a.sh)||0)>0) startedYm[ymsAll[yi]]=1; } }
   }
   const planStarted=!!(psiSimOn && _simPlanYm && startedYm[_simPlanYm]);
+  const planUpYms=simPlanUpYms();          // 수출작업의뢰서를 올린 달
   // 그 달에 발주필요를 손으로 적었거나 엑셀로 올렸는가.
   //   올린 달은 '사람이 정한 달' 로 보아, 적지 않은 품번은 발주하지 않는 것으로 둔다(빈칸).
   //   올리지 않은 달은 전처럼 셈해 낸 값을 그대로 쓴다.
@@ -16409,9 +16537,11 @@ function renderPSI(){
       //   싹 지우고, 그 달 '선적계획' 은 미공급수량 그대로 본다.
       //   아직 안 나갔으면 그대로 두고, 나가기 시작하면 그 칸을 비우고
       //   남은 몫(미공급 − 실제선적)을 다음 달 계획으로 넘긴다.
-      const isPlanYm=(psiSimOn && _simPlanYm===y);
-      if(isPlanYm) shipPlan[i]=0;                        // 앞에서 넘어온 것은 무시
-      const planCalc=psiSimOn?shipPlan[i]:0;
+      // 수출작업의뢰서를 올린 달은 그 값이 곧 선적계획이다(다른 셈은 무시한다)
+      const upYm=!!planUpYms[y];
+      const isPlanYm=(psiSimOn && !upYm && _simPlanYm===y);
+      if(isPlanYm || upYm) shipPlan[i]=0;                // 앞에서 넘어온 것은 무시
+      const planCalc=psiSimOn?(upYm?(Number(_simPlanUp[simPlanKey(g.rep,y)])||0):shipPlan[i]):0;
       const planAdd=isPlanYm ? (_simPlan.get(g.rep)||0) : 0;
       const manShip=_simShip[simNeedKey(g.rep,y)];
       const realSh=(manShip!=null)?Math.max(0,manShip):a.sh;
