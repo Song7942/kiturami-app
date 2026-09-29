@@ -16670,11 +16670,14 @@ function renderPSI(){
       const kEach=yms.map((y,i)=>{
         const x=v[y]||{sh:0,i:0,o:0,ms:0,st:0};
         const b=i===0?' bl':'';
-        const val={sh:n(x.sh), plan:'', i:n(x.i), o:n(x.o), ms:n(x.ms), st:n(x.st), mo:'', need:'', need0:'', needd:'', st2:'', mo2:''};
+        // 수출작업의뢰서로 올린 달은 그 품번(호환품번)에 적힌 수량을 이 줄에도 적는다.
+        //   대표품번 줄은 이 값들을 더한 값이다.
+        const kPlan=(psiSimOn && planUpYms[y]) ? (Number(_simPlanUp[simPlanKey(it.key,y)])||0) : 0;
+        const val={sh:n(x.sh), plan:(kPlan?n(kPlan):''), i:n(x.i), o:n(x.o), ms:n(x.ms), st:n(x.st), mo:'', need:'', need0:'', needd:'', st2:'', mo2:''};
         const dim={sh:1, ms:1};
         // 보유월은 대표품번 줄에만 적으므로 하위 줄에는 색을 칠하지 않는다
         const html=SB.map((d,j)=>'<td class="n'+(j===0?b:'')+(dim[d.k]?' dim':'')+'">'+val[d.k]+'</td>').join('');
-        return {html, raw:{sh:x.sh, plan:null, i:x.i, o:x.o, ms:x.ms, st:x.st, mo:null, need:null, need0:null, needd:null, st2:null, mo2:null}};
+        return {html, raw:{sh:x.sh, plan:(kPlan||null), i:x.i, o:x.o, ms:x.ms, st:x.st, mo:null, need:null, need0:null, needd:null, st2:null, mo2:null}};
       });
       const cells=kEach.map(z=>z.html).join('');
       const kTot=totOf(kEach.map(z=>z.raw));
@@ -16809,6 +16812,8 @@ async function downloadPSI(){
   const manYmX={};
   if(typeof _simNeed!=='undefined')
     Object.keys(_simNeed||{}).forEach(k=>{ const p=String(k).split('|'); if(p[1]) manYmX[p[1]]=1; });
+  // 수출작업의뢰서를 올린 달(그 달은 올린 선적계획을 그대로 적는다)
+  const planUpYmsX=(typeof simPlanUpYms==='function')?simPlanUpYms():{};
   const tot={}; yms.forEach(y=>tot[y]={sh:0,i:0,o:0,ms:0,st:0,fut:0});
   let totOpen=0;
   const body=[];
@@ -16847,7 +16852,8 @@ async function downloadPSI(){
       if(SHOWOPEN) row.push(v._open||0);
       const kRaw=[];
       yms.forEach(y=>{ const x=v[y]||{};
-        const val={sh:x.sh??'', i:x.i??'', o:x.o??'', ms:x.ms??'', st:x.st??'', mo:'', need:'', need0:'', needd:'', st2:'', mo2:''};
+        const kPlan=(psiSimOn && planUpYmsX[y]) ? (Number(_simPlanUp[simPlanKey(it.key,y)])||0) : 0;
+        const val={sh:x.sh??'', plan:(kPlan||''), i:x.i??'', o:x.o??'', ms:x.ms??'', st:x.st??'', mo:'', need:'', need0:'', needd:'', st2:'', mo2:''};
         kRaw.push(val); });
       if(SHOWTOT){ const tv=totOf(kRaw); SB.forEach(d=>row.push(tv[d.k])); }
       kRaw.forEach(val=>SB.forEach(d=>row.push(val[d.k])));
