@@ -16684,7 +16684,9 @@ function renderPSI(){
       const gOrd=(psiSimOn && ordRep[y]) ? (ordRep[y][g.rep]||0) : 0;   // 주문(호환품번 값의 합)
       gAcc[y]=Object.assign(gAcc[y]||{}, {need:nd, need0:ndAuto, needd:(nd-ndAuto),
                                           addSt, plan, ord:gOrd, arrIn:arrive[i], sh:realSh});
-      if(psiSimOn && i+1<ymsAll.length) shipPlan[i+1]+=nd;   // 이 달 발주분은 다음 달에 나간다
+      // 이 달 발주분은 다음 달에 나간다.
+      //   다만 다음 달이 '주문(수출작업의뢰서)으로 확정된 달' 이면 그 달 선적은 의뢰서대로이므로 얹지 않는다.
+      if(psiSimOn && i+1<ymsAll.length && !ordYms[ymsAll[i+1]]) shipPlan[i+1]+=nd;
       const sAttr=' data-rep="'+escapeHtml(g.rep)+'" data-ym="'+y+'"'+ktHistAttr('sim.sh', g.rep+'|'+y)
         +' onclick="simShipFocus(this)" title="'
         +L('실제로 나간 수량을 적으면 못 나간 만큼은 다음 달 선적으로 넘어갑니다','Введите фактическую отгрузку')+'"';
