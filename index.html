@@ -12067,8 +12067,6 @@ function poSpec(pn){
 function poChaLabel(v){
   const t=String(v||'').trim();
   if(t==='미상') return (lang==='ru')?'Не указано':'미상';
-  // 짝이 맞지 않아 따로 모아 둔 차수. 러시아어 화면에서는 꼬리말만 러시아어로.
-  if(lang==='ru' && t.endsWith('(미일치분)')) return t.slice(0,-6).trim()+' (не сопоставлено)';
   return t;
 }
 function poChaList(){
