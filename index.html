@@ -16274,8 +16274,21 @@ function renderPSI(){
   psiFcClear();
   _psiLowN=c.avgN;
   const yms=[]; for(let i=0;i<c.months;i++) yms.push(psiYmAdd(c.from,i));
+  // 선적계획은 '지난 달에 못 나간 몫' 이 이어져 내려온다. 조회기간을 좁혀도 그 줄기가 끊기지 않게
+  //   주문·올린 계획·미공급이 있는 달까지 앞으로 더 셈해 둔다(화면에는 안 나온다).
+  const ymsPre=[];
+  if(psiSimOn){
+    let first=yms[0];
+    const back=(k)=>{ const p=String(k).split('|')[1]; if(p && /^\d{4}$/.test(p) && p<first) first=p; };
+    Object.keys(_simOrder||{}).forEach(back);
+    Object.keys(_simPlanUp||{}).forEach(back);
+    if(_simPlanYm && _simPlanYm<first) first=_simPlanYm;
+    let guard=0;
+    for(let y=first; y<yms[0] && guard<24; y=psiYmAdd(y,1), guard++) ymsPre.push(y);
+  }
+  const PRE=ymsPre.length;
   // 발주필요는 '입고월' 보유월을 보고 잡는다. 그 달이 화면 밖일 수 있으니 뒤로 3개월 더 셈해 둔다.
-  const ymsAll=yms.slice();
+  const ymsAll=ymsPre.concat(yms);
   if(psiSimOn) for(let i=1;i<=3;i++) ymsAll.push(psiYmAdd(yms[yms.length-1], i));
   _psiYms=yms;                      // '기간합계' 열을 거르고 정렬할 때 쓴다
   const kwEl=pgEl('Input');
@@ -16611,8 +16624,8 @@ function renderPSI(){
     const gAcc={};                            // 달마다 합계에 더할 값(남는 묶음만 나중에 더한다)
     g.sim={};                                 // 달마다 선적계획·발주필요·발주후재고·발주후보유월
     const gMoq=psiSimOn?simMoqOfRep(g.rep):0; // 이 묶음의 최소 발주수량(MOQ)
-    const gEach=yms.map((y,i)=>{
-      const a=g.agg[y]; const b=i===0?' bl':'';
+    const gEachAll=ymsAll.map((y,i)=>{
+      const a=g.agg[y]||{sh:0,i:0,o:0,ms:0,st:0,fut:0}; const b=(i===PRE)?' bl':'';
       addSt+=arrive[i];                       // 이 달에 들어오는 발주분
       const st=a.st+addSt;
       // 선적계획 = 지난달 발주분 + 지난달에 못 나간 것.
@@ -16719,6 +16732,8 @@ function renderPSI(){
         +(d.k==='need'?nAttr:((psiSimOn&&d.k==='sh')?sAttr:''))+'>'+val[d.k]+'</td>').join('');
       return {html, raw:{sh:sh, ord:gOrd, plan:plan, i:inq, o:a.o, ms:a.ms, st:st, mo:mo, need:nd, need0:ndAuto, needd:ndDiff, st2:st2, mo2:m2}};
     });
+    // 화면에는 조회기간의 달만 내보낸다(앞서 셈한 달은 줄기를 잇기 위한 것뿐)
+    const gEach=gEachAll.slice(PRE, PRE+yms.length);
     const gCells=gEach.map(x=>x.html).join('');
     const gTot=totOf(gEach.map(x=>x.raw));
     const gLow=psiLow(gTot.mo), gHigh=psiHigh(gTot.mo);
