@@ -11765,6 +11765,9 @@ async function shipSyncMonth(ym, field){
 async function poRecalcSupply(){
   if(!poData.length) await loadPO();
   if(!poData.length) return {ok:true, rows:0, total:0};
+  // 인보이스를 아직 안 읽었으면 먼저 읽는다. 빈 채로 셈하면 공급수량이 모두 0 이 되어 버린다.
+  if(!(shipData||[]).length && typeof loadShip==='function'){ try{ await loadShip(); }catch(e){} }
+  if(!(shipData||[]).length) return {ok:false, msg:'선적 자료를 읽지 못했습니다'};
   const need={};
   (shipData||[]).forEach(r=>{ if(!poCountShip(r)) return;      // 기준 시각 앞의 인보이스는 빼고 센다
     const k=normPN(r.pn); if(!k) return; need[k]=(need[k]||0)+(Number(r.qty)||0); });
@@ -12064,6 +12067,8 @@ function poSpec(pn){
 function poChaLabel(v){
   const t=String(v||'').trim();
   if(t==='미상') return (lang==='ru')?'Не указано':'미상';
+  // 짝이 맞지 않아 따로 모아 둔 차수. 러시아어 화면에서는 꼬리말만 러시아어로.
+  if(lang==='ru' && t.endsWith('(미일치분)')) return t.slice(0,-6).trim()+' (не сопоставлено)';
   return t;
 }
 function poChaList(){
