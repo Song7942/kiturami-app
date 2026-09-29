@@ -5377,8 +5377,16 @@ async function handleSpecialPNUpload(wb){
     const hdr=pnFindHeaderRow(aoa); if(!hdr) continue;
     const C=hdr.C;
     const compatToRep={}; PN_DATA.forEach(r=>(r.compats||[]).forEach(c=>compatToRep[normPN(c)]=r.rep));
+    // 품목코드정보 같은 파일은 십만 줄이 넘는다. 품번조회가 쓰는 품번(대표·호환·최종)만 추려
+    // 올린다 — 안 그러면 쓸데없이 수백 번을 오가느라 창이 멎은 것처럼 보인다.
+    const wantPn=new Set();
+    PN_DATA.forEach(p=>{ const add=k=>{ const n=normPN(k); if(n) wantPn.add(n); };
+      add(p.rep); add(p.final); (p.compats||[]).forEach(add); });
     const specMap={}, repAgg={}, seen={};
+    let fileRows=0;
     for(let r=hdr.row+1;r<aoa.length;r++){ const row=aoa[r]||[]; const raw=String(row[C.pn]==null?'':row[C.pn]).trim(); if(!raw)continue; const pn=normPN(raw);
+      fileRows++;
+      if(!wantPn.has(pn)) continue;                 // 품번조회에 없는 품번은 건너뛴다
       const o=specMap[pn]||(specMap[pn]={});
       if(C.name!=null){ const v=V(row,C.name); if(v){o.name=v; seen.name=1;} }
       if(C.spec!=null){ const v=V(row,C.spec); if(v){o.spec=v; seen.spec=1;} }
@@ -5419,7 +5427,11 @@ async function handleSpecialPNUpload(wb){
     if(!scols.length && !ocols.length && !seen.en) return ru?'Совпадающих данных нет.':'반영할 내용을 찾지 못했습니다.';
     await loadPnSpecs(); _pnLookupMap=null; _pnByRepMap=null; renderPN();
     const parts=[]; if(seen.name||seen.spec)parts.push('품명·규격'); if(seen.nw||seen.gw||seen.cbm)parts.push('N/W·G/W·CBM'); if(seen.dan)parts.push('단종'); if(seen.ru)parts.push('러품'); if(seen.en)parts.push('영문명('+enN+')'); if(seen.appl)parts.push('적용모델');
-    return (ru?'Обновлено: ':'반영: ')+parts.join(', ')+' — 호환품번 '+specPns.length+'개 / 대표품번 '+reps.length+'개.';
+    const skipped=fileRows-specPns.length;
+    return (ru?'Обновлено: ':'반영: ')+parts.join(', ')+' — 호환품번 '+specPns.length+'개 / 대표품번 '+reps.length+'개.'
+      + (skipped>0 ? (ru?('\nВ файле '+fileRows+' строк; не найдено в справочнике: '+skipped+' (пропущено).')
+                        :('\n파일에는 '+fileRows.toLocaleString()+'줄이 있고, 그중 품번조회에 있는 '+specPns.length.toLocaleString()+'개만 반영했습니다.'
+                          +'\n(나머지 '+skipped.toLocaleString()+'개는 품번조회에 없는 품번이라 건너뛰었습니다)')) : '');
   }
   return null;   // 표준 품번 양식 → 기존 로직
 }
