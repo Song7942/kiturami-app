@@ -4255,6 +4255,7 @@ function ktAfterPnEdit(){
   _pnLookupMap=null; _pnByRepMap=null; _nameRuByRep=null;
   if(typeof _pnChkMap!=='undefined') _pnChkMap=null;
   if(typeof pnSumClear==='function') pnSumClear();
+  if(typeof simPlanUpClear==='function') simPlanUpClear();
   const on=id=>{ const e=document.getElementById(id); return !!(e && e.classList.contains('active')); };
   const go=(id,fn)=>{ try{ if(on(id) && typeof fn==='function') fn(); }catch(e){} };
   go('pane-pn',    typeof renderPN==='function'?renderPN:null);
@@ -15537,13 +15538,31 @@ let psiSimOn=false;
 //   전에는 psiData[pn].data 객체를 열쇠로 삼았는데, 8초마다 도는 새로고침이
 //   psiData 를 통째로 새로 만들면 열쇠가 죄다 남의 것이 되어 입고가 안 붙었다.
 let _simZ={};
-// 수출작업의뢰서로 올린 선적계획 — { '대표품번|연월': 수량 }
+// 수출작업의뢰서로 올린 선적계획 — { '호환품번|연월': 수량 }
+//   적힌 품번 그대로(호환품번 단위) 담고, 화면에서는 대표품번마다 저절로 더해 보여 준다.
 //   올린 달은 그 달 계산값을 무시하고 올린 값만 쓴다(적지 않은 품번은 0).
-let _simPlanUp={};
-function simPlanKey(rep, ym){ return String(rep)+'|'+String(ym); }
+let _simPlanUp={}, _simPlanRepCache=null;
+function simPlanKey(pn, ym){ return normPN(pn)+'|'+String(ym); }
+function simPlanUpClear(){ _simPlanRepCache=null; }
 function simPlanUpYms(){
   const s={}; Object.keys(_simPlanUp||{}).forEach(k=>{ const p=String(k).split('|'); if(p[1]) s[p[1]]=1; });
   return s;
+}
+// { 연월: { 대표품번: 합계 } } — 호환품번으로 담아 둔 값을 대표품번끼리 더한다
+function simPlanUpByRep(){
+  if(_simPlanRepCache) return _simPlanRepCache;
+  const m={};
+  Object.keys(_simPlanUp||{}).forEach(k=>{
+    const p=String(k).split('|'); const pn=p[0], ym=p[1];
+    if(!pn||!ym) return;
+    const q=Number(_simPlanUp[k])||0; if(!q) return;
+    const rep=(getPNInfo(pn)?pn:'') || findMasterRep(pn)
+            || ((typeof pnChkMap==='function') ? (pnChkMap().get(normPN(pn))||'') : '') || '';
+    if(!rep) return;
+    (m[ym]=m[ym]||{}); m[ym][rep]=(m[ym][rep]||0)+q;
+  });
+  _simPlanRepCache=m;
+  return m;
 }
 const _simPlan=new Map();       // 대표품번 → 발주현황 미공급수량(그 달 '선적계획' 열에 얹는다)
 let _simPlanYm='';              // 미공급분을 선적하는 것으로 보는 달
@@ -15608,7 +15627,7 @@ function simResetManual(){
   if(!c){ alert(ru?'Ручных значений нет.':'손으로 고친 값이 없습니다.'); return; }
   if(!confirm(ru ? ('Сбросить '+c+' ручных значений?')
                  : ('손으로 고친 '+c+'개를 원래 셈한 값으로 되돌립니다.\n계속할까요?'))) return;
-  _simNeed={}; _simShip={}; _simNeedNew={}; _simPlanUp={}; saveSimMan();
+  _simNeed={}; _simShip={}; _simNeedNew={}; _simPlanUp={}; simPlanUpClear(); saveSimMan();
   ktHistClearMine('sim.');                 // 이 아이디가 남긴 수기 이력도 지운다
   renderSIM();
 }
@@ -15985,30 +16004,34 @@ async function handleSimReqUpload(ev){
     if(!ym || !/^\d{4}$/.test(ym)){ alert(ru?'Не удалось определить месяц отгрузки.':'출고일자(달)를 알아내지 못했습니다.\n예: 10월내 / 2026-10'); return; }
     const rows=simReqRows(aoa);
     if(!rows.length){ alert(ru?'Строк нет.':'Code·수량 줄을 찾지 못했습니다.'); return; }
-    // 대표품번으로 모은다
-    const byRep={}; const miss=[]; let tot=0;
+    // 적힌 품번(호환품번) 그대로 담는다. 대표품번 합계는 화면이 저절로 낸다.
+    const byPn={}; const repSet={}; const miss=[]; let tot=0;
     rows.forEach(x=>{
       const raw=pnUpAll(x.code);
-      const rep=(getPNInfo(raw)?raw:'') || findMasterRep(raw) || findMasterRep(normPN(raw)) || (pnChkMap?pnChkMap().get(normPN(raw)):'') || '';
+      const rep=(getPNInfo(raw)?raw:'') || findMasterRep(raw) || findMasterRep(normPN(raw))
+              || ((typeof pnChkMap==='function')?(pnChkMap().get(normPN(raw))||''):'') || '';
       tot+=x.qty;
       if(!rep){ miss.push(x.code); return; }
-      byRep[rep]=(byRep[rep]||0)+x.qty;
+      const k=normPN(raw);
+      byPn[k]=(byPn[k]||0)+x.qty;
+      repSet[rep]=1;
     });
-    const reps=Object.keys(byRep);
-    if(!reps.length){ alert(ru?'Ничего не найдено в справочнике.':'품번조회에서 찾은 품번이 없습니다.'); return; }
-    const okQty=reps.reduce((a,r)=>a+byRep[r],0);
+    const pns=Object.keys(byPn), reps=Object.keys(repSet);
+    if(!pns.length){ alert(ru?'Ничего не найдено в справочнике.':'품번조회에서 찾은 품번이 없습니다.'); return; }
+    const okQty=pns.reduce((a,k)=>a+byPn[k],0);
     if(!confirm('수출작업의뢰서 — '+psiYmLabel(ym)+' 선적계획\n\n'
       +'· 줄 '+rows.length+'개 / 수량 '+psiFmt(tot)+'개\n'
-      +'· 품번조회에서 찾음: 대표품번 '+reps.length+'개 / 수량 '+psiFmt(okQty)+'개\n'
+      +'· 품번조회에서 찾음: 호환품번 '+pns.length+'개 (대표품번 '+reps.length+'개) / 수량 '+psiFmt(okQty)+'개\n'
       +(miss.length?('· 못 찾은 품번 '+miss.length+'개: '+miss.slice(0,6).join(', ')+(miss.length>6?' …':'')+'\n'):'')
       +'\n'+psiYmLabel(ym)+' 의 선적계획을 이 내용으로 바꿉니다(그 달의 기존 값은 지웁니다). 계속할까요?')) return;
     // 그 달 값을 싹 비우고 새로 넣는다
     Object.keys(_simPlanUp).forEach(k=>{ if(String(k).split('|')[1]===ym) delete _simPlanUp[k]; });
-    reps.forEach(r=>{ _simPlanUp[simPlanKey(r,ym)]=byRep[r]; });
+    pns.forEach(k=>{ _simPlanUp[simPlanKey(k,ym)]=byPn[k]; });
+    simPlanUpClear();
     saveSimMan();
     if(typeof renderSIM==='function') renderSIM();
     alert('반영했습니다 — '+psiYmLabel(ym)+' 선적계획\n'
-      +'대표품번 '+reps.length+'개 / 수량 '+psiFmt(okQty)+'개'
+      +'호환품번 '+pns.length+'개 / 수량 '+psiFmt(okQty)+'개 (대표품번 '+reps.length+'개로 합산)'
       +(miss.length?('\n※ 품번조회에 없어 넣지 못한 품번 '+miss.length+'개: '+miss.slice(0,10).join(', ')+(miss.length>10?' …':'')):''));
   }catch(e){ console.error(e); alert(ru?'Ошибка чтения файла.':'파일을 읽지 못했습니다.\n'+(e&&e.message||e)); }
 }
@@ -16148,7 +16171,7 @@ async function loadSimMan(){
       if(c.ship && typeof c.ship==='object') _simShip=c.ship;
       if(c.need && typeof c.need==='object') _simNeed=c.need;
       if(c.needNew && typeof c.needNew==='object') _simNeedNew=c.needNew;
-      if(c.plan && typeof c.plan==='object') _simPlanUp=c.plan;
+      if(c.plan && typeof c.plan==='object'){ _simPlanUp=c.plan; simPlanUpClear(); }
     }
   }catch(e){}
 }
@@ -16485,6 +16508,7 @@ function renderPSI(){
   }
   const planStarted=!!(psiSimOn && _simPlanYm && startedYm[_simPlanYm]);
   const planUpYms=simPlanUpYms();          // 수출작업의뢰서를 올린 달
+  const planUpRep=simPlanUpByRep();        // 그 달 대표품번별 합계(호환품번 값을 더한 것)
   // 그 달에 발주필요를 손으로 적었거나 엑셀로 올렸는가.
   //   올린 달은 '사람이 정한 달' 로 보아, 적지 않은 품번은 발주하지 않는 것으로 둔다(빈칸).
   //   올리지 않은 달은 전처럼 셈해 낸 값을 그대로 쓴다.
@@ -16541,7 +16565,7 @@ function renderPSI(){
       const upYm=!!planUpYms[y];
       const isPlanYm=(psiSimOn && !upYm && _simPlanYm===y);
       if(isPlanYm || upYm) shipPlan[i]=0;                // 앞에서 넘어온 것은 무시
-      const planCalc=psiSimOn?(upYm?(Number(_simPlanUp[simPlanKey(g.rep,y)])||0):shipPlan[i]):0;
+      const planCalc=psiSimOn?(upYm?((planUpRep[y]&&planUpRep[y][g.rep])||0):shipPlan[i]):0;
       const planAdd=isPlanYm ? (_simPlan.get(g.rep)||0) : 0;
       const manShip=_simShip[simNeedKey(g.rep,y)];
       const realSh=(manShip!=null)?Math.max(0,manShip):a.sh;
