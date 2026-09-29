@@ -12376,6 +12376,7 @@ function renderPO(){
 const PO_MAN_ID=94;
 let _poMan={};          // '차수\u0000발주코드' -> 1  (손으로 고친 공급수량)
 let _poSince='';        // 이 시각 뒤에 올린 인보이스만 공급수량에 센다(비면 전부)
+let _poFromYm='';       // 이 달부터 실제로 선적된 것만 공급수량에 센다(YYMM, 비면 전부)
 let _poManLoaded=false;
 function poManKey(cha,pn){ return String(cha||'')+'\u0000'+normPN(pn); }
 async function loadPoMan(){
@@ -12385,7 +12386,7 @@ async function loadPoMan(){
     const { data }=await sb.from('kt_psi_cfg').select('cfg').eq('id',PO_MAN_ID).maybeSingle();
     const c=(data && data.cfg && typeof data.cfg==='object') ? data.cfg : null;
     if(c){
-      if(c.man && typeof c.man==='object'){ _poMan=c.man; _poSince=String(c.since||''); }
+      if(c.man && typeof c.man==='object'){ _poMan=c.man; _poSince=String(c.since||''); _poFromYm=String(c.fromYm||''); }
       else { _poMan=c; _poSince=''; }        // 옛 모양(맵만 있던 것)도 읽는다
     }
   }catch(e){}
@@ -12394,7 +12395,7 @@ let _poManT=null;
 function savePoMan(){
   clearTimeout(_poManT);
   _poManT=setTimeout(async function(){
-    try{ await sb.from('kt_psi_cfg').upsert({ id:PO_MAN_ID, cfg:{ since:_poSince, man:_poMan },
+    try{ await sb.from('kt_psi_cfg').upsert({ id:PO_MAN_ID, cfg:{ since:_poSince, fromYm:_poFromYm, man:_poMan },
       updated_at:new Date().toISOString() },{onConflict:'id'}); }catch(e){}
   }, 400);
 }
@@ -12402,11 +12403,17 @@ function poIsMan(cha,pn){ return !!_poMan[poManKey(cha,pn)]; }
 function poManCount(){ return Object.keys(_poMan).length; }
 // 이 인보이스 줄을 공급수량에 셀 것인가(기준 시각 뒤에 올린 것만)
 function poCountShip(r){
+  // 기준 선적월을 정해 두면 그 달부터 실제로 선적된 것만 공급수량에 센다
+  if(_poFromYm){ const m=String((r&&r.ym)||''); if(!m || m<_poFromYm) return false; }
   if(!_poSince) return true;
   const t=String((r&&r.updated_at)||'');
   return t>_poSince;
 }
 function poSinceLabel(){
+  const ru=(lang==='ru');
+  const fm=_poFromYm ? ((ru?'с ':'')+psiYmLabel(_poFromYm)+(ru?'':' 부터 선적된 것')) : '';
+  if(fm && !_poSince) return fm;
+  if(fm) return fm+(ru?' + ':' · ');
   if(!_poSince) return (lang==='ru')?'все инвойсы':'전체 인보이스';
   const d=new Date(_poSince);
   const z=x=>String(x).padStart(2,'0');
@@ -12541,6 +12548,13 @@ function openPoViewPanel(){
     +'<div style="border-top:1px solid var(--border);margin:12px 0 8px"></div>'
     +'<div style="font-size:12px;font-weight:700;margin-bottom:4px">'+(ru?'Что считать в «Поставлено»':'공급수량에 셀 인보이스')+'</div>'
     +'<div style="font-size:11px;color:var(--muted);line-height:1.5">'+escapeHtml(poSinceLabel())+'</div>'
+    +'<div style="display:flex;gap:6px;align-items:center;margin-top:7px">'
+      +'<span style="font-size:11px;color:var(--muted);white-space:nowrap">'+(ru?'С месяца':'기준 선적월')+'</span>'
+      +'<input id="povFromYm" type="text" placeholder="2026-09" value="'+escapeHtml(_poFromYm?psiYmLabel(_poFromYm):'')+'"'
+      +' style="width:84px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:12px;text-align:center">'
+      +'<button id="povFromSet" style="flex:1;padding:6px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);cursor:pointer;font-size:11px">'
+      +(ru?'Применить':'그 달부터만 세기')+'</button>'
+    +'</div>'
     +'<div style="display:flex;gap:6px;margin-top:7px">'
     +'<button id="povSince" style="flex:1;padding:6px;border:1px solid #f97316;border-radius:7px;background:var(--surface2);color:#f97316;cursor:pointer;font-size:11px">'
       +(ru?'Считать только новые':'지금부터 올리는 것만')+'</button>'
@@ -12575,6 +12589,22 @@ function openPoViewPanel(){
   };
   box.querySelector('#povSince').onclick=()=>setSince(true);
   box.querySelector('#povAll').onclick=()=>setSince(false);
+  // 기준 선적월: 그 달부터 '실제로 선적된 것' 만 공급수량에 센다
+  box.querySelector('#povFromSet').onclick=async()=>{
+    const ru2=(lang==='ru');
+    const v=String(box.querySelector('#povFromYm').value||'').replace(/\D/g,'');
+    const ym=(v.length>=6)?v.slice(2,6):(v.length===4?v:'');
+    if(v && !ym){ alert(ru2?'Формат: 2026-09':'2026-09 처럼 적어 주세요.'); return; }
+    if(!confirm(ym ? ((ru2?'Считать поставку только с ':'')+psiYmLabel(ym)+(ru2?'':' 부터 실제로 선적된 것만 공급수량에 셉니다.')+'\n\n계속할까요?')
+                   : (ru2?'Считать все отгрузки?':'모든 선적을 다시 세어 공급수량을 채웁니다.\n\n계속할까요?'))) return;
+    box.remove();
+    _poFromYm=ym;
+    savePoMan();
+    const r=await poRecalcSupply();
+    await loadPO();
+    poManBtn(); renderPO();
+    alert((ru2?'Готово. Поставлено: ':'반영했습니다. 공급수량 합계 ')+((r&&r.ok)?r.total.toLocaleString():'?'));
+  };
   box.onmousedown=e=>{ if(e.target===box) done(); };
 }
 // ══ 제품목록 ═══════════════════════════════════════════════
@@ -16014,6 +16044,24 @@ function simReqYm(aoa, fname){
   }
   return dateYm || refYm || '';
 }
+// Ref. No 에서 차수 번호를 뽑는다. RUMOSKRUS261001_AS → 261001 → 차수 'RUS 261001'
+function simReqCha(aoa, fname){
+  let d='';
+  for(let r=0;r<Math.min(aoa.length,30) && !d;r++){
+    const row=aoa[r]||[];
+    for(let c=0;c<row.length;c++){
+      const s=String(row[c]==null?'':row[c]).replace(/\s+/g,'');
+      if(!/ref\.?no/i.test(s)) continue;
+      for(let k=c+1;k<Math.min(row.length,c+4);k++){
+        const m=String(row[k]||'').match(/(\d{6})/);
+        if(m){ d=m[1]; break; }
+      }
+      if(d) break;
+    }
+  }
+  if(!d){ const m=String(fname||'').match(/(\d{6})/); if(m) d=m[1]; }
+  return d ? ('RUS '+d) : '';
+}
 function simReqRows(aoa){
   const out=[]; let cCode=-1, cQty=-1;
   const grab=(s)=>String(s==null?'':s).replace(/\s+/g,'');
@@ -16073,10 +16121,14 @@ async function handleSimReqUpload(ev){
     const pns=Object.keys(byPn), reps=Object.keys(repSet);
     if(!pns.length){ alert(ru?'Ничего не найдено в справочнике.':'품번조회에서 찾은 품번이 없습니다.'); return; }
     const okQty=pns.reduce((a,k)=>a+byPn[k],0);
-    if(!confirm('수출작업의뢰서 — '+psiYmLabel(ym)+' 선적계획\n\n'
+    // 발주현황에 넣을 차수·발주년월 (차수 261001 → 발주년월은 한 달 앞선 2026-09)
+    const cha=simReqCha(aoa, file.name);
+    const poYm=psiYmAdd(ym,-1);
+    if(!confirm('수출작업의뢰서 — '+psiYmLabel(ym)+' 주문·선적계획\n\n'
       +'· 줄 '+rows.length+'개 / 수량 '+psiFmt(tot)+'개\n'
       +'· 품번조회에서 찾음: 호환품번 '+pns.length+'개 (대표품번 '+reps.length+'개) / 수량 '+psiFmt(okQty)+'개\n'
       +(miss.length?('· 못 찾은 품번 '+miss.length+'개: '+miss.slice(0,6).join(', ')+(miss.length>6?' …':'')+'\n'):'')
+      +(cha?('· 발주현황: 차수 '+cha+' / 발주년월 '+psiYmLabel(poYm)+' 로 '+rows.length+'줄 등록\n'):'')
       +'\n'+psiYmLabel(ym)+' 의 주문·선적계획을 이 내용으로 바꿉니다(그 달의 기존 값은 지웁니다). 계속할까요?')) return;
     // 그 달 값을 싹 비우고 새로 넣는다 (선적계획과 주문에 같이 적는다)
     Object.keys(_simPlanUp).forEach(k=>{ if(String(k).split('|')[1]===ym) delete _simPlanUp[k]; });
@@ -16084,9 +16136,30 @@ async function handleSimReqUpload(ev){
     pns.forEach(k=>{ _simPlanUp[simPlanKey(k,ym)]=byPn[k]; _simOrder[simPlanKey(k,ym)]=byPn[k]; });
     simPlanUpClear(); simOrderClear();
     saveSimMan();
+    // 발주현황에도 그대로 등록한다. 차수는 Ref.No(RUS 261001), 발주년월은 그 한 달 앞.
+    //   공급수량은 0 으로 두고, 실제로 선적된 만큼만 뒤에 채워진다.
+    let poMsg='';
+    if(cha){
+      try{
+        if(!poData.length) await loadPO();
+        const mon=String(Number(String(poYm).slice(2))||'');
+        await sb.from('kt_po').delete().eq('cha',cha);       // 그 차수를 이 파일 내용으로 새로 세운다
+        const put=rows.map(x=>({ cha, pn:pnUpAll(x.code), mon, qty:x.qty, supplied:0,
+                                 updated_at:new Date().toISOString() }));
+        for(let i=0;i<put.length;i+=300){
+          const { error }=await sb.from('kt_po').upsert(put.slice(i,i+300),{onConflict:'cha,pn'});
+          if(error) throw error;
+        }
+        await loadPO();
+        if(typeof poRecalcSupply==='function'){ await poRecalcSupply(); await loadPO(); }
+        poMsg='\n발주현황: 차수 '+cha+' · 발주년월 '+psiYmLabel(poYm)+' 로 '+put.length+'줄 등록';
+        try{ if(ktPaneOn('pane-po') && typeof renderPO==='function') renderPO(); }catch(e){}
+      }catch(e){ poMsg='\n※ 발주현황 등록 실패: '+((e&&e.message)||e); }
+    }
     if(typeof renderSIM==='function') renderSIM();
     alert('반영했습니다 — '+psiYmLabel(ym)+' 주문·선적계획\n'
       +'호환품번 '+pns.length+'개 / 수량 '+psiFmt(okQty)+'개 (대표품번 '+reps.length+'개로 합산)'
+      +poMsg
       +(miss.length?('\n※ 품번조회에 없어 넣지 못한 품번 '+miss.length+'개: '+miss.slice(0,10).join(', ')+(miss.length>10?' …':'')):''));
   }catch(e){ console.error(e); alert(ru?'Ошибка чтения файла.':'파일을 읽지 못했습니다.\n'+(e&&e.message||e)); }
 }

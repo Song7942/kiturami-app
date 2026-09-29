@@ -1,4 +1,4 @@
-﻿param([switch]$WithPrice)
+﻿param([switch]$WithPrice, [switch]$OwnDb)
 $ErrorActionPreference='Stop'
 # Make the self-hosting copy from index.html.
 #   in  : ..\index.html            (the one you edit)
@@ -21,12 +21,23 @@ if(-not (Test-Path (Join-Path $DIR 'api'))){ [void](New-Item -ItemType Directory
 
 $html=[IO.File]::ReadAllText($SRC,$U8)
 
-# 1) price shim right after the supabase client script (must run before the app script)
+# 1) the cloud client is replaced by our own connector (api/db.php), and the price shim rides along
+$stag='<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>'
+if($html.IndexOf($stag) -lt 0){ throw 'supabase cdn tag not found' }
+$repl=''
+if($OwnDb){
+  $repl='<script id="ktDbClient">' + [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'dbclient.js'),$U8) + '</script>'
+}else{
+  $repl=$stag                                   # keep the cloud
+}
 if(-not $WithPrice){
-  $shim=[IO.File]::ReadAllText($SHIM,$U8)
-  $stag='<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>'
-  if($html.IndexOf($stag) -lt 0){ throw 'supabase cdn tag not found' }
-  $html=$html.Replace($stag, $stag + "`r`n" + '<script id="ktNoPrice">' + $shim + '</script>')
+  $repl=$repl + "`r`n" + '<script id="ktNoPrice">' + [IO.File]::ReadAllText($SHIM,$U8) + '</script>'
+}
+$html=$html.Replace($stag, $repl)
+if($OwnDb){
+  # the cloud address is no longer used
+  $html=[regex]::Replace($html, "const SUPABASE_URL\s*=\s*'[^']*'", "const SUPABASE_URL=''")
+  $html=[regex]::Replace($html, "const SUPABASE_KEY\s*=\s*'[^']*'", "const SUPABASE_KEY=''")
 }
 
 # 2) the two server paths are plain php files next to index.html
@@ -39,5 +50,6 @@ $html=$html.Replace('<button class="dl-btn" id="pnOfflineBtn"','<button class="d
 [IO.File]::WriteAllText($OUT,$html,$U8)
 Write-Output ('output : ' + $OUT)
 Write-Output ('size   : {0:N2} MB' -f ((Get-Item $OUT).Length/1MB))
-if($WithPrice){ Write-Output 'price  : shown (data comes from the cloud)' }
-else          { Write-Output 'price  : hidden (tables served empty)' }
+if($WithPrice){ Write-Output 'price  : shown' } else { Write-Output 'price  : hidden (tables served empty)' }
+if($OwnDb){ Write-Output 'data   : my own server (api/db.php + MySQL)' }
+else      { Write-Output 'data   : Supabase cloud' }
