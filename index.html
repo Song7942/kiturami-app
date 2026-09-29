@@ -12460,6 +12460,7 @@ async function onPoNumBlur(el){
   if(!isFinite(num) || num<0){ alert(ru?'Введите число.':'숫자를 넣어 주세요.'); el.textContent=before; return; }
   const row=(poData||[]).find(x=>String(x.cha)===cha && normPN(x.pn)===normPN(pn));
   if(!row){ el.textContent=before; return; }
+  const was=Math.round(Number(row[field])||0);
   row[field]=Math.round(num);
   if(field==='supplied'){ _poMan[poManKey(cha,pn)]=1; savePoMan(); }
   if(field==='qty'){ _poManQ[poManKey(cha,pn)]=1; savePoMan(); }   // 손으로 고친 자리에 바탕색
@@ -12468,7 +12469,17 @@ async function onPoNumBlur(el){
     {onConflict:'cha,pn'});
   if(error){ alert((ru?'Ошибка сохранения':'저장 실패')+'\n['+(error.message||error.code)+']'); el.textContent=before; return; }
   ktHistAdd('po.'+field, cha+'|'+pn, before, String(Math.round(num)));
+  // 수주수량이 바뀌면 발주시뮬레이션의 '주문' 도 같이 움직인다(의뢰서로 확정한 달은 빼고).
+  if(field==='qty'){
+    if(typeof loadSimMan==='function') await loadSimMan();
+    simOrderFollowPo(row.pn, row.qty-was);
+  }
   renderPO();
+  poSimRefresh();
+}
+// 발주현황이 바뀌면 발주시뮬레이션 화면을 다시 그린다(열어 둔 때만).
+function poSimRefresh(){
+  try{ if(typeof renderSIM==='function' && typeof ktPaneOn==='function' && ktPaneOn('pane-sim')) renderSIM(); }catch(e){}
 }
 function poManBtn(){
   const b=document.getElementById('poResetManualBtn'); if(!b) return;
@@ -12492,7 +12503,7 @@ async function poResetManual(){
   const r=await poRecalcSupply();
   if(!r.ok){ alert((ru?'Ошибка':'실패')+'\n['+r.msg+']'); return; }
   await loadPO();
-  poManBtn(); renderPO();
+  poManBtn(); renderPO(); poSimRefresh();
   alert(ru?('Готово: '+r.total):('되돌렸습니다. 공급수량 합계 '+r.total.toLocaleString()));
 }
 // 변경코드(공급) 칸. 여기 적은 코드가 그 묶음의 '최종품번' 이 된다.
@@ -12541,6 +12552,7 @@ async function onPoChgBlur(el){
   _poRepMap=null;
   ktAfterPnEdit();
   renderPO();
+  poSimRefresh();
 }
 // 발주현황을 대표품번끼리 묶어 볼지
 function poGroupOn(){ try{ return localStorage.getItem('kt_po_group')==='1'; }catch(e){ return false; } }
@@ -12606,7 +12618,7 @@ function openPoViewPanel(){
     savePoMan();
     const r=await poRecalcSupply();
     await loadPO();
-    poManBtn(); renderPO();
+    poManBtn(); renderPO(); poSimRefresh();
     alert((ru?'Готово. Поставлено: ':'반영했습니다. 공급수량 합계 ')+((r&&r.ok)?r.total.toLocaleString():'?'));
   };
   box.querySelector('#povSince').onclick=()=>setSince(true);
@@ -12624,7 +12636,7 @@ function openPoViewPanel(){
     savePoMan();
     const r=await poRecalcSupply();
     await loadPO();
-    poManBtn(); renderPO();
+    poManBtn(); renderPO(); poSimRefresh();
     alert((ru2?'Готово. Поставлено: ':'반영했습니다. 공급수량 합계 ')+((r&&r.ok)?r.total.toLocaleString():'?'));
   };
   box.onmousedown=e=>{ if(e.target===box) done(); };
@@ -12762,9 +12774,12 @@ async function poDeleteRow(cha, pn){
   if(error){ alert((ru?'Ошибка':'삭제 실패')+'\n['+(error.message||error.code)+']'); return; }
   { const k=poManKey(row.cha,row.pn);
     if(_poMan[k] || _poManQ[k]){ delete _poMan[k]; delete _poManQ[k]; savePoMan(); } }
+  // 지운 만큼 발주시뮬레이션의 '주문' 에서도 뺀다
+  if(typeof loadSimMan==='function') await loadSimMan();
+  simOrderFollowPo(row.pn, -(Number(row.qty)||0));
   await loadPO();
   renderPO(); poManBtn();
-  if(typeof renderSIM==='function' && ktPaneOn('pane-sim')) renderSIM();
+  poSimRefresh();
 }
 async function loadPOTab(){
   const m=canEditPsi();
@@ -12847,7 +12862,7 @@ function handlePOUpload(event, mode){
           +'\nSQL: create table if not exists kt_po (cha text not null, pn text not null, mon text, qty numeric default 0, supplied numeric default 0, updated_at timestamptz default now(), primary key (cha,pn));'
           +'\n['+(error.message||error.code)+']'); event.target.value=''; return; }
       }
-      await loadPO(); renderPO();
+      await loadPO(); renderPO(); poSimRefresh();
       alert((ru?'Готово. ':'반영 완료. ')+rows.length+(ru?'':'줄')+(miss?('\n'+(ru?'Не найдено: ':'기존 자료에 없어 건너뜀: ')+miss):''));
     }catch(err){ console.error(err); alert(ru?'Ошибка загрузки.':'업로드 처리 중 오류가 발생했습니다.'); }
     event.target.value='';
@@ -15632,7 +15647,31 @@ function simPlanUpYms(){
 //   2026-09 부터 쓴다(그 앞 달은 비워 둔다).
 const SIM_ORD_FROM='2609';
 let _simOrder={}, _simOrderRepCache=null;
+let _simOrdReq={};              // 수출작업의뢰서로 확정한 달 — 발주현황을 고쳐도 건드리지 않는다
 function simOrderClear(){ _simOrderRepCache=null; }
+// 발주현황 수주수량이 바뀌면 그 물량을 '주문' 으로 옮겨 적어 둔 달도 같이 고친다.
+//   의뢰서로 확정한 달(2026-10 등)은 그 달 나갈 몫이 따로 정해져 있으므로 손대지 않는다.
+//   주문 열쇠는 발주현황과 같은 자리(최종품번이 있으면 그것)를 쓴다.
+function simOrderFollowPo(pn, delta){
+  delta=Math.round(Number(delta)||0);
+  if(!delta) return [];
+  const key=normPN((typeof poLookup==='function'?(poLookup(pn)||{}):{}).fin||'')||normPN(pn);
+  if(!key) return [];
+  const yms=[...new Set(Object.keys(_simOrder||{}).map(k=>String(k).split('|')[1]))]
+    .filter(y=>y && y>=SIM_ORD_FROM && !_simOrdReq[y]).sort();
+  const hit=[];
+  yms.forEach(y=>{
+    const k=simPlanKey(key,y);
+    const was=Number(_simOrder[k])||0;
+    if(!was && delta<0) return;                 // 없던 자리를 음수로 만들지는 않는다
+    const now=Math.max(0, was+delta);
+    if(now===was) return;
+    if(now) _simOrder[k]=now; else delete _simOrder[k];
+    hit.push({ym:y, was, now});
+  });
+  if(hit.length){ simOrderClear(); saveSimMan(); }
+  return hit;
+}
 function simOrderOf(pn, ym){ return (ym>=SIM_ORD_FROM) ? (Number(_simOrder[simPlanKey(pn,ym)])||0) : 0; }
 function simOrderByRep(){
   if(_simOrderRepCache) return _simOrderRepCache;
@@ -16154,6 +16193,7 @@ async function handleSimReqUpload(ev){
     Object.keys(_simPlanUp).forEach(k=>{ if(String(k).split('|')[1]===ym) delete _simPlanUp[k]; });
     Object.keys(_simOrder).forEach(k=>{ if(String(k).split('|')[1]===ym) delete _simOrder[k]; });
     pns.forEach(k=>{ _simPlanUp[simPlanKey(k,ym)]=byPn[k]; _simOrder[simPlanKey(k,ym)]=byPn[k]; });
+    _simOrdReq[ym]=1;                     // 이 달은 의뢰서로 확정한 달
     simPlanUpClear(); simOrderClear();
     saveSimMan();
     // 발주현황에도 그대로 등록한다. 차수는 Ref.No(RUS 261001), 발주년월은 그 한 달 앞.
@@ -16325,6 +16365,7 @@ async function loadSimMan(){
       if(c.needNew && typeof c.needNew==='object') _simNeedNew=c.needNew;
       if(c.plan && typeof c.plan==='object'){ _simPlanUp=c.plan; simPlanUpClear(); }
       if(c.order && typeof c.order==='object'){ _simOrder=c.order; simOrderClear(); }
+      if(c.ordReq && typeof c.ordReq==='object') _simOrdReq=c.ordReq;
     }
   }catch(e){}
 }
@@ -16333,7 +16374,7 @@ function saveSimMan(){
   clearTimeout(_simManT);
   _simManT=setTimeout(async()=>{
     try{
-      await sb.from('kt_psi_cfg').upsert({ id:SIM_MAN_ID, cfg:{ ship:_simShip, need:_simNeed, needNew:_simNeedNew, plan:_simPlanUp, order:_simOrder },
+      await sb.from('kt_psi_cfg').upsert({ id:SIM_MAN_ID, cfg:{ ship:_simShip, need:_simNeed, needNew:_simNeedNew, plan:_simPlanUp, order:_simOrder, ordReq:_simOrdReq },
         updated_at:new Date().toISOString() },{onConflict:'id'});
     }catch(e){ console.log('sim_man: 저장 실패'); }
   }, 600);
