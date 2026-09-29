@@ -2386,7 +2386,10 @@ function switchTab(tab){
   // 탭을 옮길 때마다 주문 알림 점을 가볍게 새로고침 — 로그인 중 새 주문/배분도 바로 보이게.
   if(currentUser){ loadOrderFeedStamps().then(updateOrderUnreadDots); refreshSignupDot(); }
   if(tab==='pn'){ renderPN();
-    Promise.all([loadPnAlt(), loadPsiCols()]).then(()=>{ if(ktPaneOn('pane-pn')) renderPN(); }); }
+    // 출고·선적 열은 PSI 자료를 쓴다. 아직 안 읽었으면 뒤에서 읽고 다시 그린다.
+    const needPsi = canSeePsi() && (typeof psiData==='undefined' || !Object.keys(psiData||{}).length);
+    Promise.all([loadPnAlt(), loadPsiCols(), needPsi?loadPSI():Promise.resolve()])
+      .then(()=>{ pnSumClear(); if(ktPaneOn('pane-pn')) renderPN(); }); }
   if(tab==='prod') loadProdTab();
   // KAZAK 은 주문탭 공급가로 카자흐스탄 USD 를 쓰므로 계산식 데이터도 함께 읽는다.
   if(tab==='order'){ mountModelDiag('order'); syncDiagram();
@@ -4142,6 +4145,35 @@ function pnSpecVal(r, f){   // f: nw|gw|cbm|dan
   if(r._split){ const s=pnSpecOf(r._compat); return s?(s[f]!=null?String(s[f]):''):''; }
   return pnSpecAgg(r, f);
 }
+// ── 품번조회 출고·선적 ────────────────────────────────────
+//   PSI 자료(kt_psi)의 모든 달을 더한 값. 호환품번(품번) 단위로 셈한다.
+//   기간을 고르지 않고 자료에 있는 달을 전부 더한다 — '지금까지 나간 총량'.
+let _pnSumCache=null;
+function pnSumClear(){ _pnSumCache=null; }
+function pnSumMap(){
+  if(_pnSumCache) return _pnSumCache;
+  _pnSumCache={};
+  const D=(typeof psiData!=='undefined' && psiData)?psiData:{};
+  Object.keys(D).forEach(k=>{
+    const d=(D[k]||{}).data||{};
+    let o=0, s=0;
+    Object.keys(d).forEach(ym=>{
+      if(!/^\d{4}$/.test(ym)) return;
+      const c=d[ym]||{};
+      o += Number(c.o)||0;
+      s += Number((c.v!=null&&c.v!=='') ? c.v : ((c.s!=null&&c.s!=='') ? c.s : c.g)) || 0;
+    });
+    _pnSumCache[normPN(k)]={ o, s };
+  });
+  return _pnSumCache;
+}
+function pnSumOf(pn){ const k=normPN(pn); return (k && pnSumMap()[k]) || { o:0, s:0 }; }
+// 한 줄(분할이면 그 품번, 묶어 보기면 호환품번 전부)의 합
+function pnSumRow(r, f){
+  if(r && r._split) return pnSumOf(r._compat)[f];
+  let n=0; ((r&&r.compats)||[]).forEach(c=>{ n+=pnSumOf(c)[f]; });
+  return n;
+}
 // ── 대체품목(연결조립필요품목 포함) ───────────────────────────
 //   호환품번마다 '대신 쓸 수 있는 품번'을 여러 개 적어 둔다.
 //   kt_pn_specs 에는 자리가 없어 kt_psi_cfg(id=100) 한 칸에 모아 둔다.
@@ -4222,6 +4254,7 @@ function pnAltQtyText(pn){ return pnAltEntries(pn).map(e=>e.q).join(', '); }
 function ktAfterPnEdit(){
   _pnLookupMap=null; _pnByRepMap=null; _nameRuByRep=null;
   if(typeof _pnChkMap!=='undefined') _pnChkMap=null;
+  if(typeof pnSumClear==='function') pnSumClear();
   const on=id=>{ const e=document.getElementById(id); return !!(e && e.classList.contains('active')); };
   const go=(id,fn)=>{ try{ if(on(id) && typeof fn==='function') fn(); }catch(e){} };
   go('pane-pn',    typeof renderPN==='function'?renderPN:null);
@@ -4391,6 +4424,11 @@ function pnBaseCols(isKo, showEng){
   c.push({key:'gw', cap:78, label:ru?'G/W ср.(kg)':'G/W<br>평균(kg)'});
   c.push({key:'cbm', cap:84, label:ru?'CBM ср.(m³)':'CBM<br>평균(m³)'});
   c.push({key:'note', cap:56, label:ru?'Снято':'단종'});
+  // 출고·선적(PSI 자료의 모든 달 합계) — PSI 를 보는 사람에게만
+  if(canSeePsi()){
+    c.push({key:'out',  cap:82, label:ru?'Расход<br>(всего)':'출고<br>(전체기간)'});
+    c.push({key:'ship', cap:82, label:ru?'Отгрузка<br>(всего)':'선적<br>(전체기간)'});
+  }
   // 대체품목 — 품번·품명·필요수량 세 칸을 한 묶음으로 세운다
   { const g=ru?'Замена (вкл. узлы в сборе)':'대체품목(연결조립필요품목포함)';
     c.push({key:'alt',      cap:112, group:g, color:'#f59e0b', capLabel:ru?'Артикул':'품번'});
@@ -4503,6 +4541,8 @@ function pnColText(key, r){
     case 'gw': return pnSpecVal(r,'gw');
     case 'cbm': return pnSpecVal(r,'cbm');
     case 'note': return pnSpecVal(r,'dan');
+    case 'out':  { const n=pnSumRow(r,'o'); return n?String(n):''; }
+    case 'ship': { const n=pnSumRow(r,'s'); return n?String(n):''; }
     case 'alt': return pnAltText(r.rep);
     case 'alt_name': return pnAltNameText(r.rep);
     case 'alt_qty': return pnAltQtyText(r.rep);
@@ -4515,7 +4555,7 @@ function pnColText(key, r){
 function pnColLabelShort(key){
   const t=T[lang];
   if(key && key.indexOf('m:')===0){ const mk=key.slice(2); const md=(typeof MODEL_DEFS!=='undefined'?MODEL_DEFS:[]).find(m=>m.key===mk); return md?(md.group+' '+md.label):key; }
-  const M={export_ctrl:(lang==='ru'?'Эксп.контроль':'수출제한'), name:t.pnH0, spec:t.pnH0s, name_ru:(lang==='ru'?'Рус.название':'러시아어 품명'), name_en:(lang==='ru'?'Англ.название':'영문품명'), rep:t.pnH1, compat:t.pnH2, final:t.pnH3, nw:'N/W', gw:'G/W', cbm:'CBM', note:(lang==='ru'?'Снято с пр-ва':'단종'), alt:(lang==='ru'?'Замена — артикул':'대체품목 품번'), alt_name:(lang==='ru'?'Замена — наименование':'대체품목 품명'), alt_qty:(lang==='ru'?'Замена — кол-во':'대체품목 필요수량'), applied_models:(lang==='ru'?'Модели':'적용모델(임시)')};
+  const M={export_ctrl:(lang==='ru'?'Эксп.контроль':'수출제한'), name:t.pnH0, spec:t.pnH0s, name_ru:(lang==='ru'?'Рус.название':'러시아어 품명'), name_en:(lang==='ru'?'Англ.название':'영문품명'), rep:t.pnH1, compat:t.pnH2, final:t.pnH3, nw:'N/W', gw:'G/W', cbm:'CBM', out:(lang==='ru'?'Расход (всего)':'출고(전체기간)'), ship:(lang==='ru'?'Отгрузка (всего)':'선적(전체기간)'), note:(lang==='ru'?'Снято с пр-ва':'단종'), alt:(lang==='ru'?'Замена — артикул':'대체품목 품번'), alt_name:(lang==='ru'?'Замена — наименование':'대체품목 품명'), alt_qty:(lang==='ru'?'Замена — кол-во':'대체품목 필요수량'), applied_models:(lang==='ru'?'Модели':'적용모델(임시)')};
   return String(M[key]||key).replace(/<br>/g,' ');
 }
 // 모델 열용 소형 필터 아이콘(셀이 좁아 콤팩트하게)
@@ -4606,6 +4646,10 @@ function pnCellHtml(col, r, ctx){
         const inner=(isMaster?cspecEdit(r._compat,'dan',val):escapeHtml(val))+h.badge;
         return _pnTd(col, inner, h.cls.trim(), 'font-size:11px;color:var(--muted);text-align:center'); }
       return _pnTd(col, escapeHtml(val), '', 'font-size:11px;color:var(--muted);text-align:center'); }
+    case 'out': case 'ship': {
+      const n=pnSumRow(r, col.key==='out'?'o':'s');
+      return _pnTd(col, n?psiFmt(n):'', '', 'text-align:right;padding:0 8px;font-size:11px'
+        + (n?'':';color:var(--muted)')); }
     case 'applied_models': { const inner=isMaster?ed(r.rep,'applied_models',r.applied_models||''):escapeHtml(r.applied_models||'');
       return _pnTd(col, inner, '', 'text-align:left;font-size:11px'); }
   }
@@ -4618,7 +4662,7 @@ function pnDistinctValues(key){
   const set=new Set();
   const rows = _pnSplit ? pnExpandRows(PN_DATA) : PN_DATA;
   rows.forEach(r=> set.add(String(pnColText(key,r))));
-  const num=['nw','gw','cbm'].includes(key);
+  const num=['nw','gw','cbm','out','ship'].includes(key);
   return [...set].sort((a,b)=> num ? ((parseFloat(a)||0)-(parseFloat(b)||0)) : a.localeCompare(b,'ko'));
 }
 // 헤더 필터/정렬 버튼(클릭 영역을 크게)
@@ -4808,7 +4852,7 @@ function renderPN(){
   }
   // 정렬(엑셀식: 한 열 기준 오름/내림, 빈값은 항상 뒤로)
   if(_pnSort.key){
-    const k=_pnSort.key, dir=_pnSort.dir==='desc'?-1:1, num=['nw','gw','cbm'].includes(k);
+    const k=_pnSort.key, dir=_pnSort.dir==='desc'?-1:1, num=['nw','gw','cbm','out','ship'].includes(k);
     rows=rows.slice().sort((a,b)=>{
       const va=String(pnColText(k,a)), vb=String(pnColText(k,b));
       const ea=va==='', eb=vb==='';
