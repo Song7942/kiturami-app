@@ -4256,6 +4256,7 @@ function ktAfterPnEdit(){
   if(typeof _pnChkMap!=='undefined') _pnChkMap=null;
   if(typeof pnSumClear==='function') pnSumClear();
   if(typeof simPlanUpClear==='function') simPlanUpClear();
+  if(typeof simOrderClear==='function') simOrderClear();
   const on=id=>{ const e=document.getElementById(id); return !!(e && e.classList.contains('active')); };
   const go=(id,fn)=>{ try{ if(on(id) && typeof fn==='function') fn(); }catch(e){} };
   go('pane-pn',    typeof renderPN==='function'?renderPN:null);
@@ -14831,15 +14832,19 @@ function psiVisSub(){ const m=psiColsMap();
   // 발주시뮬레이션에서만 선적 뒤에 '선적계획'을, 보유월 뒤에 세 열을 더 붙인다.
   //   넷 다 보기 창에서 끌 수 있다(끄면 아래 목록에 안 들어간다).
   if(typeof psiSimOn!=='undefined' && psiSimOn){
-    if(m.plan!==false){
-      const k=v.findIndex(d=>d.k==='sh');
-      v = (k>=0) ? v.slice(0,k+1).concat(PSI_PLAN_COL, v.slice(k+1)) : PSI_PLAN_COL.concat(v);
+    { // 실제선적 뒤에 '주문'·'선적계획' 을 끼운다(보기 창에서 따로따로 끌 수 있다)
+      const add=PSI_PLAN_COL.filter(d=>m[d.k]!==false);
+      if(add.length){
+        const k=v.findIndex(d=>d.k==='sh');
+        v = (k>=0) ? v.slice(0,k+1).concat(add, v.slice(k+1)) : add.concat(v);
+      }
     }
     v=v.concat(PSI_SIM_COL_DEFS.filter(d=>m[d.k]!==false));
   }
   if(!v.length) v=PSI_COL_DEFS.filter(d=>d.k==='st');   // 전부 끄면 재고는 남긴다
   return colOrdApply(psiOrdScopeSub(), v); }
-const PSI_PLAN_COL=[{k:'plan', w:62, ko:'선적<br>계획', ru:'План<br>отгр.', simOff:1}];
+const PSI_PLAN_COL=[{k:'ord', w:58, ko:'주문', ru:'Заказ'},
+                    {k:'plan', w:62, ko:'선적<br>계획', ru:'План<br>отгр.', simOff:1}];
 const PSI_SIM_COL_DEFS=[
   {k:'need', w:70, ko:'발주필요', ru:'Дозаказ',
    hko:'발주필요<br><span style="font-weight:400;font-size:9px;color:var(--muted)">(다음달선적)</span>',
@@ -15323,7 +15328,7 @@ function psiFilterIcon(key){
 // 선적계획·발주필요·발주후재고·발주후보유월은 자료에 있는 값이 아니라
 // 그리면서 대표품번 묶음마다 셈해 내는 값이다. 그래서 호환품번 줄(it.v)에는 없고,
 // 거르개·정렬도 줄이 아니라 묶음을 기준으로 해야 한다. 그린 값을 g.sim 에 담아 둔다.
-const PSI_SIM_VAL_COLS={plan:1, need:1, need0:1, needd:1, st2:1, mo2:1};
+const PSI_SIM_VAL_COLS={ord:1, plan:1, need:1, need0:1, needd:1, st2:1, mo2:1};
 function psiIsSimCol(key){ return !!PSI_SIM_VAL_COLS[String(key).split(':')[0]]; }
 function psiSimValStr(f,v){
   if(v==null||v==='') return '';
@@ -15548,6 +15553,27 @@ function simPlanUpYms(){
   const s={}; Object.keys(_simPlanUp||{}).forEach(k=>{ const p=String(k).split('|'); if(p[1]) s[p[1]]=1; });
   return s;
 }
+// 주문 — { '호환품번|연월': 수량 }. 수출작업의뢰서를 올리면 선적계획과 함께 적힌다.
+//   2026-09 부터 쓴다(그 앞 달은 비워 둔다).
+const SIM_ORD_FROM='2609';
+let _simOrder={}, _simOrderRepCache=null;
+function simOrderClear(){ _simOrderRepCache=null; }
+function simOrderOf(pn, ym){ return (ym>=SIM_ORD_FROM) ? (Number(_simOrder[simPlanKey(pn,ym)])||0) : 0; }
+function simOrderByRep(){
+  if(_simOrderRepCache) return _simOrderRepCache;
+  const m={};
+  Object.keys(_simOrder||{}).forEach(k=>{
+    const p=String(k).split('|'); const pn=p[0], ym=p[1];
+    if(!pn||!ym||ym<SIM_ORD_FROM) return;
+    const q=Number(_simOrder[k])||0; if(!q) return;
+    const rep=(getPNInfo(pn)?pn:'') || findMasterRep(pn)
+            || ((typeof pnChkMap==='function') ? (pnChkMap().get(normPN(pn))||'') : '') || '';
+    if(!rep) return;
+    (m[ym]=m[ym]||{}); m[ym][rep]=(m[ym][rep]||0)+q;
+  });
+  _simOrderRepCache=m;
+  return m;
+}
 // { 연월: { 대표품번: 합계 } } — 호환품번으로 담아 둔 값을 대표품번끼리 더한다
 function simPlanUpByRep(){
   if(_simPlanRepCache) return _simPlanRepCache;
@@ -15620,14 +15646,14 @@ function renderSIM(){
   }
 }
 // 손으로 고친 값(실제선적·발주필요)을 셈한 값으로 되돌린다
-function simManualCount(){ return Object.keys(_simNeed).length + Object.keys(_simShip).length + Object.keys(_simPlanUp||{}).length; }
+function simManualCount(){ return Object.keys(_simNeed).length + Object.keys(_simShip).length + Object.keys(_simPlanUp||{}).length + Object.keys(_simOrder||{}).length; }
 function simResetManual(){
   const ru=(lang==='ru');
   const c=simManualCount();
   if(!c){ alert(ru?'Ручных значений нет.':'손으로 고친 값이 없습니다.'); return; }
   if(!confirm(ru ? ('Сбросить '+c+' ручных значений?')
                  : ('손으로 고친 '+c+'개를 원래 셈한 값으로 되돌립니다.\n계속할까요?'))) return;
-  _simNeed={}; _simShip={}; _simNeedNew={}; _simPlanUp={}; simPlanUpClear(); saveSimMan();
+  _simNeed={}; _simShip={}; _simNeedNew={}; _simPlanUp={}; _simOrder={}; simPlanUpClear(); simOrderClear(); saveSimMan();
   ktHistClearMine('sim.');                 // 이 아이디가 남긴 수기 이력도 지운다
   renderSIM();
 }
@@ -16023,14 +16049,15 @@ async function handleSimReqUpload(ev){
       +'· 줄 '+rows.length+'개 / 수량 '+psiFmt(tot)+'개\n'
       +'· 품번조회에서 찾음: 호환품번 '+pns.length+'개 (대표품번 '+reps.length+'개) / 수량 '+psiFmt(okQty)+'개\n'
       +(miss.length?('· 못 찾은 품번 '+miss.length+'개: '+miss.slice(0,6).join(', ')+(miss.length>6?' …':'')+'\n'):'')
-      +'\n'+psiYmLabel(ym)+' 의 선적계획을 이 내용으로 바꿉니다(그 달의 기존 값은 지웁니다). 계속할까요?')) return;
-    // 그 달 값을 싹 비우고 새로 넣는다
+      +'\n'+psiYmLabel(ym)+' 의 주문·선적계획을 이 내용으로 바꿉니다(그 달의 기존 값은 지웁니다). 계속할까요?')) return;
+    // 그 달 값을 싹 비우고 새로 넣는다 (선적계획과 주문에 같이 적는다)
     Object.keys(_simPlanUp).forEach(k=>{ if(String(k).split('|')[1]===ym) delete _simPlanUp[k]; });
-    pns.forEach(k=>{ _simPlanUp[simPlanKey(k,ym)]=byPn[k]; });
-    simPlanUpClear();
+    Object.keys(_simOrder).forEach(k=>{ if(String(k).split('|')[1]===ym) delete _simOrder[k]; });
+    pns.forEach(k=>{ _simPlanUp[simPlanKey(k,ym)]=byPn[k]; _simOrder[simPlanKey(k,ym)]=byPn[k]; });
+    simPlanUpClear(); simOrderClear();
     saveSimMan();
     if(typeof renderSIM==='function') renderSIM();
-    alert('반영했습니다 — '+psiYmLabel(ym)+' 선적계획\n'
+    alert('반영했습니다 — '+psiYmLabel(ym)+' 주문·선적계획\n'
       +'호환품번 '+pns.length+'개 / 수량 '+psiFmt(okQty)+'개 (대표품번 '+reps.length+'개로 합산)'
       +(miss.length?('\n※ 품번조회에 없어 넣지 못한 품번 '+miss.length+'개: '+miss.slice(0,10).join(', ')+(miss.length>10?' …':'')):''));
   }catch(e){ console.error(e); alert(ru?'Ошибка чтения файла.':'파일을 읽지 못했습니다.\n'+(e&&e.message||e)); }
@@ -16172,6 +16199,7 @@ async function loadSimMan(){
       if(c.need && typeof c.need==='object') _simNeed=c.need;
       if(c.needNew && typeof c.needNew==='object') _simNeedNew=c.needNew;
       if(c.plan && typeof c.plan==='object'){ _simPlanUp=c.plan; simPlanUpClear(); }
+      if(c.order && typeof c.order==='object'){ _simOrder=c.order; simOrderClear(); }
     }
   }catch(e){}
 }
@@ -16180,7 +16208,7 @@ function saveSimMan(){
   clearTimeout(_simManT);
   _simManT=setTimeout(async()=>{
     try{
-      await sb.from('kt_psi_cfg').upsert({ id:SIM_MAN_ID, cfg:{ ship:_simShip, need:_simNeed, needNew:_simNeedNew, plan:_simPlanUp },
+      await sb.from('kt_psi_cfg').upsert({ id:SIM_MAN_ID, cfg:{ ship:_simShip, need:_simNeed, needNew:_simNeedNew, plan:_simPlanUp, order:_simOrder },
         updated_at:new Date().toISOString() },{onConflict:'id'});
     }catch(e){ console.log('sim_man: 저장 실패'); }
   }, 600);
@@ -16393,7 +16421,7 @@ function renderPSI(){
   const tdS='padding:4px 5px;font-size:11px;overflow:hidden;border-bottom:1px solid var(--border)';
   const numS=tdS+';text-align:right;white-space:nowrap';
   // 기간합계: 선적·선적계획·입고·출고·미출·발주필요는 더하고, 재고·보유월은 마지막 달 값을 쓴다
-  const TOT_SUM={sh:1,plan:1,i:1,o:1,ms:1,need:1,need0:1,needd:1}, TOT_LAST={st:1,mo:1,st2:1,mo2:1};
+  const TOT_SUM={sh:1,ord:1,plan:1,i:1,o:1,ms:1,need:1,need0:1,needd:1}, TOT_LAST={st:1,mo:1,st2:1,mo2:1};
   const totOf=raws=>{ const t={}, last=raws[raws.length-1]||{};
     SB.forEach(d=>{ const k=d.k;
       if(TOT_SUM[k]){ let sm=0; raws.forEach(r=>{ const v=Number(r[k]); if(isFinite(v)) sm+=v; }); t[k]=sm; }
@@ -16403,7 +16431,7 @@ function renderPSI(){
   const totTxt=(k,t)=>{ const v=t[k];
     if(v==null||v==='') return '';
     if(k==='mo'||k==='mo2') return Number(v).toFixed(1);
-    if((k==='plan'||k==='need') && !Number(v)) return '';
+    if((k==='plan'||k==='need'||k==='ord') && !Number(v)) return '';
     return n(v); };
   const futOut=(d,y)=>{ let s=0; for(let i=1;i<=c.avgN;i++) s+=psiOutOf(d,psiYmAdd(y,i)); return s; };
   // 출고기간 칸: 그 해(또는 그 달) 출고를 더한다. 같은 품번이 두 번 세어지지 않게 한 번만 본다.
@@ -16509,13 +16537,14 @@ function renderPSI(){
   const planStarted=!!(psiSimOn && _simPlanYm && startedYm[_simPlanYm]);
   const planUpYms=simPlanUpYms();          // 수출작업의뢰서를 올린 달
   const planUpRep=simPlanUpByRep();        // 그 달 대표품번별 합계(호환품번 값을 더한 것)
+  const ordRep=simOrderByRep();            // 주문 — 호환품번 값을 대표품번끼리 더한 것
   // 그 달에 발주필요를 손으로 적었거나 엑셀로 올렸는가.
   //   올린 달은 '사람이 정한 달' 로 보아, 적지 않은 품번은 발주하지 않는 것으로 둔다(빈칸).
   //   올리지 않은 달은 전처럼 셈해 낸 값을 그대로 쓴다.
   const manYm={};
   Object.keys(_simNeed||{}).forEach(k=>{ const p=String(k).split('|'); if(p[1]) manYm[p[1]]=1; });
   const shTot={};                         // 달마다 실제선적 합계(손으로 고친 값 포함)
-  const shipTot={}, inTot={};             // 달마다 발주분의 선적·입고 합계
+  const shipTot={}, inTot={}, ordTot={};             // 달마다 발주분의 선적·입고 합계
   const arrStTot={}, arrFutTot={};        // 달마다 '그 발주분이 들어오는 달'의 재고·앞으로 출고 합계
   const kCls={ rep:'cd', final:'cd', compat:'cd', note:'ct', exp:'xc', name:'nm', spec:'sp' };   // 하위 줄 고정열
   const bodyRows=[];
@@ -16612,8 +16641,9 @@ function renderPSI(){
       }else if(psiSimOn && man!=null){ nd=simNeedMoq(g.rep, man); }
       // 합계 줄에 더할 값은 일단 묶음마다 담아 두고, 아래에서 남은 묶음만 골라 더한다
       //   (선적계획·발주필요 같은 열로 거르면 빠진 묶음은 합계에서도 빠져야 한다)
+      const gOrd=(psiSimOn && ordRep[y]) ? (ordRep[y][g.rep]||0) : 0;   // 주문(호환품번 값의 합)
       gAcc[y]=Object.assign(gAcc[y]||{}, {need:nd, need0:ndAuto, needd:(nd-ndAuto),
-                                          addSt, plan, arrIn:arrive[i], sh:realSh});
+                                          addSt, plan, ord:gOrd, arrIn:arrive[i], sh:realSh});
       if(psiSimOn && i+1<ymsAll.length) shipPlan[i+1]+=nd;   // 이 달 발주분은 다음 달에 나간다
       const sAttr=' data-rep="'+escapeHtml(g.rep)+'" data-ym="'+y+'"'+ktHistAttr('sim.sh', g.rep+'|'+y)
         +' onclick="simShipFocus(this)" title="'
@@ -16633,8 +16663,8 @@ function renderPSI(){
       // 발주필요(자동계산) 칸은 손으로 적었든 아니든 늘 '셈해 낸 값' 을 적는다.
       //   손으로 적지 않은 달은 발주필요와 자동계산이 같은 값이 된다.
       const ndDiff=nd-ndAuto;
-      g.sim[y]={plan, need:nd, need0:ndAuto, needd:ndDiff, st2, mo2:m2};   // 거르개·정렬이 볼 수 있게 담아 둔다
-      const val={sh:n(sh), plan:(plan?n(plan):''), i:n(inq), o:n(a.o), ms:n(a.ms), st:n(st),
+      g.sim[y]={ord:gOrd, plan, need:nd, need0:ndAuto, needd:ndDiff, st2, mo2:m2};   // 거르개·정렬이 볼 수 있게 담아 둔다
+      const val={sh:n(sh), ord:(gOrd?n(gOrd):''), plan:(plan?n(plan):''), i:n(inq), o:n(a.o), ms:n(a.ms), st:n(st),
                  mo:(mo==null?'':mo.toFixed(1)),
                  need:(nd?n(nd):''), need0:(ndAuto?n(ndAuto):''),
                  needd:(ndDiff?((ndDiff>0?'+':'')+n(ndDiff)):''),
@@ -16645,7 +16675,7 @@ function renderPSI(){
       const html=SB.map((d,j)=>'<td class="n'+(j===0?b:'')+((low&&d.k==='mo')?' low':'')+((high&&d.k==='mo')?' hi':'')
         +((d.k==='need'||(psiSimOn&&d.k==='sh'))?' ed':'')+manMark(d)+lockMark(d)+'"'
         +(d.k==='need'?nAttr:((psiSimOn&&d.k==='sh')?sAttr:''))+'>'+val[d.k]+'</td>').join('');
-      return {html, raw:{sh:sh, plan:plan, i:inq, o:a.o, ms:a.ms, st:st, mo:mo, need:nd, need0:ndAuto, needd:ndDiff, st2:st2, mo2:m2}};
+      return {html, raw:{sh:sh, ord:gOrd, plan:plan, i:inq, o:a.o, ms:a.ms, st:st, mo:mo, need:nd, need0:ndAuto, needd:ndDiff, st2:st2, mo2:m2}};
     });
     const gCells=gEach.map(x=>x.html).join('');
     const gTot=totOf(gEach.map(x=>x.raw));
@@ -16673,11 +16703,12 @@ function renderPSI(){
         // 수출작업의뢰서로 올린 달은 그 품번(호환품번)에 적힌 수량을 이 줄에도 적는다.
         //   대표품번 줄은 이 값들을 더한 값이다.
         const kPlan=(psiSimOn && planUpYms[y]) ? (Number(_simPlanUp[simPlanKey(it.key,y)])||0) : 0;
-        const val={sh:n(x.sh), plan:(kPlan?n(kPlan):''), i:n(x.i), o:n(x.o), ms:n(x.ms), st:n(x.st), mo:'', need:'', need0:'', needd:'', st2:'', mo2:''};
+        const kOrd=psiSimOn ? simOrderOf(it.key,y) : 0;
+        const val={sh:n(x.sh), ord:(kOrd?n(kOrd):''), plan:(kPlan?n(kPlan):''), i:n(x.i), o:n(x.o), ms:n(x.ms), st:n(x.st), mo:'', need:'', need0:'', needd:'', st2:'', mo2:''};
         const dim={sh:1, ms:1};
         // 보유월은 대표품번 줄에만 적으므로 하위 줄에는 색을 칠하지 않는다
         const html=SB.map((d,j)=>'<td class="n'+(j===0?b:'')+(dim[d.k]?' dim':'')+'">'+val[d.k]+'</td>').join('');
-        return {html, raw:{sh:x.sh, plan:(kPlan||null), i:x.i, o:x.o, ms:x.ms, st:x.st, mo:null, need:null, need0:null, needd:null, st2:null, mo2:null}};
+        return {html, raw:{sh:x.sh, ord:(kOrd||null), plan:(kPlan||null), i:x.i, o:x.o, ms:x.ms, st:x.st, mo:null, need:null, need0:null, needd:null, st2:null, mo2:null}};
       });
       const cells=kEach.map(z=>z.html).join('');
       const kTot=totOf(kEach.map(z=>z.raw));
@@ -16713,6 +16744,7 @@ function renderPSI(){
       needdTot[y]=(needdTot[y]||0)+(s.needd||0);
       stAdd[y]=(stAdd[y]||0)+(s.addSt||0);
       shipTot[y]=(shipTot[y]||0)+(s.plan||0);
+      ordTot[y]=(ordTot[y]||0)+(s.ord||0);
       shTot[y]=(shTot[y]||0)+(s.sh||0);
       inTot[y]=(inTot[y]||0)+(s.arrIn||0);
       const a=x.g.agg[y], t=tot[y];
@@ -16729,7 +16761,7 @@ function renderPSI(){
   const sumS=thS+';font-weight:700;background:var(--surface)';
   const sumRaws=yms.map(y=>{ const t=tot[y]; const tst=t.st+(stAdd[y]||0);
     const tn=psiSimOn ? (needTot[y]||0) : 0;
-    return { sh:(psiSimOn?(shTot[y]||0):t.sh), plan:(shipTot[y]||0), i:t.i+(inTot[y]||0), o:t.o, ms:t.ms, st:tst,
+    return { sh:(psiSimOn?(shTot[y]||0):t.sh), ord:(ordTot[y]||0), plan:(shipTot[y]||0), i:t.i+(inTot[y]||0), o:t.o, ms:t.ms, st:tst,
              mo:moOf(tst,t.fut), need:tn,
              need0:(psiSimOn?(need0Tot[y]||0):0), needd:(psiSimOn?(needdTot[y]||0):0),
              st2:((psiSimOn && arrFutTot[y]) ? ((arrStTot[y]||0)+tn) : null),
@@ -16744,7 +16776,7 @@ function renderPSI(){
     const tn=psiSimOn ? (needTot[y]||0) : 0;
     const tm2=(psiSimOn && arrFutTot[y]) ? moOf((arrStTot[y]||0)+tn, arrFutTot[y]) : null;
     const ts2=(psiSimOn && arrFutTot[y]) ? ((arrStTot[y]||0)+tn) : null;
-    const val={sh:n(psiSimOn?(shTot[y]||0):t.sh), plan:(shipTot[y]?n(shipTot[y]):''), i:n(t.i+(inTot[y]||0)), o:n(t.o), ms:n(t.ms),
+    const val={sh:n(psiSimOn?(shTot[y]||0):t.sh), ord:(ordTot[y]?n(ordTot[y]):''), plan:(shipTot[y]?n(shipTot[y]):''), i:n(t.i+(inTot[y]||0)), o:n(t.o), ms:n(t.ms),
                st:n(tst), mo:(mo==null?'':mo.toFixed(1)),
                need:(tn?n(tn):''),
                need0:(psiSimOn&&need0Tot[y]?n(need0Tot[y]):''),
@@ -16798,7 +16830,7 @@ async function downloadPSI(){
   yms.forEach(y=>{ g1.push(psiYmLabel(y)); SB.slice(1).forEach(()=>g1.push('')); SB.forEach(d=>g2.push(String(ru?d.ru:d.ko).replace(/<br>/g,' '))); });
   const moOf=(st,fut)=>{ const avg=fut/c.avgN; return avg>0 ? Math.round((st/avg)*10)/10 : ''; };
   // 기간합계: 더할 열과 마지막 달 값을 쓰는 열(화면과 같은 규칙)
-  const TOT_SUM={sh:1,plan:1,i:1,o:1,ms:1,need:1,need0:1,needd:1}, TOT_LAST={st:1,mo:1,st2:1,mo2:1};
+  const TOT_SUM={sh:1,ord:1,plan:1,i:1,o:1,ms:1,need:1,need0:1,needd:1}, TOT_LAST={st:1,mo:1,st2:1,mo2:1};
   const totOf=raws=>{ const t={}, last=raws[raws.length-1]||{};
     SB.forEach(d=>{ const k=d.k;
       if(TOT_SUM[k]){ let sm=0; raws.forEach(r=>{ const v=Number(r[k]); if(isFinite(v)) sm+=v; }); t[k]=sm; }
@@ -16835,7 +16867,8 @@ async function downloadPSI(){
       const mn=(typeof _simNeed!=='undefined')?_simNeed[g.rep+'|'+y]:null;
       // 화면과 같은 규칙: 그 달을 손으로 정했으면 적은 값만, 안 적은 품번은 0
       const nd=(mn!=null)?((typeof simNeedMoq==='function')?simNeedMoq(g.rep,mn):mn):(manYmX[y]?0:nd0);
-      const val={sh:a.sh, i:a.i, o:a.o, ms:a.ms, st:a.st, mo:moOf(a.st,a.fut),
+      const gOrdX=(typeof simOrderByRep==='function' && psiSimOn) ? ((simOrderByRep()[y]||{})[g.rep]||0) : 0;
+      const val={sh:a.sh, ord:(gOrdX||''), i:a.i, o:a.o, ms:a.ms, st:a.st, mo:moOf(a.st,a.fut),
                  need:(nd||''), need0:(nd0||''), needd:((nd-nd0)||''),
                  st2:(a.st+nd), mo2:moOf(a.st+nd,a.fut)};
       gRaw.push(val); });
@@ -16853,7 +16886,8 @@ async function downloadPSI(){
       const kRaw=[];
       yms.forEach(y=>{ const x=v[y]||{};
         const kPlan=(psiSimOn && planUpYmsX[y]) ? (Number(_simPlanUp[simPlanKey(it.key,y)])||0) : 0;
-        const val={sh:x.sh??'', plan:(kPlan||''), i:x.i??'', o:x.o??'', ms:x.ms??'', st:x.st??'', mo:'', need:'', need0:'', needd:'', st2:'', mo2:''};
+        const kOrdX=(psiSimOn && typeof simOrderOf==='function') ? simOrderOf(it.key,y) : 0;
+        const val={sh:x.sh??'', ord:(kOrdX||''), plan:(kPlan||''), i:x.i??'', o:x.o??'', ms:x.ms??'', st:x.st??'', mo:'', need:'', need0:'', needd:'', st2:'', mo2:''};
         kRaw.push(val); });
       if(SHOWTOT){ const tv=totOf(kRaw); SB.forEach(d=>row.push(tv[d.k])); }
       kRaw.forEach(val=>SB.forEach(d=>row.push(val[d.k])));
