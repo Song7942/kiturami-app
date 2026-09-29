@@ -12469,10 +12469,10 @@ async function onPoNumBlur(el){
     {onConflict:'cha,pn'});
   if(error){ alert((ru?'Ошибка сохранения':'저장 실패')+'\n['+(error.message||error.code)+']'); el.textContent=before; return; }
   ktHistAdd('po.'+field, cha+'|'+pn, before, String(Math.round(num)));
-  // 수주수량이 바뀌면 발주시뮬레이션의 '주문' 도 같이 움직인다(의뢰서로 확정한 달은 빼고).
+  // 수주수량이 바뀌면 발주시뮬레이션의 '주문' 도 발주현황 값에 다시 맞춘다.
   if(field==='qty'){
     if(typeof loadSimMan==='function') await loadSimMan();
-    simOrderFollowPo(row.pn, row.qty-was);
+    simOrderSyncPo();
   }
   renderPO();
   poSimRefresh();
@@ -12774,10 +12774,10 @@ async function poDeleteRow(cha, pn){
   if(error){ alert((ru?'Ошибка':'삭제 실패')+'\n['+(error.message||error.code)+']'); return; }
   { const k=poManKey(row.cha,row.pn);
     if(_poMan[k] || _poManQ[k]){ delete _poMan[k]; delete _poManQ[k]; savePoMan(); } }
-  // 지운 만큼 발주시뮬레이션의 '주문' 에서도 뺀다
-  if(typeof loadSimMan==='function') await loadSimMan();
-  simOrderFollowPo(row.pn, -(Number(row.qty)||0));
   await loadPO();
+  // 지운 만큼 발주시뮬레이션의 '주문' 에서도 빠진다
+  if(typeof loadSimMan==='function') await loadSimMan();
+  simOrderSyncPo();
   renderPO(); poManBtn();
   poSimRefresh();
 }
@@ -12862,7 +12862,10 @@ function handlePOUpload(event, mode){
           +'\nSQL: create table if not exists kt_po (cha text not null, pn text not null, mon text, qty numeric default 0, supplied numeric default 0, updated_at timestamptz default now(), primary key (cha,pn));'
           +'\n['+(error.message||error.code)+']'); event.target.value=''; return; }
       }
-      await loadPO(); renderPO(); poSimRefresh();
+      await loadPO();
+      if(typeof loadSimMan==='function') await loadSimMan();
+      simOrderSyncPo();
+      renderPO(); poSimRefresh();
       alert((ru?'Готово. ':'반영 완료. ')+rows.length+(ru?'':'줄')+(miss?('\n'+(ru?'Не найдено: ':'기존 자료에 없어 건너뜀: ')+miss):''));
     }catch(err){ console.error(err); alert(ru?'Ошибка загрузки.':'업로드 처리 중 오류가 발생했습니다.'); }
     event.target.value='';
@@ -15648,29 +15651,47 @@ function simPlanUpYms(){
 const SIM_ORD_FROM='2609';
 let _simOrder={}, _simOrderRepCache=null;
 let _simOrdReq={};              // 수출작업의뢰서로 확정한 달 — 발주현황을 고쳐도 건드리지 않는다
+let _simOrdCha={};              // 의뢰서로 등록한 차수 → 그 달. 그 차수는 이미 그 달 주문으로 잡혀 있다
 function simOrderClear(){ _simOrderRepCache=null; }
-// 발주현황 수주수량이 바뀌면 그 물량을 '주문' 으로 옮겨 적어 둔 달도 같이 고친다.
-//   의뢰서로 확정한 달(2026-10 등)은 그 달 나갈 몫이 따로 정해져 있으므로 손대지 않는다.
-//   주문 열쇠는 발주현황과 같은 자리(최종품번이 있으면 그것)를 쓴다.
-function simOrderFollowPo(pn, delta){
-  delta=Math.round(Number(delta)||0);
-  if(!delta) return [];
-  const key=normPN((typeof poLookup==='function'?(poLookup(pn)||{}):{}).fin||'')||normPN(pn);
-  if(!key) return [];
-  const yms=[...new Set(Object.keys(_simOrder||{}).map(k=>String(k).split('|')[1]))]
-    .filter(y=>y && y>=SIM_ORD_FROM && !_simOrdReq[y]).sort();
-  const hit=[];
-  yms.forEach(y=>{
-    const k=simPlanKey(key,y);
-    const was=Number(_simOrder[k])||0;
-    if(!was && delta<0) return;                 // 없던 자리를 음수로 만들지는 않는다
-    const now=Math.max(0, was+delta);
-    if(now===was) return;
-    if(now) _simOrder[k]=now; else delete _simOrder[k];
-    hit.push({ym:y, was, now});
+// 발주현황 수주수량을 품번별로 낸다(의뢰서로 등록한 차수는 뺀다 — 그 몫은 그 달 주문으로 따로 있다).
+//   열쇠는 발주현황 화면이 쓰는 자리(최종품번이 있으면 그것)로 맞춘다.
+// 미공급분이 나가는 달 = 이번 달(선적일을 이달 말일로 본다). simBuild 와 같은 기준.
+function simPlanYmNow(){
+  const t=new Date(), d1=new Date(t.getFullYear(), t.getMonth()+1, 0), p2=x=>(x<10?'0':'')+x;
+  const sail=d1.getFullYear()+'-'+p2(d1.getMonth()+1)+'-'+p2(d1.getDate());
+  return (typeof shipYmOf==='function')?(shipYmOf(sail)||''):'';
+}
+function poQtyByPn(){
+  const m={};
+  (poData||[]).forEach(r=>{
+    if(_simOrdCha[String(r.cha||'')]) return;
+    const key=normPN((typeof poLookup==='function'?(poLookup(r.pn)||{}):{}).fin||'')||normPN(r.pn);
+    if(!key) return;
+    m[key]=(m[key]||0)+(Number(r.qty)||0);
   });
-  if(hit.length){ simOrderClear(); saveSimMan(); }
-  return hit;
+  return m;
+}
+// 발주현황에서 옮겨 적어 둔 달의 '주문' 을 발주현황 수주수량에 다시 맞춘다.
+//   손으로 고치든 엑셀로 올리든, 발주현황이 바뀌면 이 한 곳만 부르면 된다.
+//   의뢰서로 확정한 달은 나갈 몫이 따로 정해져 있으므로 건드리지 않는다.
+function simOrderSyncPo(){
+  const y=_simPlanYm || simPlanYmNow();                // 미공급분이 나가는 달(이번 달)
+  if(!y || y<SIM_ORD_FROM || _simOrdReq[y]) return 0;
+  if(!(poData||[]).length) return 0;                   // 발주현황을 아직 안 읽었으면 손대지 않는다
+  const has=Object.keys(_simOrder||{}).some(k=>String(k).split('|')[1]===y);
+  if(!has) return 0;                                   // 그 달을 주문으로 잡아 둔 적이 없으면 그대로
+  const want=poQtyByPn();
+  const keys=new Set(Object.keys(_simOrder).filter(k=>String(k).split('|')[1]===y).map(k=>String(k).split('|')[0]));
+  Object.keys(want).forEach(k=>keys.add(k));
+  let ch=0;
+  keys.forEach(k=>{
+    const kk=simPlanKey(k,y), was=Number(_simOrder[kk])||0, now=Math.round(want[k]||0);
+    if(was===now) return;
+    if(now) _simOrder[kk]=now; else delete _simOrder[kk];
+    ch++;
+  });
+  if(ch){ simOrderClear(); saveSimMan(); }
+  return ch;
 }
 function simOrderOf(pn, ym){ return (ym>=SIM_ORD_FROM) ? (Number(_simOrder[simPlanKey(pn,ym)])||0) : 0; }
 function simOrderByRep(){
@@ -16194,6 +16215,7 @@ async function handleSimReqUpload(ev){
     Object.keys(_simOrder).forEach(k=>{ if(String(k).split('|')[1]===ym) delete _simOrder[k]; });
     pns.forEach(k=>{ _simPlanUp[simPlanKey(k,ym)]=byPn[k]; _simOrder[simPlanKey(k,ym)]=byPn[k]; });
     _simOrdReq[ym]=1;                     // 이 달은 의뢰서로 확정한 달
+    if(cha) _simOrdCha[cha]=ym;           // 이 차수의 몫은 그 달 주문으로 이미 잡혀 있다
     simPlanUpClear(); simOrderClear();
     saveSimMan();
     // 발주현황에도 그대로 등록한다. 차수는 Ref.No(RUS 261001), 발주년월은 그 한 달 앞.
@@ -16366,6 +16388,7 @@ async function loadSimMan(){
       if(c.plan && typeof c.plan==='object'){ _simPlanUp=c.plan; simPlanUpClear(); }
       if(c.order && typeof c.order==='object'){ _simOrder=c.order; simOrderClear(); }
       if(c.ordReq && typeof c.ordReq==='object') _simOrdReq=c.ordReq;
+      if(c.ordCha && typeof c.ordCha==='object') _simOrdCha=c.ordCha;
     }
   }catch(e){}
 }
@@ -16374,7 +16397,7 @@ function saveSimMan(){
   clearTimeout(_simManT);
   _simManT=setTimeout(async()=>{
     try{
-      await sb.from('kt_psi_cfg').upsert({ id:SIM_MAN_ID, cfg:{ ship:_simShip, need:_simNeed, needNew:_simNeedNew, plan:_simPlanUp, order:_simOrder, ordReq:_simOrdReq },
+      await sb.from('kt_psi_cfg').upsert({ id:SIM_MAN_ID, cfg:{ ship:_simShip, need:_simNeed, needNew:_simNeedNew, plan:_simPlanUp, order:_simOrder, ordReq:_simOrdReq, ordCha:_simOrdCha },
         updated_at:new Date().toISOString() },{onConflict:'id'});
     }catch(e){ console.log('sim_man: 저장 실패'); }
   }, 600);
@@ -16395,6 +16418,7 @@ async function loadSimTab(){
   await loadMoq();                                           // 발주필요를 MOQ 이상으로 적으려면 필요하다
   simMoqClear();
   await loadSimMan();                                        // 손으로 적어 둔 실제선적·발주필요
+  simOrderSyncPo();                                          // 주문을 발주현황 수주수량에 맞춘다
   await loadKtHist();                                        // 수기 수정 이력(칸에 마우스를 올리면 뜬다)
   await loadPoReqs(true); poReqBtns();                       // 보고·재가 단추
   if(psiPaneFresh('sim')){ updatePaneHBar('sim'); return; }   // 바뀐 게 없으면 그대로 둔다
