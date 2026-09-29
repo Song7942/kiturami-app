@@ -14915,19 +14915,44 @@ function psiNowYm(){ const t=new Date();
   return String(t.getFullYear()).slice(2)+((t.getMonth()+1)<10?'0':'')+(t.getMonth()+1); }
 // 실제 선적량을 손으로 고쳐 볼 때 쓰는 값. '대표품번|연월' → 수량. 화면에서만 쓴다.
 let _simShip={};
+// 발주시뮬레이션에서 적은 '실제선적' 을 PSI 자료(kt_psi)에 그대로 담는다.
+//   그래야 PSI 화면과 발주시뮬레이션이 같은 숫자를 본다.
+//   묶음(대표품번) 줄에 적은 값은 그 묶음 합이 되도록 최종품번 줄에 담는다.
+async function simShipSave(rep, ym, val){
+  const p=getPNInfo(rep)||{};
+  const cs=(p.compats||[]).map(normPN).filter(Boolean);
+  if(!cs.length) return false;
+  const fin=normPN(p.final||'');
+  const target=(fin && cs.indexOf(fin)>=0) ? fin
+             : (cs.slice().sort((a,b)=>psiShipOf((psiData[b]||{}).data,ym)-psiShipOf((psiData[a]||{}).data,ym))[0] || cs[0]);
+  let others=0; cs.forEach(k=>{ if(k!==target) others+=psiShipOf((psiData[k]||{}).data, ym); });
+  const want=Math.max(0, Math.round(Number(val)||0)-others);
+  const cur=psiData[target]||{rep:rep, data:{}};
+  const data=JSON.parse(JSON.stringify(cur.data||{}));
+  const cell=data[ym]||(data[ym]={});
+  if(want>0) cell.v=want; else { delete cell.v; delete cell.s; delete cell.g; }
+  if(!Object.keys(data[ym]).length) delete data[ym];
+  const { error }=await sb.from('kt_psi').upsert({ pn:target, rep:(cur.rep||rep||''), data, updated_at:new Date().toISOString() },{onConflict:'pn'});
+  if(error){ alert('저장 실패\n['+(error.message||error.code)+']'); return false; }
+  psiData[target]={ rep:(cur.rep||rep||''), data };      // 화면도 바로 같은 값을 쓰게
+  return true;
+}
 function simShipFocus(td){
   if(td.querySelector('input')) return;
   const cur=td.textContent.trim().replace(/,/g,'');
   td.innerHTML='<input class="ni" type="text" value="'+escapeHtml(cur)+'">';
   const el=td.querySelector('input');
   el.onkeydown=e=>{ if(e.key==='Enter'||e.key==='Escape') el.blur(); };
-  el.onblur=()=>{
+  el.onblur=async()=>{
     const rep=td.getAttribute('data-rep'), ym=td.getAttribute('data-ym');
     const t=String(el.value).replace(/[^0-9]/g,'');
-    if(t==='') delete _simShip[simNeedKey(rep,ym)]; else _simShip[simNeedKey(rep,ym)]=Math.round(Number(t));
+    if(t===cur){ renderSIM(); return; }
+    delete _simShip[simNeedKey(rep,ym)];                 // 시뮬 전용 수기값은 더 쓰지 않는다(PSI 에 담는다)
     ktHistAdd('sim.sh', rep+'|'+ym, cur, t);
+    await simShipSave(rep, ym, t===''?0:Number(t));
     saveSimMan();
     renderSIM();      // 못 나간 물량이 다음 달로 넘어가므로 표 전체를 다시 셈한다
+    try{ if(ktPaneOn('pane-psi') && typeof renderPSI==='function') renderPSI(); }catch(e){}
   };
   el.focus(); el.select();
 }
@@ -15604,7 +15629,10 @@ function simBuild(){
   const ym=(typeof shipYmOf==='function')?shipYmOf(arrive):'';
   _simPlanYm=(typeof shipYmOf==='function')?(shipYmOf(sail)||''):'';   // 선적계획을 찍을 달
   let rows=0, total=0;
-  if(ym){
+  // 그 달에 '주문'(수출작업의뢰서) 자료가 있으면 그것이 그 달의 선적 예정량이다.
+  //   발주현황 미공급으로 또 셈하면 같은 물량을 두 번 넣게 되므로 건너뛴다.
+  const ordHas=Object.keys(_simOrder||{}).some(k=>String(k).split('|')[1]===_simPlanYm);
+  if(ym && !ordHas){
     // 같은 품번이 여러 차수에 걸쳐 있고, 취소 줄(수주수량이 음수)도 섞여 있다.
     // 줄마다 따로 보면 음수 줄이 빠져 발주현황 미공급 합계와 어긋난다.
     // 품번마다 먼저 상계하고, 그러고도 남는 양만 다음 달 선적으로 얹는다.
@@ -16279,7 +16307,11 @@ function renderPSI(){
   const simCols=psiSimOn?['plan','need','need0','needd','st2','mo2'].filter(has):[];
   const hasSimVal=v=>simCols.length>0 && ymsAll.some(y=>{ const x=v[y]||{};
     return (x.sh||0)||(x.i||0)||(x.o||0)||(x.ms||0)||(x.st||0)||(x.mo!=null); });
-  if(!psiShowZero()) items=items.filter(it=>hasVal(it.v) || hasNeed(it.r) || hasSimVal(it.v));
+  // 주문·올린 선적계획이 적힌 품번은 PSI 수치가 0 이어도 남긴다
+  //   (숨겨 버리면 그 수량이 합계와 다음 달 이월에서 통째로 빠진다)
+  const hasUp=it=>psiSimOn && ymsAll.some(y=>
+      (Number(_simOrder[simPlanKey(it.key,y)])||0)>0 || (Number(_simPlanUp[simPlanKey(it.key,y)])||0)>0);
+  if(!psiShowZero()) items=items.filter(it=>hasVal(it.v) || hasNeed(it.r) || hasSimVal(it.v) || hasUp(it));
 
   _psiAllItems=items;
   const fkeys=Object.keys(_psiFilters);
@@ -16538,6 +16570,8 @@ function renderPSI(){
   const planUpYms=simPlanUpYms();          // 수출작업의뢰서를 올린 달
   const planUpRep=simPlanUpByRep();        // 그 달 대표품번별 합계(호환품번 값을 더한 것)
   const ordRep=simOrderByRep();            // 주문 — 호환품번 값을 대표품번끼리 더한 것
+  const ordYms={};                         // 주문 자료가 있는 달(그 달은 주문이 곧 그 달 선적 예정량)
+  Object.keys(_simOrder||{}).forEach(k=>{ const p=String(k).split('|'); if(p[1]&&p[1]>=SIM_ORD_FROM) ordYms[p[1]]=1; });
   // 그 달에 발주필요를 손으로 적었거나 엑셀로 올렸는가.
   //   올린 달은 '사람이 정한 달' 로 보아, 적지 않은 품번은 발주하지 않는 것으로 둔다(빈칸).
   //   올리지 않은 달은 전처럼 셈해 낸 값을 그대로 쓴다.
@@ -16590,11 +16624,17 @@ function renderPSI(){
       //   싹 지우고, 그 달 '선적계획' 은 미공급수량 그대로 본다.
       //   아직 안 나갔으면 그대로 두고, 나가기 시작하면 그 칸을 비우고
       //   남은 몫(미공급 − 실제선적)을 다음 달 계획으로 넘긴다.
-      // 수출작업의뢰서를 올린 달은 그 값이 곧 선적계획이다(다른 셈은 무시한다)
+      // 그 달 선적계획 = 그 달에 나가기로 한 몫 + 지난 달에 못 나가 넘어온 몫.
+      //   '나가기로 한 몫' 은 주문(수출작업의뢰서)이 있으면 그 값이고,
+      //   주문이 없는 달은 발주현황 미공급(이번 달) 또는 앞선 달에서 넘어온 것뿐이다.
+      const hasOrd=psiSimOn && !!ordYms[y];
       const upYm=!!planUpYms[y];
-      const isPlanYm=(psiSimOn && !upYm && _simPlanYm===y);
-      if(isPlanYm || upYm) shipPlan[i]=0;                // 앞에서 넘어온 것은 무시
-      const planCalc=psiSimOn?(upYm?((planUpRep[y]&&planUpRep[y][g.rep])||0):shipPlan[i]):0;
+      const isPlanYm=(psiSimOn && !upYm && !hasOrd && _simPlanYm===y);
+      if(isPlanYm) shipPlan[i]=0;                        // 미공급 달은 앞에서 넘어온 것을 미공급이 이미 품고 있다
+      const upQty=upYm ? ((planUpRep[y]&&planUpRep[y][g.rep])||0) : 0;
+      const gOrdQ=hasOrd ? ((ordRep[y]&&ordRep[y][g.rep])||0) : 0;
+      const base=hasOrd ? gOrdQ : (upYm ? upQty : 0);
+      const planCalc=psiSimOn?(base+shipPlan[i]):0;
       const planAdd=isPlanYm ? (_simPlan.get(g.rep)||0) : 0;
       const manShip=_simShip[simNeedKey(g.rep,y)];
       const realSh=(manShip!=null)?Math.max(0,manShip):a.sh;
