@@ -5247,7 +5247,9 @@ async function _renamePNRep(oldRep, newRaw){
 }
 // 대표품번을 이미 있는 대표품번으로 바꾸려 할 때: 두 묶음을 하나로 합친다(묻고 나서).
 //   · 호환품번은 두 묶음 것을 모두 모은다(겹치면 하나로)
-//   · 최종품번·품명·규격 등은 합쳐 받는 쪽(newRep) 것을 그대로 둔다(비어 있으면 옛 묶음 값으로 채운다)
+//   · 최종품번은 옛 묶음(oldRep)의 것을 따른다 — 바꾸려는 쪽이 지금 쓰는 품번이다(없으면 newRep 것)
+//   · 품명·규격 등은 합쳐 받는 쪽(newRep) 것을 그대로 둔다(비어 있으면 옛 묶음 값으로 채운다)
+//   · 옛 대표품번 이름으로 적힌 자료(재고·출고·주문·배분·가격·시뮬 수기값 등)도 새 대표품번으로 옮겨 합친다
 //   · 옛 대표품번은 톰스톤으로 지운다. 이력은 양쪽에 남긴다.
 async function _mergePNRep(oldRep, newRep){
   const src=PN_DATA.find(x=>x.rep===oldRep)||{}, dst=PN_DATA.find(x=>x.rep===newRep);
@@ -5259,14 +5261,15 @@ async function _mergePNRep(oldRep, newRep){
     +oldRep+' 묶음을 '+newRep+' 묶음에 합칠까요?\n\n'
     +'· '+newRep+' 호환품번: '+((dst.compats||[]).join(', ')||'없음')+'\n'
     +'· 더해질 호환품번: '+(addC.join(', ')||'없음')+'\n'
-    +'· 최종품번은 '+newRep+' 의 것('+(dst.final||'없음')+')을 그대로 둡니다 — 합친 뒤 필요하면 바꿔 주세요.\n'
+    +'· 최종품번: '+(dst.final||'없음')+' → '+(src.final||dst.final||'없음')+'\n'
+    +'· '+oldRep+' 로 적힌 재고·출고·주문·배분·가격·시뮬 수기값은 '+newRep+' 로 옮겨 합칩니다.\n'
     +'· '+oldRep+' 는 지워집니다.')) return { ok:false };
   const now=new Date().toISOString(), who=(currentUser&&currentUser.id)||'';
   const hist=(Array.isArray(dst.history)?dst.history.slice():[]);
   hist.push({ f:'merge', o:oldRep, n:newRep, t:now, u:who });
   const fill=(a,b)=>(a!=null && String(a)!=='') ? a : (b||'');
   const d={ name_ko:fill(dst.name_ko,src.name_ko), name_ru:fill(dst.name_ru,src.name_ru), spec:fill(dst.spec,src.spec),
-            final:fill(dst.final,src.final), compats:merged, note:fill(dst.note,src.note),
+            final:fill(src.final,dst.final), compats:merged, note:fill(dst.note,src.note),
             applied_models:fill(dst.applied_models,src.applied_models), history:hist };
   const e2=await sb.from('kt_pn_overrides').upsert({ rep:newRep, name_ko:d.name_ko, name_ru:d.name_ru, spec:d.spec, final:d.final, compats:d.compats },{onConflict:'rep'});
   if(e2.error){ alert('합치기 저장 실패\n['+(e2.error.message||e2.error.code)+']'); return { ok:false }; }
@@ -5278,9 +5281,87 @@ async function _mergePNRep(oldRep, newRep){
   const enOld=engNameByRep[oldRep.toUpperCase()];
   if(enOld && !engNameByRep[newRep.toUpperCase()]){ try{ await sb.from('kt_names_en').upsert({ rep:newRep, name_en:enOld },{onConflict:'rep'}); engNameByRep[newRep.toUpperCase()]=enOld; }catch(e){} }
   _pnLookupMap=null; _pnByRepMap=null; _nameRuByRep=null;
+  await recordPNHistory(newRep, 'final', dst.final||'', d.final||'');
   // 최종품번이 아닌 호환품번에는 단종 O 가 붙는 규칙을 합친 묶음에도 적용한다
   if(typeof pnAutoDan==='function'){ try{ await pnAutoDan(newRep); }catch(e){} }
+  const mv=await pnMergeRepData(oldRep, newRep);
+  if(mv.fail.length) alert('합쳤지만 일부 자료를 옮기지 못했습니다:\n'+mv.fail.join('\n'));
+  else if(mv.moved.length) pnToast(oldRep+' → '+newRep+' 로 옮겨 합침: '+mv.moved.join(' · ')+' — 새로고침하면 모든 화면에 반영됩니다');
   return { ok:true, rerender:true };
+}
+// 옛 대표품번 이름으로 적힌 자료를 새 대표품번으로 옮긴다. 같은 열쇠가 이미 있으면 수량을 더한다.
+//   (PSI·발주현황·선적은 품번 기준이라 묶음이 합쳐지면 저절로 같이 셈한다)
+async function pnMergeRepData(oldRep, newRep){
+  const moved=[], fail=[];
+  const all=async(t, cols)=>{ const out=[];
+    for(let from=0;;from+=1000){
+      const { data, error }=await sb.from(t).select(cols).in('rep',[oldRep,newRep]).range(from, from+999);
+      if(error) throw error; (data||[]).forEach(r=>out.push(r)); if(!data || data.length<1000) break; }
+    return out; };
+  const step=async(label, fn)=>{ try{ const n=await fn(); if(n) moved.push(label+' '+n); }
+    catch(e){ fail.push(label+': '+((e&&e.message)||e)); } };
+  // 재고 (company, rep) — 수량을 더한다
+  await step('재고', async()=>{
+    const rows=await all('kt_inventory','*'); const olds=rows.filter(r=>r.rep===oldRep); if(!olds.length) return 0;
+    for(const o of olds){
+      const n=rows.find(r=>r.rep===newRep && r.company===o.company);
+      const row=Object.assign({}, n||o, { rep:newRep, qty:(Number(n&&n.qty)||0)+(Number(o.qty)||0), updated_at:new Date().toISOString() });
+      let r=await sb.from('kt_inventory').upsert(row,{onConflict:'company,rep'}); if(r.error) throw r.error;
+      r=await sb.from('kt_inventory').delete().eq('company',o.company).eq('rep',oldRep); if(r.error) throw r.error;
+    }
+    return olds.length; });
+  // 출고·변경요청·가격계산 — 대표품번만 바꾼다
+  for(const [t,label] of [['kt_shipments','출고'],['kt_group_change_requests','변경요청'],['kt_price_calc','가격계산'],['kt_psi','PSI']]){
+    await step(label, async()=>{
+      const { data, error }=await sb.from(t).update({ rep:newRep }).eq('rep',oldRep).select('rep');
+      if(error) throw error; return (data||[]).length; });
+  }
+  // 배분 (target_company, company, rep) — 배분수량을 더한다
+  await step('배분', async()=>{
+    const rows=await all('kt_order_allocations','*'); const olds=rows.filter(r=>r.rep===oldRep); if(!olds.length) return 0;
+    for(const o of olds){
+      const n=rows.find(r=>r.rep===newRep && r.company===o.company && r.target_company===o.target_company);
+      const row=Object.assign({}, o, n||{}, { rep:newRep, allocated:(Number(n&&n.allocated)||0)+(Number(o.allocated)||0) });
+      let r=await sb.from('kt_order_allocations').upsert(row,{onConflict:'target_company,company,rep'}); if(r.error) throw r.error;
+      r=await sb.from('kt_order_allocations').delete().eq('target_company',o.target_company).eq('company',o.company).eq('rep',oldRep); if(r.error) throw r.error;
+    }
+    return olds.length; });
+  // 가격 (rep) · 회사별 가격 (company, rep) — 새 대표품번에 값이 없을 때만 옮긴다(있으면 새 것을 둔다)
+  await step('가격', async()=>{
+    const rows=await all('kt_prices','*'); const o=rows.find(r=>r.rep===oldRep); if(!o) return 0;
+    if(!rows.some(r=>r.rep===newRep)){ const r=await sb.from('kt_prices').upsert(Object.assign({}, o, {rep:newRep}),{onConflict:'rep'}); if(r.error) throw r.error; }
+    const r=await sb.from('kt_prices').delete().eq('rep',oldRep); if(r.error) throw r.error;
+    return 1; });
+  await step('회사별 가격', async()=>{
+    const rows=await all('kt_company_prices','*'); const olds=rows.filter(r=>r.rep===oldRep); if(!olds.length) return 0;
+    for(const o of olds){
+      if(!rows.some(r=>r.rep===newRep && r.company===o.company)){
+        const r=await sb.from('kt_company_prices').upsert(Object.assign({}, o, {rep:newRep}),{onConflict:'company,rep'}); if(r.error) throw r.error; }
+      const r=await sb.from('kt_company_prices').delete().eq('company',o.company).eq('rep',oldRep); if(r.error) throw r.error;
+    }
+    return olds.length; });
+  // 주문 — 품목(items) 안의 대표품번을 바꾼다
+  await step('주문', async()=>{
+    const { data, error }=await sb.from('kt_orders').select('id,items').contains('items',[{rep:oldRep}]);
+    if(error) throw error; let n=0;
+    for(const o of (data||[])){
+      const items=(o.items||[]).map(it=>(it && it.rep===oldRep)?Object.assign({}, it, {rep:newRep}):it);
+      const r=await sb.from('kt_orders').update({ items }).eq('id',o.id); if(r.error) throw r.error; n++;
+    }
+    return n; });
+  // 발주시뮬레이션 수기값(실제선적·발주필요) — '대표품번|연월' 열쇠를 옮겨 더한다
+  await step('시뮬 수기값', async()=>{
+    if(typeof loadSimMan!=='function') return 0;
+    await loadSimMan(); let n=0;
+    [_simShip, _simNeed, _simNeedNew].forEach(m=>{ if(!m) return;
+      Object.keys(m).forEach(k=>{ const p=String(k).split('|'); if(p[0]!==oldRep) return;
+        const nk=newRep+'|'+p.slice(1).join('|');
+        const a=Number(m[k]), b=Number(m[nk]);
+        m[nk]=(isFinite(a)&&isFinite(b)&&m[nk]!=null) ? (a+b) : m[k];
+        delete m[k]; n++; }); });
+    if(n) saveSimMan();
+    return n; });
+  return { moved, fail };
 }
 // 편집용 contenteditable span (품번조회·주문·부품조회 공용). MASTER 만 이걸로 렌더한다.
 // onclick 전파를 막아, 셀을 눌러 편집해도 행 클릭(하이라이트) 이 발동하지 않게 한다.
