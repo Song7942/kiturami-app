@@ -11776,6 +11776,9 @@ async function poRecalcSupply(){
   const need={};
   (shipData||[]).forEach(r=>{ if(!poCountShip(r)) return;      // 기준 시각 앞의 인보이스는 빼고 센다
     const k=normPN(r.pn); if(!k) return; need[k]=(need[k]||0)+(Number(r.qty)||0); });
+  // 코드별로 나눠 적은 줄(공급 내역)은 그 코드 인보이스에서 적은 만큼 먼저 떼어 간다 — 다른 줄에 두 번 잡히지 않게
+  poData.forEach(r=>{ const sp=_poSplit[poManKey(r.cha,r.pn)]; if(!sp) return;
+    sp.forEach(x=>{ const k=normPN(x.c); if(k && need[k]!=null) need[k]=Math.max(0, need[k]-(Number(x.q)||0)); }); });
   // 손으로 고쳐 둔 줄은 그대로 두고, 나머지만 0 으로 놓고 다시 채운다
   const before={}; poData.forEach(r=>{ before[r.cha+'\u0000'+r.pn]=r.supplied;
     if(!poIsMan(r.cha,r.pn)) r.supplied=0; });
@@ -12343,7 +12346,8 @@ function renderPO(){
       pn:'<td style="'+tdS+'"><span style="'+codeS+'">'+escapeHtml(normBadgePN(r.pn))+'</span></td>',
       chg:'<td style="'+tdS+'">'+(EDPO
           ? poChgEdit(r.pn, chg)
-          : (chg?('<span style="'+codeS+';color:#b91c1c;font-weight:600">'+escapeHtml(normBadgePN(chg))+'</span>'):''))+'</td>',
+          : (chg?('<span style="'+codeS+';color:#b91c1c;font-weight:600">'+escapeHtml(normBadgePN(chg))+'</span>'):''))
+          + poSplitList(r.cha, r.pn, codeS)+'</td>',
       dan:'<td style="'+tdS+';text-align:center;color:var(--muted)">'+escapeHtml(String((pnSpecOf(r.pn)||{}).dan||''))+'</td>',
       exp:'<td style="'+tdS+';text-align:center;color:#ef4444;font-weight:700">'+(isExportRestricted(r.pn)?'O':'')+'</td>',
       name:'<td style="'+tdS+';word-break:break-all;font-size:10.5px;line-height:1.25">'+escapeHtml(poName(r.pn))+'</td>',
@@ -12351,7 +12355,15 @@ function renderPO(){
       qty:'<td class="'+(poIsManQ(r.cha,r.pn)?'po-man':'')+'" style="'+numS+'">'
         +(EDPO?poNumEdit(r.cha,r.pn,'qty',r.qty):(r.qty?r.qty.toLocaleString():'0'))+'</td>',
       sup:'<td class="'+(poIsMan(r.cha,r.pn)?'po-man':'')+'" style="'+numS+'">'
-        +(EDPO?poNumEdit(r.cha,r.pn,'supplied',r.supplied):(r.supplied?r.supplied.toLocaleString():''))+'</td>',
+        +(poSplitOf(r.cha,r.pn)
+          ? ('<span'+(EDPO?(' onclick="event.stopPropagation();poSplitOpen(this)" data-pocha="'+escapeHtml(String(r.cha||''))+'" data-popn="'+escapeHtml(String(r.pn||''))+'"'
+               +' style="cursor:pointer;border-bottom:1px dashed var(--accent2)"'):'')
+             +' title="'+escapeHtml(poSplitOf(r.cha,r.pn).map(x=>normBadgePN(x.c)+' × '+x.q).join('\n'))+'">'
+             +(r.supplied?r.supplied.toLocaleString():'0')+'</span>')
+          : (EDPO?poNumEdit(r.cha,r.pn,'supplied',r.supplied):(r.supplied?r.supplied.toLocaleString():'')))
+        +(EDPO?('<span onclick="event.stopPropagation();poSplitOpen(this)" data-pocha="'+escapeHtml(String(r.cha||''))+'" data-popn="'+escapeHtml(String(r.pn||''))+'"'
+          +' title="'+L('코드별 공급수량 나눠 적기','Поставка по кодам')+'"'
+          +' style="cursor:pointer;color:var(--accent2);font-size:10px;margin-left:3px">⇄</span>'):'')+'</td>',
       rest:'<td style="'+numS+';font-weight:600'+(rest>0?';color:#b91c1c':'')+'">'+(rest?rest.toLocaleString():'0')+'</td>'
     };
     const del=EDPO ? ('<td style="'+tdS+';text-align:center;width:44px;white-space:nowrap">'
@@ -12397,6 +12409,7 @@ function renderPO(){
 const PO_MAN_ID=94;
 let _poMan={};          // '차수|발주코드' -> 1  (손으로 고친 공급수량)
 let _poManQ={};         // '차수|발주코드' -> 1  (손으로 고친 수주수량 — 표시만 한다)
+let _poSplit={};        // '차수|발주코드' -> [{c:공급코드, q:수량}]  (여러 호환품번으로 나눠 나간 줄)
 let _poSince='';        // 이 시각 뒤에 올린 인보이스만 공급수량에 센다(비면 전부)
 let _poFromYm='';       // 이 달부터 실제로 선적된 것만 공급수량에 센다(YYMM, 비면 전부)
 let _poManLoaded=false;
@@ -12408,7 +12421,7 @@ async function loadPoMan(){
     const { data }=await sb.from('kt_psi_cfg').select('cfg').eq('id',PO_MAN_ID).maybeSingle();
     const c=(data && data.cfg && typeof data.cfg==='object') ? data.cfg : null;
     if(c){
-      if(c.man && typeof c.man==='object'){ _poMan=c.man; _poSince=String(c.since||''); _poFromYm=String(c.fromYm||'');
+      if(c.man && typeof c.man==='object'){ _poMan=c.man; _poSplit=(c.split && typeof c.split==="object")?c.split:{}; _poSince=String(c.since||''); _poFromYm=String(c.fromYm||'');
         _poManQ=(c.manQ && typeof c.manQ==='object')?c.manQ:{}; }
       else { _poMan=c; _poSince=''; }        // 옛 모양(맵만 있던 것)도 읽는다
     }
@@ -12419,7 +12432,7 @@ function savePoMan(){
   clearTimeout(_poManT);
   _poManT=setTimeout(async function(){
     try{ const { error }=await sb.from('kt_psi_cfg').upsert({ id:PO_MAN_ID,
-      cfg:{ since:_poSince, fromYm:_poFromYm, man:_poMan, manQ:_poManQ },
+      cfg:{ since:_poSince, fromYm:_poFromYm, man:_poMan, manQ:_poManQ, split:_poSplit },
       updated_at:new Date().toISOString() },{onConflict:'id'});
       if(error) console.error('발주현황 수기 표시 저장 실패', error);
     }catch(e){ console.error('발주현황 수기 표시 저장 실패', e); }
@@ -12427,6 +12440,99 @@ function savePoMan(){
 }
 function poIsMan(cha,pn){ return !!_poMan[poManKey(cha,pn)]; }
 function poIsManQ(cha,pn){ return !!_poManQ[poManKey(cha,pn)]; }
+// ── 공급 내역: 한 줄이 여러 호환품번으로 나눠 나갔을 때 코드별 수량을 적는다 ──
+//   적으면 공급수량 = 코드별 수량의 합(손으로 고친 줄로 친다).
+//   공급수량을 다시 셀 때 적은 코드의 인보이스에서 그만큼 먼저 떼어 가므로 다른 줄에 두 번 잡히지 않는다.
+function poSplitOf(cha,pn){ const s=_poSplit[poManKey(cha,pn)]; return (s && s.length) ? s : null; }
+function poSplitList(cha, pn, codeS){
+  const sp=poSplitOf(cha,pn); if(!sp) return '';
+  return '<div style="margin-top:2px;line-height:1.35">'+sp.map(x=>
+    '<div style="'+codeS+';color:#b91c1c">'+escapeHtml(normBadgePN(x.c))+' <span style="color:var(--muted)">×</span> '+Number(x.q).toLocaleString()+'</div>').join('')+'</div>';
+}
+function poSplitOpen(el){
+  const ru=(lang==='ru');
+  if(!((typeof pnEditable==='function') && pnEditable())) return;
+  const cha=String(el.getAttribute('data-pocha')||''), pn=String(el.getAttribute('data-popn')||'');
+  const row=(poData||[]).find(x=>String(x.cha)===cha && normPN(x.pn)===normPN(pn)); if(!row) return;
+  const old=document.getElementById('poSplitPop'); if(old) old.remove();
+  const cur=poSplitOf(cha,pn) || [{c:pnUpAll(row.pn), q:row.supplied||''}];
+  const box=document.createElement('div'); box.id='poSplitPop';
+  box.setAttribute('data-pocha',cha); box.setAttribute('data-popn',row.pn);
+  box.style.cssText='position:fixed;inset:0;z-index:10000;background:#0008;display:flex;align-items:center;justify-content:center';
+  box.onclick=e=>{ if(e.target===box) box.remove(); };
+  box.innerHTML='<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;width:520px;max-width:94vw;max-height:88vh;overflow:auto;box-shadow:0 16px 44px #000a;font-size:12px;color:var(--text)">'
+    +'<div style="padding:12px 14px;border-bottom:1px solid var(--border)"><div style="font-weight:700;font-size:13px">'+(ru?'Поставка по кодам':'코드별 공급수량')+'</div>'
+    +'<div style="color:var(--muted);margin-top:3px">'+escapeHtml(poChaLabel(cha))+' · '+escapeHtml(normBadgePN(row.pn))+' · '+escapeHtml(poName(row.pn))
+    +' · '+(ru?'заказано ':'수주 ')+(Number(row.qty)||0).toLocaleString()+'</div></div>'
+    +'<div style="padding:10px 14px"><table style="width:100%;border-collapse:collapse"><thead><tr style="color:var(--muted);font-size:11px">'
+    +'<th style="text-align:left;padding:3px">'+(ru?'Код поставки':'공급코드')+'</th><th style="text-align:left;padding:3px">'+(ru?'Наименование':'품명')+'</th>'
+    +'<th style="text-align:right;padding:3px">'+(ru?'Кол-во':'수량')+'</th><th></th></tr></thead><tbody id="poSplitBody"></tbody></table>'
+    +'<div style="margin-top:6px;display:flex;justify-content:space-between;align-items:center">'
+    +'<button class="dl-btn" onclick="poSplitAddLine()">＋ '+(ru?'Код':'코드 추가')+'</button>'
+    +'<span id="poSplitSum" style="font-weight:700"></span></div></div>'
+    +'<div style="padding:10px 14px;border-top:1px solid var(--border);display:flex;gap:6px;justify-content:flex-end">'
+    +(poSplitOf(cha,pn)?('<button class="dl-btn" onclick="poSplitSave(true)" style="margin-right:auto;color:#ef4444;border-color:#ef4444">'+(ru?'Сбросить':'나눠 적기 해제')+'</button>'):'')
+    +'<button class="dl-btn" onclick="document.getElementById(\'poSplitPop\').remove()">'+(ru?'Отмена':'취소')+'</button>'
+    +'<button class="dl-btn" onclick="poSplitSave(false)" style="background:var(--accent2);border-color:var(--accent2);color:#fff">'+(ru?'Сохранить':'저장')+'</button></div></div>';
+  document.body.appendChild(box);
+  cur.forEach(x=>poSplitAddLine(x.c, x.q));
+  if(cur.length<2) poSplitAddLine();
+  const f=box.querySelector('.po-sp-c'); if(f) f.focus();
+}
+function poSplitAddLine(c, q){
+  const tb=document.getElementById('poSplitBody'); if(!tb) return;
+  const inS='padding:3px 6px;border:1px solid var(--border);border-radius:5px;background:var(--surface);color:var(--text);font-size:12px';
+  const tr=document.createElement('tr');
+  tr.innerHTML='<td style="padding:3px"><input class="po-sp-c" value="'+escapeHtml(c||'')+'" oninput="poSplitHint(this)" style="'+inS+';width:120px;font-family:\'Courier New\',monospace"></td>'
+    +'<td style="padding:3px;font-size:11px;color:var(--muted)" class="po-sp-h"></td>'
+    +'<td style="padding:3px;text-align:right"><input class="po-sp-q" type="number" min="0" step="1" value="'+escapeHtml(q==null?'':String(q))+'" oninput="poSplitSum()" style="'+inS+';width:70px;text-align:right"></td>'
+    +'<td style="padding:3px;text-align:center"><span onclick="this.closest(\'tr\').remove();poSplitSum()" style="cursor:pointer;color:#ef4444;font-weight:700">✕</span></td>';
+  tb.appendChild(tr);
+  poSplitHint(tr.querySelector('.po-sp-c')); poSplitSum();
+}
+function poSplitHint(inp){
+  const h=inp.closest('tr').querySelector('.po-sp-h'); const pn=pnUpAll(inp.value);
+  if(!h) return;
+  const nm=pn?poName(pn):'';
+  h.textContent=pn?(nm||((lang==='ru')?'нет в справочнике':'품번조회에 없음')):'';
+}
+function poSplitSum(){
+  const s=document.getElementById('poSplitSum'); if(!s) return;
+  let t=0; document.querySelectorAll('#poSplitBody .po-sp-q').forEach(i=>t+=Math.round(Number(i.value)||0));
+  s.textContent=((lang==='ru')?'Итого ':'합계 ')+t.toLocaleString();
+}
+async function poSplitSave(clear){
+  const ru=(lang==='ru');
+  const box=document.getElementById('poSplitPop'); if(!box) return;
+  const cha=String(box.getAttribute('data-pocha')||''), pn=String(box.getAttribute('data-popn')||'');
+  const row=(poData||[]).find(x=>String(x.cha)===cha && normPN(x.pn)===normPN(pn)); if(!row){ box.remove(); return; }
+  const key=poManKey(cha,pn);
+  const before=poSplitOf(cha,pn);
+  let list=[];
+  if(!clear){
+    const m={}; const order=[];
+    box.querySelectorAll('#poSplitBody tr').forEach(tr=>{
+      const c=pnUpAll(tr.querySelector('.po-sp-c').value), q=Math.round(Number(tr.querySelector('.po-sp-q').value)||0);
+      if(!c || q<=0) return;
+      const k=normPN(c); if(!(k in m)){ m[k]={c, q:0}; order.push(k); } m[k].q+=q; });
+    list=order.map(k=>m[k]);
+    if(!list.length){ alert(ru?'Введите код и количество.':'공급코드와 수량을 한 줄 이상 넣어 주세요.'); return; }
+    const sum=list.reduce((a,x)=>a+x.q,0);
+    if(sum>(Number(row.qty)||0) && !confirm(ru?'Больше заказанного. Сохранить?':('코드별 합계 '+sum.toLocaleString()+' 가 수주수량 '+(Number(row.qty)||0).toLocaleString()+' 보다 많습니다. 그래도 저장할까요?'))) return;
+  }
+  if(clear){ delete _poSplit[key]; delete _poMan[key]; }
+  else { _poSplit[key]=list; _poMan[key]=1; row.supplied=list.reduce((a,x)=>a+x.q,0); }
+  savePoMan();
+  const { error }=await sb.from('kt_po').upsert(
+    { cha:row.cha, pn:row.pn, mon:row.mon, qty:row.qty, supplied:row.supplied, updated_at:new Date().toISOString() },{onConflict:'cha,pn'});
+  if(error){ alert((ru?'Ошибка сохранения':'저장 실패')+'\n['+(error.message||error.code)+']'); return; }
+  ktHistAdd('po.split', cha+'|'+pn, before?before.map(x=>x.c+'×'+x.q).join(', '):'', clear?'':list.map(x=>x.c+'×'+x.q).join(', '));
+  box.remove();
+  // 적은 코드의 인보이스 몫이 바뀌었으므로 나머지 줄의 공급수량을 다시 센다
+  if(typeof poRecalcSupply==='function'){ await poRecalcSupply(); }
+  await loadPO();
+  renderPO(); poManBtn(); poSimRefresh();
+}
 function poManCount(){ return Object.keys(_poMan).length+Object.keys(_poManQ).length; }
 // 이 인보이스 줄을 공급수량에 셀 것인가(기준 시각 뒤에 올린 것만)
 function poCountShip(r){
@@ -12507,7 +12613,7 @@ async function poResetManual(){
                :('손으로 고친 공급수량 '+Object.keys(_poMan).length+'개를 인보이스 기준으로 되돌립니다.'
                  +(cq?('\n수주수량에 칠한 바탕색 '+cq+'개도 함께 지웁니다(숫자는 그대로).'):'')
                  +'\n계속할까요?'))) return;
-  _poMan={}; _poManQ={}; savePoMan();
+  _poMan={}; _poManQ={}; _poSplit={}; savePoMan();
   ktHistClearMine('po.');                  // 이 아이디가 남긴 수기 이력도 지운다
   const r=await poRecalcSupply();
   if(!r.ok){ alert((ru?'Ошибка':'실패')+'\n['+r.msg+']'); return; }
@@ -12853,6 +12959,7 @@ async function poDeleteCha(){
   let manCh=false;
   Object.keys(_poMan ).forEach(k=>{ if(k.split('|')[0]===cha){ delete _poMan[k];  manCh=true; } });
   Object.keys(_poManQ).forEach(k=>{ if(k.split('|')[0]===cha){ delete _poManQ[k]; manCh=true; } });
+  Object.keys(_poSplit).forEach(k=>{ if(k.split('|')[0]===cha){ delete _poSplit[k]; manCh=true; } });
   if(manCh) savePoMan();
   const cs=document.getElementById('poCha'); if(cs && cs.value===cha) cs.value='';
   await loadPO();
@@ -12883,7 +12990,7 @@ async function poDeleteRow(cha, pn){
   const { error }=await sb.from('kt_po').delete().eq('cha',row.cha).eq('pn',row.pn);
   if(error){ alert((ru?'Ошибка':'삭제 실패')+'\n['+(error.message||error.code)+']'); return; }
   { const k=poManKey(row.cha,row.pn);
-    if(_poMan[k] || _poManQ[k]){ delete _poMan[k]; delete _poManQ[k]; savePoMan(); } }
+    if(_poMan[k] || _poManQ[k]){ delete _poMan[k]; delete _poManQ[k]; delete _poSplit[k]; savePoMan(); } }
   await loadPO();
   // 지운 만큼 발주시뮬레이션의 '주문' 에서도 빠진다
   if(typeof loadSimMan==='function') await loadSimMan();
@@ -12988,7 +13095,7 @@ async function poReqUpload(wb, fname){
   // 수주수량은 이제 의뢰서 값이므로 손으로 고친 표시(수주)를 걷는다. 지운 줄의 표시도 걷는다.
   let manCh=false;
   keys.forEach(k=>{ const mk=poManKey(cha,k); if(_poManQ[mk]){ delete _poManQ[mk]; manCh=true; } });
-  gone.forEach(k=>{ const mk=poManKey(cha,k); if(_poMan[mk]||_poManQ[mk]){ delete _poMan[mk]; delete _poManQ[mk]; manCh=true; } });
+  gone.forEach(k=>{ const mk=poManKey(cha,k); if(_poMan[mk]||_poManQ[mk]){ delete _poMan[mk]; delete _poManQ[mk]; delete _poSplit[mk]; manCh=true; } });
   if(manCh) savePoMan();
   await loadPO();
   let supMsg='';
@@ -13079,6 +13186,8 @@ function downloadPO(){
     aoa.push(xh.map(h=>{
       if(h[0]==='qty')  return r.qty;
       if(h[0]==='sup')  return r.supplied;
+      if(h[0]==='chg' && poSplitOf(r.cha,r.pn)){ const v=poCellVal('chg', r);
+        return (v?(v+' / '):'')+poSplitOf(r.cha,r.pn).map(x=>normBadgePN(x.c)+'×'+x.q).join(', '); }
       if(h[0]==='rest') return r.qty-r.supplied;
       return poCellVal(h[0], r);
     }));
@@ -16424,6 +16533,7 @@ async function handleSimReqUpload(ev){
         // 그 차수의 수기 표시는 옛 줄의 것이므로 걷어낸다
         Object.keys(_poMan ).forEach(k=>{ if(k.split('|')[0]===cha) delete _poMan[k];  });
         Object.keys(_poManQ).forEach(k=>{ if(k.split('|')[0]===cha) delete _poManQ[k]; });
+        Object.keys(_poSplit).forEach(k=>{ if(k.split('|')[0]===cha) delete _poSplit[k]; });
         savePoMan();
         const put=rows.map(x=>({ cha, pn:pnUpAll(x.code), mon, qty:x.qty, supplied:0,
                                  updated_at:new Date().toISOString() }));
@@ -18171,7 +18281,7 @@ function ktGroupByRep(tbodyId, o){
   if(!rows.length) return;
   const ri=o.rep, keep=new Set(o.keep||[]), sum=(o.sum||[]);
   const txt=(tr,i)=>{ const td=tr.children[i]; return td?String(td.textContent||'').trim():''; };
-  const num=v=>{ const x=String(v).replace(/[,\s]/g,''); return (x && isFinite(Number(x)))?Number(x):0; };
+  const num=v=>{ const x=String(v).replace(/[,\s⇄]/g,''); return (x && isFinite(Number(x)))?Number(x):0; };
   const order=[], map=new Map();
   for(let i=0;i<rows.length;i++){
     const k=txt(rows[i],ri);
