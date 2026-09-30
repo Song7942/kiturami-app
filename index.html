@@ -12255,7 +12255,8 @@ function poAllPeriod(){
 function poColDefs(){ return colOrdApply('po', poColDefsBase()); }
 function poColDefsBase(){
   const ru=(lang==='ru'), L=(ko,rr)=>(ru?rr:ko);
-  // 단종·수출제한은 발주코드(호환품번) 기준이다 — 품번조회·가격정보와 같은 규칙.
+  // 단종·수출제한은 최종품번 기준이다(없으면 발주코드) — 품번조회·PSI 의 대표품번 줄과 같은 규칙.
+  //   값은 품번조회와 같은 자리(kt_pn_specs·kt_export_ctrl)를 읽으므로 어느 화면에서 고쳐도 같이 바뀐다.
   return [['cha',L('차수','Партия'),90],['mon',L('발주년월','Мес. заказа'),68],
           ['rep',L('대표코드','Осн. код'),104],['pn',L('발주코드','Код заказа'),104],
           ['final',L('최종품번','Акт. артикул'),104],
@@ -12278,8 +12279,8 @@ function poCellVal(key, r){
     case 'pn':   return normBadgePN(r.pn)||'';
     case 'final': return pnUpperLead(((getPNInfo(i.rep||'')||{}).final)||'');
     case 'chg':  return (i.fin && i.fin!==normPN(r.pn)) ? normBadgePN(i.fin) : '';
-    case 'dan':  return String((pnSpecOf(r.pn)||{}).dan||'');
-    case 'exp':  return isExportRestricted(r.pn) ? 'O' : '';
+    case 'dan':  return String((pnSpecOf(i.fin||r.pn)||{}).dan||'');      // 단종·수출제한은 최종품번 기준(없으면 발주코드)
+    case 'exp':  return isExportRestricted(i.fin||r.pn) ? 'O' : '';
     case 'name': return poName(r.pn)||'';
     case 'spec': return poSpec(r.pn)||'';
     case 'qty':  return String(Number(r.qty)||0);
@@ -12468,8 +12469,8 @@ function renderPO(){
           : (EDPO ? poChgEdit(r.pn, chg)
                   : (chg?('<span style="'+codeS+';color:#b91c1c;font-weight:600">'+escapeHtml(normBadgePN(chg))+'</span>'):'')))
           + poSplitList(r.cha, r.pn, EDPO)+'</td>',
-      dan:'<td style="'+tdS+';text-align:center;color:var(--muted)">'+escapeHtml(String((pnSpecOf(r.pn)||{}).dan||''))+'</td>',
-      exp:'<td style="'+tdS+';text-align:center;color:#ef4444;font-weight:700">'+(isExportRestricted(r.pn)?'O':'')+'</td>',
+      dan:'<td style="'+tdS+';text-align:center;color:var(--muted)">'+escapeHtml(String((pnSpecOf(i.fin||r.pn)||{}).dan||''))+'</td>',
+      exp:'<td style="'+tdS+';text-align:center;color:#ef4444;font-weight:700">'+(isExportRestricted(i.fin||r.pn)?'O':'')+'</td>',
       name:'<td style="'+tdS+';word-break:break-all;font-size:10.5px;line-height:1.25">'+escapeHtml(poName(r.pn))+'</td>',
       spec:'<td style="'+tdS+';word-break:break-all;font-size:10.5px;line-height:1.25;color:var(--muted)">'+escapeHtml(poSpec(r.pn))+'</td>',
       qty:'<td class="'+(poIsManQ(r.cha,r.pn)?'po-man':'')+'" style="'+numS+'">'
