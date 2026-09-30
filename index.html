@@ -16005,8 +16005,8 @@ function simPlanUpYms(){
   return s;
 }
 // 주문 — { '호환품번|연월': 수량 }. 수출작업의뢰서를 올리면 선적계획과 함께 적힌다.
-//   2026-09 부터 쓴다(그 앞 달은 비워 둔다).
-const SIM_ORD_FROM='2609';
+//   2026-08 부터 쓴다(그 앞 달은 비워 둔다).
+const SIM_ORD_FROM='2608';
 let _simOrder={}, _simOrderRepCache=null;
 let _simOrdReq={};              // 수출작업의뢰서로 확정한 달 — 발주현황을 고쳐도 건드리지 않는다
 let _simOrdCha={};              // 의뢰서로 등록한 차수 → 그 달. 그 차수는 이미 그 달 주문으로 잡혀 있다
