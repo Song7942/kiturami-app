@@ -12024,6 +12024,7 @@ async function shipSaveInvoice(oldInv, newInv, sail, arrive, btn){
 //   미공급수량 = 수주수량 − 공급수량
 // ══════════════════════════════════════════
 let poData=[];        // [{cha, pn, mon, qty, supplied}]
+let _poLastEdit='';   // 발주현황을 마지막으로 고친 때(kt_po.updated_at 중 가장 늦은 것)
 let _poFiltered=[];
 
 async function loadPO(){
@@ -12031,10 +12032,11 @@ async function loadPO(){
   try{
     const page=1000;
     for(let from=0;;from+=page){
-      const { data, error }=await sb.from('kt_po').select('cha,pn,mon,qty,supplied').range(from, from+page-1);
+      const { data, error }=await sb.from('kt_po').select('cha,pn,mon,qty,supplied,updated_at').range(from, from+page-1);
       if(error) return;                       // 표 없음 → 빈 화면(안전)
-      (data||[]).forEach(r=>poData.push({ cha:r.cha||'', pn:r.pn||'', mon:r.mon||'',
-        qty:Number(r.qty)||0, supplied:Number(r.supplied)||0 }));
+      (data||[]).forEach(r=>{ poData.push({ cha:r.cha||'', pn:r.pn||'', mon:r.mon||'',
+        qty:Number(r.qty)||0, supplied:Number(r.supplied)||0 });
+        const u=String(r.updated_at||''); if(u>_poLastEdit) _poLastEdit=u; });
       if(!data || data.length<page) break;
     }
   }catch(e){}
@@ -12586,6 +12588,7 @@ async function onPoNumBlur(el){
     {onConflict:'cha,pn'});
   if(error){ alert((ru?'Ошибка сохранения':'저장 실패')+'\n['+(error.message||error.code)+']'); el.textContent=before; return; }
   ktHistAdd('po.'+field, cha+'|'+pn, before, String(Math.round(num)));
+  _poLastEdit=new Date().toISOString();          // 미공급이 들어갈 달(고친 날의 다음 달)을 새로 잡는다
   // 수주수량이 바뀌면 발주시뮬레이션의 '주문' 도 발주현황 값에 다시 맞춘다.
   if(field==='qty'){
     if(typeof loadSimMan==='function') await loadSimMan();
@@ -16010,11 +16013,21 @@ let _simOrdCha={};              // 의뢰서로 등록한 차수 → 그 달. �
 function simOrderClear(){ _simOrderRepCache=null; }
 // 발주현황 수주수량을 품번별로 낸다(의뢰서로 등록한 차수는 뺀다 — 그 몫은 그 달 주문으로 따로 있다).
 //   열쇠는 발주현황 화면이 쓰는 자리(최종품번이 있으면 그것)로 맞춘다.
-// 미공급분이 나가는 달 = 이번 달(선적일을 이달 말일로 본다). simBuild 와 같은 기준.
+// 이번 달(YYMM) — 발주현황에서 옮겨 적어 둔 '주문' 을 맞추는 달
+function simCurYm(){
+  const t=new Date(), p2=x=>(x<10?'0':'')+x;
+  return String(t.getFullYear()).slice(2)+p2(t.getMonth()+1);
+}
+// 미공급분이 나가는 달 = 발주현황을 마지막으로 고친 날의 다음 달(선적일을 그 달 말일로 본다).
+//   9/30 에 고쳤으면 10월 선적계획에 미공급수량이 들어간다. simBuild 와 같은 기준.
+function simPlanSailDate(){
+  const b=_poLastEdit ? new Date(_poLastEdit) : new Date();
+  const t=isNaN(b.getTime()) ? new Date() : b;
+  const d1=new Date(t.getFullYear(), t.getMonth()+2, 0), p2=x=>(x<10?'0':'')+x;
+  return d1.getFullYear()+'-'+p2(d1.getMonth()+1)+'-'+p2(d1.getDate());
+}
 function simPlanYmNow(){
-  const t=new Date(), d1=new Date(t.getFullYear(), t.getMonth()+1, 0), p2=x=>(x<10?'0':'')+x;
-  const sail=d1.getFullYear()+'-'+p2(d1.getMonth()+1)+'-'+p2(d1.getDate());
-  return (typeof shipYmOf==='function')?(shipYmOf(sail)||''):'';
+  return (typeof shipYmOf==='function')?(shipYmOf(simPlanSailDate())||''):'';
 }
 function poQtyByPn(){
   const m={};
@@ -16030,7 +16043,7 @@ function poQtyByPn(){
 //   손으로 고치든 엑셀로 올리든, 발주현황이 바뀌면 이 한 곳만 부르면 된다.
 //   의뢰서로 확정한 달은 나갈 몫이 따로 정해져 있으므로 건드리지 않는다.
 function simOrderSyncPo(){
-  const y=_simPlanYm || simPlanYmNow();                // 미공급분이 나가는 달(이번 달)
+  const y=simCurYm();                                  // 옮겨 적어 둔 달(이번 달)
   if(!y || y<SIM_ORD_FROM || _simOrdReq[y]) return 0;
   if(!(poData||[]).length) return 0;                   // 발주현황을 아직 안 읽었으면 손대지 않는다
   const has=Object.keys(_simOrder||{}).some(k=>String(k).split('|')[1]===y);
@@ -16085,19 +16098,16 @@ let _simPlanYm='';              // 미공급분을 선적하는 것으로 보는
 let _simInfo=null;
 function simBuild(){
   _simZ={}; _simPlan.clear(); _simPlanYm='';
-  // 미공급분은 이번 달 안에 나가는 것으로 본다(선적일 = 이번 달 말일).
-  // 그래서 '선적계획' 열에는 이번 달에 찍히고, 입고는 늘 쓰는 대로 선적일 + 49일이다.
-  const t=new Date(), d1=new Date(t.getFullYear(), t.getMonth()+1, 0);
-  const p2=x=>(x<10?'0':'')+x;
-  const sail=d1.getFullYear()+'-'+p2(d1.getMonth()+1)+'-'+p2(d1.getDate());
+  // 미공급분은 발주현황을 고친 날의 다음 달 안에 나가는 것으로 본다(선적일 = 그 달 말일).
+  // 그래서 '선적계획' 열에는 그 달에 찍히고, 입고는 늘 쓰는 대로 선적일 + 49일이다.
+  //   그 달에 주문(수출작업의뢰서)이 있어도 선적계획은 발주현황 미공급으로 본다 —
+  //   의뢰서 차수도 발주현황에 들어 있어 그 몫이 미공급 안에 이미 있다.
+  const sail=simPlanSailDate();
   const arrive=shipAutoArrive(sail);
   const ym=(typeof shipYmOf==='function')?shipYmOf(arrive):'';
   _simPlanYm=(typeof shipYmOf==='function')?(shipYmOf(sail)||''):'';   // 선적계획을 찍을 달
   let rows=0, total=0;
-  // 그 달에 '주문'(수출작업의뢰서) 자료가 있으면 그것이 그 달의 선적 예정량이다.
-  //   발주현황 미공급으로 또 셈하면 같은 물량을 두 번 넣게 되므로 건너뛴다.
-  const ordHas=Object.keys(_simOrder||{}).some(k=>String(k).split('|')[1]===_simPlanYm);
-  if(ym && !ordHas){
+  if(ym){
     // 같은 품번이 여러 차수에 걸쳐 있고, 취소 줄(수주수량이 음수)도 섞여 있다.
     // 줄마다 따로 보면 음수 줄이 빠져 발주현황 미공급 합계와 어긋난다.
     // 품번마다 먼저 상계하고, 그러고도 남는 양만 다음 달 선적으로 얹는다.
@@ -17160,7 +17170,7 @@ function renderPSI(){
       //   주문이 없는 달은 발주현황 미공급(이번 달) 또는 앞선 달에서 넘어온 것뿐이다.
       const hasOrd=psiSimOn && !!ordYms[y];
       const upYm=!!planUpYms[y];
-      const isPlanYm=(psiSimOn && !upYm && !hasOrd && _simPlanYm===y);
+      const isPlanYm=(psiSimOn && _simPlanYm===y);     // 발주현황 미공급이 선적계획이 되는 달(의뢰서 달이어도)
       if(isPlanYm) shipPlan[i]=0;                        // 미공급 달은 앞에서 넘어온 것을 미공급이 이미 품고 있다
       const upQty=upYm ? ((planUpRep[y]&&planUpRep[y][g.rep])||0) : 0;
       const gOrdQ=hasOrd ? ((ordRep[y]&&ordRep[y][g.rep])||0) : 0;
@@ -17187,7 +17197,8 @@ function renderPSI(){
         if(carry>0){ const pa=ymsAll.indexOf(simShipArriveYm(y)); if(pa>i) arrive[pa]-=carry; }
       }
       if(psiSimOn){
-        const q=known?((y<=psiNowYm())?0:realSh):planCalc;   // 지난 달 실적의 입고는 자료에 이미 있다
+        // 지난 달 실적의 입고는 자료에 이미 있다. 미공급 달의 입고는 simBuild 가 _simZ 로 미리 얹었다.
+        const q=isPlanYm ? 0 : (known?((y<=psiNowYm())?0:realSh):planCalc);
         if(q>0){ const sa=ymsAll.indexOf(simShipArriveYm(y)); if(sa>i) arrive[sa]+=q; }
       }
       const sh=realSh, inq=a.i+arrive[i];
