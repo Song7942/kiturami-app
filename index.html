@@ -12349,9 +12349,11 @@ function renderPO(){
       mon:'<td style="'+tdS+';text-align:center;color:var(--muted);white-space:nowrap">'+escapeHtml(poYmOf(r))+'</td>',
       rep:'<td style="'+tdS+'">'+(i.rep?('<span style="'+codeS+'">'+escapeHtml(i.rep)+'</span>'):'')+'</td>',
       pn:'<td style="'+tdS+'"><span style="'+codeS+'">'+escapeHtml(normBadgePN(r.pn))+'</span></td>',
-      chg:'<td style="'+tdS+'">'+((EDPO && !(poSplitShown(r.cha,r.pn) && !chg))   // 공급 내역이 있으면 빈 변경코드 칸(점선)은 숨긴다
-          ? poChgEdit(r.pn, chg)
-          : (chg?('<span style="'+codeS+';color:#b91c1c;font-weight:600">'+escapeHtml(normBadgePN(chg))+'</span>'):''))
+      // 공급 내역이 있으면, 비어 있거나 내역과 같은 변경코드 칸(점선)은 숨긴다(두 번 보이지 않게)
+      chg:'<td style="'+tdS+'">'+((poSplitShown(r.cha,r.pn) && (!chg || poSplitShown(r.cha,r.pn).some(x=>normPN(x.c)===normPN(chg))))
+          ? ''
+          : (EDPO ? poChgEdit(r.pn, chg)
+                  : (chg?('<span style="'+codeS+';color:#b91c1c;font-weight:600">'+escapeHtml(normBadgePN(chg))+'</span>'):'')))
           + poSplitList(r.cha, r.pn, EDPO)+'</td>',
       dan:'<td style="'+tdS+';text-align:center;color:var(--muted)">'+escapeHtml(String((pnSpecOf(r.pn)||{}).dan||''))+'</td>',
       exp:'<td style="'+tdS+';text-align:center;color:#ef4444;font-weight:700">'+(isExportRestricted(r.pn)?'O':'')+'</td>',
@@ -12555,6 +12557,7 @@ async function poSplitApply(row, list){
   if(typeof poRecalcSupply==='function'){ await poRecalcSupply(); }
   await loadPO();
   renderPO(); poManBtn(); poSimRefresh();
+  if(!clear) await poSplitOfferFinal(row);       // 코드 한 개로만 나갔으면 그 코드를 최종품번으로
   return true;
 }
 // 변경코드(공급) 칸 안에서 공급 내역의 코드·수량을 바로 고친다.
@@ -12698,32 +12701,71 @@ async function onPoChgBlur(el){
   const val=pnUpAll(String(el.textContent||'').replace(/\s+/g,' '));
   if(val===before) return;
   if(!pnEditable()){ el.textContent=before; return; }
-  const info=poLookup(pn);
-  const rep=String(info.rep||'');
+  const fin=val || pnUpperLead(pn);            // 비우면 발주코드가 최종품번
+  if(!(await poApplyFinal(pn, fin, ''))){ el.textContent=before; return; }
+}
+// 발주코드 pn 이 속한 묶음(대표품번)의 최종품번을 fin 으로 바꾼다 — 품번조회·부품조회 등 모든 화면에 적용된다.
+//   ① 그 묶음의 최종품번이 fin 이 되고 ② 묶음에 없던 코드면 호환품번으로도 넣고
+//   ③ 최종품번이 아닌 나머지 호환품번에는 단종 O 가 저절로 붙는다(pnAutoDan).
+//   묻고 나서 바꾼다. 바꿨으면 true.
+async function poApplyFinal(pn, fin, lead){
+  const ru=(lang==='ru');
+  const rep=String((poLookup(pn)||{}).rep||'');
   if(!rep){
     alert(ru?('Не найден осн. артикул для '+pn):(pn+' 의 대표품번을 품번조회에서 찾지 못했습니다.\n먼저 품번조회에 그 품번을 넣어 주세요.'));
-    el.textContent=before; return;
+    return false;
   }
   const p=getPNInfo(rep);
-  const fin=val || pnUpperLead(pn);            // 비우면 발주코드가 최종품번
   const cs=((p&&p.compats)||[]).slice();
   const has=cs.some(c=>normPN(c)===normPN(fin));
   const msg=ru
     ? ('Осн. артикул '+rep+'\nАктуальный артикул → '+fin+(has?'':'\n+ добавить как артикул замены')+'\n\nПродолжить?')
-    : ('대표품번 '+rep+' 의 최종품번을 '+fin+' 로 바꿉니다.'
+    : ((lead?(lead+'\n\n'):'')+'대표품번 '+rep+' 의 최종품번을 '+fin+' 로 바꿉니다(품번조회·부품조회 등 모든 화면).'
        +(has?'':('\n· '+fin+' 을(를) 호환품번으로도 넣습니다.'))
        +'\n· 최종품번이 아닌 나머지 호환품번에는 단종 O 가 붙습니다.\n\n계속할까요?');
-  if(!confirm(msg)){ el.textContent=before; return; }
+  if(!confirm(msg)) return false;
   if(!has){
     const r1=await savePNCell(rep, 'compat', cs.concat([fin]).join(', '));
-    if(!(r1&&r1.ok)){ el.textContent=before; return; }
+    if(!(r1&&r1.ok)) return false;
   }
   const r2=await savePNCell(rep, 'final', fin);
-  if(!(r2&&r2.ok)){ el.textContent=before; return; }
+  if(!(r2&&r2.ok)) return false;
   _poRepMap=null;
   ktAfterPnEdit();
   renderPO();
   poSimRefresh();
+  return true;
+}
+// 공급 내역이 코드 한 개뿐이고 발주코드와 다르면, 그 코드를 최종품번으로 삼자고 묻는다(이미 그렇다면 묻지 않는다).
+async function poSplitOfferFinal(row){
+  const sp=poSplitOf(row.cha,row.pn);
+  if(!sp || sp.length!==1) return;
+  const fin=pnUpAll(sp[0].c);
+  if(!fin || normPN(fin)===normPN(row.pn)) return;
+  if(normPN((poLookup(row.pn)||{}).fin||'')===normPN(fin)) return;
+  await poApplyFinal(row.pn, fin, poChaLabel(row.cha)+' · '+normBadgePN(row.pn)+' 는 '+normBadgePN(fin)+' 로만 공급됐습니다.');
+}
+// 발주현황을 열 때, 이미 적어 둔 공급 내역 중 최종품번으로 아직 안 바꾼 것이 있으면 한 번 묻는다.
+let _poFinalAsked=false;
+async function poOfferFinalAll(){
+  if(_poFinalAsked) return;
+  if(!((typeof pnEditable==='function') && pnEditable())) return;
+  _poFinalAsked=true;
+  const want=[]; const seenRep={};
+  (poData||[]).forEach(r=>{
+    const sp=poSplitOf(r.cha,r.pn); if(!sp || sp.length!==1) return;
+    const fin=pnUpAll(sp[0].c), info=poLookup(r.pn)||{};
+    if(!fin || normPN(fin)===normPN(r.pn) || !info.rep || normPN(info.fin||'')===normPN(fin)) return;
+    if(seenRep[info.rep]) return; seenRep[info.rep]=1;
+    want.push({r, fin, rep:info.rep});
+  });
+  if(!want.length) return;
+  const ru=(lang==='ru');
+  if(!confirm(ru?('Сделать коды поставки актуальными артикулами? '+want.length)
+    :('변경코드(공급)가 한 개뿐인 줄 '+want.length+'개가 아직 최종품번으로 바뀌지 않았습니다.\n\n'
+      +want.slice(0,10).map(w=>'· '+normBadgePN(w.r.pn)+' → '+normBadgePN(w.fin)+'  (대표 '+w.rep+')').join('\n')+(want.length>10?'\n …':'')
+      +'\n\n하나씩 확인하며 최종품번으로 바꿀까요?'))) return;
+  for(const w of want) await poSplitOfferFinal(w.r);
 }
 // 발주현황을 대표품번끼리 묶어 볼지
 function poGroupOn(){ try{ return localStorage.getItem('kt_po_group')==='1'; }catch(e){ return false; } }
@@ -13064,6 +13106,7 @@ async function loadPOTab(){
   await loadKtHist();
   renderPO();
   poManBtn();
+  if((PN_DATA||[]).length) setTimeout(()=>{ poOfferFinalAll(); }, 300);   // 공급코드 한 개짜리 → 최종품번 제안(한 번만)
 }
 // 헤더 이름으로 열을 찾는다(양식이 조금 달라도 읽히게)
 function poFindCols(row){
