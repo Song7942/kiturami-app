@@ -5229,7 +5229,7 @@ async function _renamePNRep(oldRep, newRaw){
   const newRep=pnUpAll(newRaw);
   if(!newRep){ return { ok:false }; }
   if(newRep===oldRep) return { ok:true };
-  if(PN_DATA.some(p=>p.rep===newRep)){ alert('이미 있는 품번입니다: '+newRep); return { ok:false }; }
+  if(PN_DATA.some(p=>p.rep===newRep)) return await _mergePNRep(oldRep, newRep);
   const p=PN_DATA.find(x=>x.rep===oldRep) || {};
   const hist=(Array.isArray(p.history)?p.history.slice():[]);
   hist.push({ f:'rep', o:oldRep, n:newRep, t:new Date().toISOString(), u:(currentUser&&currentUser.id)||'' });
@@ -5243,6 +5243,43 @@ async function _renamePNRep(oldRep, newRaw){
   const enOld=engNameByRep[oldRep.toUpperCase()];
   if(enOld){ try{ await sb.from('kt_names_en').upsert({ rep:newRep, name_en:enOld },{onConflict:'rep'}); engNameByRep[newRep.toUpperCase()]=enOld; delete engNameByRep[oldRep.toUpperCase()]; }catch(e){} }
   try{ await sb.from('kt_pn_overrides').upsert({ rep:newRep, note:d.note, applied_models:d.applied_models, history:hist },{onConflict:'rep'}); }catch(e){}
+  return { ok:true, rerender:true };
+}
+// 대표품번을 이미 있는 대표품번으로 바꾸려 할 때: 두 묶음을 하나로 합친다(묻고 나서).
+//   · 호환품번은 두 묶음 것을 모두 모은다(겹치면 하나로)
+//   · 최종품번·품명·규격 등은 합쳐 받는 쪽(newRep) 것을 그대로 둔다(비어 있으면 옛 묶음 값으로 채운다)
+//   · 옛 대표품번은 톰스톤으로 지운다. 이력은 양쪽에 남긴다.
+async function _mergePNRep(oldRep, newRep){
+  const src=PN_DATA.find(x=>x.rep===oldRep)||{}, dst=PN_DATA.find(x=>x.rep===newRep);
+  if(!dst) return { ok:false };
+  const seen={}, merged=[];
+  (dst.compats||[]).concat(src.compats||[]).forEach(c=>{ const u=pnUpAll(c), k=normPN(u); if(u && !seen[k]){ seen[k]=1; merged.push(u); } });
+  const addC=(src.compats||[]).filter(c=>!(dst.compats||[]).some(d=>normPN(d)===normPN(c)));
+  if(!confirm('이미 있는 대표품번입니다: '+newRep+'\n\n'
+    +oldRep+' 묶음을 '+newRep+' 묶음에 합칠까요?\n\n'
+    +'· '+newRep+' 호환품번: '+((dst.compats||[]).join(', ')||'없음')+'\n'
+    +'· 더해질 호환품번: '+(addC.join(', ')||'없음')+'\n'
+    +'· 최종품번은 '+newRep+' 의 것('+(dst.final||'없음')+')을 그대로 둡니다 — 합친 뒤 필요하면 바꿔 주세요.\n'
+    +'· '+oldRep+' 는 지워집니다.')) return { ok:false };
+  const now=new Date().toISOString(), who=(currentUser&&currentUser.id)||'';
+  const hist=(Array.isArray(dst.history)?dst.history.slice():[]);
+  hist.push({ f:'merge', o:oldRep, n:newRep, t:now, u:who });
+  const fill=(a,b)=>(a!=null && String(a)!=='') ? a : (b||'');
+  const d={ name_ko:fill(dst.name_ko,src.name_ko), name_ru:fill(dst.name_ru,src.name_ru), spec:fill(dst.spec,src.spec),
+            final:fill(dst.final,src.final), compats:merged, note:fill(dst.note,src.note),
+            applied_models:fill(dst.applied_models,src.applied_models), history:hist };
+  const e2=await sb.from('kt_pn_overrides').upsert({ rep:newRep, name_ko:d.name_ko, name_ru:d.name_ru, spec:d.spec, final:d.final, compats:d.compats },{onConflict:'rep'});
+  if(e2.error){ alert('합치기 저장 실패\n['+(e2.error.message||e2.error.code)+']'); return { ok:false }; }
+  const e1=await sb.from('kt_pn_overrides').upsert({ rep:oldRep, name_ko:'', name_ru:'', spec:'', final:PN_TOMBSTONE, compats:[] },{onConflict:'rep'});
+  if(e1.error){ alert('옛 대표품번 지우기 실패\n['+(e1.error.message||e1.error.code)+']'); return { ok:false }; }
+  try{ await sb.from('kt_pn_overrides').upsert({ rep:newRep, note:d.note, applied_models:d.applied_models, history:hist },{onConflict:'rep'}); }catch(e){}
+  Object.assign(dst, d);
+  const i=PN_DATA.findIndex(x=>x.rep===oldRep); if(i>=0) PN_DATA.splice(i,1);
+  const enOld=engNameByRep[oldRep.toUpperCase()];
+  if(enOld && !engNameByRep[newRep.toUpperCase()]){ try{ await sb.from('kt_names_en').upsert({ rep:newRep, name_en:enOld },{onConflict:'rep'}); engNameByRep[newRep.toUpperCase()]=enOld; }catch(e){} }
+  _pnLookupMap=null; _pnByRepMap=null; _nameRuByRep=null;
+  // 최종품번이 아닌 호환품번에는 단종 O 가 붙는 규칙을 합친 묶음에도 적용한다
+  if(typeof pnAutoDan==='function'){ try{ await pnAutoDan(newRep); }catch(e){} }
   return { ok:true, rerender:true };
 }
 // 편집용 contenteditable span (품번조회·주문·부품조회 공용). MASTER 만 이걸로 렌더한다.
