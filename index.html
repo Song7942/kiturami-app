@@ -4265,6 +4265,7 @@ function ktAfterPnEdit(){
   if(typeof pnSumClear==='function') pnSumClear();
   if(typeof simPlanUpClear==='function') simPlanUpClear();
   if(typeof simOrderClear==='function') simOrderClear();
+  if(typeof priceCalcSyncRep==='function') priceCalcSyncRep();   // 가격은 호환품번을 따라 묶음이 바뀐다
   const on=id=>{ const e=document.getElementById(id); return !!(e && e.classList.contains('active')); };
   const go=(id,fn)=>{ try{ if(on(id) && typeof fn==='function') fn(); }catch(e){} };
   go('pane-pn',    typeof renderPN==='function'?renderPN:null);
@@ -5249,7 +5250,7 @@ async function _renamePNRep(oldRep, newRaw){
 //   · 호환품번은 두 묶음 것을 모두 모은다(겹치면 하나로)
 //   · 최종품번은 옛 묶음(oldRep)의 것을 따른다 — 바꾸려는 쪽이 지금 쓰는 품번이다(없으면 newRep 것)
 //   · 품명·규격 등은 합쳐 받는 쪽(newRep) 것을 그대로 둔다(비어 있으면 옛 묶음 값으로 채운다)
-//   · 옛 대표품번 이름으로 적힌 자료(재고·출고·주문·배분·가격·시뮬 수기값 등)도 새 대표품번으로 옮겨 합친다
+//   · 옛 대표품번 이름으로 적힌 자료(재고·출고·주문·배분·시뮬 수기값 등. 가격은 호환품번을 따라가므로 옮기지 않는다)도 새 대표품번으로 옮겨 합친다
 //   · 옛 대표품번은 톰스톤으로 지운다. 이력은 양쪽에 남긴다.
 async function _mergePNRep(oldRep, newRep){
   const src=PN_DATA.find(x=>x.rep===oldRep)||{}, dst=PN_DATA.find(x=>x.rep===newRep);
@@ -5262,7 +5263,7 @@ async function _mergePNRep(oldRep, newRep){
     +'· '+newRep+' 호환품번: '+((dst.compats||[]).join(', ')||'없음')+'\n'
     +'· 더해질 호환품번: '+(addC.join(', ')||'없음')+'\n'
     +'· 최종품번: '+(dst.final||'없음')+' → '+(src.final||dst.final||'없음')+'\n'
-    +'· '+oldRep+' 로 적힌 재고·출고·주문·배분·가격·시뮬 수기값은 '+newRep+' 로 옮겨 합칩니다.\n'
+    +'· '+oldRep+' 로 적힌 재고·출고·주문·배분·시뮬 수기값은 '+newRep+' 로 옮겨 합칩니다.\n'
     +'· '+oldRep+' 는 지워집니다.')) return { ok:false };
   const now=new Date().toISOString(), who=(currentUser&&currentUser.id)||'';
   const hist=(Array.isArray(dst.history)?dst.history.slice():[]);
@@ -5311,7 +5312,7 @@ async function pnMergeRepData(oldRep, newRep){
     }
     return olds.length; });
   // 출고·변경요청·가격계산 — 대표품번만 바꾼다
-  for(const [t,label] of [['kt_shipments','출고'],['kt_group_change_requests','변경요청'],['kt_price_calc','가격계산'],['kt_psi','PSI']]){
+  for(const [t,label] of [['kt_shipments','출고'],['kt_group_change_requests','변경요청'],['kt_psi','PSI']]){
     await step(label, async()=>{
       const { data, error }=await sb.from(t).update({ rep:newRep }).eq('rep',oldRep).select('rep');
       if(error) throw error; return (data||[]).length; });
@@ -5326,20 +5327,7 @@ async function pnMergeRepData(oldRep, newRep){
       r=await sb.from('kt_order_allocations').delete().eq('target_company',o.target_company).eq('company',o.company).eq('rep',oldRep); if(r.error) throw r.error;
     }
     return olds.length; });
-  // 가격 (rep) · 회사별 가격 (company, rep) — 새 대표품번에 값이 없을 때만 옮긴다(있으면 새 것을 둔다)
-  await step('가격', async()=>{
-    const rows=await all('kt_prices','*'); const o=rows.find(r=>r.rep===oldRep); if(!o) return 0;
-    if(!rows.some(r=>r.rep===newRep)){ const r=await sb.from('kt_prices').upsert(Object.assign({}, o, {rep:newRep}),{onConflict:'rep'}); if(r.error) throw r.error; }
-    const r=await sb.from('kt_prices').delete().eq('rep',oldRep); if(r.error) throw r.error;
-    return 1; });
-  await step('회사별 가격', async()=>{
-    const rows=await all('kt_company_prices','*'); const olds=rows.filter(r=>r.rep===oldRep); if(!olds.length) return 0;
-    for(const o of olds){
-      if(!rows.some(r=>r.rep===newRep && r.company===o.company)){
-        const r=await sb.from('kt_company_prices').upsert(Object.assign({}, o, {rep:newRep}),{onConflict:'company,rep'}); if(r.error) throw r.error; }
-      const r=await sb.from('kt_company_prices').delete().eq('company',o.company).eq('rep',oldRep); if(r.error) throw r.error;
-    }
-    return olds.length; });
+  // 가격은 호환품번을 따라간다 — 가격 줄은 옮기지 않는다(가격정보 화면이 호환품번의 지금 묶음으로 저절로 묶는다. priceCalcSyncRep)
   // 주문 — 품목(items) 안의 대표품번을 바꾼다
   await step('주문', async()=>{
     // jsonb 칸이라 JSON 글자로 넘긴다(배열 그대로 넘기면 Postgres 배열 모양이 되어 'invalid input syntax for type json')
@@ -5441,6 +5429,7 @@ async function loadPNOverrides(){
     applyPNOverrideRow({ rep:row.rep, name_ko:row.name_ko, name_ru:row.name_ru, spec:row.spec, final:row.final, compats:compats||[], note:row.note, applied_models:row.applied_models, nw:row.nw, gw:row.gw, cbm:row.cbm, export_ctrl:row.export_ctrl, history:Array.isArray(history)?history:[] });
   });
   _pnLookupMap=null; _pnByRepMap=null; _nameRuByRep=null;
+  if(typeof priceCalcSyncRep==='function') priceCalcSyncRep();
 }
 // 엑셀 업로드 헤더를 웹 열에 매핑(라벨로 자동 인식). 품번키 + 값열.
 function pnMapCols(headerRow){
@@ -18112,6 +18101,25 @@ async function loadPriceCalc(){
     from+=1000;
   }
   priceCalcData=all;
+  priceCalcSyncRep();
+}
+// 가격은 호환품번을 따라간다. 줄에 적힌 대표품번이 아니라, 그 호환품번이 지금 품번조회에서
+//   속한 대표품번으로 묶어 보인다(묶음을 합치거나 호환품번을 옮기면 가격도 저절로 따라간다).
+//   화면에서만 고쳐 두고, 그 줄을 저장할 때 바른 대표품번이 같이 적힌다.
+//   · 적힌 대표품번 묶음에 그 호환품번이 아직 있으면 그대로 둔다(한 호환품번이 두 묶음에 걸친 경우도 있다)
+//   · 그 묶음에서 빠졌거나 묶음이 없어졌을 때만(합치기·대표품번 변경·삭제) 지금 속한 묶음으로 옮겨 보인다
+//   · 품번조회 어느 묶음에도 없는 호환품번이면 적힌 대표품번을 그대로 둔다.
+function priceCalcSyncRep(){
+  if(!(PN_DATA||[]).length || !(priceCalcData||[]).length) return 0;
+  const m=new Map(), has=new Set();
+  PN_DATA.forEach(p=>(p.compats||[]).forEach(c=>{ const k=normPN(c); if(!k) return;
+    if(!m.has(k)) m.set(k, p.rep); has.add(p.rep+'|'+k); }));
+  let n=0;
+  priceCalcData.forEach(r=>{ const k=normPN(r.compat||''); if(!k) return;
+    if(has.has(r.rep+'|'+k)) return;                    // 적힌 묶음에 아직 있다
+    const cur=m.get(k);
+    if(cur && cur!==r.rep){ r.rep=cur; n++; } });
+  return n;
 }
 
 // ── 계산 로직 (엑셀 계산식 시트와 동일) ──
