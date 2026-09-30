@@ -5218,6 +5218,14 @@ async function savePNCell(rep, field, value){
     if(added.length) await priceSeedNewCompats(rep, added);
   }
   if(field==='final'){
+    // 새로 고른 최종품번은 지금 쓰는 코드다. 예전에 최종품번에서 빠지며 자동으로 붙은 단종 O 가 남아 있으면 푼다
+    //   ('△' 등 다른 표시는 그대로). 어느 화면에서 최종품번을 바꾸든 이 한 곳을 지난다.
+    const nf=normPN(p.final||'');
+    if(nf && nf!==normPN(oldVal||'') && String((pnSpecOf(nf)||{}).dan||'').trim()==='O'){
+      const { error:e0 }=await sb.from('kt_pn_specs').upsert({ pn:nf, dan:'' },{onConflict:'pn'});
+      if(!e0){ const cur=Object.assign({nw:'',gw:'',cbm:'',dan:''}, _pnSpec.get(nf)||{}); cur.dan=''; _pnSpec.set(nf,cur);
+        await recordPNHistory(rep, 'cspec:dan:'+nf, 'O', ''); }
+    }
     const marked=await pnAutoDan(rep);
     if(marked.length) pnToast(lang==='ru'
       ? ('Снято с пр-ва отмечено: '+marked.length+' арт. ('+marked.slice(0,3).join(', ')+(marked.length>3?'…':'')+')')
@@ -12671,7 +12679,11 @@ async function poSplitApply(row, list){
   if(typeof poRecalcSupply==='function'){ await poRecalcSupply(); }
   await loadPO();
   renderPO(); poManBtn(); poSimRefresh();
-  if(!clear) await poSplitOfferFinal(row);       // 코드 한 개로만 나갔으면 그 코드를 최종품번으로
+  if(!clear){
+    await poSplitOfferFinal(row);                 // 코드 한 개로만 나갔으면 그 코드를 최종품번으로
+    // 공급되는 최종품번은 단종이 아니다(자기 발주코드 하나만 적힌 정리표 줄은 빼고). 최종품번이 된 뒤에 푼다.
+    const sh=poSplitShown(row.cha,row.pn); if(sh) await poUndanCodes(sh.map(x=>x.c));
+  }
   return true;
 }
 // 변경코드(공급) 칸 안에서 공급 내역의 코드·수량을 바로 고친다.
@@ -12817,6 +12829,7 @@ async function onPoChgBlur(el){
   if(!pnEditable()){ el.textContent=before; return; }
   const fin=val || pnUpperLead(pn);            // 비우면 발주코드가 최종품번
   if(!(await poApplyFinal(pn, fin, ''))){ el.textContent=before; return; }
+  if(val) await poUndanCodes([fin]);           // 변경코드(공급)로 적은 코드는 공급되는 코드 — 단종을 푼다
 }
 // 발주코드 pn 이 속한 묶음(대표품번)의 최종품번을 fin 으로 바꾼다 — 품번조회·부품조회 등 모든 화면에 적용된다.
 //   ① 그 묶음의 최종품번이 fin 이 되고 ② 묶음에 없던 코드면 호환품번으로도 넣고
@@ -12870,16 +12883,54 @@ async function poOfferFinalAll(){
     const sp=poSplitOf(r.cha,r.pn); if(!sp || sp.length!==1) return;
     const fin=pnUpAll(sp[0].c), info=poLookup(r.pn)||{};
     if(!fin || normPN(fin)===normPN(r.pn) || !info.rep || normPN(info.fin||'')===normPN(fin)) return;
+    // 최종품번을 이미 다른 코드로 정해 두었으면(발주코드도 공급코드도 아닌 것) 옛 공급 기록으로 되돌리자고 묻지 않는다
+    if(info.fin && normPN(info.fin)!==normPN(r.pn)) return;
     if(seenRep[info.rep]) return; seenRep[info.rep]=1;
     want.push({r, fin, rep:info.rep});
   });
-  if(!want.length) return;
   const ru=(lang==='ru');
-  if(!confirm(ru?('Сделать коды поставки актуальными артикулами? '+want.length)
+  if(want.length && confirm(ru?('Сделать коды поставки актуальными артикулами? '+want.length)
     :('변경코드(공급)가 한 개뿐인 줄 '+want.length+'개가 아직 최종품번으로 바뀌지 않았습니다.\n\n'
       +want.slice(0,10).map(w=>'· '+normBadgePN(w.r.pn)+' → '+normBadgePN(w.fin)+'  (대표 '+w.rep+')').join('\n')+(want.length>10?'\n …':'')
-      +'\n\n하나씩 확인하며 최종품번으로 바꿀까요?'))) return;
-  for(const w of want) await poSplitOfferFinal(w.r);
+      +'\n\n하나씩 확인하며 최종품번으로 바꿀까요?'))){
+    for(const w of want) await poSplitOfferFinal(w.r);
+  }
+  // 이미 적어 둔 변경코드(공급) 중 단종 O 로 남아 있는 코드 — 공급된 코드이므로 단종을 풀자고 묻는다
+  const finSet=poFinalSet();
+  const dan=[...new Set(poSplitCodesAll().filter(c=>finSet.has(c) && String((pnSpecOf(c)||{}).dan||'').trim()==='O'))];
+  if(dan.length && confirm(ru?('Снять «Снято» с кодов поставки? '+dan.length)
+    :('변경코드(공급)로 적힌 최종품번 '+dan.length+'개가 품번조회에서 단종 O 로 되어 있습니다.\n\n'
+      +dan.slice(0,10).map(c=>'· '+normBadgePN(c)).join('\n')+(dan.length>10?'\n …':'')
+      +'\n\n공급되는 최종품번이므로 단종을 공란으로 바꿀까요?'))){
+    await poUndanCodes(dan);
+  }
+}
+// 발주현황에 변경코드(공급)로 적힌 코드 전부(자기 발주코드 하나만 적힌 정리표 줄은 뺀다)
+function poSplitCodesAll(){
+  const out=[];
+  (poData||[]).forEach(r=>{ const sp=poSplitShown(r.cha,r.pn); if(sp) sp.forEach(x=>{ const k=normPN(x.c); if(k) out.push(k); }); });
+  return out;
+}
+// 공급되는 최종품번은 단종이 아니다 — 품번조회의 단종 O 를 공란으로 바꾼다(품번조회와 같은 자리 kt_pn_specs).
+//   · 최종품번인 코드만 푼다. 최종품번이 아닌 호환품번은 '최종품번이 아니면 단종 O' 규칙(pnAutoDan)을 따른다.
+//   · '△' 등 다른 표시는 그대로 둔다. 바꾼 코드 목록을 돌려준다.
+function poFinalSet(){
+  const s=new Set(); (PN_DATA||[]).forEach(p=>{ const f=normPN(p.final||''); if(f) s.add(f); }); return s;
+}
+async function poUndanCodes(codes){
+  const fins=poFinalSet();
+  const list=[...new Set((codes||[]).map(c=>normPN(c)).filter(k=>k && fins.has(k) && String((pnSpecOf(k)||{}).dan||'').trim()==='O'))];
+  if(!list.length) return [];
+  const { error }=await sb.from('kt_pn_specs').upsert(list.map(pn=>({pn, dan:''})),{onConflict:'pn'});
+  if(error){ alert((lang==='ru'?'Ошибка':'단종 풀기 저장 실패')+'\n['+(error.message||error.code)+']'); return []; }
+  list.forEach(k=>{ const cur=Object.assign({nw:'',gw:'',cbm:'',dan:''}, _pnSpec.get(k)||{}); cur.dan=''; _pnSpec.set(k,cur);
+    const repOf=(typeof findMasterRep==='function')?findMasterRep(k):'';
+    if(repOf && typeof recordPNHistory==='function') recordPNHistory(repOf, 'cspec:dan:'+k, 'O', '');   // 품번조회 단종 칸과 같은 이력
+  });
+  if(typeof pnToast==='function') pnToast((lang==='ru')?('Снято «Снято»: '+list.join(', '))
+    :('공급된 코드의 단종을 풀었습니다 — '+list.slice(0,5).map(normBadgePN).join(', ')+(list.length>5?' 외':'')));
+  if(typeof ktAfterPnEdit==='function') ktAfterPnEdit();
+  return list;
 }
 // 발주현황을 대표품번끼리 묶어 볼지
 function poGroupOn(){ try{ return localStorage.getItem('kt_po_group')==='1'; }catch(e){ return false; } }
