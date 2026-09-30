@@ -12150,6 +12150,7 @@ function poColDefsBase(){
   // 단종·수출제한은 발주코드(호환품번) 기준이다 — 품번조회·가격정보와 같은 규칙.
   return [['cha',L('차수','Партия'),90],['mon',L('발주년월','Мес. заказа'),68],
           ['rep',L('대표코드','Осн. код'),104],['pn',L('발주코드','Код заказа'),104],
+          ['final',L('최종품번','Акт. артикул'),104],
           ['chg',L('변경코드(공급)','Код замены'),104],['dan',L('단종','Снято'),44]]
     .concat(canViewExportCtrl()?[['exp',L('수출제한','Эксп.контроль'),ru?86:58]]:[])
     .concat([['name',L('품명','Наименование'),170]])
@@ -12167,6 +12168,7 @@ function poCellVal(key, r){
     case 'mon':  return poYmOf(r)||'';
     case 'rep':  return i.rep||'';
     case 'pn':   return normBadgePN(r.pn)||'';
+    case 'final': return pnUpperLead(((getPNInfo(i.rep||'')||{}).final)||'');
     case 'chg':  return (i.fin && i.fin!==normPN(r.pn)) ? normBadgePN(i.fin) : '';
     case 'dan':  return String((pnSpecOf(r.pn)||{}).dan||'');
     case 'exp':  return isExportRestricted(r.pn) ? 'O' : '';
@@ -12349,6 +12351,9 @@ function renderPO(){
       mon:'<td style="'+tdS+';text-align:center;color:var(--muted);white-space:nowrap">'+escapeHtml(poYmOf(r))+'</td>',
       rep:'<td style="'+tdS+'">'+(i.rep?('<span style="'+codeS+'">'+escapeHtml(i.rep)+'</span>'):'')+'</td>',
       pn:'<td style="'+tdS+'"><span style="'+codeS+'">'+escapeHtml(normBadgePN(r.pn))+'</span></td>',
+      // 최종품번 — 품번조회와 같은 값·같은 저장 자리(대표품번의 final). 어느 화면에서 고쳐도 같이 바뀐다.
+      final:(()=>{ const fv=pnUpperLead(((getPNInfo(i.rep||'')||{}).final)||'');
+        return '<td style="'+tdS+'"><span style="'+codeS+'">'+((EDPO && i.rep) ? pnEditSpan(i.rep,'final',fv) : escapeHtml(fv))+'</span></td>'; })(),
       // 공급 내역이 있으면, 비어 있거나 내역과 같은 변경코드 칸(점선)은 숨긴다(두 번 보이지 않게)
       chg:'<td style="'+tdS+'">'+((poSplitShown(r.cha,r.pn) && (!chg || poSplitShown(r.cha,r.pn).some(x=>normPN(x.c)===normPN(chg))))
           ? ''
