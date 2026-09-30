@@ -12317,7 +12317,7 @@ function renderPO(){
   const EDPO=(typeof pnEditable==='function') && pnEditable();   // 변경코드·줄 지우기는 MASTER 만
   const cg=document.getElementById('poColgroup');
   if(cg) cg.innerHTML=heads.map(h=>'<col style="width:'+h[2]+'px">').join('')
-    + (EDPO?'<col style="width:26px">':'');
+    + (EDPO?'<col style="width:44px">':'');
   const thead=document.getElementById('poThead');
   const tbody=document.getElementById('poTbody');
   const empty=document.getElementById('poEmpty');
@@ -12349,7 +12349,11 @@ function renderPO(){
         +(EDPO?poNumEdit(r.cha,r.pn,'supplied',r.supplied):(r.supplied?r.supplied.toLocaleString():''))+'</td>',
       rest:'<td style="'+numS+';font-weight:600'+(rest>0?';color:#b91c1c':'')+'">'+(rest?rest.toLocaleString():'0')+'</td>'
     };
-    const del=EDPO ? ('<td style="'+tdS+';text-align:center;width:26px">'
+    const del=EDPO ? ('<td style="'+tdS+';text-align:center;width:44px;white-space:nowrap">'
+      + '<span onclick="event.stopPropagation();poAddRowOpen(this)"'
+      + ' data-pocha="'+escapeHtml(String(r.cha||''))+'" data-pomon="'+escapeHtml(String(r.mon||''))+'"'
+      + ' title="'+L('이 아래에 품목 추가(같은 차수)','Добавить позицию ниже')+'"'
+      + ' style="cursor:pointer;color:var(--accent2);font-weight:700;margin-right:7px">＋</span>'
       + '<span onclick="event.stopPropagation();poDeleteRow(&quot;'+escapeHtml(String(r.cha).replace(/"/g,''))+'&quot;,&quot;'+escapeHtml(String(r.pn))+'&quot;)"'
       + ' title="'+L('이 줄 지우기','Удалить строку')+'"'
       + ' style="cursor:pointer;color:#ef4444;font-weight:700">✕</span></td>') : '';
@@ -12365,7 +12369,7 @@ function renderPO(){
   let poLeadCell='', poLabAt=-1;
   if(poLead) poLeadCell='<th colspan="'+poLead+'" style="'+poSumS+'">'+poSumLab+'</th>';
   else { poLabAt=poTailArr.findIndex(v=>v===''); if(poLabAt>=0) poTailArr[poLabAt]=poSumLab; }
-  const poEdCol=EDPO?('<th style="'+thS+';width:26px"></th>'):'';
+  const poEdCol=EDPO?('<th style="'+thS+';width:44px"></th>'):'';
   if(thead) thead.innerHTML='<tr>'+heads.map(h=>'<th'+danTip(h[0])+' style="'+thS+'">'+h[1]+poFilterIcon(h[0])+'</th>').join('')+poEdCol+'</tr>'
     + '<tr>'+poLeadCell
     + poTailArr.map((v,i)=>'<th style="'+poSumS+(i===poLabAt?';text-align:left':'')+'">'+v+'</th>').join('')
@@ -12756,6 +12760,68 @@ function handleProdUpload(event){
   reader.readAsArrayBuffer(file);
 }
 function debouncedRenderPO(){ clearTimeout(window._poT); window._poT=setTimeout(renderPO,200); }
+// 발주현황 줄 더하기: 누른 줄 바로 아래에 입력 줄을 펼친다(차수·발주년월은 그 줄과 같다).
+//   저장하면 목록은 늘 하던 차례(차수·발주코드)로 다시 그린다.
+function poAddRowOpen(btn){
+  const ru=(lang==='ru');
+  const tr=btn.closest('tr'); if(!tr) return;
+  document.querySelectorAll('#poTbody tr.po-add-row').forEach(x=>x.remove());
+  const cha=String(btn.getAttribute('data-pocha')||''), mon=String(btn.getAttribute('data-pomon')||'');
+  const n=tr.children.length;
+  const inS='padding:3px 6px;border:1px solid var(--accent2);border-radius:5px;background:var(--surface);color:var(--text);font-size:12px';
+  const add=document.createElement('tr');
+  add.className='po-add-row';
+  add.setAttribute('data-pocha',cha); add.setAttribute('data-pomon',mon);
+  add.innerHTML='<td colspan="'+n+'" style="padding:6px 8px;background:var(--surface2);border-bottom:1px solid var(--border);font-size:12px">'
+    + '<span style="font-weight:700;margin-right:10px">＋ '+escapeHtml(poChaLabel(cha))+(mon?(' · '+escapeHtml(poYmOf({cha,mon})||mon)):'')+'</span>'
+    + (ru?'Код ':'발주코드 ')+'<input class="po-add-pn" style="'+inS+';width:130px;font-family:\'Courier New\',monospace" placeholder="S141210001"'
+    + ' oninput="poAddRowHint(this)" onkeydown="poAddRowKey(event)">'
+    + ' <span class="po-add-hint" style="display:inline-block;min-width:220px;color:var(--muted);margin:0 10px;font-size:11px"></span>'
+    + (ru?'Кол-во ':'수주수량 ')+'<input class="po-add-qty" type="number" min="1" step="1" style="'+inS+';width:70px;text-align:right" onkeydown="poAddRowKey(event)">'
+    + ' <button class="dl-btn" onclick="poAddRowSave(this)" style="margin-left:8px;background:var(--accent2);border-color:var(--accent2);color:#fff">'+(ru?'Добавить':'추가')+'</button>'
+    + ' <button class="dl-btn" onclick="this.closest(\'tr\').remove()">'+(ru?'Отмена':'취소')+'</button>'
+    + '</td>';
+  tr.after(add);
+  add.querySelector('.po-add-pn').focus();
+}
+function poAddRowKey(ev){
+  if(ev.key==='Enter'){ ev.preventDefault();
+    const tr=ev.target.closest('tr');
+    if(ev.target.classList.contains('po-add-pn')) tr.querySelector('.po-add-qty').focus();
+    else poAddRowSave(ev.target); }
+  if(ev.key==='Escape'){ ev.target.closest('tr').remove(); }
+}
+function poAddRowHint(inp){
+  const pn=pnUpAll(inp.value), h=inp.closest('tr').querySelector('.po-add-hint');
+  if(!h) return;
+  if(!pn){ h.textContent=''; return; }
+  const name=poName(pn), spec=poSpec(pn);
+  h.style.color=name?'var(--text)':'var(--muted)';
+  h.textContent=name ? (name+(spec?(' · '+spec):'')) : ((lang==='ru')?'нет в справочнике':'품번조회에 없는 코드');
+}
+async function poAddRowSave(el){
+  const ru=(lang==='ru');
+  const tr=el.closest('tr'); if(!tr) return;
+  if(!((typeof pnEditable==='function') && pnEditable())){ alert(ru?'Нет прав.':'추가할 권한이 없습니다.'); return; }
+  const cha=String(tr.getAttribute('data-pocha')||''), mon=String(tr.getAttribute('data-pomon')||'');
+  const pn=pnUpAll(tr.querySelector('.po-add-pn').value);
+  const qty=Math.round(Number(String(tr.querySelector('.po-add-qty').value).replace(/,/g,'')));
+  if(!pn){ alert(ru?'Введите код.':'발주코드를 넣어 주세요.'); tr.querySelector('.po-add-pn').focus(); return; }
+  if(!isFinite(qty) || qty<=0){ alert(ru?'Введите количество.':'수주수량을 넣어 주세요.'); tr.querySelector('.po-add-qty').focus(); return; }
+  if((poData||[]).some(x=>String(x.cha)===cha && normPN(x.pn)===normPN(pn))){
+    alert(ru?'Такая строка уже есть.':(poChaLabel(cha)+' 에 '+normBadgePN(pn)+' 줄이 이미 있습니다.\n그 줄의 수주수량을 고쳐 주세요.')); return; }
+  if(!poName(pn) && !confirm(ru?'Кода нет в справочнике. Добавить?':(normBadgePN(pn)+' 는 품번조회에 없는 코드입니다. 그래도 추가할까요?'))) return;
+  const { error }=await sb.from('kt_po').upsert(
+    { cha, pn, mon, qty, supplied:0, updated_at:new Date().toISOString() },{onConflict:'cha,pn'});
+  if(error){ alert((ru?'Ошибка сохранения':'저장 실패')+'\n['+(error.message||error.code)+']'); return; }
+  _poManQ[poManKey(cha,pn)]=1; savePoMan();          // 손으로 넣은 수주수량 — 바탕색
+  ktHistAdd('po.qty', cha+'|'+pn, '', String(qty));
+  await loadPO();
+  if(typeof poRecalcSupply==='function'){ await poRecalcSupply(); await loadPO(); }   // 이미 선적된 게 있으면 공급수량에 잡힌다
+  if(typeof loadSimMan==='function') await loadSimMan();
+  simOrderSyncPo();
+  renderPO(); poManBtn(); poSimRefresh();
+}
 // 발주현황 줄 지우기: kt_po 에서 그 (차수, 발주코드) 줄을 없앤다.
 //   발주필요·선적계획을 이 자료로 셈하므로 시뮬레이션도 다시 그린다.
 async function poDeleteRow(cha, pn){
