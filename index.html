@@ -5342,7 +5342,8 @@ async function pnMergeRepData(oldRep, newRep){
     return olds.length; });
   // 주문 — 품목(items) 안의 대표품번을 바꾼다
   await step('주문', async()=>{
-    const { data, error }=await sb.from('kt_orders').select('id,items').contains('items',[{rep:oldRep}]);
+    // jsonb 칸이라 JSON 글자로 넘긴다(배열 그대로 넘기면 Postgres 배열 모양이 되어 'invalid input syntax for type json')
+    const { data, error }=await sb.from('kt_orders').select('id,items').contains('items',JSON.stringify([{rep:oldRep}]));
     if(error) throw error; let n=0;
     for(const o of (data||[])){
       const items=(o.items||[]).map(it=>(it && it.rep===oldRep)?Object.assign({}, it, {rep:newRep}):it);
