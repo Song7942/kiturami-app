@@ -16574,19 +16574,21 @@ async function handleSimReqUpload(ev){
     const okQty=pns.reduce((a,k)=>a+byPn[k],0);
     // 발주현황에 넣을 차수·발주년월 (차수 261001 → 발주년월은 한 달 앞선 2026-09)
     const cha=simReqCha(aoa, file.name);
-    const poYm=psiYmAdd(ym,-1);
+    // 발주년월은 발주현황 화면과 같게 차수에서 낸다(260702 → 2026-06). 차수가 없으면 출고월 한 달 앞.
+    const poYm=(cha && poYmKey({cha})) || psiYmAdd(ym,-1);
     if(!confirm('수출작업의뢰서 — '+psiYmLabel(ym)+' 주문·선적계획\n\n'
       +'· 줄 '+rows.length+'개 / 수량 '+psiFmt(tot)+'개\n'
       +'· 품번조회에서 찾음: 호환품번 '+pns.length+'개 (대표품번 '+reps.length+'개) / 수량 '+psiFmt(okQty)+'개\n'
       +(miss.length?('· 못 찾은 품번 '+miss.length+'개: '+miss.slice(0,6).join(', ')+(miss.length>6?' …':'')+'\n'):'')
       +(cha?('· 발주현황: 차수 '+cha+' / 발주년월 '+psiYmLabel(poYm)+' 로 '+rows.length+'줄 등록\n'):'')
-      +'\n'+psiYmLabel(ym)+' 의 주문·선적계획을 이 내용으로 바꿉니다(그 달의 기존 값은 지웁니다). 계속할까요?')) return;
-    // 그 달 값을 싹 비우고 새로 넣는다 (선적계획과 주문에 같이 적는다)
+      +'\n'+psiYmLabel(ym)+' 선적계획 · '+psiYmLabel(poYm)+' 주문(발주를 넣은 달)을 이 내용으로 바꿉니다(그 달의 기존 선적계획은 지웁니다). 계속할까요?')) return;
+    // 선적계획은 출고월, 주문은 실제로 발주를 넣은 달(출고월 한 달 앞 = 발주년월)에 적는다.
+    //   차수가 있으면 주문은 아래 발주현황 등록 뒤 발주현황 수주수량으로 다시 맞춘다.
     Object.keys(_simPlanUp).forEach(k=>{ if(String(k).split('|')[1]===ym) delete _simPlanUp[k]; });
-    Object.keys(_simOrder).forEach(k=>{ if(String(k).split('|')[1]===ym) delete _simOrder[k]; });
-    pns.forEach(k=>{ _simPlanUp[simPlanKey(k,ym)]=byPn[k]; _simOrder[simPlanKey(k,ym)]=byPn[k]; });
-    _simOrdReq[ym]=1;                     // 이 달은 의뢰서로 확정한 달
-    if(cha) _simOrdCha[cha]=ym;           // 이 차수의 몫은 그 달 주문으로 이미 잡혀 있다
+    pns.forEach(k=>{ _simPlanUp[simPlanKey(k,ym)]=byPn[k]; });
+    if(!cha){
+      pns.forEach(k=>{ const kk=simPlanKey(k,poYm); _simOrder[kk]=(Number(_simOrder[kk])||0)+byPn[k]; });
+    }
     simPlanUpClear(); simOrderClear();
     saveSimMan();
     // 발주현황에도 그대로 등록한다. 차수는 Ref.No(RUS 261001), 발주년월은 그 한 달 앞.
@@ -16614,8 +16616,9 @@ async function handleSimReqUpload(ev){
         try{ if(ktPaneOn('pane-po') && typeof renderPO==='function') renderPO(); }catch(e){}
       }catch(e){ poMsg='\n※ 발주현황 등록 실패: '+((e&&e.message)||e); }
     }
+    simOrderSyncPo();                     // 주문 = 발주년월이 그 달인 발주현황 수주수량
     if(typeof renderSIM==='function') renderSIM();
-    alert('반영했습니다 — '+psiYmLabel(ym)+' 주문·선적계획\n'
+    alert('반영했습니다 — '+psiYmLabel(ym)+' 선적계획 · '+psiYmLabel(poYm)+' 주문\n'
       +'호환품번 '+pns.length+'개 / 수량 '+psiFmt(okQty)+'개 (대표품번 '+reps.length+'개로 합산)'
       +poMsg
       +(miss.length?('\n※ 품번조회에 없어 넣지 못한 품번 '+miss.length+'개: '+miss.slice(0,10).join(', ')+(miss.length>10?' …':'')):''));
@@ -16761,6 +16764,14 @@ async function loadSimMan(){
       if(c.order && typeof c.order==='object'){ _simOrder=c.order; simOrderClear(); }
       if(c.ordReq && typeof c.ordReq==='object') _simOrdReq=c.ordReq;
       if(c.ordCha && typeof c.ordCha==='object') _simOrdCha=c.ordCha;
+      // 예전에는 의뢰서 주문을 출고월에 적었다. 이제 주문은 발주를 넣은 달(발주년월)에 두고
+      //   발주현황 수주수량으로 맞추므로, 출고월에 적힌 의뢰서 주문은 한 번 걷어 낸다.
+      const oldReq=Object.keys(_simOrdReq||{});
+      if(oldReq.length){
+        Object.keys(_simOrder).forEach(k=>{ if(_simOrdReq[String(k).split('|')[1]]) delete _simOrder[k]; });
+        _simOrdReq={}; _simOrdCha={}; simOrderClear();
+        saveSimMan();
+      }
     }
   }catch(e){}
 }
@@ -17171,16 +17182,15 @@ function renderPSI(){
       //   싹 지우고, 그 달 '선적계획' 은 미공급수량 그대로 본다.
       //   아직 안 나갔으면 그대로 두고, 나가기 시작하면 그 칸을 비우고
       //   남은 몫(미공급 − 실제선적)을 다음 달 계획으로 넘긴다.
-      // 그 달 선적계획 = 그 달에 나가기로 한 몫 + 지난 달에 못 나가 넘어온 몫.
-      //   '나가기로 한 몫' 은 주문(수출작업의뢰서)이 있으면 그 값이고,
-      //   주문이 없는 달은 발주현황 미공급(이번 달) 또는 앞선 달에서 넘어온 것뿐이다.
+      // 그 달 선적계획 = 올린 선적계획(수출작업의뢰서) + 지난 달 주문·발주필요 + 지난 달에 못 나가 넘어온 몫.
+      //   주문은 실제로 발주를 넣은 달(발주년월)에 적히고, 그 다음 달에 나간다(발주필요와 같다).
       const hasOrd=psiSimOn && !!ordYms[y];
       const upYm=!!planUpYms[y];
       const isPlanYm=(psiSimOn && _simPlanYm===y);     // 발주현황 미공급이 선적계획이 되는 달(의뢰서 달이어도)
       if(isPlanYm) shipPlan[i]=0;                        // 미공급 달은 앞에서 넘어온 것을 미공급이 이미 품고 있다
       const upQty=upYm ? ((planUpRep[y]&&planUpRep[y][g.rep])||0) : 0;
       const gOrdQ=hasOrd ? ((ordRep[y]&&ordRep[y][g.rep])||0) : 0;
-      const base=hasOrd ? gOrdQ : (upYm ? upQty : 0);
+      const base=upYm ? upQty : 0;
       const planCalc=psiSimOn?(base+shipPlan[i]):0;
       const planAdd=isPlanYm ? (_simPlan.get(g.rep)||0) : 0;
       const manShip=_simShip[simNeedKey(g.rep,y)];
@@ -17194,6 +17204,8 @@ function renderPSI(){
       if(psiSimOn && i+1<ymsAll.length){
         if(isPlanYm){ if(planStarted) shipPlan[i+1]+=Math.max(0, planAdd-realSh); }
         else if(known) shipPlan[i+1]+=Math.max(0, planCalc-realSh);
+        // 이 달에 넣은 주문은 다음 달에 나간다. 다음 달이 의뢰서로 선적계획을 올린 달이면 그 값이 곧 이 주문이다.
+        if(hasOrd && !planUpYms[ymsAll[i+1]]) shipPlan[i+1]+=gOrdQ;
       }
       // 미공급분은 '그 달에 다 나간다'고 보고 입고에 미리 얹혀 있다(simBuild 의 _simZ).
       // 실제선적을 적어 못 나간 몫은 다음 달 선적으로 넘겼으니, 그만큼은 그 입고에서 뺀다.
@@ -17233,8 +17245,8 @@ function renderPSI(){
       gAcc[y]=Object.assign(gAcc[y]||{}, {need:nd, need0:ndAuto, needd:(nd-ndAuto),
                                           addSt, plan, ord:gOrd, arrIn:arrive[i], sh:realSh});
       // 이 달 발주분은 다음 달에 나간다.
-      //   다만 다음 달이 '주문(수출작업의뢰서)으로 확정된 달' 이면 그 달 선적은 의뢰서대로이므로 얹지 않는다.
-      if(psiSimOn && i+1<ymsAll.length && !ordYms[ymsAll[i+1]]) shipPlan[i+1]+=nd;
+      //   다만 다음 달이 의뢰서로 선적계획을 올린 달이면 그 달 선적은 의뢰서대로이므로 얹지 않는다.
+      if(psiSimOn && i+1<ymsAll.length && !planUpYms[ymsAll[i+1]]) shipPlan[i+1]+=nd;
       const sAttr=' data-rep="'+escapeHtml(g.rep)+'" data-ym="'+y+'"'+ktHistAttr('sim.sh', g.rep+'|'+y)
         +' onclick="simShipFocus(this)" title="'
         +L('실제로 나간 수량을 적으면 못 나간 만큼은 다음 달 선적으로 넘어갑니다','Введите фактическую отгрузку')+'"';
