@@ -4629,7 +4629,12 @@ function pnCellHtml(col, r, ctx){
       return _pnTd(col, inner, (h.cls+' pn-wrap').trim(), 'font-size:11px;color:var(--muted)'); }
     case 'name_en': { const en=engNameText(r.rep); const h=H('name_en'); const inner=(isMaster?ed(r.rep,'name_en',en):escapeHtml(en))+h.badge;
       return _pnTd(col, inner, (h.cls+' pn-wrap').trim(), 'font-size:11px;color:var(--accent2);font-weight:600'); }
-    case 'rep': { const h=H('rep'); const inner=(isMaster?ed(r.rep,'rep',r.rep):`<span class="pn-badge pn-rep">${hlPN(r.rep,kw)}</span>`)+h.badge;
+    case 'rep': { const h=H('rep');
+      // 호환품번 줄(분할 보기)에서 고치면 그 호환품번만 옮길지 묶음 전체를 바꿀지 묻는다(onPNCellBlur 의 rep_one)
+      const edRep=(r._split && r._compat)
+        ? `<span contenteditable="true" class="pn-edit" data-pnrep="${escapeHtml(r.rep)}" data-pnfield="rep_one" data-pncompat="${escapeHtml(r._compat)}" data-pnorig="${escapeHtml(r.rep)}" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()" onblur="onPNCellBlur(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}" style="display:inline-block;min-width:20px;outline:none;border-bottom:1px dashed var(--accent2);cursor:text;padding:0 2px">${escapeHtml(r.rep)}</span>`
+        : ed(r.rep,'rep',r.rep);
+      const inner=(isMaster?edRep:`<span class="pn-badge pn-rep">${hlPN(r.rep,kw)}</span>`)+h.badge;
       const auto=pnRepIsAuto(r.rep);                          // 자동으로 붙인 대표품번
       const tip=lang==='ru'?'Осн. артикул проставлен автоматически — проверьте':'대표품번이 없어 자동으로 붙인 값입니다. 확인 후 바꿔 주세요.';
       const cell=auto?`<span title="${escapeHtml(tip)}" style="display:inline-block">${inner}</span>`:inner;
@@ -5254,6 +5259,76 @@ async function _renamePNRep(oldRep, newRaw){
   try{ await sb.from('kt_pn_overrides').upsert({ rep:newRep, note:d.note, applied_models:d.applied_models, history:hist },{onConflict:'rep'}); }catch(e){}
   return { ok:true, rerender:true };
 }
+// 버튼 여러 개 중 하나를 고르는 작은 창. 고른 버튼의 key 를(닫으면 null) 돌려준다.
+function pnChoice(title, body, buttons){
+  return new Promise(resolve=>{
+    const old=document.getElementById('pnChoicePop'); if(old) old.remove();
+    const box=document.createElement('div'); box.id='pnChoicePop';
+    box.style.cssText='position:fixed;inset:0;z-index:10001;background:#0008;display:flex;align-items:center;justify-content:center';
+    const done=v=>{ box.remove(); resolve(v); };
+    box.onmousedown=e=>{ if(e.target===box) done(null); };
+    box.innerHTML='<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;width:460px;max-width:94vw;box-shadow:0 16px 44px #000a;font-size:12px;color:var(--text)">'
+      +'<div style="padding:12px 14px;border-bottom:1px solid var(--border);font-weight:700;font-size:13px">'+escapeHtml(title)+'</div>'
+      +'<div style="padding:12px 14px;white-space:pre-wrap;line-height:1.55">'+escapeHtml(body)+'</div>'
+      +'<div style="padding:10px 14px;border-top:1px solid var(--border);display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap"></div></div>';
+    const bar=box.querySelector('div > div:last-child');
+    buttons.forEach(b=>{ const btn=document.createElement('button'); btn.className='dl-btn'; btn.textContent=b.label;
+      if(b.primary) btn.style.cssText='background:var(--accent2);border-color:var(--accent2);color:#fff';
+      btn.onclick=()=>done(b.key); bar.appendChild(btn); });
+    document.body.appendChild(box);
+  });
+}
+// 분할 보기(호환품번 줄)에서 대표품번 칸을 고쳤을 때.
+//   이 호환품번만 옮길지, 묶음 전체의 대표품번을 바꿀지(=예전 동작) 고르게 한다.
+async function pnRepOneEdit(fromRep, compat, toRaw){
+  if(!userRole(currentUser).isMaster) return { ok:false };
+  const toRep=pnUpAll(toRaw);
+  if(!toRep || toRep===fromRep) return { ok:false };
+  const src=PN_DATA.find(p=>p.rep===fromRep); if(!src) return { ok:false };
+  const n=(src.compats||[]).length;
+  if(n<=1) return await _renamePNRep(fromRep, toRep);        // 호환품번이 하나뿐이면 묶음 이름 바꾸기와 같다
+  const exists=PN_DATA.some(p=>p.rep===toRep);
+  const pick=await pnChoice('대표품번 바꾸기',
+    normBadgePN(compat)+' 줄의 대표품번을 '+toRep+' 로 적었습니다.\n\n'
+    +'· 이 호환품번만 옮기기: '+normBadgePN(compat)+' 하나만 '+toRep+(exists?' 묶음으로 옮깁니다.':' 새 묶음으로 떼어 냅니다.')+'\n'
+    +'  나머지 '+(n-1)+'개는 '+fromRep+' 에 그대로 남습니다.\n'
+    +'· 묶음 전체 바꾸기: '+fromRep+' 의 호환품번 '+n+'개 모두의 대표품번을 '+toRep+' 로 바꿉니다'+(exists?'(두 묶음 합치기).':'.'),
+    [{key:null,label:'취소'},{key:'all',label:'묶음 전체 바꾸기'},{key:'one',label:'이 호환품번만 옮기기',primary:true}]);
+  if(pick==='all') return await _renamePNRep(fromRep, toRep);
+  if(pick!=='one') return { ok:false };
+  return await pnMoveCompat(fromRep, compat, toRep);
+}
+// 호환품번 하나를 다른 대표품번 묶음으로 옮긴다(없는 대표품번이면 새 묶음을 만든다).
+//   · 옛 묶음: 그 호환품번을 빼고, 그게 최종품번이었으면 남은 호환품번 가운데 첫 번째를 최종품번으로
+//   · 새 묶음: 그 호환품번을 넣고, 최종품번이 없으면 그 호환품번을 최종품번으로. 새로 만들면 품명·규격은 옛 묶음 것을 따른다
+//   · 저장은 품번조회와 같은 길(savePNCell)을 지나므로 이력·단종 자동 표시·가격 묶음도 같이 따라간다
+//   · 재고·출고·주문처럼 대표품번 단위로만 적힌 자료는 호환품번으로 나눌 수 없어 옛 묶음에 그대로 둔다
+async function pnMoveCompat(fromRep, compat, toRep){
+  const src=PN_DATA.find(p=>p.rep===fromRep); if(!src) return { ok:false };
+  const k=normPN(compat), cu=pnUpAll(compat);
+  const rest=(src.compats||[]).filter(c=>normPN(c)!==k);
+  if(!rest.length) return await _renamePNRep(fromRep, toRep);
+  const dst=PN_DATA.find(p=>p.rep===toRep);
+  const finMoved=normPN(src.final||'')===k;
+  const r1=await savePNCell(fromRep, 'compat', rest.join(', '));
+  if(!(r1&&r1.ok)) return { ok:false };
+  if(finMoved){ const r=await savePNCell(fromRep, 'final', pnUpAll(rest[0])); if(!(r&&r.ok)) return { ok:false }; }
+  const dc=((dst&&dst.compats)||[]).filter(c=>normPN(c)!==k).concat([cu]);
+  const r2=await savePNCell(toRep, 'compat', dc.join(', '));
+  if(!(r2&&r2.ok)) return { ok:false };
+  if(!dst){
+    // 새 묶음의 품명·규격은 옮긴 호환품번 자신의 값(품번조회 호환품번 칸)을 먼저, 없으면 옛 묶음 것을 쓴다
+    const cs=pnSpecOf(cu)||{};
+    const nv={ name_ko:cs.name||src.name_ko||'', name_ru:cs.name_ru||src.name_ru||'', spec:cs.spec||src.spec||'' };
+    for(const f of ['name_ko','name_ru','spec']){ if(nv[f]) await savePNCell(toRep, f, nv[f]); }
+  }
+  const dNow=PN_DATA.find(p=>p.rep===toRep);
+  if(!dNow || !dNow.final){ const r=await savePNCell(toRep, 'final', cu); if(!(r&&r.ok)) return { ok:false }; }
+  if(typeof pnAutoDan==='function'){ try{ await pnAutoDan([fromRep, toRep]); }catch(e){} }
+  pnToast(normBadgePN(cu)+' → '+toRep+(dst?' 묶음으로 옮겼습니다':' 새 묶음으로 떼어 냈습니다')
+    +(finMoved?(' · '+fromRep+' 최종품번은 '+normBadgePN(rest[0])+' 로 바뀌었습니다(필요하면 고쳐 주세요)'):''));
+  return { ok:true, rerender:true };
+}
 // 대표품번을 이미 있는 대표품번으로 바꾸려 할 때: 두 묶음을 하나로 합친다(묻고 나서).
 //   · 호환품번은 두 묶음 것을 모두 모은다(겹치면 하나로)
 //   · 최종품번은 옛 묶음(oldRep)의 것을 따른다 — 바꾸려는 쪽이 지금 쓰는 품번이다(없으면 newRep 것)
@@ -5371,6 +5446,13 @@ async function onPNCellBlur(el){
   const rep=el.getAttribute('data-pnrep'), field=el.getAttribute('data-pnfield');
   const val=el.textContent.replace(/\s+/g,' ').trim();
   if(val===(el.getAttribute('data-pnorig')||'')) return;
+  // 호환품번 줄의 대표품번: 그 호환품번만 옮기거나 묶음 전체의 대표품번을 바꾼다
+  if(field==='rep_one'){
+    const orig=el.getAttribute('data-pnorig')||'';
+    const res=await pnRepOneEdit(rep, el.getAttribute('data-pncompat')||'', val);
+    if(res && res.ok){ ktAfterPnEdit(); } else { el.textContent=orig; }
+    return;
+  }
   // 대체품목: 한 칸에 여러 품번. kt_psi_cfg(id=100)에 호환품번을 열쇠로 모아 둔다.
   if(field==='alt'){ return await onPnAltBlur(el); }
   if(field==='altq'){ return await onPnAltQtyBlur(el); }
@@ -18416,6 +18498,8 @@ async function priceSeedNewCompats(rep, added){
       try{ await loadPriceCalc(); }catch(e){}
     }
     if(!Array.isArray(priceCalcData) || !priceCalcData.length) return;
+    // 다른 묶음에서 옮겨 온 호환품번이면 가격 줄이 이미 있다 — 먼저 지금 묶음으로 맞춰 두어야 두 번 만들지 않는다
+    if(typeof priceCalcSyncRep==='function') priceCalcSyncRep();
     const supply=priceSupplyOfFinal(rep);
     if(supply==null) return;                                            // 최종품번에 공급가가 없으면 아무것도 안 한다
     let next=0; priceCalcData.forEach(r=>{ const n=Number(r.row_no); if(isFinite(n) && n>next) next=n; });
