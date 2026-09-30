@@ -16029,34 +16029,40 @@ function simPlanSailDate(){
 function simPlanYmNow(){
   return (typeof shipYmOf==='function')?(shipYmOf(simPlanSailDate())||''):'';
 }
-function poQtyByPn(){
+// 발주현황 줄의 발주년월(YYMM) — 화면의 '발주년월' 열과 같다(차수의 달 − 1)
+function poYmKey(r){ const s=poYmOf(r)||''; return s ? (s.slice(2,4)+s.slice(5,7)) : ''; }
+// 발주현황 수주수량을 품번별로 낸다 — 발주년월이 ym 인 줄만.
+//   열쇠는 발주현황 화면이 쓰는 자리(최종품번이 있으면 그것)로 맞춘다.
+function poQtyByPn(ym){
   const m={};
   (poData||[]).forEach(r=>{
-    if(_simOrdCha[String(r.cha||'')]) return;
+    if(poYmKey(r)!==ym) return;
     const key=normPN((typeof poLookup==='function'?(poLookup(r.pn)||{}):{}).fin||'')||normPN(r.pn);
     if(!key) return;
     m[key]=(m[key]||0)+(Number(r.qty)||0);
   });
   return m;
 }
-// 발주현황에서 옮겨 적어 둔 달의 '주문' 을 발주현황 수주수량에 다시 맞춘다.
+// 발주시뮬레이션 '주문' = 그 달이 발주년월인 발주현황 수주수량.
 //   손으로 고치든 엑셀로 올리든, 발주현황이 바뀌면 이 한 곳만 부르면 된다.
-//   의뢰서로 확정한 달은 나갈 몫이 따로 정해져 있으므로 건드리지 않는다.
+//   맞추는 달: 이번 달 + 발주현황에 발주년월로 나오는 달(SIM_ORD_FROM 부터).
+//   의뢰서로 확정한 달(출고월)은 나갈 몫이 따로 정해져 있으므로 건드리지 않는다.
 function simOrderSyncPo(){
-  const y=simCurYm();                                  // 옮겨 적어 둔 달(이번 달)
-  if(!y || y<SIM_ORD_FROM || _simOrdReq[y]) return 0;
   if(!(poData||[]).length) return 0;                   // 발주현황을 아직 안 읽었으면 손대지 않는다
-  const has=Object.keys(_simOrder||{}).some(k=>String(k).split('|')[1]===y);
-  if(!has) return 0;                                   // 그 달을 주문으로 잡아 둔 적이 없으면 그대로
-  const want=poQtyByPn();
-  const keys=new Set(Object.keys(_simOrder).filter(k=>String(k).split('|')[1]===y).map(k=>String(k).split('|')[0]));
-  Object.keys(want).forEach(k=>keys.add(k));
+  const yms=new Set([simCurYm()]);
+  (poData||[]).forEach(r=>{ const y=poYmKey(r); if(y) yms.add(y); });
   let ch=0;
-  keys.forEach(k=>{
-    const kk=simPlanKey(k,y), was=Number(_simOrder[kk])||0, now=Math.round(want[k]||0);
-    if(was===now) return;
-    if(now) _simOrder[kk]=now; else delete _simOrder[kk];
-    ch++;
+  yms.forEach(y=>{
+    if(!y || y<SIM_ORD_FROM || _simOrdReq[y]) return;
+    const want=poQtyByPn(y);
+    const keys=new Set(Object.keys(_simOrder).filter(k=>String(k).split('|')[1]===y).map(k=>String(k).split('|')[0]));
+    Object.keys(want).forEach(k=>keys.add(k));
+    keys.forEach(k=>{
+      const kk=simPlanKey(k,y), was=Number(_simOrder[kk])||0, now=Math.round(want[k]||0);
+      if(was===now) return;
+      if(now) _simOrder[kk]=now; else delete _simOrder[kk];
+      ch++;
+    });
   });
   if(ch){ simOrderClear(); saveSimMan(); }
   return ch;
