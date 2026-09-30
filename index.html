@@ -1517,6 +1517,10 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/></svg>
         <span id="i18n-po-manual">수기 초기화</span>
       </button>
+      <button class="dl-btn" id="poDelChaBtn" onclick="poDeleteCha()" title="차수를 적으면 그 차수의 줄을 모두 지웁니다" style="display:none;color:#ef4444;border-color:#ef4444">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>
+        <span id="i18n-po-delcha">차수 삭제</span>
+      </button>
       <button class="dl-btn" onclick="poResetFilters()" title="헤더 필터·정렬을 기본값으로">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
         <span id="i18n-po-reset">필터 초기화</span>
@@ -2551,6 +2555,7 @@ function refreshPsiTexts(){
   set('i18n-po-all',ALL[0],ALL[1]);
   set('i18n-po-view','보기','Вид');
   set('i18n-po-manual','수기 초기화','Сброс ручных');
+  set('i18n-po-delcha','차수 삭제','Удалить партию');
   set('i18n-po-reset','필터 초기화','Сброс фильтров');
   set('i18n-po-up','발주 업로드','Загрузить заказы');
   set('i18n-po-dl',DL[0],DL[1]);
@@ -12822,6 +12827,45 @@ async function poAddRowSave(el){
   simOrderSyncPo();
   renderPO(); poManBtn(); poSimRefresh();
 }
+// 차수 삭제: 적은 차수(RUS 260702 · 260702 둘 다 받는다)의 줄을 kt_po 에서 모두 없앤다.
+//   그 차수에 잡혀 있던 인보이스 수량은 공급수량을 다시 셀 때 다른 차수로 옮겨 간다.
+async function poDeleteCha(){
+  const ru=(lang==='ru');
+  if(!((typeof pnEditable==='function') && pnEditable())){ alert(ru?'Нет прав.':'지울 권한이 없습니다.'); return; }
+  await loadPO();
+  const list=poChaList();
+  const sel=(document.getElementById('poCha')||{}).value||'';
+  const inp=prompt(ru?'Партия для удаления (напр. RUS 260702):':'지울 차수를 적어 주세요 (예: RUS 260702 또는 260702)', sel);
+  if(inp==null) return;
+  const t=String(inp).trim(); if(!t) return;
+  const norm=s=>String(s||'').replace(/\s+/g,'').toUpperCase();
+  let cha=list.find(c=>norm(c)===norm(t)) || '';
+  if(!cha && /^\d+$/.test(t)){ const hit=list.filter(c=>c.replace(/\D/g,'')===t); if(hit.length===1) cha=hit[0]; }
+  if(!cha){ alert(ru?('Партия не найдена: '+t):('"'+t+'" 차수를 찾지 못했습니다.\n지금 있는 차수: '+list.map(poChaLabel).join(', '))); return; }
+  const rows=poData.filter(r=>r.cha===cha);
+  const q=rows.reduce((a,r)=>a+(Number(r.qty)||0),0), s=rows.reduce((a,r)=>a+(Number(r.supplied)||0),0);
+  if(!confirm(ru ? ('Удалить партию '+cha+'?\n'+rows.length+' строк')
+    : (poChaLabel(cha)+' 차수를 통째로 지웁니다.\n\n'
+       +'· '+rows.length+'줄 / 수주 '+q.toLocaleString()+' · 공급 '+s.toLocaleString()+' · 미공급 '+(q-s).toLocaleString()+'\n'
+       +'· 되돌릴 수 없습니다(다시 넣으려면 의뢰서·발주 엑셀을 다시 올려야 합니다).\n\n계속할까요?'))) return;
+  const { error }=await sb.from('kt_po').delete().eq('cha',cha);
+  if(error){ alert((ru?'Ошибка':'삭제 실패')+'\n['+(error.message||error.code)+']'); return; }
+  let manCh=false;
+  Object.keys(_poMan ).forEach(k=>{ if(k.split('|')[0]===cha){ delete _poMan[k];  manCh=true; } });
+  Object.keys(_poManQ).forEach(k=>{ if(k.split('|')[0]===cha){ delete _poManQ[k]; manCh=true; } });
+  if(manCh) savePoMan();
+  const cs=document.getElementById('poCha'); if(cs && cs.value===cha) cs.value='';
+  await loadPO();
+  let supMsg='';
+  if(typeof poRecalcSupply==='function'){
+    const sup=await poRecalcSupply(); await loadPO();
+    if(sup && sup.ok) supMsg='\n공급수량 다시 셈: '+sup.total.toLocaleString();
+  }
+  if(typeof loadSimMan==='function') await loadSimMan();
+  simOrderSyncPo();
+  renderPO(); poManBtn(); poSimRefresh();
+  alert((ru?'Удалено: ':'지웠습니다 — ')+poChaLabel(cha)+' '+rows.length+(ru?'':'줄')+supMsg);
+}
 // 발주현황 줄 지우기: kt_po 에서 그 (차수, 발주코드) 줄을 없앤다.
 //   발주필요·선적계획을 이 자료로 셈하므로 시뮬레이션도 다시 그린다.
 async function poDeleteRow(cha, pn){
@@ -12850,6 +12894,8 @@ async function poDeleteRow(cha, pn){
 async function loadPOTab(){
   const m=canEditPsi();
   ['poUploadBtn'].forEach(id=>{ const b=document.getElementById(id); if(b) b.style.display=m?'':'none'; });
+  { const b=document.getElementById('poDelChaBtn');
+    if(b) b.style.display=((typeof pnEditable==='function') && pnEditable())?'':'none'; }
   await Promise.all([loadPO(), loadPoMan()]);
   if(typeof loadPsiCols==='function') await loadPsiCols();   // 열 차례를 같은 곳에 담는다
   await loadKtHist();
