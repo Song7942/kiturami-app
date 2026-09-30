@@ -12444,8 +12444,10 @@ function poIsManQ(cha,pn){ return !!_poManQ[poManKey(cha,pn)]; }
 //   적으면 공급수량 = 코드별 수량의 합(손으로 고친 줄로 친다).
 //   공급수량을 다시 셀 때 적은 코드의 인보이스에서 그만큼 먼저 떼어 가므로 다른 줄에 두 번 잡히지 않는다.
 function poSplitOf(cha,pn){ const s=_poSplit[poManKey(cha,pn)]; return (s && s.length) ? s : null; }
+// 적힌 내역이 자기 코드 하나뿐이면(정리표로 공급수량을 고정한 줄) 따로 보여 주지 않는다
+function poSplitShown(cha,pn){ const s=poSplitOf(cha,pn); return (s && !(s.length===1 && normPN(s[0].c)===normPN(pn))) ? s : null; }
 function poSplitList(cha, pn, codeS){
-  const sp=poSplitOf(cha,pn); if(!sp) return '';
+  const sp=poSplitShown(cha,pn); if(!sp) return '';
   return '<div style="margin-top:2px;line-height:1.35">'+sp.map(x=>
     '<div style="'+codeS+';color:#b91c1c">'+escapeHtml(normBadgePN(x.c))+' <span style="color:var(--muted)">×</span> '+Number(x.q).toLocaleString()+'</div>').join('')+'</div>';
 }
@@ -13037,8 +13039,45 @@ function poIsReqBook(wb){
     for(let r=0;r<Math.min(a.length,30);r++){
       if((a[r]||[]).some(v=>String(v==null?'':v).replace(/\s+/g,'').indexOf('수출작업의뢰서')>=0)) return true;
     }
+    // 의뢰서를 정리한 표: 윗줄에 RUMOSKRUS260301_AS 같은 차수 번호가 있고 Code 머리글이 있는 것
+    if(poReqChaCell(a) && a.some(r=>(r||[]).some(v=>{ const s=String(v==null?'':v).replace(/\s+/g,'').toLowerCase(); return s==='code'||s==='품목코드'; })))
+      return true;
   }
   return false;
+}
+// 표 윗부분에 적힌 차수 번호(RUMOSKRUS260301_AS → RUS 260301)
+function poReqChaCell(aoa){
+  for(let r=0;r<Math.min(aoa.length,10);r++){
+    for(const v of (aoa[r]||[])){
+      const m=String(v==null?'':v).trim().match(/^[A-Za-z]{5,}(\d{6})(?:[_\-\s][A-Za-z0-9]*)?$/);
+      if(m) return 'RUS '+m[1];
+    }
+  }
+  return '';
+}
+// 의뢰서·정리표의 Code / 수량(수주수량) / 공급수량 을 머리글 이름으로 읽는다.
+//   표가 여러 개면 머리글을 만날 때마다 다시 잡고, TOTAL 줄에서 끊는다.
+function poReqRows(aoa){
+  const out=[]; let C=null, hasSup=false;
+  const grab=s=>String(s==null?'':s).replace(/\s+/g,'').toLowerCase();
+  for(let r=0;r<aoa.length;r++){
+    const row=aoa[r]||[];
+    const h={c:-1,q:-1,s:-1};
+    row.forEach((v,i)=>{ const s=grab(v);
+      if(h.c<0 && (s==='code'||s==='품목코드'||s==='품번'||s==='발주코드')) h.c=i;
+      if(h.q<0 && (s==='수주수량'||s==='수량'||s==='qty'||s==='q\'ty')) h.q=i;
+      if(h.s<0 && s==='공급수량') h.s=i; });
+    if(h.c>=0 && h.q>=0){ C=h; if(h.s>=0) hasSup=true; continue; }
+    if(!C) continue;
+    const code=String(row[C.c]==null?'':row[C.c]).trim();
+    if(!code) continue;
+    if(/^t\s*o\s*t\s*a\s*l$/i.test(code) || /^합계/.test(code)){ C=null; continue; }
+    if(!/^[A-Za-z0-9._\-\/]{5,}$/.test(code)) continue;
+    const num=v=>{ const t=String(v==null?'':v).replace(/,/g,'').trim(); const n=Number(t); return (t!=='' && isFinite(n)) ? Math.round(n) : null; };
+    const q=num(row[C.q]); if(q==null || q<=0) continue;
+    out.push({ code, qty:q, sup:(C.s>=0 ? (num(row[C.s])||0) : null) });
+  }
+  return { rows:out, hasSup };
 }
 // ── 수출작업의뢰서 → 발주현황 수주수량 ─────────────────────
 //   · 차수는 Ref.No(RUMOSKRUS260702_AS → RUS 260702)
@@ -13054,9 +13093,10 @@ async function poReqUpload(wb, fname){
     if(has){ aoa=a; break; }
   }
   if(!aoa){ alert(ru?'Не найден список (Code/수량).':'Code·수량 표를 찾지 못했습니다.'); return; }
-  const cha=simReqCha(aoa, fname);
-  if(!cha){ alert(ru?'Не найден Ref. No.':'Ref. No 에서 차수를 알아내지 못했습니다.\n예: RUMOSKRUS260702_AS'); return; }
-  const src=simReqRows(aoa);
+  // 차수: Ref.No 칸 → 표 윗부분의 번호(RUMOSKRUS260301_AS) → 파일 이름 차례로 찾는다
+  const cha=simReqCha(aoa,'') || poReqChaCell(aoa) || simReqCha(aoa, fname);
+  if(!cha){ alert(ru?'Не найден Ref. No.':'차수를 알아내지 못했습니다.\nRef. No 나 표 위에 RUMOSKRUS260702_AS 같은 번호가 있어야 합니다.'); return; }
+  const parsed=poReqRows(aoa), src=parsed.rows, hasSup=parsed.hasSup;
   if(!src.length){ alert(ru?'Строк нет.':'Code·수량 줄을 찾지 못했습니다.'); return; }
   // 발주월: 차수의 달 − 1. 차수 번호가 이상하면 출고일자 − 1.
   let chaYm=cha.replace(/\D/g,'').slice(0,4);
@@ -13064,18 +13104,20 @@ async function poReqUpload(wb, fname){
   const poYm=chaYm ? psiYmAdd(chaYm,-1) : '';
   const mon=poYm ? String(Number(poYm.slice(2))) : '';
   // 같은 Code 가 두 번 나오면 더한다
-  const agg={}; let tot=0;
+  const agg={}; let tot=0, totS=0;
   src.forEach(x=>{ const pn=pnUpAll(x.code), k=normPN(pn);
-    (agg[k]||(agg[k]={pn, qty:0})).qty+=x.qty; tot+=x.qty; });
+    const o=agg[k]||(agg[k]={pn, qty:0, sup:0}); o.qty+=x.qty; o.sup+=(x.sup||0); tot+=x.qty; totS+=(x.sup||0); });
   const keys=Object.keys(agg);
   await loadPO(); await loadPoMan();
   const cur={}; poData.forEach(r=>{ if(String(r.cha)===cha) cur[normPN(r.pn)]=r; });
   const gone=Object.keys(cur).filter(k=>!agg[k]);
   const nNew=keys.filter(k=>!cur[k]).length, nUpd=keys.length-nNew;
   const unk=keys.filter(k=>!(getPNInfo(agg[k].pn) || findMasterRep(agg[k].pn) || poLookup(agg[k].pn).rep));
-  if(!confirm('수출작업의뢰서 → 발주현황 수주수량\n\n'
+  if(!confirm('수출작업의뢰서 → 발주현황 '+(hasSup?'수주·공급수량':'수주수량')+'\n\n'
     +'· 차수 '+cha+(mon?(' / 발주월 '+mon+'월'):'')+'\n'
-    +'· Code '+keys.length+'개 / 수량 '+tot.toLocaleString()+'개\n'
+    +'· Code '+keys.length+'개 / 수주 '+tot.toLocaleString()+'개'
+    +(hasSup?(' · 공급 '+totS.toLocaleString()+' · 미공급 '+(tot-totS).toLocaleString()):'')+'\n'
+    +(hasSup?'· 공급수량은 파일 값으로 고정합니다(손으로 고친 줄로 표시 — 인보이스로 다시 세지 않음)\n':'')
     +'· 새로 넣음 '+nNew+'줄 / 수주수량 바꿈 '+nUpd+'줄'
     +(gone.length?(' / 파일에 없어 지움 '+gone.length+'줄'):'')+'\n'
     +(unk.length?('· 품번조회에 없는 Code '+unk.length+'개(그래도 넣습니다): '+unk.slice(0,6).map(k=>agg[k].pn).join(', ')+(unk.length>6?' …':'')+'\n'):'')
@@ -13083,7 +13125,7 @@ async function poReqUpload(wb, fname){
   const now=new Date().toISOString();
   const put=keys.map(k=>{ const c=cur[k];
     return { cha, pn:c?c.pn:agg[k].pn, mon:mon||(c?c.mon:''), qty:agg[k].qty,
-             supplied:c?c.supplied:0, updated_at:now }; });
+             supplied:hasSup?agg[k].sup:(c?c.supplied:0), updated_at:now }; });
   for(let i=0;i<put.length;i+=300){
     const { error }=await sb.from('kt_po').upsert(put.slice(i,i+300),{onConflict:'cha,pn'});
     if(error){ alert((ru?'Ошибка загрузки.':'업로드 실패')+'\n['+(error.message||error.code)+']'); return; }
@@ -13096,6 +13138,14 @@ async function poReqUpload(wb, fname){
   let manCh=false;
   keys.forEach(k=>{ const mk=poManKey(cha,k); if(_poManQ[mk]){ delete _poManQ[mk]; manCh=true; } });
   gone.forEach(k=>{ const mk=poManKey(cha,k); if(_poMan[mk]||_poManQ[mk]){ delete _poMan[mk]; delete _poManQ[mk]; delete _poSplit[mk]; manCh=true; } });
+  // 공급수량이 적힌 파일이면 그 값으로 고정한다. 공급된 수량은 그 코드 인보이스에서 떼어 가도록
+  //   코드 한 개짜리 공급 내역으로 적어 둔다(다른 차수에 두 번 잡히지 않게).
+  if(hasSup){
+    put.forEach(p=>{ const mk=poManKey(cha,p.pn);
+      _poMan[mk]=1;
+      if(p.supplied>0) _poSplit[mk]=[{c:pnUpAll(p.pn), q:p.supplied}]; else delete _poSplit[mk]; });
+    manCh=true;
+  }
   if(manCh) savePoMan();
   await loadPO();
   let supMsg='';
@@ -13108,6 +13158,7 @@ async function poReqUpload(wb, fname){
   renderPO(); poManBtn(); poSimRefresh();
   alert((ru?'Готово. ':'반영 완료 — ')+cha+'\n'
     +'수주수량 '+put.length+'줄 / '+tot.toLocaleString()+'개'
+    +(hasSup?('\n공급수량 '+totS.toLocaleString()+'개 (파일 값으로 고정)'):'')
     +(gone.length?('\n지운 줄 '+gone.length):'')+supMsg);
 }
 // mode: 'order' = 수주수량 반영(없던 줄은 새로 만든다), 'supply' = 공급수량만 채운다
@@ -13186,8 +13237,8 @@ function downloadPO(){
     aoa.push(xh.map(h=>{
       if(h[0]==='qty')  return r.qty;
       if(h[0]==='sup')  return r.supplied;
-      if(h[0]==='chg' && poSplitOf(r.cha,r.pn)){ const v=poCellVal('chg', r);
-        return (v?(v+' / '):'')+poSplitOf(r.cha,r.pn).map(x=>normBadgePN(x.c)+'×'+x.q).join(', '); }
+      if(h[0]==='chg' && poSplitShown(r.cha,r.pn)){ const v=poCellVal('chg', r);
+        return (v?(v+' / '):'')+poSplitShown(r.cha,r.pn).map(x=>normBadgePN(x.c)+'×'+x.q).join(', '); }
       if(h[0]==='rest') return r.qty-r.supplied;
       return poCellVal(h[0], r);
     }));
