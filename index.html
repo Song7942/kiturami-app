@@ -12471,8 +12471,8 @@ function renderPO(){
       // 최종품번 — 품번조회와 같은 값·같은 저장 자리(대표품번의 final). 어느 화면에서 고쳐도 같이 바뀐다.
       final:(()=>{ const fv=pnUpperLead(((getPNInfo(i.rep||'')||{}).final)||'');
         return '<td style="'+tdS+'"><span style="'+codeS+'">'+((EDPO && i.rep) ? pnEditSpan(i.rep,'final',fv) : escapeHtml(fv))+'</span></td>'; })(),
-      // 공급 내역이 있으면, 비어 있거나 내역과 같은 변경코드 칸(점선)은 숨긴다(두 번 보이지 않게)
-      chg:'<td style="'+tdS+'">'+((poSplitShown(r.cha,r.pn) && (!chg || poSplitShown(r.cha,r.pn).some(x=>normPN(x.c)===normPN(chg))))
+      // 공급 내역이 있으면 그 내역만 보인다(최종품번은 옆 '최종품번' 열에 있으므로 여기서 또 보이지 않는다)
+      chg:'<td style="'+tdS+'">'+(poSplitShown(r.cha,r.pn)
           ? ''
           : (EDPO ? poChgEdit(r.pn, chg)
                   : (chg?('<span style="'+codeS+';color:#b91c1c;font-weight:600">'+escapeHtml(normBadgePN(chg))+'</span>'):'')))
