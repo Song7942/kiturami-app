@@ -379,7 +379,7 @@ td.lockd::after{content:' 🔒';font-size:9px}
 /* 발주현황에서 손으로 고친 칸 */
 td.po-man{background:#ffedd5!important;color:#9a3412!important;font-weight:700;border-bottom:1px solid #f97316!important}
 /* 발주현황 변경코드(공급) 칸의 공급 내역 — 칸 안에서 바로 고친다 */
-.po-sp-ed{outline:none;cursor:text;border-radius:3px;padding:0 1px}
+.po-sp-ed{outline:none;cursor:text;border-radius:3px;padding:0 1px;display:inline-block;min-width:16px;min-height:13px}
 .po-sp-ed:hover,.po-sp-ed:focus{background:var(--surface2);box-shadow:inset 0 -1px 0 var(--accent2)}
 /* 발주현황·선적입고현황 '묶어 보기' 의 대표품번 줄 */
 tr.kt-grp td{background:var(--tag-bg)!important;font-weight:700}
@@ -12368,7 +12368,7 @@ function poCellVal(key, r){
     case 'rep':  return i.rep||'';
     case 'pn':   return normBadgePN(r.pn)||'';
     case 'final': return pnUpperLead(((getPNInfo(i.rep||'')||{}).final)||'');
-    case 'chg':  { const sp=poSplitShown(r.cha,r.pn); return sp ? sp.map(x=>normBadgePN(x.c)+'×'+x.q).join(', ') : ''; }   // 적어 둔 공급 내역만(최종품번을 저절로 가져오지 않는다)
+    case 'chg':  { const sp=poSplitShown(r.cha,r.pn); return sp ? sp.map(x=>normBadgePN(x.c)+((Number(x.q)||0)>0?('×'+x.q):'')).join(', ') : ''; }   // 적어 둔 공급 내역만(최종품번을 저절로 가져오지 않는다)
     case 'dan':  return String((pnSpecOf(i.fin||r.pn)||{}).dan||'');      // 단종·수출제한은 최종품번 기준(없으면 발주코드)
     case 'exp':  return isExportRestricted(i.fin||r.pn) ? 'O' : '';
     case 'name': return poName(r.pn)||'';
@@ -12666,7 +12666,7 @@ function poSplitList(cha, pn, ed){
     : escapeHtml(v);
   return '<div style="line-height:1.5;font-size:11px">'+sp.map((x,i)=>
     '<div><span style="color:#b91c1c;font-weight:600">'+ce(i,'c',normBadgePN(x.c))+'</span>'
-    +' <span style="color:var(--muted)">×</span> '+ce(i,'q',Number(x.q).toLocaleString())+'</div>').join('')+'</div>';
+    +' <span style="color:var(--muted)">×</span> '+ce(i,'q',(Number(x.q)||0)>0?Number(x.q).toLocaleString():'')+'</div>').join('')+'</div>';
 }
 // 공급 내역이 없는 줄의 변경코드(공급) 칸 — 코드를 적으면 코드별 공급수량 창을 그 코드로 연다
 function poChgNewEdit(cha, pn){
@@ -12676,11 +12676,17 @@ function poChgNewEdit(cha, pn){
     + ' onblur="onPoChgNewBlur(this)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();this.blur();}"'
     + " style=\"display:inline-block;min-width:60px;min-height:14px;font-size:11px\"></span>";
 }
-function onPoChgNewBlur(el){
+// 적은 코드를 수량 없이 바로 저장한다(공급수량은 그대로 인보이스로 셈). 수량은 나중에 칸이나 ⇄ 창에서 넣는다.
+async function onPoChgNewBlur(el){
+  const ru=(lang==='ru');
   const code=pnUpAll(String(el.textContent||'').replace(/\s+/g,''));
   el.textContent='';
   if(!code) return;
-  poSplitOpen(el, code);
+  if(!((typeof pnEditable==='function') && pnEditable())) return;
+  const cha=String(el.getAttribute('data-pocha')||''), pn=String(el.getAttribute('data-popn')||'');
+  const row=(poData||[]).find(x=>String(x.cha)===cha && normPN(x.pn)===normPN(pn)); if(!row) return;
+  if(!poName(code) && !confirm(ru?'Кода нет в справочнике. Сохранить?':(normBadgePN(code)+' 는 품번조회에 없는 코드입니다. 그래도 적을까요?'))) return;
+  await poSplitApply(row, [{c:code, q:0}]);
 }
 function poSplitOpen(el, preCode){
   const ru=(lang==='ru');
@@ -12748,10 +12754,10 @@ async function poSplitSave(clear){
     const m={}; const order=[];
     box.querySelectorAll('#poSplitBody tr').forEach(tr=>{
       const c=pnUpAll(tr.querySelector('.po-sp-c').value), q=Math.round(Number(tr.querySelector('.po-sp-q').value)||0);
-      if(!c || q<=0) return;
+      if(!c || q<0) return;                        // 수량은 비워도 된다(코드만 적어 두기)
       const k=normPN(c); if(!(k in m)){ m[k]={c, q:0}; order.push(k); } m[k].q+=q; });
     list=order.map(k=>m[k]);
-    if(!list.length){ alert(ru?'Введите код и количество.':'공급코드와 수량을 한 줄 이상 넣어 주세요.'); return; }
+    if(!list.length){ alert(ru?'Введите код.':'공급코드를 한 줄 이상 넣어 주세요.'); return; }
     const sum=list.reduce((a,x)=>a+x.q,0);
     if(sum>(Number(row.qty)||0) && !confirm(ru?'Больше заказанного. Сохранить?':('코드별 합계 '+sum.toLocaleString()+' 가 수주수량 '+(Number(row.qty)||0).toLocaleString()+' 보다 많습니다. 그래도 저장할까요?'))) return;
   }
@@ -12763,8 +12769,12 @@ async function poSplitApply(row, list){
   const cha=row.cha, pn=row.pn, key=poManKey(cha,pn);
   const before=poSplitOf(cha,pn);
   const clear=!(list && list.length);
+  // 수량을 하나라도 적었으면 공급수량 = 코드별 수량의 합(손으로 고친 줄).
+  //   코드만 적고 수량은 비웠으면 기록만 남기고, 공급수량은 전처럼 인보이스로 셈한다.
+  const sum=clear?0:list.reduce((a,x)=>a+(Number(x.q)||0),0);
   if(clear){ delete _poSplit[key]; delete _poMan[key]; }
-  else { _poSplit[key]=list; _poMan[key]=1; row.supplied=list.reduce((a,x)=>a+x.q,0); }
+  else if(sum>0){ _poSplit[key]=list; _poMan[key]=1; row.supplied=sum; }
+  else { _poSplit[key]=list; delete _poMan[key]; }
   savePoMan();
   const { error }=await sb.from('kt_po').upsert(
     { cha:row.cha, pn:row.pn, mon:row.mon, qty:row.qty, supplied:row.supplied, updated_at:new Date().toISOString() },{onConflict:'cha,pn'});
@@ -12783,7 +12793,7 @@ async function poSplitApply(row, list){
   return true;
 }
 // 변경코드(공급) 칸 안에서 공급 내역의 코드·수량을 바로 고친다.
-//   코드를 비우거나 수량을 0 으로 하면 그 줄이 빠지고, 다 빠지면 나눠 적기가 풀린다.
+//   코드를 비우면 그 줄이 빠지고(수량은 비워도 된다), 다 빠지면 나눠 적기가 풀린다.
 async function onPoSplitCellBlur(el){
   const ru=(lang==='ru');
   const cha=String(el.getAttribute('data-pocha')||''), pn=String(el.getAttribute('data-popn')||'');
@@ -12807,7 +12817,7 @@ async function onPoSplitCellBlur(el){
   }
   // 빈 줄은 빼고, 같은 코드는 합친다
   const m={}, order=[];
-  list.forEach(x=>{ if(!x.c || !(x.q>0)) return; const k=normPN(x.c);
+  list.forEach(x=>{ if(!x.c) return; const k=normPN(x.c);
     if(!(k in m)){ m[k]={c:x.c, q:0}; order.push(k); } m[k].q+=x.q; });
   const next=order.map(k=>m[k]);
   if(!next.length && !confirm(ru?'Снять разбивку?':'남은 공급코드가 없습니다. 나눠 적기를 풀고 인보이스 기준으로 되돌릴까요?')){ el.textContent=before; return; }
