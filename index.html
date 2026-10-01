@@ -12368,7 +12368,7 @@ function poCellVal(key, r){
     case 'rep':  return i.rep||'';
     case 'pn':   return normBadgePN(r.pn)||'';
     case 'final': return pnUpperLead(((getPNInfo(i.rep||'')||{}).final)||'');
-    case 'chg':  return (i.fin && i.fin!==normPN(r.pn)) ? normBadgePN(i.fin) : '';
+    case 'chg':  { const sp=poSplitShown(r.cha,r.pn); return sp ? sp.map(x=>normBadgePN(x.c)+'×'+x.q).join(', ') : ''; }   // 적어 둔 공급 내역만(최종품번을 저절로 가져오지 않는다)
     case 'dan':  return String((pnSpecOf(i.fin||r.pn)||{}).dan||'');      // 단종·수출제한은 최종품번 기준(없으면 발주코드)
     case 'exp':  return isExportRestricted(i.fin||r.pn) ? 'O' : '';
     case 'name': return poName(r.pn)||'';
@@ -12553,11 +12553,9 @@ function renderPO(){
       // 최종품번 — 품번조회와 같은 값·같은 저장 자리(대표품번의 final). 어느 화면에서 고쳐도 같이 바뀐다.
       final:(()=>{ const fv=pnUpperLead(((getPNInfo(i.rep||'')||{}).final)||'');
         return '<td style="'+tdS+'"><span style="'+codeS+'">'+((EDPO && i.rep) ? pnEditSpan(i.rep,'final',fv) : escapeHtml(fv))+'</span></td>'; })(),
-      // 공급 내역이 있으면 그 내역만 보인다(최종품번은 옆 '최종품번' 열에 있으므로 여기서 또 보이지 않는다)
-      chg:'<td style="'+tdS+'">'+(poSplitShown(r.cha,r.pn)
-          ? ''
-          : (EDPO ? poChgEdit(r.pn, chg)
-                  : (chg?('<span style="'+codeS+';color:#b91c1c;font-weight:600">'+escapeHtml(normBadgePN(chg))+'</span>'):'')))
+      // 변경코드(공급) = 적어 둔 공급 내역만 보인다. 최종품번은 저절로 가져오지 않는다(옆 '최종품번' 열에 있다).
+      //   비어 있으면 코드를 적는 칸 — 적으면 코드별 공급수량 창이 그 코드로 열린다(수량은 거기서).
+      chg:'<td style="'+tdS+'">'+((!poSplitShown(r.cha,r.pn) && EDPO) ? poChgNewEdit(r.cha, r.pn) : '')
           + poSplitList(r.cha, r.pn, EDPO)+'</td>',
       dan:'<td style="'+tdS+';text-align:center;color:var(--muted)">'+escapeHtml(String((pnSpecOf(i.fin||r.pn)||{}).dan||''))+'</td>',
       exp:'<td style="'+tdS+';text-align:center;color:#ef4444;font-weight:700">'+(isExportRestricted(i.fin||r.pn)?'O':'')+'</td>',
@@ -12670,13 +12668,29 @@ function poSplitList(cha, pn, ed){
     '<div><span style="color:#b91c1c;font-weight:600">'+ce(i,'c',normBadgePN(x.c))+'</span>'
     +' <span style="color:var(--muted)">×</span> '+ce(i,'q',Number(x.q).toLocaleString())+'</div>').join('')+'</div>';
 }
-function poSplitOpen(el){
+// 공급 내역이 없는 줄의 변경코드(공급) 칸 — 코드를 적으면 코드별 공급수량 창을 그 코드로 연다
+function poChgNewEdit(cha, pn){
+  return '<span contenteditable="true" class="po-sp-ed" data-pocha="'+escapeHtml(String(cha||''))+'" data-popn="'+escapeHtml(String(pn||''))+'"'
+    + ' title="'+escapeHtml((lang==='ru')?'Код поставки':'실제로 공급된 코드를 적으면 수량을 넣는 창이 열립니다')+'"'
+    + ' onclick="event.stopPropagation()" onmousedown="event.stopPropagation()"'
+    + ' onblur="onPoChgNewBlur(this)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();this.blur();}"'
+    + " style=\"display:inline-block;min-width:60px;min-height:14px;font-size:11px\"></span>";
+}
+function onPoChgNewBlur(el){
+  const code=pnUpAll(String(el.textContent||'').replace(/\s+/g,''));
+  el.textContent='';
+  if(!code) return;
+  poSplitOpen(el, code);
+}
+function poSplitOpen(el, preCode){
   const ru=(lang==='ru');
   if(!((typeof pnEditable==='function') && pnEditable())) return;
   const cha=String(el.getAttribute('data-pocha')||''), pn=String(el.getAttribute('data-popn')||'');
   const row=(poData||[]).find(x=>String(x.cha)===cha && normPN(x.pn)===normPN(pn)); if(!row) return;
   const old=document.getElementById('poSplitPop'); if(old) old.remove();
-  const cur=poSplitOf(cha,pn) || [{c:pnUpAll(row.pn), q:row.supplied||''}];
+  // 칸에 적은 코드가 있으면 그 코드로, 없으면 지금 내역(없으면 발주코드)으로 시작한다. 수량은 지금 공급수량을 넣어 둔다.
+  const cur=preCode ? [{c:preCode, q:row.supplied||''}]
+                    : (poSplitOf(cha,pn) || [{c:pnUpAll(row.pn), q:row.supplied||''}]);
   const box=document.createElement('div'); box.id='poSplitPop';
   box.setAttribute('data-pocha',cha); box.setAttribute('data-popn',row.pn);
   box.style.cssText='position:fixed;inset:0;z-index:10000;background:#0008;display:flex;align-items:center;justify-content:center';
@@ -13581,8 +13595,6 @@ function downloadPO(){
     aoa.push(xh.map(h=>{
       if(h[0]==='qty')  return r.qty;
       if(h[0]==='sup')  return r.supplied;
-      if(h[0]==='chg' && poSplitShown(r.cha,r.pn)){ const v=poCellVal('chg', r);
-        return (v?(v+' / '):'')+poSplitShown(r.cha,r.pn).map(x=>normBadgePN(x.c)+'×'+x.q).join(', '); }
       if(h[0]==='rest') return r.qty-r.supplied;
       return poCellVal(h[0], r);
     }));
