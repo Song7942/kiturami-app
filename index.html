@@ -13780,29 +13780,41 @@ function ppsiParse(wb){
     notes.push('합본 '+hapBlocks.map(b=>'20'+b.yy).join('·')+' 판매(수량)');
   }
   // 3) 2021년 시트 — 월별 '판매 계'. 코드로 맞추고, 소계·합계는 이름이 양쪽에 하나뿐일 때만 맞춘다
-  const n21=wb.SheetNames.find(n=>/^\s*20\d{2}년\s*$/.test(n));
-  if(n21){
-    const a=aoaOf(n21), yy=String(n21.match(/20(\d{2})년/)[1]);
-    if(!hapYears[yy]){
-      const r2=a[1]||[], r3=a[2]||[], r4=a[3]||[];
-      const ms=[]; r2.forEach((v,c)=>{ const m=String(v==null?'':v).match(/^\s*(\d{1,2})월\s*\(/); if(m && ms.length<12) ms.push({ mm:+m[1], c }); });
-      const cols=[]; ms.forEach(x=>{ for(let c=x.c;c<x.c+6;c++){ if(ppsiNorm(r3[c])==='판매'){ for(let k=c;k<c+4;k++){ if(ppsiNorm(r4[k])==='계'){ cols.push({ ym:yy+String(x.mm).padStart(2,'0'), col:k }); break; } } break; } } });
-      // 모델 줄(코드가 있는 줄)만 코드로 맞춘다. 소계·합계는 아래에서 모델 줄로 다시 셈한다.
-      let miss=0, missQ=0;
-      for(let r=4;r<a.length;r++){ const row=a[r]||[];
-        const t=ppsiNorm(row[0]), g=ppsiNorm(row[2]), m=ppsiNorm(row[3]);
-        if(!PPSI_CODE_RE.test(g)){
-          // 코드 없이 수량이 있는 모델 줄은 맞출 수 없어 뺀다(소계 줄은 원래 안 쓴다)
-          if(t && m && !/합계|소계/.test(t+m)){ const q=cols.reduce((s,cc)=>s+(ppsiNum(row[cc.col])||0),0); if(q){ miss++; missQ+=q; } }
-          continue; }
-        const key='C:'+g;
-        if(!byKey[key]){ const o={ k:key, t, g, m, lv:'m', src:n21 }; byKey[key]=o; rows.push(o); }
-        cols.forEach(cc=>put(key, cc.ym, ppsiNum(row[cc.col]))); }
-      notes.push(n21+' 판매 계 '+cols.length+'개월'+(miss?(' (코드 없는 모델 '+miss+'줄·'+missQ+'개 뺌)'):''));
-    }
+  const ys=ppsiYearSheet(wb);
+  if(ys && !hapYears[ys.yy]){
+    ys.items.forEach(x=>{ const key='C:'+x.code;
+      if(!byKey[key]){ const o={ k:key, t:x.t, g:x.code, m:x.m, lv:'m', src:ys.name }; byKey[key]=o; rows.push(o); }
+      Object.keys(x.vals).forEach(ym=>put(key, ym, x.vals[ym])); });
+    notes.push(ys.note);
   }
-  // 줄을 다시 세운다: 맨 위 합계, 그 아래 타입(가스·기름…)마다 소계와 그 모델들. 합계·소계는 모델 줄을 더한 값이다.
-  const models=rows.filter(r=>r.lv==='m');
+  const b=ppsiBuild(rows.filter(r=>r.lv==='m'), d);
+  return { rows:b.rows, d:b.d, years:b.years, notes };
+}
+// 'YYYY년' 시트(예: 2021년)의 월별 '판매 계'. 코드가 있는 모델 줄만 읽는다(소계·합계는 모델 줄로 다시 셈한다).
+//   돌려주는 것: { name, yy, items:[{code,t,m,vals:{ym:n}}], note }
+function ppsiYearSheet(wb){
+  const name=wb.SheetNames.find(n=>/^\s*20\d{2}년\s*$/.test(n));
+  if(!name) return null;
+  const a=XLSX.utils.sheet_to_json(wb.Sheets[name],{header:1,raw:true,defval:''});
+  const yy=String(name.match(/20(\d{2})년/)[1]);
+  const r2=a[1]||[], r3=a[2]||[], r4=a[3]||[];
+  const ms=[]; r2.forEach((v,c)=>{ const m=String(v==null?'':v).match(/^\s*(\d{1,2})월\s*\(/); if(m && ms.length<12) ms.push({ mm:+m[1], c }); });
+  const cols=[]; ms.forEach(x=>{ for(let c=x.c;c<x.c+6;c++){ if(ppsiNorm(r3[c])==='판매'){ for(let k=c;k<c+4;k++){ if(ppsiNorm(r4[k])==='계'){ cols.push({ ym:yy+String(x.mm).padStart(2,'0'), col:k }); break; } } break; } } });
+  const items=[], seen={}; let miss=0, missQ=0;
+  for(let r=4;r<a.length;r++){ const row=a[r]||[];
+    const t=ppsiNorm(row[0]), g=ppsiNorm(row[2]), m=ppsiNorm(row[3]);
+    if(!PPSI_CODE_RE.test(g)){
+      // 코드 없이 수량이 있는 모델 줄은 맞출 수 없어 뺀다
+      if(t && m && !/합계|소계/.test(t+m)){ const q=cols.reduce((s,cc)=>s+(ppsiNum(row[cc.col])||0),0); if(q){ miss++; missQ+=q; } }
+      continue; }
+    const vals={}; cols.forEach(cc=>{ const n=ppsiNum(row[cc.col]); if(n!=null) vals[cc.ym]=(vals[cc.ym]||0)+n; });
+    if(seen[g]){ Object.keys(vals).forEach(ym=>{ seen[g].vals[ym]=(seen[g].vals[ym]||0)+vals[ym]; }); continue; }
+    const it={ code:g, t, m, vals }; seen[g]=it; items.push(it); }
+  return { name, yy, items, months:cols.length,
+           note:name+' 판매 계 '+cols.length+'개월'+(miss?(' (코드 없는 모델 '+miss+'줄·'+missQ+'개 뺌)'):'') };
+}
+// 줄을 다시 세운다: 맨 위 합계, 그 아래 타입(가스·기름…)마다 소계와 그 모델들. 합계·소계는 모델 줄을 더한 값이다.
+function ppsiBuild(models, d){
   const types=[]; models.forEach(r=>{ const t=r.t||'기타'; if(types.indexOf(t)<0) types.push(t); });
   const outRows=[{ k:'T:ALL', t:'', g:'', m:'합계', lv:'t' }], dd={};
   const addTo=(k,o)=>Object.keys(o||{}).forEach(ym=>{ (dd[k]=dd[k]||{}); dd[k][ym]=(dd[k][ym]||0)+o[ym]; });
@@ -13812,7 +13824,22 @@ function ppsiParse(wb){
   });
   const yms=new Set(); Object.values(dd).forEach(o=>Object.keys(o).forEach(y=>yms.add(y)));
   const years=[...new Set([...yms].map(y=>y.slice(0,2)))].sort();
-  return { rows:outRows, d:dd, years, notes };
+  return { rows:outRows, d:dd, years };
+}
+// 'YYYY년' 시트만 있는 엑셀(예: 2022 05 19 러시아 제품 PSI.xlsx 의 2021년)을 올렸을 때:
+//   지금 표에서 그 해 숫자만 이 시트 값으로 바꾼다(다른 해는 그대로). 표에 없는 코드는 새 줄로 넣는다.
+function ppsiMergeYear(cur, ys){
+  const models=(cur.rows||[]).filter(r=>r.lv==='m').map(r=>Object.assign({}, r));
+  const d={}; models.forEach(r=>{ const o=(cur.d||{})[r.k]; if(!o) return;
+    const keep={}; Object.keys(o).forEach(ym=>{ if(ym.slice(0,2)!==ys.yy) keep[ym]=o[ym]; }); d[r.k]=keep; });
+  const byKey={}; models.forEach(r=>{ byKey[r.k]=r; });
+  let added=0;
+  ys.items.forEach(x=>{ const key='C:'+x.code;
+    if(!byKey[key]){ const o={ k:key, t:x.t, g:x.code, m:x.m, lv:'m', src:ys.name }; byKey[key]=o; models.push(o); added++; }
+    const dst=(d[key]=d[key]||{}); Object.keys(x.vals).forEach(ym=>{ dst[ym]=(dst[ym]||0)+x.vals[ym]; }); });
+  const b=ppsiBuild(models, d);
+  const notes=(cur.notes||[]).filter(n=>!new RegExp('^20'+ys.yy+'년 ').test(n)).concat([ys.note+' (따로 올림)']);
+  return { rows:b.rows, d:b.d, years:b.years, notes, added };
 }
 function handlePPSIUpload(ev){
   const ru=(lang==='ru');
@@ -13824,6 +13851,27 @@ function handlePPSIUpload(ev){
   fr.onload=async function(e){
     try{
       const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array', cellFormula:false, cellHTML:false, cellStyles:false});
+      // 모스크바·합본 없이 'YYYY년' 시트만 있으면: 지금 표의 그 해 숫자만 바꾼다
+      const onlyYear=wb.SheetNames.indexOf('모스크바')<0 && wb.SheetNames.indexOf('합본')<0;
+      if(onlyYear){
+        const ys=ppsiYearSheet(wb);
+        if(!ys){ alert(ru?'Нет нужных листов.':"'모스크바'·'합본' 또는 '2021년' 같은 연도 시트가 없습니다."); renderPPSI(); return; }
+        await loadPPSI(true);   // 다른 사람이 그 사이 올렸을 수 있으니 새로 읽는다
+        if(!_ppsi){ alert('먼저 제품 PSI 엑셀(모스크바·블라디보스톡·합본 시트가 있는 파일)을 올려 주세요.\n그 다음에 '+ys.name+' 시트만 따로 올릴 수 있습니다.'); renderPPSI(); return; }
+        const mg=ppsiMergeYear(_ppsi, ys);
+        const yTot=mg.d['T:ALL']||{};
+        const sum=Object.keys(yTot).filter(k=>k.slice(0,2)===ys.yy).reduce((a,k)=>a+yTot[k],0);
+        if(!confirm('제품 PSI — '+file.name+'\n\n'
+          +'· '+ys.name+' 시트의 판매 계로 20'+ys.yy+'년 숫자만 바꿉니다(다른 해는 그대로)\n'
+          +'· 20'+ys.yy+'년 합계 '+sum.toLocaleString()+' / 코드 '+ys.items.length+'개'+(mg.added?(' (새 줄 '+mg.added+'개)'):'')+'\n'
+          +'· '+ys.note+'\n\n계속할까요?')){ renderPPSI(); return; }
+        const cfg=Object.assign({}, _ppsi, { rows:mg.rows, d:mg.d, years:mg.years, notes:mg.notes,
+          y_files:Object.assign({}, _ppsi.y_files||{}, { [ys.yy]:{ file:file.name, at:new Date().toISOString() } }) });
+        const { error }=await sb.from('kt_psi_cfg').upsert({ id:PPSI_ID, cfg, updated_at:new Date().toISOString() },{onConflict:'id'});
+        if(error){ alert((ru?'Ошибка сохранения':'저장 실패')+'\n['+(error.message||error.code)+']'); renderPPSI(); return; }
+        _ppsi=cfg; ppsiFillYears(true); renderPPSI();
+        return;
+      }
       const p=ppsiParse(wb);
       if(p.error){ alert(p.error); renderPPSI(); return; }
       const tot=p.rows.find(o=>o.lv==='t');
