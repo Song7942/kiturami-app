@@ -677,7 +677,7 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
   <button class="tab-btn" style="display:none" onclick="switchTab('shipments')" id="tab-shipments"><span id="i18n-tab-shipments">🚚 출고관리</span></button>
   <button class="tab-btn" style="display:none" onclick="switchTab('price')"     id="tab-price">💲 가격정보</button>
   <button class="tab-btn" style="display:none" onclick="switchTab('psi')"       id="tab-psi"><span id="i18n-tab-psi">📈 PSI</span></button>
-  <button class="tab-btn" style="display:none" onclick="switchTab('ppsi')"      id="tab-ppsi"><span id="i18n-tab-ppsi">📦 제품 PSI</span></button>
+  <button class="tab-btn" style="display:none" onclick="switchTab('ppsi')"      id="tab-ppsi"><span id="i18n-tab-ppsi">📦 제품 출고</span></button>
   <button class="tab-btn" style="display:none" onclick="switchTab('po')"        id="tab-po"><span id="i18n-tab-po">📋 발주현황</span></button>
   <button class="tab-btn" style="display:none" onclick="switchTab('ship')"      id="tab-ship"><span id="i18n-tab-ship">🚢 선적/입고현황</span></button>
   <button class="tab-btn" style="display:none" onclick="switchTab('ms')"        id="tab-ms"><span id="i18n-tab-ms">⚠ 미출현황</span></button>
@@ -1515,7 +1515,7 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
       </select>
       <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted)"><input type="checkbox" id="ppsiHideZero" checked onchange="renderPPSI()"> <span id="i18n-ppsi-hz">수량 없는 줄 숨기기</span></label>
       <div class="count-badge" id="ppsiBadge"></div>
-      <button class="dl-btn" id="ppsiUpBtn" onclick="document.getElementById('ppsiFile').click()" title="제품 PSI 엑셀(모스크바·블라디보스톡·합본·2021년 시트)을 올리면 표를 새로 만듭니다" style="display:none;background:var(--accent2);border-color:var(--accent2);color:#fff">
+      <button class="dl-btn" id="ppsiUpBtn" onclick="document.getElementById('ppsiFile').click()" title="제품 출고 엑셀(제품 PSI 파일 — 모스크바·블라디보스톡·합본·2021년 시트)을 올리면 표를 새로 만듭니다" style="display:none;background:var(--accent2);border-color:var(--accent2);color:#fff">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
         <span id="i18n-ppsi-up">엑셀 업로드</span>
       </button>
@@ -2541,7 +2541,7 @@ function refreshPsiTexts(){
   set('i18n-pn-cols',COLS[0],COLS[1]);
   // 보고서
   set('i18n-tab-report','📑 보고서','📑 Отчёт');
-  set('i18n-tab-ppsi','📦 제품 PSI','📦 PSI изделий');
+  set('i18n-tab-ppsi','📦 제품 출고','📦 Отгрузка изделий');
   set('i18n-rep-perlab','기간','Период');
   set('i18n-rep-lowlab','재고 기준(개월)','Норма запаса (мес.)');
   set('i18n-rep-avglab','보유월 향후','Мес. вперёд');
@@ -3571,7 +3571,7 @@ function updatePaneHBar(key){ const f=_hbars[key]; if(f) f(); }
 //   PSI 와 발주시뮬레이션처럼 생김새가 닮은 화면이 많아, 도구줄 맨 앞에 이름을 붙인다.
 const KT_PANE_TITLE={
   pn:['품번 조회','Артикулы'], parts:['부품 조회','Поиск деталей'], prod:['제품목록','Изделия'],
-  psi:['PSI','PSI'], ppsi:['제품 PSI','PSI изделий'], sim:['발주시뮬레이션','Симуляция заказа'], po:['발주현황','Заказы'],
+  psi:['PSI','PSI'], ppsi:['제품 출고','Отгрузка изделий'], sim:['발주시뮬레이션','Симуляция заказа'], po:['발주현황','Заказы'],
   ship:['선적/입고현황','Отгрузка/Приход'], ms:['미출현황','Невыполненные'],
   moq:['MOQ','MOQ'], blk:['사용불가','Заблокировано'], price:['가격정보','Цены'],
   ss:['안전재고','Страховой запас'], pnchk:['품번확인','Проверка артикулов'],
@@ -11789,7 +11789,7 @@ function ktDropInitAll(){
   const X=(ko)=>'여기에 '+ko+' 엑셀(.xlsx)을 놓으세요';
   const R=(ru)=>'Отпустите файл Excel ('+ru+') здесь';
   ktDropInit('pane-psi',       'psiFileInput',    X('PSI'),      R('PSI'));
-  ktDropInit('pane-ppsi',      'ppsiFile',        X('제품 PSI'), R('PSI изделий'));
+  ktDropInit('pane-ppsi',      'ppsiFile',        X('제품 출고'), R('отгрузка изделий'));
   ktDropInit('pane-sim',       'simDropFile',
              '여기에 발주필요 또는 PSI 엑셀(.xlsx)을 놓으세요',
              'Отпустите файл Excel (дозаказ или PSI) здесь');
@@ -13861,7 +13861,7 @@ function handlePPSIUpload(ev){
         const mg=ppsiMergeYear(_ppsi, ys);
         const yTot=mg.d['T:ALL']||{};
         const sum=Object.keys(yTot).filter(k=>k.slice(0,2)===ys.yy).reduce((a,k)=>a+yTot[k],0);
-        if(!confirm('제품 PSI — '+file.name+'\n\n'
+        if(!confirm('제품 출고 — '+file.name+'\n\n'
           +'· '+ys.name+' 시트의 판매 계로 20'+ys.yy+'년 숫자만 바꿉니다(다른 해는 그대로)\n'
           +'· 20'+ys.yy+'년 합계 '+sum.toLocaleString()+' / 코드 '+ys.items.length+'개'+(mg.added?(' (새 줄 '+mg.added+'개)'):'')+'\n'
           +'· '+ys.note+'\n\n계속할까요?')){ renderPPSI(); return; }
@@ -13876,7 +13876,7 @@ function handlePPSIUpload(ev){
       if(p.error){ alert(p.error); renderPPSI(); return; }
       const tot=p.rows.find(o=>o.lv==='t');
       const ySum=yy=>{ const o=tot?p.d[tot.k]:null; if(!o) return 0; return Object.keys(o).filter(k=>k.slice(0,2)===yy).reduce((a,k)=>a+o[k],0); };
-      if(!confirm('제품 PSI — '+file.name+'\n\n'
+      if(!confirm('제품 출고 — '+file.name+'\n\n'
         +'· 줄 '+p.rows.length+'개 / 연도 '+p.years.map(y=>'20'+y).join(', ')+'\n'
         +(tot?('· '+(tot.m||tot.g||tot.t)+':\n   '+p.years.map(y=>'20'+y+' '+ySum(y).toLocaleString()).join(' · ')+'\n'):'')
         +'· 읽은 곳: '+p.notes.join(' / ')+'\n\n'
@@ -13931,7 +13931,7 @@ function renderPPSI(){
   if(!_ppsi){ thead.innerHTML=''; tbody.innerHTML=''; if(cg) cg.innerHTML='';
     if(badge) badge.textContent='';
     if(info) info.textContent='';
-    if(empty){ empty.style.display='block'; empty.textContent=ru?'Нет данных. Загрузите Excel «PSI изделий».':'자료가 없습니다. 제품 PSI 엑셀을 올려 주세요.'; }
+    if(empty){ empty.style.display='block'; empty.textContent=ru?'Нет данных. Загрузите Excel (PSI изделий).':'자료가 없습니다. 제품 PSI 엑셀을 올려 주세요(제품 출고 수량을 읽어 옵니다).'; }
     updatePaneHBar('ppsi'); return; }
   if(empty) empty.style.display='none';
   const C=ppsiCols(), rows=ppsiVisibleRows(C);
@@ -13979,8 +13979,8 @@ async function downloadPPSI(){
   xlPaint(ws, 0, h1.length, XL_HEAD_C); xlPaint(ws, 1, h1.length, XL_HEAD_C);
   rows.forEach((r,i)=>{ if(r.lv!=='m') xlPaint(ws, i+2, h1.length, r.lv==='t'?XL_SUM:XL_GRP); });
   for(let ri=2; ri<aoa.length; ri++) for(let ci=3; ci<h1.length; ci++){ const a=XLSX.utils.encode_cell({r:ri,c:ci}); if(ws[a] && ws[a].t==='n') ws[a].z='#,##0'; }
-  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, ru?'PSI изделий':'제품 출고');
-  XLSX.writeFile(wb, xlsxName('제품PSI','PSI_izdeliy'));
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, ru?'Отгрузка изделий':'제품 출고');
+  XLSX.writeFile(wb, xlsxName('제품출고','Otgruzka_izdeliy'));
 }
 function downloadPO(){
   renderPO();
