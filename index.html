@@ -4929,19 +4929,36 @@ function downloadParts(){
   const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'부품검색');
   XLSX.writeFile(wb, xlsxName('부품검색','Поиск_деталей'));
 }
-function downloadPN(){
+async function downloadPN(){
   renderPN();   // 현재 검색·필터·정렬·분할 상태를 _pnFiltered 에 최신화
   const rows=(_pnFiltered||[]).slice();
   if(!rows.length) return;
+  await ensureXlsxStyle();      // 머리글 줄바꿈·가운데 정렬을 엑셀에 적으려면 스타일 판이 필요하다
   const isKo=lang==='ko', showEng=canViewEngName();
   // 화면에 보이는 열(순서 그대로). 삭제 열은 제외.
   const meta=pnColMetaOrdered(isKo, showEng, false);
-  const labelFor=c=> c.group ? (c.group+' '+c.capLabel) : (String(c.label||'').replace(/<br>/g,' ').trim() || pnColLabelShort(c.key));
+  // 머리글은 화면처럼 줄을 나눠 한 칸 안에 적는다(예: 최종품번 / (변경, 현시점), 대체품목 / (연결조립필요품목포함) / 품번)
+  const labelFor=c=> c.group
+    ? (String(c.group).replace(/<br>/g,'\n').replace(/\s*\(/,'\n(').trim()+'\n'+c.capLabel)
+    : (String(c.label||'').replace(/\s*<br>\s*/g,'\n').trim() || pnColLabelShort(c.key));
   const header=meta.map(labelFor);
   const aoa=[header];
-  rows.forEach(r=> aoa.push(meta.map(c=> pnColText(c.key, r))));
+  // 출고·선적·중량·부피 열은 엑셀에서 숫자로 셈할 수 있게 숫자로 넣는다(글자로 넣으면 합계·정렬이 안 된다)
+  const NUM_COL={ out:1, ship:1, nw:1, gw:1, cbm:1 };
+  const cellOf=(key, r)=>{ const v=pnColText(key, r);
+    if(!NUM_COL[key]) return v;
+    const t=String(v==null?'':v).replace(/,/g,'').trim(); if(t==='') return '';
+    const n=Number(t); return isFinite(n) ? n : v; };
+  rows.forEach(r=> aoa.push(meta.map(c=> cellOf(c.key, r))));
   const ws=XLSX.utils.aoa_to_sheet(aoa);
   ws['!cols']=meta.map(c=> ({ wch: Math.min(40, Math.max(6, Math.round((c.cap||60)/6.5))) }));
+  // 출고·선적은 천 단위 쉼표로 보이게
+  meta.forEach((c,ci)=>{ if(c.key!=='out' && c.key!=='ship') return;
+    for(let ri=1; ri<aoa.length; ri++){ const a=XLSX.utils.encode_cell({r:ri, c:ci}); if(ws[a] && ws[a].t==='n') ws[a].z='#,##0'; } });
+  // 머리글: 칸 안 줄바꿈 + 가운데 정렬, 줄 수만큼 높이를 준다
+  xlPaint(ws, 0, meta.length, Object.assign({}, XL_HEAD_C, { alignment:{ horizontal:'center', vertical:'center', wrapText:true } }));
+  const lines=Math.max(1, ...header.map(h=>String(h).split('\n').length));
+  ws['!rows']=[{ hpt: 15*lines+4 }];
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,lang==='ru'?'Артикулы':'품번조회');
   XLSX.writeFile(wb, xlsxName('품번조회','Артикулы'));
 }
