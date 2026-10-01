@@ -678,6 +678,7 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
   <button class="tab-btn" style="display:none" onclick="switchTab('price')"     id="tab-price">💲 가격정보</button>
   <button class="tab-btn" style="display:none" onclick="switchTab('psi')"       id="tab-psi"><span id="i18n-tab-psi">📈 PSI</span></button>
   <button class="tab-btn" style="display:none" onclick="switchTab('ppsi')"      id="tab-ppsi"><span id="i18n-tab-ppsi">📦 제품 출고</span></button>
+  <button class="tab-btn" style="display:none" onclick="switchTab('asr')"       id="tab-asr"><span id="i18n-tab-asr">🔧 A/S부품 소요율</span></button>
   <button class="tab-btn" style="display:none" onclick="switchTab('po')"        id="tab-po"><span id="i18n-tab-po">📋 발주현황</span></button>
   <button class="tab-btn" style="display:none" onclick="switchTab('ship')"      id="tab-ship"><span id="i18n-tab-ship">🚢 선적/입고현황</span></button>
   <button class="tab-btn" style="display:none" onclick="switchTab('ms')"        id="tab-ms"><span id="i18n-tab-ms">⚠ 미출현황</span></button>
@@ -1539,6 +1540,46 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
       </table>
     </div>
     <div id="ppsiEmpty" class="no-result" style="display:none"></div>
+  </div>
+</div>
+
+<!-- A/S부품 소요율: 제품 출고(가동대수) 대비 부품 출고 — 모델별 -->
+<div class="tab-pane" id="pane-asr">
+  <div class="fixed-top">
+    <div class="search-bar">
+      <div class="search-wrap">
+        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+        <input type="text" id="asrInput" placeholder="분류·코드·모델로 검색…" oninput="clearTimeout(window._asrT);window._asrT=setTimeout(renderASR,200)">
+      </div>
+      <span style="font-size:11px;color:var(--muted)">연도</span>
+      <select id="asrFrom" onchange="renderASR()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></select>
+      <span style="font-size:11px;color:var(--muted)">~</span>
+      <select id="asrTo" onchange="renderASR()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></select>
+      <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted)" title="가동대수 = 그 달을 포함해 최근 N개월 동안 판매(출고)한 제품 대수 — 품질보증기간(출고 후 최대 42개월) 안에 있는 제품 수">가동대수(보증기간)
+        <select id="asrN" onchange="asrRecalc()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px">
+          <option value="12">12개월</option><option value="24">24개월</option><option value="36">36개월</option><option value="42" selected>42개월</option><option value="48">48개월</option><option value="60">60개월</option>
+        </select></label>
+      <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted)"><input type="checkbox" id="asrHideZero" checked onchange="renderASR()"> 부품 출고 없는 모델 숨기기</label>
+      <div class="count-badge" id="asrBadge"></div>
+      <button class="dl-btn" onclick="downloadASR()">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        <span>엑셀 다운로드</span>
+      </button>
+    </div>
+    <div id="asrInfo" style="font-size:11px;color:var(--muted);padding:2px 12px 0;line-height:1.5"></div>
+    <div class="tbl-scrollbar" id="asrTblScrollbar" style="display:none;margin:4px 0 0">
+      <div class="tbl-scrollbar-thumb" id="asrTblScrollbarThumb"></div>
+    </div>
+  </div>
+  <div class="scroll-body" id="scrollBodyASR" style="padding:0 12px 72px">
+    <div class="pn-body-wrap">
+      <table id="asrTable" style="border-collapse:separate;border-spacing:0;table-layout:fixed">
+        <colgroup id="asrColgroup"></colgroup>
+        <thead id="asrThead"></thead>
+        <tbody id="asrTbody"></tbody>
+      </table>
+    </div>
+    <div id="asrEmpty" class="no-result" style="display:none"></div>
   </div>
 </div>
 
@@ -2475,6 +2516,7 @@ function switchTab(tab){
   if(tab==='pnchk'){ loadPnChkTab(); }
   if(tab==='report'){ loadReportTab(); }
   if(tab==='ppsi'){ loadPPSITab(); }
+  if(tab==='asr'){ loadASRTab(); }
   try{ ktPaneTitle(tab); }catch(e){}       // 도구줄 맨 앞에 화면 이름을 붙인다
   if(tab==='sim'){ loadSimTab(); }
   if(tab==='adminOrders'){ loadAdminOrdersTab(); }
@@ -2542,6 +2584,7 @@ function refreshPsiTexts(){
   // 보고서
   set('i18n-tab-report','📑 보고서','📑 Отчёт');
   set('i18n-tab-ppsi','📦 제품 출고','📦 Отгрузка изделий');
+  set('i18n-tab-asr','🔧 A/S부품 소요율','🔧 Расход запчастей');
   set('i18n-rep-perlab','기간','Период');
   set('i18n-rep-lowlab','재고 기준(개월)','Норма запаса (мес.)');
   set('i18n-rep-avglab','보유월 향후','Мес. вперёд');
@@ -3571,7 +3614,7 @@ function updatePaneHBar(key){ const f=_hbars[key]; if(f) f(); }
 //   PSI 와 발주시뮬레이션처럼 생김새가 닮은 화면이 많아, 도구줄 맨 앞에 이름을 붙인다.
 const KT_PANE_TITLE={
   pn:['품번 조회','Артикулы'], parts:['부품 조회','Поиск деталей'], prod:['제품목록','Изделия'],
-  psi:['PSI','PSI'], ppsi:['제품 출고','Отгрузка изделий'], sim:['발주시뮬레이션','Симуляция заказа'], po:['발주현황','Заказы'],
+  psi:['PSI','PSI'], ppsi:['제품 출고','Отгрузка изделий'], asr:['A/S부품 소요율','Расход запчастей'], sim:['발주시뮬레이션','Симуляция заказа'], po:['발주현황','Заказы'],
   ship:['선적/입고현황','Отгрузка/Приход'], ms:['미출현황','Невыполненные'],
   moq:['MOQ','MOQ'], blk:['사용불가','Заблокировано'], price:['가격정보','Цены'],
   ss:['안전재고','Страховой запас'], pnchk:['품번확인','Проверка артикулов'],
@@ -7916,7 +7959,7 @@ function applyPermTabVisibility(skipSwitch){
   if(!pobj){
     // 권한을 아직 부여하지 않은 회원: 품번조회 하나만 연다.
     // 종전에는 역할 기본값을 그대로 써서 주문·재고관리·가격정보까지 다 보였다.
-    ['tab-order','tab-parts','tab-adminOrders','tab-inventory','tab-shipments','tab-price','tab-psi','tab-po','tab-ship','tab-ms','tab-blk','tab-moq','tab-ss','tab-report','tab-ppsi','tab-sim','tab-memberManagement']
+    ['tab-order','tab-parts','tab-adminOrders','tab-inventory','tab-shipments','tab-price','tab-psi','tab-po','tab-ship','tab-ms','tab-blk','tab-moq','tab-ss','tab-report','tab-ppsi','tab-asr','tab-sim','tab-memberManagement']
       .forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display='none'; });
     const pnEl=document.getElementById('tab-pn'); if(pnEl) pnEl.style.display='';
     const pcEl=document.getElementById('tab-pnchk'); if(pcEl) pcEl.style.display='';   // 품번확인은 품번조회를 따라간다
@@ -7924,6 +7967,7 @@ function applyPermTabVisibility(skipSwitch){
     const psi0=document.getElementById('tab-psi'); if(psi0 && canSeePsi()) psi0.style.display='block';
     const rep0=document.getElementById('tab-report'); if(rep0 && canSeePsi()) rep0.style.display='block';
     const pp0=document.getElementById('tab-ppsi'); if(pp0 && canSeePsi()) pp0.style.display='block';
+    const as0=document.getElementById('tab-asr'); if(as0 && canSeePsi()) as0.style.display='block';
     if(!skipSwitch) ensureVisibleTab();
     return;
   }
@@ -7932,6 +7976,7 @@ function applyPermTabVisibility(skipSwitch){
   const psiEl=document.getElementById('tab-psi'); if(psiEl) psiEl.style.display = canSeePsi() ? 'block' : 'none';
   const repEl=document.getElementById('tab-report'); if(repEl) repEl.style.display = canSeePsi() ? 'block' : 'none';
   const ppEl=document.getElementById('tab-ppsi'); if(ppEl) ppEl.style.display = canSeePsi() ? 'block' : 'none';
+  const asEl=document.getElementById('tab-asr'); if(asEl) asEl.style.display = canSeePsi() ? 'block' : 'none';
   const poEl=document.getElementById('tab-po'); if(poEl) poEl.style.display='none';
   const shipEl=document.getElementById('tab-ship'); if(shipEl) shipEl.style.display='none';
   const msEl=document.getElementById('tab-ms'); if(msEl) msEl.style.display='none';
@@ -13700,6 +13745,10 @@ async function loadPPSI(force){
   try{
     const { data, error }=await sb.from('kt_psi_cfg').select('cfg').eq('id',PPSI_ID).limit(1);
     _ppsi=(!error && data && data[0] && data[0].cfg && data[0].cfg.rows) ? data[0].cfg : null;
+    // 분류·소계는 읽을 때마다 모델 줄로 다시 세운다(분류 규칙을 바꿔도 다시 올릴 필요가 없다)
+    if(_ppsi){ const models=_ppsi.rows.filter(r=>r.lv==='m'), dm={};
+      models.forEach(r=>{ if(_ppsi.d[r.k]) dm[r.k]=_ppsi.d[r.k]; });
+      const b=ppsiBuild(models, dm); _ppsi.rows=b.rows; _ppsi.d=b.d; _ppsi.years=b.years; }
   }catch(e){ _ppsi=null; }
 }
 async function loadPPSITab(){
@@ -13813,14 +13862,25 @@ function ppsiYearSheet(wb){
   return { name, yy, items, months:cols.length,
            note:name+' 판매 계 '+cols.length+'개월'+(miss?(' (코드 없는 모델 '+miss+'줄·'+missQ+'개 뺌)'):'') };
 }
-// 줄을 다시 세운다: 맨 위 합계, 그 아래 타입(가스·기름…)마다 소계와 그 모델들. 합계·소계는 모델 줄을 더한 값이다.
+// 제품 분류 — 가스는 TGB·STSG·KSG(HIFIN 포함)만 바닥형, 나머지는 벽걸이. 기름은 바닥형.
+const PPSI_CATS=['가스벽걸이보일러','가스바닥형보일러','기름바닥형보일러','화목보일러','펠렛보일러','하이브리드(기름/화목)보일러','기타'];
+function ppsiCatOf(r){
+  const t=String(r.t||''), m=String(r.m||'').toUpperCase();
+  if(/하이브리드/.test(t)) return '하이브리드(기름/화목)보일러';
+  if(/화목/.test(t)) return '화목보일러';
+  if(/펠렛/.test(t)) return '펠렛보일러';
+  if(/기름/.test(t)) return '기름바닥형보일러';
+  if(/가스/.test(t)) return /^(TGB|STSG|KSG)\b/.test(m) ? '가스바닥형보일러' : '가스벽걸이보일러';
+  return '기타';
+}
+// 줄을 다시 세운다: 맨 위 합계, 그 아래 분류(가스벽걸이보일러…)마다 소계와 그 모델들. 합계·소계는 모델 줄을 더한 값이다.
 function ppsiBuild(models, d){
-  const types=[]; models.forEach(r=>{ const t=r.t||'기타'; if(types.indexOf(t)<0) types.push(t); });
   const outRows=[{ k:'T:ALL', t:'', g:'', m:'합계', lv:'t' }], dd={};
   const addTo=(k,o)=>Object.keys(o||{}).forEach(ym=>{ (dd[k]=dd[k]||{}); dd[k][ym]=(dd[k][ym]||0)+o[ym]; });
-  types.forEach(t=>{
-    outRows.push({ k:'S:'+t, t, g:'', m:t+' 소계', lv:'s' });
-    models.filter(r=>(r.t||'기타')===t).forEach(r=>{ outRows.push(r); if(d[r.k]){ dd[r.k]=d[r.k]; addTo('S:'+t, d[r.k]); addTo('T:ALL', d[r.k]); } });
+  PPSI_CATS.forEach(cat=>{
+    const list=models.filter(r=>ppsiCatOf(r)===cat); if(!list.length) return;
+    outRows.push({ k:'S:'+cat, t:cat, g:'', m:'소계', lv:'s' });
+    list.forEach(r=>{ outRows.push(r); if(d[r.k]){ dd[r.k]=d[r.k]; addTo('S:'+cat, d[r.k]); addTo('T:ALL', d[r.k]); } });
   });
   const yms=new Set(); Object.values(dd).forEach(o=>Object.keys(o).forEach(y=>yms.add(y)));
   const years=[...new Set([...yms].map(y=>y.slice(0,2)))].sort();
@@ -13981,6 +14041,218 @@ async function downloadPPSI(){
   for(let ri=2; ri<aoa.length; ri++) for(let ci=3; ci<h1.length; ci++){ const a=XLSX.utils.encode_cell({r:ri,c:ci}); if(ws[a] && ws[a].t==='n') ws[a].z='#,##0'; }
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, ru?'Отгрузка изделий':'제품 출고');
   XLSX.writeFile(wb, xlsxName('제품출고','Otgruzka_izdeliy'));
+}
+// ══════════════════════════════════════════
+// A/S부품 소요율 — 제품 모델별로, 보증기간 안에 있는 제품(가동대수) 100대당 한 해 동안 나간 A/S 부품 수
+//   · 제품 판매: 제품 출고 화면(_ppsi)의 모델별 월 수량
+//   · 가동대수: 그 달 포함 최근 N개월(기본 42개월 = 품질보증기간) 판매 누계
+//   · 부품 출고: PSI 의 품번별 월 출고(o) — 지금 품번조회의 대표품번으로 묶는다
+//   · 부품 → 제품: 품번조회 '적용모델(임시)' + 부품조회 모델 표(A.P 10~24 …)
+//   · 공용 부품: 그 달 적용 모델들의 가동대수 비율로 나눈다
+//   · 소요율(100대·연) = 그 해 배분된 부품 출고 ÷ 그 해 평균 가동대수 × 100 × 12/그 해 달 수(연 환산)
+//   · 이번 달은 아직 덜 찼으므로 지난달까지만 센다
+// ══════════════════════════════════════════
+let _asr=null;
+// 적용모델 이름을 제품 출고 모델 이름 꼴로 맞춘다(W/A → WORLD ALPHA 같은 줄임말·표기 차이)
+function asrNorm(s){
+  let t=String(s==null?'':s).toUpperCase().replace(/\(.*?\)/g,'').replace(/\s*-\s*/g,'-').replace(/\s+/g,' ').trim();
+  t=t.replace(/^W\/A 20(19|21)-/,'WORLD ALPHA OLD-')
+     .replace(/^W\/A\b/,'WORLD ALPHA').replace(/^T\/A\b/,'TWIN ALPHA').replace(/^W\/P\b/,'WORLD ALPHA P')
+     .replace(/^A\/P\b/,'ALPHA PLUS').replace(/^A\/N\b/,'ALPHA NEO')
+     .replace(/^TURBO HIFIN\b/,'TURBO HI FIN').replace(/^KRP-(\d+)A$/,'KRP-$1PA');
+  return t;
+}
+// 부품조회 모델 표의 묶음 이름 → 제품 이름 앞부분
+const ASR_GROUP_FAMILY={ 'A.P':'ALPHA PLUS', 'A.P S':'ALPHA PLUS S', 'A.P T':'ALPHA PLUS T',
+                         'A.N S':'ALPHA NEO S', 'A.N C':'ALPHA NEO C', 'A.N CH':'ALPHA NEO CH' };
+function asrMonthsUpTo(lastYm){ const out=[]; let y='2101'; while(y<=lastYm){ out.push(y); y=psiYmAdd(y,1); } return out; }
+function asrBuild(N){
+  if(!_ppsi) return null;
+  const nowYm=psiNowYm(), cut=psiYmAdd(nowYm,-1);               // 지난달까지
+  const months=asrMonthsUpTo(cut);
+  const models=_ppsi.rows.filter(r=>r.lv==='m');
+  const byName={}; models.forEach(r=>{ byName[asrNorm(r.m)]=r.k; });
+  // 1) 모델별 월 판매 → 가동대수(최근 N개월 누계)
+  const ib={};
+  models.forEach(r=>{ const s=_ppsi.d[r.k]||{}; let run=0; const arr={};
+    months.forEach((ym,i)=>{ run+=(Number(s[ym])||0); if(i>=N) run-=(Number(s[months[i-N]])||0); arr[ym]=Math.max(0,run); });
+    ib[r.k]=arr; });
+  // 2) 부품(대표품번) → 적용 제품 모델
+  const appl={};
+  const addAppl=(rep,k)=>{ if(!rep||!k) return; (appl[rep]=appl[rep]||new Set()).add(k); };
+  (PN_DATA||[]).forEach(p=>String(p.applied_models||'').split(/[,\n;]+/).forEach(tok=>{ const k=byName[asrNorm(tok)]; if(k) addAppl(p.rep,k); }));
+  const famModels=fam=>models.filter(r=>new RegExp('^'+fam.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'-(\\d+)H?$').test(asrNorm(r.m)));
+  const defMap={};   // 모델 표 열 → 제품 모델 키들
+  (typeof MODEL_DEFS!=='undefined'?MODEL_DEFS:[]).forEach(md=>{ const fam=ASR_GROUP_FAMILY[md.group]; if(!fam) return;
+    const lab=String(md.label||''), m2=lab.match(/^(\d+)\s*~\s*(\d+)$/), lo=m2?+m2[1]:+lab, hi=m2?+m2[2]:+lab;
+    defMap[md.key]=famModels(fam).filter(r=>{ const c=+asrNorm(r.m).match(/-(\d+)H?$/)[1]; return c>=lo && c<=hi; }).map(r=>r.k); });
+  (typeof PARTS!=='undefined'?PARTS:[]).forEach(pt=>{ const rep=(getPNInfo(pt.rep)?pt.rep:'')||findMasterRep(pt.rep)||pt.rep;
+    Object.keys(pt.models||{}).forEach(mk=>{ if(pt.models[mk]) (defMap[mk]||[]).forEach(k=>addAppl(rep,k)); }); });
+  // 3) 부품 출고를 대표품번으로 모아 달마다 배분
+  const repOf=pn=>(getPNInfo(pn)?pn:'')||findMasterRep(pn)||((typeof pnChkMap==='function')?(pnChkMap().get(normPN(pn))||''):'')||((psiData[pn]||{}).rep)||'';
+  const outRep={};
+  Object.keys(psiData||{}).forEach(pn=>{ const dd=(psiData[pn]||{}).data||{}; const rep=repOf(pn); if(!rep) return;
+    months.forEach(ym=>{ const o=dd[ym]; const q=o?(Number(o.o)||0):0; if(!q) return; (outRep[rep]=outRep[rep]||{}); outRep[rep][ym]=(outRep[rep][ym]||0)+q; }); });
+  const alloc={}, detail={}, unlinked={}, unlinkedReps={};
+  let linkedTot=0;
+  Object.keys(outRep).forEach(rep=>{ const ks=appl[rep] ? [...appl[rep]] : [];
+    Object.keys(outRep[rep]).forEach(ym=>{ const q=outRep[rep][ym], yy=ym.slice(0,2);
+      const w=ks.map(k=>(ib[k]||{})[ym]||0), W=w.reduce((a,b)=>a+b,0);
+      if(!ks.length || W<=0){ unlinked[yy]=(unlinked[yy]||0)+q; (unlinkedReps[yy]=unlinkedReps[yy]||new Set()).add(rep); return; }
+      linkedTot+=q;
+      ks.forEach((k,i)=>{ if(!w[i]) return; const a=q*w[i]/W;
+        ((alloc[k]=alloc[k]||{})[yy]=(alloc[k][yy]||0)+a);
+        const dk=(detail[k]=detail[k]||{}); const dy=(dk[yy]=dk[yy]||{}); dy[rep]=(dy[rep]||0)+a; }); }); });
+  const years=[...new Set(months.map(m=>m.slice(0,2)))];
+  const firstFull=months[N-1]||'';                               // 가동대수가 N개월을 다 채운 첫 달
+  return { N, cut, months, years, models, ib, alloc, detail, unlinked, unlinkedReps, linkedTot, appl, firstFull };
+}
+// 한 줄(모델 또는 묶음)의 그 해 값: 부품 출고·평균 가동대수·소요율
+function asrYear(A, keys, yy){
+  const ms=A.months.filter(m=>m.slice(0,2)===yy); if(!ms.length) return null;
+  let parts=0, ibSum=0;
+  keys.forEach(k=>{ parts+=((A.alloc[k]||{})[yy]||0); ms.forEach(m=>{ ibSum+=((A.ib[k]||{})[m]||0); }); });
+  const ibAvg=ibSum/ms.length;
+  const rate=ibAvg>0 ? parts/ibAvg*100*(12/ms.length) : null;
+  return { parts, ibAvg, rate, nMonths:ms.length, partial:ms.length<12, early:(ms[ms.length-1]<A.firstFull) };
+}
+function asrRecalc(){ _asr=null; renderASR(); }
+async function loadASRTab(){
+  const tasks=[loadPPSI()];
+  if(!Object.keys(psiData||{}).length && typeof loadPSI==='function') tasks.push(loadPSI());
+  if(!(PN_DATA||[]).length && typeof loadPNOverrides==='function') tasks.push(loadPNOverrides());
+  await Promise.all(tasks);
+  _asr=null; renderASR();
+}
+function asrFillYears(ys){
+  ['asrFrom','asrTo'].forEach((id,i)=>{ const s=document.getElementById(id); if(!s) return;
+    if(s.getAttribute('data-ys')!==ys.join(',')){ const cur=s.value;
+      s.innerHTML=ys.map(y=>'<option value="'+y+'">20'+y+'</option>').join(''); s.setAttribute('data-ys',ys.join(','));
+      s.value=cur && ys.indexOf(cur)>=0 ? cur : (i===0 ? (ys[Math.max(0,ys.length-3)]||'') : (ys[ys.length-1]||'')); } });
+}
+function asrView(){
+  const N=+((document.getElementById('asrN')||{}).value||42);
+  if(!_asr || _asr.N!==N) _asr=asrBuild(N);
+  const A=_asr; if(!A) return null;
+  asrFillYears(A.years);
+  const f=(document.getElementById('asrFrom')||{}).value||A.years[0], t=(document.getElementById('asrTo')||{}).value||A.years[A.years.length-1];
+  const yrs=A.years.filter(y=>y>=(f<t?f:t) && y<=(f<t?t:f));
+  const kw=((document.getElementById('asrInput')||{}).value||'').trim().toLowerCase();
+  const hz=!!(document.getElementById('asrHideZero')||{}).checked;
+  // 줄: 합계 → 분류 소계 → 모델 (제품 출고와 같은 차례)
+  const rows=[];
+  const all=A.models.map(r=>r.k);
+  rows.push({ lv:'t', t:'', g:'', m:'합계', keys:all });
+  PPSI_CATS.forEach(cat=>{
+    const ms=A.models.filter(r=>ppsiCatOf(r)===cat); if(!ms.length) return;
+    const vis=ms.filter(r=>{
+      if(kw && ![cat, r.t, r.g, r.m].some(v=>String(v||'').toLowerCase().includes(kw))) return false;
+      if(hz && !yrs.some(y=>((A.alloc[r.k]||{})[y]||0)>0)) return false;
+      return true; });
+    if(!vis.length && (kw||hz)) return;
+    rows.push({ lv:'s', t:cat, g:'', m:'소계', keys:ms.map(r=>r.k) });
+    vis.forEach(r=>rows.push({ lv:'m', t:r.t, g:r.g, m:r.m, k:r.k, keys:[r.k] }));
+  });
+  return { A, yrs, rows };
+}
+function asrFmtRate(v){ return v==null ? '' : (v>=10 ? v.toFixed(1) : v.toFixed(2)); }
+function renderASR(){
+  const thead=document.getElementById('asrThead'), tbody=document.getElementById('asrTbody'), cg=document.getElementById('asrColgroup');
+  const empty=document.getElementById('asrEmpty'), badge=document.getElementById('asrBadge'), info=document.getElementById('asrInfo');
+  if(!thead||!tbody) return;
+  if(!_ppsi){ thead.innerHTML=''; tbody.innerHTML=''; if(cg) cg.innerHTML=''; if(info) info.textContent='';
+    if(empty){ empty.style.display='block'; empty.textContent='제품 출고 자료가 없습니다. 먼저 제품 출고 화면에 제품 PSI 엑셀을 올려 주세요.'; }
+    updatePaneHBar('asr'); return; }
+  if(empty) empty.style.display='none';
+  const V=asrView(); if(!V) return;
+  const { A, yrs, rows }=V;
+  const FX=[{k:'t',w:150,lab:'분류'},{k:'g',w:96,lab:'코드'},{k:'m',w:170,lab:'모델'}];
+  const SUB=[{k:'parts',w:66,lab:'부품 출고'},{k:'ib',w:70,lab:'가동대수'},{k:'rate',w:70,lab:'소요율'}];
+  const left=[0]; FX.forEach((f,i)=>left.push(left[i]+f.w));
+  if(cg) cg.innerHTML=FX.map(f=>'<col style="width:'+f.w+'px">').join('')+yrs.map(()=>SUB.map(s=>'<col style="width:'+s.w+'px">').join('')).join('');
+  const tbl=document.getElementById('asrTable'); if(tbl) tbl.style.width=(left[3]+yrs.length*SUB.reduce((a,s)=>a+s.w,0))+'px';
+  const thS='padding:5px 4px;text-align:center;vertical-align:middle;position:sticky;z-index:3;background:var(--surface2);font-size:11px;white-space:nowrap;border-bottom:1px solid var(--border)';
+  const yLab=y=>{ const r=asrYear(A, [], y); const ms=A.months.filter(m=>m.slice(0,2)===y).length;
+    return '20'+y+(ms<12?(' <span style="font-weight:400;color:var(--muted)">(1~'+ms+'월)</span>'):'')
+      +((A.months.filter(m=>m.slice(0,2)===y).slice(-1)[0]<A.firstFull)?' <span style="font-weight:400;color:#b45309" title="이 해는 판매 자료가 2021년부터라 가동대수가 '+A.N+'개월을 다 채우지 못해 소요율이 실제보다 높게 나옵니다">참고</span>':''); };
+  thead.innerHTML='<tr>'+FX.map((f,i)=>'<th rowspan="2" style="'+thS+';top:0;left:'+left[i]+'px;z-index:4">'+f.lab+'</th>').join('')
+    +yrs.map(y=>'<th colspan="3" style="'+thS+';top:0;border-left:1px solid var(--border)">'+yLab(y)+'</th>').join('')+'</tr>'
+    +'<tr>'+yrs.map(()=>SUB.map((s,i)=>'<th style="'+thS+';top:27px'+(i===0?';border-left:1px solid var(--border)':'')
+      +(s.k==='rate'?'" title="보증기간 안 제품(가동대수) 100대당 한 해 동안 나간 A/S 부품 수(연 환산)':'')+'">'+s.lab+(s.k==='rate'?' <span style="font-weight:400;color:var(--muted)">/100대·연</span>':'')+'</th>').join('')).join('')+'</tr>';
+  const tdS='padding:4px 5px;font-size:11px;border-bottom:1px solid var(--border);white-space:nowrap';
+  tbody.innerHTML=rows.map(r=>{
+    const sub=r.lv!=='m', bgFix=sub?'var(--surface2)':'var(--surface)', fw=sub?'700':'400';
+    const fix=FX.map((f,i)=>'<td style="'+tdS+';position:sticky;left:'+left[i]+'px;z-index:2;background:'+bgFix+';font-weight:'+fw
+      +(f.k==='g'?";font-family:'Courier New',monospace;font-size:10px":'')+';overflow:hidden;text-overflow:ellipsis" title="'+escapeHtml(r[f.k]||'')+'">'
+      +(r.lv==='m'&&f.k==='m'?('<span style="cursor:pointer;color:var(--accent2)" onclick="asrDetail(\''+escapeHtml(r.k).replace(/'/g,"\\'")+'\')">'+escapeHtml(r.m)+'</span>'):escapeHtml(r[f.k]||''))+'</td>').join('');
+    const nums=yrs.map(y=>{ const v=asrYear(A, r.keys, y)||{}; const early=v.early;
+      const c=(x,i,extra)=>'<td style="'+tdS+';text-align:right;background:'+(sub?'var(--surface2)':'var(--surface)')+';font-weight:'+fw+(i===0?';border-left:1px solid var(--border)':'')+(extra||'')+'">'+x+'</td>';
+      return c(v.parts?Math.round(v.parts).toLocaleString():'',0)
+        +c(v.ibAvg?Math.round(v.ibAvg).toLocaleString():'',1,';color:var(--muted)')
+        +c(asrFmtRate(v.rate),2,';color:'+((v.ibAvg>0 && v.ibAvg<30)?'var(--muted)':(early?'#b45309':'var(--accent2)'))+';font-weight:'+((v.ibAvg>0 && v.ibAvg<30)?'400':'700')+((v.ibAvg>0 && v.ibAvg<30)?'" title="가동대수가 30대 미만이라 소요율을 믿기 어렵습니다':'')); }).join('');
+    return '<tr>'+fix+nums+'</tr>'; }).join('');
+  if(badge) badge.textContent=rows.filter(r=>r.lv==='m').length+'개 모델';
+  if(info){
+    const ul=yrs.map(y=>'20'+y+' '+Math.round(A.unlinked[y]||0).toLocaleString()+'개('+((A.unlinkedReps[y]||new Set()).size)+'품목)').join(' · ');
+    info.innerHTML='가동대수 = 그 달 포함 최근 <b>'+A.N+'개월</b> 판매 누계(품질보증기간 출고 후 최대 42개월) · 소요율 = 부품 출고 ÷ 평균 가동대수 × 100 (연 환산) · '+psiYmLabel(A.cut)+'까지'
+      +'<br>공용 부품은 그 달 적용 모델들의 가동대수 비율로 나눴습니다. 적용 모델을 알 수 없거나 그 모델 판매가 없는 부품 출고는 빼고 셈했습니다: '+ul
+      +'<br><span style="color:var(--muted)">흐린 숫자</span>는 평균 가동대수가 30대 미만이라 믿기 어려운 값입니다. 기름·펠렛처럼 2021년 전에 팔린 제품이 많이 쓰이고 있는 분류는 분모(최근 '+A.N+'개월 판매)보다 실제 쓰이는 대수가 많아 소요율이 높게 나옵니다.'
+      +(A.firstFull?('<br><span style="color:#b45309">참고</span> 표시된 해는 판매 자료가 2021년 1월부터라 가동대수가 '+A.N+'개월을 다 채우지 못해('+psiYmLabel(A.firstFull)+'부터 다 참) 소요율이 실제보다 높게 나옵니다.'):'');
+  }
+  updatePaneHBar('asr');
+}
+// 모델 이름을 누르면: 그 모델에 배분된 부품(마지막 연도 기준) 목록
+function asrDetail(k){
+  const V=asrView(); if(!V) return;
+  const { A, yrs }=V, y=yrs[yrs.length-1];
+  const m=(A.models.find(r=>r.k===k)||{}).m||k;
+  const dy=((A.detail[k]||{})[y])||{};
+  const list=Object.keys(dy).map(rep=>({ rep, q:dy[rep], p:getPNInfo(rep)||{} })).sort((a,b)=>b.q-a.q);
+  const v=asrYear(A,[k],y)||{};
+  const old=document.getElementById('asrDetailPop'); if(old) old.remove();
+  const box=document.createElement('div'); box.id='asrDetailPop';
+  box.style.cssText='position:fixed;inset:0;z-index:10000;background:#0008;display:flex;align-items:center;justify-content:center';
+  box.onmousedown=e=>{ if(e.target===box) box.remove(); };
+  box.innerHTML='<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;width:640px;max-width:94vw;max-height:86vh;display:flex;flex-direction:column;box-shadow:0 16px 44px #000a;font-size:12px;color:var(--text)">'
+    +'<div style="padding:12px 14px;border-bottom:1px solid var(--border)"><div style="font-weight:700;font-size:13px">'+escapeHtml(m)+' — 20'+y+' A/S 부품</div>'
+    +'<div style="color:var(--muted);margin-top:3px">부품 출고 '+Math.round(v.parts||0).toLocaleString()+' · 평균 가동대수 '+Math.round(v.ibAvg||0).toLocaleString()+' · 소요율 '+asrFmtRate(v.rate)+' /100대·연 · 공용 부품은 배분한 몫</div></div>'
+    +'<div style="overflow:auto;padding:6px 14px"><table style="width:100%;border-collapse:collapse"><thead><tr style="color:var(--muted);font-size:11px">'
+    +'<th style="text-align:left;padding:4px">대표품번</th><th style="text-align:left;padding:4px">품명</th><th style="text-align:left;padding:4px">규격</th><th style="text-align:right;padding:4px">배분 수량</th><th style="text-align:right;padding:4px">100대당</th></tr></thead><tbody>'
+    +(list.length?list.slice(0,200).map(x=>'<tr><td style="padding:3px 4px;font-family:\'Courier New\',monospace;font-size:10.5px">'+escapeHtml(x.rep)+'</td>'
+      +'<td style="padding:3px 4px">'+escapeHtml(x.p.name_ko||'')+'</td><td style="padding:3px 4px;color:var(--muted)">'+escapeHtml(x.p.spec||'')+'</td>'
+      +'<td style="padding:3px 4px;text-align:right">'+(x.q>=10?Math.round(x.q).toLocaleString():x.q.toFixed(1))+'</td>'
+      +'<td style="padding:3px 4px;text-align:right;color:var(--accent2)">'+(v.ibAvg?asrFmtRate(x.q/v.ibAvg*100*(12/(v.nMonths||12))):'')+'</td></tr>').join('')
+      :'<tr><td colspan="5" style="padding:10px;color:var(--muted)">이 해에 배분된 부품이 없습니다.</td></tr>')
+    +'</tbody></table></div>'
+    +'<div style="padding:10px 14px;border-top:1px solid var(--border);text-align:right"><button class="dl-btn" onclick="document.getElementById(\'asrDetailPop\').remove()">닫기</button></div></div>';
+  document.body.appendChild(box);
+}
+async function downloadASR(){
+  const V=asrView(); if(!V) return;
+  await ensureXlsxStyle();
+  const { A, yrs, rows }=V;
+  const h1=['분류','코드','모델'], h2=['','',''];
+  yrs.forEach(y=>{ h1.push('20'+y,'',''); h2.push('부품 출고','가동대수(평균)','소요율(/100대·연)'); });
+  const aoa=[h1,h2];
+  rows.forEach(r=>{ const line=[r.t||'', r.g||'', r.m||''];
+    yrs.forEach(y=>{ const v=asrYear(A, r.keys, y)||{};
+      line.push(v.parts?Math.round(v.parts):'', v.ibAvg?Math.round(v.ibAvg):'', v.rate==null?'':Math.round(v.rate*100)/100); });
+    aoa.push(line); });
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  const merges=[{s:{r:0,c:0},e:{r:1,c:0}},{s:{r:0,c:1},e:{r:1,c:1}},{s:{r:0,c:2},e:{r:1,c:2}}];
+  yrs.forEach((y,i)=>merges.push({s:{r:0,c:3+i*3},e:{r:0,c:5+i*3}}));
+  ws['!merges']=merges;
+  ws['!cols']=[{wch:22},{wch:14},{wch:24}].concat(yrs.flatMap(()=>[{wch:10},{wch:12},{wch:14}]));
+  xlPaint(ws,0,h1.length,XL_HEAD_C); xlPaint(ws,1,h1.length,Object.assign({},XL_HEAD_C,{alignment:{horizontal:'center',vertical:'center',wrapText:true}}));
+  rows.forEach((r,i)=>{ if(r.lv!=='m') xlPaint(ws,i+2,h1.length,r.lv==='t'?XL_SUM:XL_GRP); });
+  for(let ri=2;ri<aoa.length;ri++) yrs.forEach((y,i)=>{ [0,1].forEach(j=>{ const a=XLSX.utils.encode_cell({r:ri,c:3+i*3+j}); if(ws[a]&&ws[a].t==='n') ws[a].z='#,##0'; });
+    const a=XLSX.utils.encode_cell({r:ri,c:5+i*3}); if(ws[a]&&ws[a].t==='n') ws[a].z='0.00'; });
+  // 설명 시트
+  const note=XLSX.utils.aoa_to_sheet([['A/S부품 소요율'],['가동대수','그 달 포함 최근 '+A.N+'개월 판매 누계(품질보증기간 출고 후 최대 42개월)'],
+    ['소요율','그 해 부품 출고 ÷ 그 해 평균 가동대수 × 100, 연 환산(/100대·연)'],['공용 부품','그 달 적용 모델들의 가동대수 비율로 배분'],
+    ['기간', '2021-01 ~ '+psiYmLabel(A.cut)],['주의','가동대수가 '+A.N+'개월을 다 채운 것은 '+psiYmLabel(A.firstFull)+'부터. 그 전 해의 소요율은 높게 나옴(참고)']]);
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'A/S부품 소요율'.replace('/','')); XLSX.utils.book_append_sheet(wb, note, '설명');
+  XLSX.writeFile(wb, xlsxName('AS부품소요율','AS_zapchasti'));
 }
 function downloadPO(){
   renderPO();
@@ -20891,7 +21163,7 @@ updatePNTableScrollbar=setupHTableScroll('scrollBodyPN','pnHdrWrap','pnTblScroll
 // PSI 계열 화면(PSI·발주시뮬레이션·발주현황·선적/입고현황·미출현황)도 같은 가로 슬라이드 막대를 쓴다.
 // 이 화면들은 머리글이 표 안에 있어서 따로 맞출 헤더가 없다 — 스크롤 칸을 헤더 자리에 그대로 넘긴다.
 [['psi','scrollBodyPSI'],['sim','scrollBodySIM'],['po','scrollBodyPO'],
- ['ship','scrollBodySHIP'],['ms','scrollBodyMS'],['ppsi','scrollBodyPPSI'],['blk','scrollBodyBLK'],['moq','scrollBodyMOQ'],['ss','scrollBodySS'],['pnchk','scrollBodyPNCHK']].forEach(function(x){
+ ['ship','scrollBodySHIP'],['ms','scrollBodyMS'],['ppsi','scrollBodyPPSI'],['asr','scrollBodyASR'],['blk','scrollBodyBLK'],['moq','scrollBodyMOQ'],['ss','scrollBodySS'],['pnchk','scrollBodyPNCHK']].forEach(function(x){
   _hbars[x[0]]=setupHTableScroll(x[1], x[1], x[0]+'TblScrollbar', x[0]+'TblScrollbarThumb');
 });
 setupSimpleHeaderScrollSync('scrollBodyPrice','priceCalcHdrWrap');
@@ -21539,6 +21811,8 @@ function enterApp(user){
   if(tabRep) tabRep.style.display = canSeePsi() ? 'block' : 'none';
   const tabPpsi=document.getElementById('tab-ppsi');
   if(tabPpsi) tabPpsi.style.display = canSeePsi() ? 'block' : 'none';
+  const tabAsr=document.getElementById('tab-asr');
+  if(tabAsr) tabAsr.style.display = canSeePsi() ? 'block' : 'none';
   // 발주현황은 위 탭줄이 아니라 PSI 화면의 단추로 연다(탭 요소는 switchTab 을 위해 남겨 두고 감춘다)
   const tabPo=document.getElementById('tab-po');
   if(tabPo) tabPo.style.display='none';
