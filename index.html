@@ -677,6 +677,7 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
   <button class="tab-btn" style="display:none" onclick="switchTab('shipments')" id="tab-shipments"><span id="i18n-tab-shipments">🚚 출고관리</span></button>
   <button class="tab-btn" style="display:none" onclick="switchTab('price')"     id="tab-price">💲 가격정보</button>
   <button class="tab-btn" style="display:none" onclick="switchTab('psi')"       id="tab-psi"><span id="i18n-tab-psi">📈 PSI</span></button>
+  <button class="tab-btn" style="display:none" onclick="switchTab('ppsi')"      id="tab-ppsi"><span id="i18n-tab-ppsi">📦 제품 PSI</span></button>
   <button class="tab-btn" style="display:none" onclick="switchTab('po')"        id="tab-po"><span id="i18n-tab-po">📋 발주현황</span></button>
   <button class="tab-btn" style="display:none" onclick="switchTab('ship')"      id="tab-ship"><span id="i18n-tab-ship">🚢 선적/입고현황</span></button>
   <button class="tab-btn" style="display:none" onclick="switchTab('ms')"        id="tab-ms"><span id="i18n-tab-ms">⚠ 미출현황</span></button>
@@ -1494,6 +1495,50 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
       </table>
     </div>
     <div id="shipEmpty" class="no-result" style="display:none"></div>
+  </div>
+</div>
+
+<!-- 제품 PSI: 러시아 법인 현지 제품 출고(판매) 수량 — 년도별·월별 -->
+<div class="tab-pane" id="pane-ppsi">
+  <div class="fixed-top">
+    <div class="search-bar">
+      <div class="search-wrap">
+        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+        <input type="text" id="ppsiInput" placeholder="타입·코드·모델로 검색…" oninput="clearTimeout(window._ppsiT);window._ppsiT=setTimeout(renderPPSI,200)">
+      </div>
+      <span style="font-size:11px;color:var(--muted)" id="i18n-ppsi-yr">연도</span>
+      <select id="ppsiFrom" onchange="renderPPSI()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></select>
+      <span style="font-size:11px;color:var(--muted)">~</span>
+      <select id="ppsiTo" onchange="renderPPSI()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></select>
+      <select id="ppsiMode" onchange="renderPPSI()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px">
+        <option value="m">월별 + 연합계</option><option value="y">연합계만</option>
+      </select>
+      <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted)"><input type="checkbox" id="ppsiHideZero" checked onchange="renderPPSI()"> <span id="i18n-ppsi-hz">수량 없는 줄 숨기기</span></label>
+      <div class="count-badge" id="ppsiBadge"></div>
+      <button class="dl-btn" id="ppsiUpBtn" onclick="document.getElementById('ppsiFile').click()" title="제품 PSI 엑셀(모스크바·블라디보스톡·합본·2021년 시트)을 올리면 표를 새로 만듭니다" style="display:none;background:var(--accent2);border-color:var(--accent2);color:#fff">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <span id="i18n-ppsi-up">엑셀 업로드</span>
+      </button>
+      <input type="file" id="ppsiFile" accept=".xlsx,.xlsm,.xls" style="display:none" onchange="handlePPSIUpload(event)">
+      <button class="dl-btn" onclick="downloadPPSI()">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        <span id="i18n-ppsi-dl">엑셀 다운로드</span>
+      </button>
+    </div>
+    <div id="ppsiInfo" style="font-size:11px;color:var(--muted);padding:2px 12px 0"></div>
+    <div class="tbl-scrollbar" id="ppsiTblScrollbar" style="display:none;margin:4px 0 0">
+      <div class="tbl-scrollbar-thumb" id="ppsiTblScrollbarThumb"></div>
+    </div>
+  </div>
+  <div class="scroll-body" id="scrollBodyPPSI" style="padding:0 12px 72px">
+    <div class="pn-body-wrap">
+      <table id="ppsiTable" style="border-collapse:separate;border-spacing:0;table-layout:fixed">
+        <colgroup id="ppsiColgroup"></colgroup>
+        <thead id="ppsiThead"></thead>
+        <tbody id="ppsiTbody"></tbody>
+      </table>
+    </div>
+    <div id="ppsiEmpty" class="no-result" style="display:none"></div>
   </div>
 </div>
 
@@ -2429,6 +2474,7 @@ function switchTab(tab){
   if(tab==='ss'){ loadSSTab(); }
   if(tab==='pnchk'){ loadPnChkTab(); }
   if(tab==='report'){ loadReportTab(); }
+  if(tab==='ppsi'){ loadPPSITab(); }
   try{ ktPaneTitle(tab); }catch(e){}       // 도구줄 맨 앞에 화면 이름을 붙인다
   if(tab==='sim'){ loadSimTab(); }
   if(tab==='adminOrders'){ loadAdminOrdersTab(); }
@@ -2495,6 +2541,7 @@ function refreshPsiTexts(){
   set('i18n-pn-cols',COLS[0],COLS[1]);
   // 보고서
   set('i18n-tab-report','📑 보고서','📑 Отчёт');
+  set('i18n-tab-ppsi','📦 제품 PSI','📦 PSI изделий');
   set('i18n-rep-perlab','기간','Период');
   set('i18n-rep-lowlab','재고 기준(개월)','Норма запаса (мес.)');
   set('i18n-rep-avglab','보유월 향후','Мес. вперёд');
@@ -3524,7 +3571,7 @@ function updatePaneHBar(key){ const f=_hbars[key]; if(f) f(); }
 //   PSI 와 발주시뮬레이션처럼 생김새가 닮은 화면이 많아, 도구줄 맨 앞에 이름을 붙인다.
 const KT_PANE_TITLE={
   pn:['품번 조회','Артикулы'], parts:['부품 조회','Поиск деталей'], prod:['제품목록','Изделия'],
-  psi:['PSI','PSI'], sim:['발주시뮬레이션','Симуляция заказа'], po:['발주현황','Заказы'],
+  psi:['PSI','PSI'], ppsi:['제품 PSI','PSI изделий'], sim:['발주시뮬레이션','Симуляция заказа'], po:['발주현황','Заказы'],
   ship:['선적/입고현황','Отгрузка/Приход'], ms:['미출현황','Невыполненные'],
   moq:['MOQ','MOQ'], blk:['사용불가','Заблокировано'], price:['가격정보','Цены'],
   ss:['안전재고','Страховой запас'], pnchk:['품번확인','Проверка артикулов'],
@@ -7869,13 +7916,14 @@ function applyPermTabVisibility(skipSwitch){
   if(!pobj){
     // 권한을 아직 부여하지 않은 회원: 품번조회 하나만 연다.
     // 종전에는 역할 기본값을 그대로 써서 주문·재고관리·가격정보까지 다 보였다.
-    ['tab-order','tab-parts','tab-adminOrders','tab-inventory','tab-shipments','tab-price','tab-psi','tab-po','tab-ship','tab-ms','tab-blk','tab-moq','tab-ss','tab-report','tab-sim','tab-memberManagement']
+    ['tab-order','tab-parts','tab-adminOrders','tab-inventory','tab-shipments','tab-price','tab-psi','tab-po','tab-ship','tab-ms','tab-blk','tab-moq','tab-ss','tab-report','tab-ppsi','tab-sim','tab-memberManagement']
       .forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display='none'; });
     const pnEl=document.getElementById('tab-pn'); if(pnEl) pnEl.style.display='';
     const pcEl=document.getElementById('tab-pnchk'); if(pcEl) pcEl.style.display='';   // 품번확인은 품번조회를 따라간다
     // KITURAMI(본사)는 권한 기록이 없어도 PSI 를 본다
     const psi0=document.getElementById('tab-psi'); if(psi0 && canSeePsi()) psi0.style.display='block';
     const rep0=document.getElementById('tab-report'); if(rep0 && canSeePsi()) rep0.style.display='block';
+    const pp0=document.getElementById('tab-ppsi'); if(pp0 && canSeePsi()) pp0.style.display='block';
     if(!skipSwitch) ensureVisibleTab();
     return;
   }
@@ -7883,6 +7931,7 @@ function applyPermTabVisibility(skipSwitch){
   // PSI 는 회원관리에서 준 'PSI 보기' 권한을 따른다(역할이 MASTER·KITURAMI 면 늘 열림).
   const psiEl=document.getElementById('tab-psi'); if(psiEl) psiEl.style.display = canSeePsi() ? 'block' : 'none';
   const repEl=document.getElementById('tab-report'); if(repEl) repEl.style.display = canSeePsi() ? 'block' : 'none';
+  const ppEl=document.getElementById('tab-ppsi'); if(ppEl) ppEl.style.display = canSeePsi() ? 'block' : 'none';
   const poEl=document.getElementById('tab-po'); if(poEl) poEl.style.display='none';
   const shipEl=document.getElementById('tab-ship'); if(shipEl) shipEl.style.display='none';
   const msEl=document.getElementById('tab-ms'); if(msEl) msEl.style.display='none';
@@ -13630,6 +13679,259 @@ function handlePOUpload(event, mode){
     event.target.value='';
   };
   reader.readAsArrayBuffer(file);
+}
+// ══════════════════════════════════════════
+// 제품 PSI — 러시아 법인 현지 제품 출고(판매) 수량을 년도별·월별로
+//   · 21년: '2021년' 시트의 월별 '판매 계'(카작+법인)
+//   · 22~25년: '모스크바'·'블라디보스톡' 시트의 달마다 '판매 → 실적' 열을 두 곳 더해서
+//   · 26년~: '합본' 시트의 'YYYY 판매(수량)' 1~12월 (그 해는 합본 값만 쓴다)
+//   줄(타입·코드·모델)은 '모스크바' 시트 차례를 따르고, 코드(A21E220274 같은)로 맞춘다.
+//   코드가 없는 소계·합계 줄은 이름으로 맞춘다. 올린 표는 kt_psi_cfg(id=110)에 담는다.
+// ══════════════════════════════════════════
+const PPSI_ID=110;
+let _ppsi=null, _ppsiLoaded=false;
+const PPSI_CODE_RE=/^[A-Z]{1,2}\d{2}[A-Z]\d{6}(-\d+)?$/;
+function ppsiNum(v){ if(v===''||v==null) return null; const n=Number(String(v).replace(/,/g,'')); return isFinite(n)?Math.round(n):null; }
+function ppsiNorm(s){ return String(s==null?'':s).replace(/\s+/g,' ').trim(); }
+async function loadPPSI(force){
+  if(_ppsiLoaded && !force) return;
+  _ppsiLoaded=true;
+  try{
+    const { data, error }=await sb.from('kt_psi_cfg').select('cfg').eq('id',PPSI_ID).limit(1);
+    _ppsi=(!error && data && data[0] && data[0].cfg && data[0].cfg.rows) ? data[0].cfg : null;
+  }catch(e){ _ppsi=null; }
+}
+async function loadPPSITab(){
+  const b=document.getElementById('ppsiUpBtn'); if(b) b.style.display=canEditPsi()?'':'none';
+  await loadPPSI();
+  ppsiFillYears();
+  renderPPSI();
+}
+// 시트 한 장의 줄을 [{key,t,g,m,lv,cells}] 로. ti/gi/mi = 타입·구분(코드)·모델 칸 번호
+function ppsiRowsOf(aoa, start, ti, gi, mi){
+  const out=[], occ={};
+  for(let r=start;r<aoa.length;r++){
+    const row=aoa[r]||[];
+    const t=ppsiNorm(row[ti]), g=ppsiNorm(row[gi]), m=ppsiNorm(row[mi]);
+    if(!(t||g||m)) continue;
+    if(!PPSI_CODE_RE.test(g) && /^-?[\d.]+$/.test(m||g||t)) continue;   // 숫자만 적힌 빈 줄(블라디보스톡 '0 | 0' 같은)
+    let key, lv;
+    // 모델 줄 = 코드가 있거나, 타입(가스·기름…)과 모델이 함께 적힌 줄. 시트의 소계·합계·재고묶음 줄은 빼고 우리가 다시 셈한다
+    //   (시트의 합계 줄은 달에 따라 칸이 비어 있어 믿을 수 없다)
+    const isModel=PPSI_CODE_RE.test(g) || (t && m && !/합계|소계|재고묶음/.test(t+m));
+    if(PPSI_CODE_RE.test(g)){ key='C:'+g; lv='m'; }
+    else { const lab=m||g||t; occ[lab]=(occ[lab]||0)+1; key='L:'+lab+'#'+occ[lab]; lv=isModel?'m':(/합계/.test(lab)?'t':'s'); }
+    out.push({ key, t, g, m, lv, r, lab:(m||g||t) });
+  }
+  return out;
+}
+// 도시 시트: 달마다 '판매' 아래 '실적' 열. {ym:'2201', col}
+function ppsiCityMonths(aoa){
+  const r3=aoa[2]||[], r4=aoa[3]||[], r5=aoa[4]||[];
+  const heads=[];
+  r3.forEach((v,c)=>{ const m=String(v==null?'':v).match(/^\s*(\d{2})년\s*(\d{1,2})월/); if(m) heads.push({ c, ym:m[1]+String(m[2]).padStart(2,'0') }); });
+  const out=[];
+  heads.forEach((h,i)=>{ const end=(i+1<heads.length)?heads[i+1].c:Math.max(r4.length,r5.length);
+    let pan=-1; for(let c=h.c;c<end;c++){ if(ppsiNorm(r4[c])==='판매'){ pan=c; break; } }
+    if(pan<0) return;
+    for(let c=pan;c<end;c++){ if(ppsiNorm(r5[c])==='실적'){ out.push({ ym:h.ym, col:c }); break; } } });
+  return out;
+}
+function ppsiParse(wb){
+  const aoaOf=n=>XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,raw:true,defval:''});
+  const has=n=>wb.SheetNames.indexOf(n)>=0;
+  const notes=[];
+  // 줄 차례의 바탕: 모스크바(없으면 합본)
+  const baseName=has('모스크바')?'모스크바':(has('합본')?'합본':'');
+  if(!baseName) return { error:"'모스크바' 또는 '합본' 시트가 없습니다." };
+  const rows=[], byKey={};
+  const addRows=(list, src)=>list.forEach(x=>{ if(byKey[x.key]) return;
+    const o={ k:x.key, t:x.t, g:x.g, m:x.m, lv:x.lv, src }; byKey[x.key]=o; rows.push(o); });
+  const d={};      // key → {ym:n}
+  const put=(key, ym, n)=>{ if(n==null || !byKey[key]) return; (d[key]=d[key]||{}); d[key][ym]=(d[key][ym]||0)+n; };
+  // 1) 합본의 'YYYY 판매(수량)' 덩어리 — 그 해는 합본 값을 쓴다
+  const hapYears={}; let hapAoa=null, hapRows=null, hapBlocks=[];
+  if(has('합본')){
+    hapAoa=aoaOf('합본');
+    const r4=hapAoa[3]||[], r5=hapAoa[4]||[];
+    r4.forEach((v,c)=>{ const m=String(v==null?'':v).match(/^\s*(\d{4})\s*판매\s*\(\s*수량\s*\)/); if(!m) return;
+      const yy=String(m[1]).slice(2), months=[];
+      for(let k=c;k<c+14 && k<r5.length;k++){ const mm=String(r5[k]==null?'':r5[k]).match(/^\s*(\d{1,2})\s*월/); if(mm) months.push({ ym:yy+String(mm[1]).padStart(2,'0'), col:k }); }
+      if(months.length){ hapBlocks.push({ yy, months }); hapYears[yy]=1; } });
+    hapRows=ppsiRowsOf(hapAoa, 7, 0, 1, 2);
+  }
+  const firstHap=Object.keys(hapYears).sort()[0]||'';
+  // 2) 모스크바·블라디보스톡 — 합본에 없는 해(22년부터)의 '실적'
+  const cities=[];
+  ['모스크바','블라디보스톡'].forEach(n=>{ if(!has(n)) return; const a=aoaOf(n); cities.push({ n, a, rows:ppsiRowsOf(a, 7, 0, 1, 2), months:ppsiCityMonths(a) }); });
+  const base=cities.find(c=>c.n===baseName);
+  addRows(base ? base.rows : hapRows, baseName);
+  cities.forEach(c=>addRows(c.rows, c.n));
+  if(hapRows) addRows(hapRows, '합본');
+  const nowYY=String(new Date().getFullYear()).slice(2);
+  cities.forEach(c=>{
+    const use=c.months.filter(x=>{ const yy=x.ym.slice(0,2); return yy>='22' && !hapYears[yy] && (firstHap ? yy<firstHap : yy<=nowYY); });
+    c.rows.forEach(x=>{ const row=c.a[x.r]||[]; use.forEach(mo=>put(x.key, mo.ym, ppsiNum(row[mo.col]))); });
+    notes.push(c.n+' '+(use.length?(psiYmLabel(use[0].ym)+'~'+psiYmLabel(use[use.length-1].ym)):'없음'));
+  });
+  if(hapRows){
+    hapRows.forEach(x=>{ const row=hapAoa[x.r]||[]; hapBlocks.forEach(b=>b.months.forEach(mo=>put(x.key, mo.ym, ppsiNum(row[mo.col])))); });
+    notes.push('합본 '+hapBlocks.map(b=>'20'+b.yy).join('·')+' 판매(수량)');
+  }
+  // 3) 2021년 시트 — 월별 '판매 계'. 코드로 맞추고, 소계·합계는 이름이 양쪽에 하나뿐일 때만 맞춘다
+  const n21=wb.SheetNames.find(n=>/^\s*20\d{2}년\s*$/.test(n));
+  if(n21){
+    const a=aoaOf(n21), yy=String(n21.match(/20(\d{2})년/)[1]);
+    if(!hapYears[yy]){
+      const r2=a[1]||[], r3=a[2]||[], r4=a[3]||[];
+      const ms=[]; r2.forEach((v,c)=>{ const m=String(v==null?'':v).match(/^\s*(\d{1,2})월\s*\(/); if(m && ms.length<12) ms.push({ mm:+m[1], c }); });
+      const cols=[]; ms.forEach(x=>{ for(let c=x.c;c<x.c+6;c++){ if(ppsiNorm(r3[c])==='판매'){ for(let k=c;k<c+4;k++){ if(ppsiNorm(r4[k])==='계'){ cols.push({ ym:yy+String(x.mm).padStart(2,'0'), col:k }); break; } } break; } } });
+      // 모델 줄(코드가 있는 줄)만 코드로 맞춘다. 소계·합계는 아래에서 모델 줄로 다시 셈한다.
+      let miss=0, missQ=0;
+      for(let r=4;r<a.length;r++){ const row=a[r]||[];
+        const t=ppsiNorm(row[0]), g=ppsiNorm(row[2]), m=ppsiNorm(row[3]);
+        if(!PPSI_CODE_RE.test(g)){
+          // 코드 없이 수량이 있는 모델 줄은 맞출 수 없어 뺀다(소계 줄은 원래 안 쓴다)
+          if(t && m && !/합계|소계/.test(t+m)){ const q=cols.reduce((s,cc)=>s+(ppsiNum(row[cc.col])||0),0); if(q){ miss++; missQ+=q; } }
+          continue; }
+        const key='C:'+g;
+        if(!byKey[key]){ const o={ k:key, t, g, m, lv:'m', src:n21 }; byKey[key]=o; rows.push(o); }
+        cols.forEach(cc=>put(key, cc.ym, ppsiNum(row[cc.col]))); }
+      notes.push(n21+' 판매 계 '+cols.length+'개월'+(miss?(' (코드 없는 모델 '+miss+'줄·'+missQ+'개 뺌)'):''));
+    }
+  }
+  // 줄을 다시 세운다: 맨 위 합계, 그 아래 타입(가스·기름…)마다 소계와 그 모델들. 합계·소계는 모델 줄을 더한 값이다.
+  const models=rows.filter(r=>r.lv==='m');
+  const types=[]; models.forEach(r=>{ const t=r.t||'기타'; if(types.indexOf(t)<0) types.push(t); });
+  const outRows=[{ k:'T:ALL', t:'', g:'', m:'합계', lv:'t' }], dd={};
+  const addTo=(k,o)=>Object.keys(o||{}).forEach(ym=>{ (dd[k]=dd[k]||{}); dd[k][ym]=(dd[k][ym]||0)+o[ym]; });
+  types.forEach(t=>{
+    outRows.push({ k:'S:'+t, t, g:'', m:t+' 소계', lv:'s' });
+    models.filter(r=>(r.t||'기타')===t).forEach(r=>{ outRows.push(r); if(d[r.k]){ dd[r.k]=d[r.k]; addTo('S:'+t, d[r.k]); addTo('T:ALL', d[r.k]); } });
+  });
+  const yms=new Set(); Object.values(dd).forEach(o=>Object.keys(o).forEach(y=>yms.add(y)));
+  const years=[...new Set([...yms].map(y=>y.slice(0,2)))].sort();
+  return { rows:outRows, d:dd, years, notes };
+}
+function handlePPSIUpload(ev){
+  const ru=(lang==='ru');
+  const file=ev.target.files && ev.target.files[0]; ev.target.value='';
+  if(!file) return;
+  if(!canEditPsi()){ alert(ru?'Нет прав.':'올릴 권한이 없습니다.'); return; }
+  const badge=document.getElementById('ppsiBadge'); if(badge) badge.textContent=ru?'Чтение…':'엑셀 읽는 중…';
+  const fr=new FileReader();
+  fr.onload=async function(e){
+    try{
+      const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array', cellFormula:false, cellHTML:false, cellStyles:false});
+      const p=ppsiParse(wb);
+      if(p.error){ alert(p.error); renderPPSI(); return; }
+      const tot=p.rows.find(o=>o.lv==='t');
+      const ySum=yy=>{ const o=tot?p.d[tot.k]:null; if(!o) return 0; return Object.keys(o).filter(k=>k.slice(0,2)===yy).reduce((a,k)=>a+o[k],0); };
+      if(!confirm('제품 PSI — '+file.name+'\n\n'
+        +'· 줄 '+p.rows.length+'개 / 연도 '+p.years.map(y=>'20'+y).join(', ')+'\n'
+        +(tot?('· '+(tot.m||tot.g||tot.t)+':\n   '+p.years.map(y=>'20'+y+' '+ySum(y).toLocaleString()).join(' · ')+'\n'):'')
+        +'· 읽은 곳: '+p.notes.join(' / ')+'\n\n'
+        +'지금 표를 이 내용으로 바꿉니다. 계속할까요?')){ renderPPSI(); return; }
+      const cfg={ v:1, file:file.name, at:new Date().toISOString(), by:(currentUser&&currentUser.id)||'',
+                  years:p.years, notes:p.notes, rows:p.rows, d:p.d };
+      const { error }=await sb.from('kt_psi_cfg').upsert({ id:PPSI_ID, cfg, updated_at:new Date().toISOString() },{onConflict:'id'});
+      if(error){ alert((ru?'Ошибка сохранения':'저장 실패')+'\n['+(error.message||error.code)+']'); renderPPSI(); return; }
+      _ppsi=cfg; _ppsiLoaded=true;
+      ppsiFillYears(true); renderPPSI();
+    }catch(err){ console.error(err); alert((ru?'Ошибка чтения файла.':'엑셀을 읽지 못했습니다.')+'\n'+((err&&err.message)||err)); renderPPSI(); }
+  };
+  fr.readAsArrayBuffer(file);
+}
+function ppsiFillYears(reset){
+  const ys=(_ppsi&&_ppsi.years)||[];
+  ['ppsiFrom','ppsiTo'].forEach((id,i)=>{ const s=document.getElementById(id); if(!s) return;
+    const cur=s.value, want=ys.map(y=>'<option value="'+y+'">20'+y+'</option>').join('');
+    if(s.getAttribute('data-ys')!==ys.join(',')){ s.innerHTML=want; s.setAttribute('data-ys',ys.join(',')); reset=true; }
+    if(reset || !cur) s.value = i===0 ? (ys[0]||'') : (ys[ys.length-1]||''); else s.value=cur; });
+}
+function ppsiCols(){
+  const ys=(_ppsi&&_ppsi.years)||[];
+  const f=(document.getElementById('ppsiFrom')||{}).value||ys[0]||'', t=(document.getElementById('ppsiTo')||{}).value||ys[ys.length-1]||'';
+  const lo=f<t?f:t, hi=f<t?t:f;
+  const mode=(document.getElementById('ppsiMode')||{}).value||'m';
+  const cols=[];
+  ys.filter(y=>y>=lo && y<=hi).forEach(y=>{
+    if(mode==='m') for(let m=1;m<=12;m++) cols.push({ y, ym:y+String(m).padStart(2,'0'), lab:m+'월' });
+    cols.push({ y, ym:'', lab:(mode==='m'?'합계':'20'+y), sum:true });
+  });
+  return { cols, mode, yrs:ys.filter(y=>y>=lo && y<=hi) };
+}
+function ppsiVal(k, c){
+  const o=(_ppsi&&_ppsi.d&&_ppsi.d[k])||{};
+  if(!c.sum) return (o[c.ym]!=null)?o[c.ym]:null;
+  let s=null; Object.keys(o).forEach(ym=>{ if(ym.slice(0,2)===c.y){ s=(s||0)+o[ym]; } }); return s;
+}
+function ppsiVisibleRows(C){
+  const kw=((document.getElementById('ppsiInput')||{}).value||'').trim().toLowerCase();
+  const hz=!!(document.getElementById('ppsiHideZero')||{}).checked;
+  return ((_ppsi&&_ppsi.rows)||[]).filter(r=>{
+    if(kw && ![r.t,r.g,r.m].some(v=>String(v||'').toLowerCase().includes(kw))) return false;
+    if(hz){ const any=C.cols.some(c=>{ const v=ppsiVal(r.k,c); return v!=null && v!==0; }); if(!any) return false; }
+    return true; });
+}
+function renderPPSI(){
+  const ru=(lang==='ru');
+  const thead=document.getElementById('ppsiThead'), tbody=document.getElementById('ppsiTbody'), cg=document.getElementById('ppsiColgroup');
+  const empty=document.getElementById('ppsiEmpty'), badge=document.getElementById('ppsiBadge'), info=document.getElementById('ppsiInfo');
+  if(!thead||!tbody) return;
+  if(!_ppsi){ thead.innerHTML=''; tbody.innerHTML=''; if(cg) cg.innerHTML='';
+    if(badge) badge.textContent='';
+    if(info) info.textContent='';
+    if(empty){ empty.style.display='block'; empty.textContent=ru?'Нет данных. Загрузите Excel «PSI изделий».':'자료가 없습니다. 제품 PSI 엑셀을 올려 주세요.'; }
+    updatePaneHBar('ppsi'); return; }
+  if(empty) empty.style.display='none';
+  const C=ppsiCols(), rows=ppsiVisibleRows(C);
+  const FX=[{k:'t',w:74,lab:ru?'Тип':'타입'},{k:'g',w:96,lab:ru?'Код':'코드'},{k:'m',w:170,lab:ru?'Модель':'모델'}];
+  const left=[0]; FX.forEach((f,i)=>left.push(left[i]+f.w));
+  const cw=c=>c.sum?(C.mode==='m'?60:72):46;
+  if(cg) cg.innerHTML=FX.map(f=>'<col style="width:'+f.w+'px">').join('')+C.cols.map(c=>'<col style="width:'+cw(c)+'px">').join('');
+  const tbl=document.getElementById('ppsiTable'); if(tbl) tbl.style.width=(left[3]+C.cols.reduce((a,c)=>a+cw(c),0))+'px';
+  const thS='padding:5px 4px;text-align:center;vertical-align:middle;position:sticky;z-index:3;background:var(--surface2);font-size:11px;white-space:nowrap;border-bottom:1px solid var(--border)';
+  const stk=i=>';left:'+left[i]+'px;z-index:4';
+  const yHead=C.mode==='m'
+    ? C.yrs.map(y=>'<th colspan="13" style="'+thS+';top:0;border-left:1px solid var(--border)">20'+y+'</th>').join('')
+    : '<th colspan="'+C.cols.length+'" style="'+thS+';top:0">'+(ru?'Итого за год':'연 합계')+'</th>';
+  thead.innerHTML='<tr>'+FX.map((f,i)=>'<th rowspan="2" style="'+thS+';top:0'+stk(i)+'">'+f.lab+'</th>').join('')+yHead+'</tr>'
+    +'<tr>'+C.cols.map(c=>'<th style="'+thS+';top:27px'+(c.sum?';font-weight:700':'')+((C.mode==='m'&&c.ym.slice(2)==='01')?';border-left:1px solid var(--border)':'')+'">'+c.lab+'</th>').join('')+'</tr>';
+  const tdS='padding:4px 5px;font-size:11px;border-bottom:1px solid var(--border);white-space:nowrap';
+  tbody.innerHTML=rows.map(r=>{
+    const bg=r.lv==='t'?'#fde68a55':(r.lv==='s'?'var(--surface2)':'var(--surface)');
+    const fw=r.lv==='m'?'400':'700';
+    const fix=FX.map((f,i)=>'<td style="'+tdS+';position:sticky;left:'+left[i]+'px;z-index:2;background:'+(r.lv==='m'?'var(--surface)':'var(--surface2)')+';font-weight:'+fw
+      +(f.k==='g'?";font-family:'Courier New',monospace;font-size:10px":'')+';overflow:hidden;text-overflow:ellipsis" title="'+escapeHtml(r[f.k]||'')+'">'+escapeHtml(r[f.k]||'')+'</td>').join('');
+    const nums=C.cols.map(c=>{ const v=ppsiVal(r.k,c);
+      return '<td style="'+tdS+';text-align:right;background:'+(c.sum?'var(--surface2)':bg)+';font-weight:'+(c.sum?'700':fw)
+        +((C.mode==='m'&&c.ym.slice(2)==='01')?';border-left:1px solid var(--border)':'')+(v<0?';color:#b91c1c':'')+'">'+((v==null||v===0)?'':v.toLocaleString())+'</td>'; }).join('');
+    return '<tr>'+fix+nums+'</tr>'; }).join('');
+  if(badge) badge.textContent=(ru?'Строк ':'')+rows.length+(ru?'':'줄');
+  if(info){ const at=_ppsi.at?new Date(_ppsi.at):null, p2=x=>String(x).padStart(2,'0');
+    info.textContent=(ru?'Файл: ':'올린 파일: ')+(_ppsi.file||'')+(at?(' · '+at.getFullYear()+'-'+p2(at.getMonth()+1)+'-'+p2(at.getDate())+' '+p2(at.getHours())+':'+p2(at.getMinutes())):'')
+      +' · '+((_ppsi.notes||[]).join(' / ')); }
+  updatePaneHBar('ppsi');
+}
+async function downloadPPSI(){
+  if(!_ppsi) return;
+  await ensureXlsxStyle();
+  const ru=(lang==='ru'), C=ppsiCols(), rows=ppsiVisibleRows(C);
+  const h1=[ru?'Тип':'타입', ru?'Код':'코드', ru?'Модель':'모델'], h2=['','',''];
+  C.cols.forEach(c=>{ h1.push('20'+c.y); h2.push(c.lab); });
+  const aoa=[h1,h2];
+  rows.forEach(r=>aoa.push([r.t||'', r.g||'', r.m||''].concat(C.cols.map(c=>{ const v=ppsiVal(r.k,c); return v==null?'':v; }))));
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  const merges=[{s:{r:0,c:0},e:{r:1,c:0}},{s:{r:0,c:1},e:{r:1,c:1}},{s:{r:0,c:2},e:{r:1,c:2}}];
+  let c0=3; C.yrs.forEach(y=>{ const n=C.cols.filter(c=>c.y===y).length; if(n>1) merges.push({s:{r:0,c:c0},e:{r:0,c:c0+n-1}}); c0+=n; });
+  ws['!merges']=merges;
+  ws['!cols']=[{wch:10},{wch:14},{wch:24}].concat(C.cols.map(c=>({wch:c.sum?9:7})));
+  xlPaint(ws, 0, h1.length, XL_HEAD_C); xlPaint(ws, 1, h1.length, XL_HEAD_C);
+  rows.forEach((r,i)=>{ if(r.lv!=='m') xlPaint(ws, i+2, h1.length, r.lv==='t'?XL_SUM:XL_GRP); });
+  for(let ri=2; ri<aoa.length; ri++) for(let ci=3; ci<h1.length; ci++){ const a=XLSX.utils.encode_cell({r:ri,c:ci}); if(ws[a] && ws[a].t==='n') ws[a].z='#,##0'; }
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, ru?'PSI изделий':'제품 출고');
+  XLSX.writeFile(wb, xlsxName('제품PSI','PSI_izdeliy'));
 }
 function downloadPO(){
   renderPO();
@@ -20540,7 +20842,7 @@ updatePNTableScrollbar=setupHTableScroll('scrollBodyPN','pnHdrWrap','pnTblScroll
 // PSI 계열 화면(PSI·발주시뮬레이션·발주현황·선적/입고현황·미출현황)도 같은 가로 슬라이드 막대를 쓴다.
 // 이 화면들은 머리글이 표 안에 있어서 따로 맞출 헤더가 없다 — 스크롤 칸을 헤더 자리에 그대로 넘긴다.
 [['psi','scrollBodyPSI'],['sim','scrollBodySIM'],['po','scrollBodyPO'],
- ['ship','scrollBodySHIP'],['ms','scrollBodyMS'],['blk','scrollBodyBLK'],['moq','scrollBodyMOQ'],['ss','scrollBodySS'],['pnchk','scrollBodyPNCHK']].forEach(function(x){
+ ['ship','scrollBodySHIP'],['ms','scrollBodyMS'],['ppsi','scrollBodyPPSI'],['blk','scrollBodyBLK'],['moq','scrollBodyMOQ'],['ss','scrollBodySS'],['pnchk','scrollBodyPNCHK']].forEach(function(x){
   _hbars[x[0]]=setupHTableScroll(x[1], x[1], x[0]+'TblScrollbar', x[0]+'TblScrollbarThumb');
 });
 setupSimpleHeaderScrollSync('scrollBodyPrice','priceCalcHdrWrap');
@@ -21186,6 +21488,8 @@ function enterApp(user){
   // 보고서도 PSI 를 보는 사람만
   const tabRep=document.getElementById('tab-report');
   if(tabRep) tabRep.style.display = canSeePsi() ? 'block' : 'none';
+  const tabPpsi=document.getElementById('tab-ppsi');
+  if(tabPpsi) tabPpsi.style.display = canSeePsi() ? 'block' : 'none';
   // 발주현황은 위 탭줄이 아니라 PSI 화면의 단추로 연다(탭 요소는 switchTab 을 위해 남겨 두고 감춘다)
   const tabPo=document.getElementById('tab-po');
   if(tabPo) tabPo.style.display='none';
