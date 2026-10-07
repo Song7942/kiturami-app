@@ -1292,6 +1292,7 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
         <span id="i18n-pnchk-clr">지우기</span>
       </button>
     </div>
+    <div id="pnChkSum" style="display:none;margin:0 4px 5px"></div>
     <div style="font-size:11px;color:var(--muted);padding:0 4px 4px" id="pnChkNote"></div>
       <div class="tbl-scrollbar" id="pnchkTblScrollbar" style="display:none;margin:4px 0 0">
         <div class="tbl-scrollbar-thumb" id="pnchkTblScrollbarThumb"></div>
@@ -15050,6 +15051,40 @@ function pnChkResolveRow(cells, pc){
   }
   return { f, used, code };
 }
+// 수량 열 — 머리글 이름으로 찾고, 없으면 숫자만 든 맨 끝 열을 본다.
+function pnChkQtyCol(){
+  if(!_pnChk) return -1;
+  const h=_pnChk.head||[];
+  for(let i=h.length-1;i>=0;i--){
+    const s=String(h[i]||'').replace(/\s+/g,'').toLowerCase();
+    if(s==='수량'||s==='кол-во'||s==='qty'||s==="q'ty"||s==='quantity'||s==='개수') return i;
+  }
+  return -1;
+}
+// 그 칸의 수량. 숫자가 아니면 null(=수량을 알 수 없는 줄).
+function pnChkQtyOf(cells, qc){
+  if(qc<0) return null;
+  const raw=String((cells||[])[qc]==null?'':cells[qc]).replace(/[,\s]/g,'').trim();
+  if(raw==='') return null;
+  const n=Number(raw);
+  return isFinite(n) ? n : null;
+}
+// 수량이 0 인 줄은 보여 주지 않는다(화면·엑셀 모두). 수량을 알 수 없는 줄은 그대로 둔다.
+function pnChkKeep(cells, qc){
+  const q=pnChkQtyOf(cells, qc);
+  return !(q===0);
+}
+// 품목수(최종품번 기준)와 수량 합계
+function pnChkTotals(rows, qc){
+  const set=new Set(); let qty=0, noFin=0, noQty=0;
+  rows.forEach(r=>{
+    const fin=String(r.fin||'').trim();
+    if(fin) set.add(normPN(fin)); else noFin++;
+    const q=pnChkQtyOf(r.cells, qc);
+    if(q==null) noQty++; else qty+=q;
+  });
+  return { items:set.size, qty, noFin, noQty, rows:rows.length };
+}
 function pnChkClear(){ _pnChk=null; renderPnChk(); }
 function debouncedRenderPnChk(){ clearTimeout(window._pnChkT); window._pnChkT=setTimeout(renderPnChk,200); }
 function pnChkColName(i){    // 머리글이 없을 때 쓰는 이름: 엑셀 열 글자(A,B,…)
@@ -15168,6 +15203,7 @@ function renderPnChk(){
   if(!_pnChk){
     if(thead) thead.innerHTML=''; if(tbody) tbody.innerHTML='';
     if(badge) badge.innerHTML='';
+    { const box=document.getElementById('pnChkSum'); if(box){ box.innerHTML=''; box.style.display='none'; } }
     if(dl) dl.style.display='none';
     if(clr) clr.style.display='none';
     if(note) note.textContent=L('품번이 든 엑셀을 이 화면에 끌어다 놓거나 \'엑셀 업로드\' 로 올려 주세요. '
@@ -15178,8 +15214,9 @@ function renderPnChk(){
     return;
   }
   const kw=((document.getElementById('pnChkInput')||{}).value||'').trim().toLowerCase();
-  const pc=_pnChk.pnCol;
-  let rows=_pnChk.rows.map(cells=>{
+  const pc=_pnChk.pnCol, qc=pnChkQtyCol();
+  const nZero=(qc>=0) ? _pnChk.rows.filter(c=>!pnChkKeep(c,qc)).length : 0;
+  let rows=_pnChk.rows.filter(c=>pnChkKeep(c,qc)).map(cells=>{
     const code=String(cells[pc]==null?'':cells[pc]).trim();
     const R=pnChkResolveRow(cells, pc);
     const f=R.f;
@@ -15190,16 +15227,40 @@ function renderPnChk(){
   const noFin=rows.filter(r=>r.found && !r.fin).length;
   const nDan=rows.filter(r=>r.dan).length;
   const nUsed=rows.filter(r=>r.used).length;
+  const all=rows;                                   // 검색 전(수량 0 은 이미 뺀 것)
   if(kw) rows=rows.filter(r=> [r.code,r.fin,r.name,r.spec].some(v=>String(v||'').toLowerCase().includes(kw)));
   if(badge) badge.innerHTML='<b>'+rows.length+'</b>';
   if(dl) dl.style.display='';
   if(clr) clr.style.display='';
+  // 상단 합계: 품목수(최종품번 기준)와 수량 합계. 검색 중이면 보이는 것 기준으로 센다.
+  {
+    const box=document.getElementById('pnChkSum');
+    if(box){
+      const T=pnChkTotals(rows, qc), A=kw?pnChkTotals(all, qc):null;
+      const cell=(lab,val,sub)=>'<div style="flex:none;min-width:132px;padding:6px 12px;border:1px solid var(--border);'
+        +'border-radius:8px;background:var(--surface2)">'
+        +'<div style="font-size:10.5px;color:var(--muted);white-space:nowrap">'+escapeHtml(lab)+'</div>'
+        +'<div style="font-size:16px;font-weight:800;line-height:1.25">'+escapeHtml(val)+'</div>'
+        +(sub?('<div style="font-size:10px;color:var(--muted);white-space:nowrap">'+escapeHtml(sub)+'</div>'):'')
+        +'</div>';
+      box.style.display='flex';
+      box.style.cssText='display:flex;gap:8px;flex-wrap:wrap;align-items:stretch;margin:0 4px 5px';
+      box.innerHTML=
+         cell(L('품목수 합계 (최종품번 기준)','Позиций (по конечному артикулу)'), T.items.toLocaleString(),
+              T.noFin?L('최종품번 없는 줄 '+T.noFin+'건은 뺐습니다','без конечного артикула: '+T.noFin):'')
+       + (qc>=0 ? cell(L('수량 합계','Итого кол-во'), T.qty.toLocaleString(),
+              T.noQty?L('수량 없는 줄 '+T.noQty+'건','без кол-ва: '+T.noQty):'') : '')
+       + cell(L('줄 수','Строк'), T.rows.toLocaleString(),
+              A?L('검색 중 · 전체 '+A.rows.toLocaleString()+'줄','всего '+A.rows.toLocaleString()):'');
+    }
+  }
   if(note) note.textContent=L(_pnChk.name+' · 품번 '+nAll+'건'
+      +(nZero?(' · 수량 0 이라 뺀 줄 '+nZero+'건'):'')
       +(nUsed?(' · 다른 칸의 품번으로 찾음 '+nUsed+'건'):'')
       +(miss?(' · 품번조회에 없음 '+miss+'건'):'')
       +(noFin?(' · 최종품번 비어 있음 '+noFin+'건'):'')
       +(nDan?(' · 단종 '+nDan+'건'):''),
-      _pnChk.name+' · '+nAll+(miss?(' · нет в базе: '+miss):''));
+      _pnChk.name+' · '+nAll+(nZero?(' · кол-во 0: '+nZero):'')+(miss?(' · нет в базе: '+miss):''));
   // 머리글: 원래 열들 + 품번 열 오른쪽에 최종품번·단종·품명·규격
   const head=[];
   _pnChk.head.forEach((h,i)=>{
@@ -15251,13 +15312,30 @@ function downloadPnChk(){
   _pnChk.head.forEach((h,i)=>{ head.push(h);
     if(i===pc){ head.push(L('최종품번','Конечный артикул')); head.push(L('단종','Снято')); head.push(L('품명','Наименование')); head.push(L('규격','Хар-ки')); } });
   const aoa=[head];
-  _pnChk.rows.forEach(cells=>{
+  // 수량이 0 인 줄은 화면과 같이 뺀다
+  const qc=pnChkQtyCol();
+  const keep=_pnChk.rows.filter(c=>pnChkKeep(c,qc));
+  const seen=new Set(); let totQty=0, haveQty=false;
+  keep.forEach(cells=>{
     const f=pnChkResolveRow(cells, pc).f;
+    if(f.fin) seen.add(normPN(f.fin));
+    const q=pnChkQtyOf(cells, qc); if(q!=null){ totQty+=q; haveQty=true; }
     const row=[];
-    _pnChk.head.forEach((h,i)=>{ row.push(cells[i]);
+    _pnChk.head.forEach((h,i)=>{ row.push((i===qc && q!=null) ? q : cells[i]);   // 수량은 숫자로 넣는다
       if(i===pc){ row.push(f.fin||''); row.push(f.dan||''); row.push(f.name||''); row.push(f.spec||''); } });
     aoa.push(row);
   });
+  // 머리글 바로 밑에 합계 줄 — 품목수(최종품번 기준)와 수량 합계
+  {
+    const sum=new Array(head.length).fill('');
+    sum[0]=L('합계 · 품목수(최종품번) '+seen.size.toLocaleString()+' · 줄 '+keep.length.toLocaleString(),
+             'Итого · позиций '+seen.size+' · строк '+keep.length);
+    if(qc>=0 && haveQty){
+      // 수량 열은 품번 열 뒤에 네 칸이 끼어들므로 그만큼 밀린다
+      sum[qc + (qc>pc?4:0)]=totQty;
+    }
+    aoa.splice(1,0,sum);
+  }
   const ws=XLSX.utils.aoa_to_sheet(aoa);
   ws['!cols']=head.map(h=>({wch:(String(h).indexOf('규격')>=0||String(h).indexOf('품명')>=0)?22:16}));
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'품번확인');
