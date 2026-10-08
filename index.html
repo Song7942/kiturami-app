@@ -14287,16 +14287,31 @@ async function downloadASR(){
 // 내려받는 표의 글자 자리 — 왼쪽으로 붙이고 칸 높이의 가운데에 놓는다.
 //   합친 칸(대체품목이 여러 줄인 곳)은 이것을 안 적으면 글자가 칸 밑바닥에 붙는다.
 function xlsxAlignAll(ws, extra){
-  const ref=ws&&ws['!ref']; if(!ref) return ws;
-  const R=XLSX.utils.decode_range(ref);
+  if(!ws || !ws['!ref']) return ws;
   const al=Object.assign({ horizontal:'left', vertical:'center', wrapText:false }, extra||{});
-  for(let r=R.s.r;r<=R.e.r;r++) for(let c=R.s.c;c<=R.e.c;c++){
-    const a=XLSX.utils.encode_cell({r,c});
-    if(!ws[a]) ws[a]={t:'s', v:''};                 // 합친 칸의 빈자리에도 자리를 맞춰 둔다
-    ws[a].s=Object.assign({}, ws[a].s, { alignment:al });
-  }
+  // 합친 칸은 안쪽이 비어 있어도 자리를 적어 두어야 글자가 가운데로 온다
+  (ws['!merges']||[]).forEach(m=>{
+    for(let r=m.s.r;r<=m.e.r;r++) for(let c=m.s.c;c<=m.e.c;c++){
+      const a=XLSX.utils.encode_cell({r,c}); if(!ws[a]) ws[a]={t:'s', v:''};
+    }
+  });
+  Object.keys(ws).forEach(k=>{
+    if(k.charAt(0)==='!') return;                    // '!ref' 같은 살림살이는 건너뛴다
+    const c=ws[k]; if(!c || typeof c!=='object') return;
+    c.s=Object.assign({}, c.s, { alignment:al });
+  });
   return ws;
 }
+// 어느 화면에서 내려받든 같은 모양이 되게, 쓰기 직전에 한 번 입힌다.
+(function(){
+  if(typeof XLSX==='undefined' || XLSX.__ktAlign) return;
+  const w=XLSX.writeFile;
+  XLSX.writeFile=function(wb){
+    try{ ((wb&&wb.SheetNames)||[]).forEach(n=>xlsxAlignAll(wb.Sheets[n])); }catch(e){ console.warn('xlsx align', e); }
+    return w.apply(this, arguments);
+  };
+  XLSX.__ktAlign=1;
+})();
 function downloadPO(){
   renderPO();
   const ru=(lang==='ru');
