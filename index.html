@@ -12467,10 +12467,29 @@ function poColDefsBase(){
     .concat(canViewExportCtrl()?[['exp',L('수출제한','Эксп.контроль'),ru?86:58]]:[])
     .concat([['name',L('품명','Наименование'),170]])
     .concat(ru?[]:[['spec','규격',150]])
+    // 대체품목(연결조립필요품목포함) — 품번조회에 적어 둔 것을 그대로 보여 준다
+    .concat([['alt',     L('대체품목<br>품번','Замена —<br>артикул'),112],
+             ['alt_name',L('대체품목<br>품명','Замена —<br>наим.'),150],
+             ['alt_qty', L('대체품목<br>필요수량','Замена —<br>кол-во'),74]])
     .concat([['qty',L('수주수량','Заказано'),70],['sup',L('공급수량','Поставлено'),70],
              ['rest',L('미공급수량','Недопоставка'),78]]);
 }
-function poColLabel(key){ const d=poColDefs().find(x=>x[0]===key); return d?d[1]:key; }
+function poColLabel(key){ const d=poColDefs().find(x=>x[0]===key); return d?String(d[1]).replace(/<br>/g,' '):key; }
+// 대체품목 칸 — 품번조회와 같이 품번마다 한 줄씩 쌓는다(여기서는 보기만 한다).
+function poAltTd(rep, key, tdS){
+  const pad='padding:0 10px;font-size:11px;vertical-align:middle;border-bottom:1px solid var(--border)';
+  const ents=rep?pnAltEntries(rep):[];
+  if(!ents.length) return '<td style="'+tdS+'"></td>';
+  const out=ents.map((e,i)=>{
+    const last=(i===ents.length-1);
+    if(key==='alt_name'){ const nm=pnAltName(e.p,e.f);
+      return pnAltRow('<span title="'+escapeHtml(nm)+'" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escapeHtml(nm)+'</span>', last, 'color:var(--muted)'); }
+    if(key==='alt_qty') return pnAltRow('<span style="margin-left:auto">'+escapeHtml(e.q||'')+'</span>', last);
+    return pnAltRow('<span style="font-family:\'Courier New\',monospace;font-size:9.5px;white-space:nowrap">'
+      +escapeHtml(normBadgePN(pnAltResolve(e.p,e.f)))+'</span>', last);
+  }).join('');
+  return '<td style="'+pad+'">'+out+'</td>';
+}
 function poIsNumCol(key){ return key==='qty'||key==='sup'||key==='rest'; }
 // 한 줄에서 그 열의 값(거르개·정렬이 쓰는 기준값). 화면에 찍히는 글자와 같게 맞춘다.
 function poCellVal(key, r){
@@ -12486,6 +12505,9 @@ function poCellVal(key, r){
     case 'exp':  return isExportRestricted(i.fin||r.pn) ? 'O' : '';
     case 'name': return poName(r.pn)||'';
     case 'spec': return poSpec(r.pn)||'';
+    case 'alt':      return i.rep?pnAltText(i.rep):'';
+    case 'alt_name': return i.rep?pnAltNameText(i.rep):'';
+    case 'alt_qty':  return i.rep?pnAltQtyText(i.rep):'';
     case 'qty':  return String(Number(r.qty)||0);
     case 'sup':  return String(Number(r.supplied)||0);
     case 'rest': return String((Number(r.qty)||0)-(Number(r.supplied)||0));
@@ -12674,6 +12696,7 @@ function renderPO(){
       exp:'<td style="'+tdS+';text-align:center;color:#ef4444;font-weight:700">'+(isExportRestricted(i.fin||r.pn)?'O':'')+'</td>',
       name:'<td style="'+tdS+';word-break:break-all;font-size:10.5px;line-height:1.25">'+escapeHtml(poName(r.pn))+'</td>',
       spec:'<td style="'+tdS+';word-break:break-all;font-size:10.5px;line-height:1.25;color:var(--muted)">'+escapeHtml(poSpec(r.pn))+'</td>',
+      alt:poAltTd(i.rep,'alt',tdS), alt_name:poAltTd(i.rep,'alt_name',tdS), alt_qty:poAltTd(i.rep,'alt_qty',tdS),
       qty:'<td class="'+(poIsManQ(r.cha,r.pn)?'po-man':'')+'" style="'+numS+'">'
         +(EDPO?poNumEdit(r.cha,r.pn,'qty',r.qty):(r.qty?r.qty.toLocaleString():'0'))+'</td>',
       sup:'<td class="'+(poIsMan(r.cha,r.pn)?'po-man':'')+'" style="'+numS+'">'
@@ -12716,7 +12739,7 @@ function renderPO(){
   if(tbody) tbody.innerHTML=body;
   // 대표코드끼리 묶어 보기: 수주·공급·미공급 수량은 묶음 줄에서 합해 보여 준다
   if(poGroupOn()) ktGroupByRep('poTbody',{ rep:ixPO('rep'),
-    keep:[ixPO('name'), ixPO('spec')].filter(i=>i>=0),
+    keep:[ixPO('name'), ixPO('spec'), ixPO('alt'), ixPO('alt_name'), ixPO('alt_qty')].filter(i=>i>=0),
     sum:[ixPO('qty'), ixPO('sup'), ixPO('rest')] });
   if(empty){ empty.textContent=L('자료가 없습니다. 엑셀 업로드로 발주 자료를 올려주세요.','Нет данных.');
              empty.style.display=rows.length?'none':'block'; }
@@ -13506,7 +13529,7 @@ async function loadPOTab(){
   ['poUploadBtn'].forEach(id=>{ const b=document.getElementById(id); if(b) b.style.display=m?'':'none'; });
   { const b=document.getElementById('poDelChaBtn');
     if(b) b.style.display=((typeof pnEditable==='function') && pnEditable())?'':'none'; }
-  await Promise.all([loadPO(), loadPoMan()]);
+  await Promise.all([loadPO(), loadPoMan(), (typeof loadPnAlt==='function')?loadPnAlt():Promise.resolve()]);
   if(typeof loadPsiCols==='function') await loadPsiCols();   // 열 차례를 같은 곳에 담는다
   await loadKtHist();
   renderPO();
