@@ -1594,6 +1594,7 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
       </div>
 
       <select id="poCha" onchange="renderPO()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></select>
+      <select id="poDan" onchange="renderPO()" title="O 단종 · △ 주문 불필요 · □ 변경예정" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></select>
       <datalist id="ktPoYmOpts"></datalist>
       <input type="text" id="poFrom" list="ktPoYmOpts" placeholder="2026-01" onfocus="this.select()" onchange="renderPO()" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"><button type="button" class="ym-pick" onclick="ktYmPickOpen('poFrom',this)">▼</button>
       <span style="font-size:11px;color:var(--muted)">~</span>
@@ -12560,7 +12561,11 @@ function _poFilterEsc(e){ if(e.key==='Escape') closePOFilter(); }
 function _poFilterOutside(e){ const b=document.getElementById('poFilterPop'); if(b && !b.contains(e.target)) closePOFilter(); }
 function closePOFilter(){ const b=document.getElementById('poFilterPop'); if(b) b.remove();
   document.removeEventListener('mousedown', _poFilterOutside); document.removeEventListener('keydown', _poFilterEsc); }
-function poResetFilters(){ _poFilters={}; _poSort={key:null,dir:'asc'}; closePOFilter(); renderPO(); }
+function poResetFilters(){
+  _poFilters={}; _poSort={key:null,dir:'asc'};
+  ['poCha','poDan'].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=''; });   // 위에서 고른 차수·단종도 푼다
+  closePOFilter(); renderPO();
+}
 function openPOFilter(key, anchor){
   closePOFilter();
   const ru=(lang==='ru');
@@ -12637,10 +12642,29 @@ function renderPO(){
       +list.map(c=>'<option value="'+escapeHtml(c)+'">'+escapeHtml(poChaLabel(c))+'</option>').join('');
     if(chaSel.getAttribute('data-list')!==lang+'|'+list.join('|')){ chaSel.innerHTML=want; chaSel.setAttribute('data-list',lang+'|'+list.join('|')); chaSel.value=cur; }
   }
+  // 단종 고르기 — 자료에 실제로 있는 표시만 목록에 올린다('-' 는 단종이 아닌 줄)
+  const danSel=document.getElementById('poDan');
+  if(danSel){
+    const cur=danSel.value;
+    const seen=new Set(); let blank=false;
+    poData.forEach(r=>{ const d=String(poCellVal('dan', r)||'').trim(); if(d) seen.add(d); else blank=true; });
+    const marks=[...seen].sort();
+    const lab=d=>d==='O'?L('O 단종','O — снято'):d==='△'?L('△ 주문 불필요','△ — не требуется'):d==='□'?L('□ 변경예정','□ — замена'):d;
+    const key=lang+'|'+marks.join('|')+'|'+(blank?'1':'0');
+    if(danSel.getAttribute('data-list')!==key){
+      danSel.innerHTML='<option value="">'+L('단종 전체','Снятие: все')+'</option>'
+        + marks.map(d=>'<option value="'+escapeHtml(d)+'">'+escapeHtml(lab(d))+'</option>').join('')
+        + (blank?('<option value="-">'+L('단종 아님','Не снято')+'</option>'):'');
+      danSel.setAttribute('data-list',key); danSel.value=cur;
+    }
+  }
   const R=poFillRange();
   const cha=chaSel?chaSel.value:'';
+  const dan=danSel?danSel.value:'';
   let rows=poData.slice();
   if(cha) rows=rows.filter(r=>r.cha===cha);
+  if(dan) rows=rows.filter(r=>{ const d=String(poCellVal('dan', r)||'').trim();   // 화면에 찍히는 값과 같은 기준
+    return (dan==='-') ? !d : (d===dan); });
   if(R.from || R.to) rows=rows.filter(r=>{ const y=poYmOf(r);
     if(!y) return !!R.whole;                 // 발주년월을 못 잡는 줄(미상)은 전 기간일 때만 보인다
     return (!R.from || y>=R.from) && (!R.to || y<=R.to); });
