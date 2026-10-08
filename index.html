@@ -12483,13 +12483,15 @@ function poSupplySet(){
   _poSupSet=s; return s;
 }
 function poHasSupply(pn){ const k=normPN(pn||''); return !!k && poSupplySet().has(k); }
-// 'O' / '' — 대체품목이 있으면 그것들이 모두 공급가를 가져야 O 로 본다.
-function poSupplyMark(r){
+// 그 줄의 공급가 표시. 대체품목이 있으면 품목마다 하나씩 ['O','',…] 로 돌려준다.
+//   대체품목이 없으면 최종품번(없으면 발주코드) 하나로 본다.
+function poSupplyMarks(r){
   const i=(typeof poLookup==='function')?(poLookup(r.pn)||{}):{};
   const ents=(i.rep && typeof pnAltEntries==='function')?pnAltEntries(i.rep):[];
-  if(ents.length) return ents.every(e=>poHasSupply(pnAltFinalOf(e.p)||pnAltResolve(e.p,e.f))) ? 'O' : '';
-  return poHasSupply(i.fin||r.pn) ? 'O' : '';
+  if(ents.length) return ents.map(e=>poHasSupply(pnAltFinalOf(e.p)||pnAltResolve(e.p,e.f))?'O':'');
+  return [ poHasSupply(i.fin||r.pn)?'O':'' ];
 }
+function poSupplyMark(r){ return poSupplyMarks(r).join(', '); }
 function poColDefs(){ return colOrdApply('po', poColDefsBase()); }
 function poColDefsBase(){
   const ru=(lang==='ru'), L=(ko,rr)=>(ru?rr:ko);
@@ -12512,6 +12514,18 @@ function poColDefsBase(){
              ['rest',L('미공급수량','Недопоставка'),78]]);
 }
 function poColLabel(key){ const d=poColDefs().find(x=>x[0]===key); return d?String(d[1]).replace(/<br>/g,' '):key; }
+// 공급가 여부 칸 — 대체품목이 있으면 그 줄에 맞춰 품목마다 한 줄씩 쌓는다.
+function poSupTd(r, tdS){
+  const marks=poSupplyMarks(r);
+  const i=(typeof poLookup==='function')?(poLookup(r.pn)||{}):{};
+  const ents=(i.rep && typeof pnAltEntries==='function')?pnAltEntries(i.rep):[];
+  if(!ents.length)
+    return '<td style="'+tdS+';text-align:center;font-weight:700;color:#0ea5e9">'+(marks[0]||'')+'</td>';
+  const pad='padding:0 10px;font-size:11px;vertical-align:middle;border-bottom:1px solid var(--border)';
+  const out=marks.map((m,k)=>pnAltRow('<span style="margin:0 auto;font-weight:700;color:#0ea5e9">'+m+'</span>',
+                                      k===marks.length-1)).join('');
+  return '<td style="'+pad+';text-align:center">'+out+'</td>';
+}
 // 대체품목 칸 — 품번조회와 같이 품번마다 한 줄씩 쌓는다(여기서는 보기만 한다).
 function poAltTd(rep, key, tdS){
   const pad='padding:0 10px;font-size:11px;vertical-align:middle;border-bottom:1px solid var(--border)';
@@ -12758,7 +12772,7 @@ function renderPO(){
       name:'<td style="'+tdS+';word-break:break-all;font-size:10.5px;line-height:1.25">'+escapeHtml(poName(r.pn))+'</td>',
       spec:'<td style="'+tdS+';word-break:break-all;font-size:10.5px;line-height:1.25;color:var(--muted)">'+escapeHtml(poSpec(r.pn))+'</td>',
       alt:poAltTd(i.rep,'alt',tdS), alt_name:poAltTd(i.rep,'alt_name',tdS), alt_qty:poAltTd(i.rep,'alt_qty',tdS),
-      sup_ok:'<td style="'+tdS+';text-align:center;font-weight:700;color:#0ea5e9">'+poSupplyMark(r)+'</td>',
+      sup_ok:poSupTd(r, tdS),
       qty:'<td class="'+(poIsManQ(r.cha,r.pn)?'po-man':'')+'" style="'+numS+'">'
         +(EDPO?poNumEdit(r.cha,r.pn,'qty',r.qty):(r.qty?r.qty.toLocaleString():'0'))+'</td>',
       sup:'<td class="'+(poIsMan(r.cha,r.pn)?'po-man':'')+'" style="'+numS+'">'
@@ -14391,19 +14405,21 @@ function downloadPO(){
   const xh=poColDefs();
   // 대체품목은 화면처럼 한 품번에 한 줄씩 적는다. 그만큼 줄을 늘리고
   // 나머지 열은 첫 줄에만 적은 뒤 세로로 합쳐, 화면과 같은 모양으로 만든다.
-  const ALT={alt:1, alt_name:1, alt_qty:1};
+  const ALT={alt:1, alt_name:1, alt_qty:1, sup_ok:1};   // 대체품목마다 한 줄씩 적는 열
   const body=[], merges=[];
   let tq=0, ts=0;
   (_poFiltered||[]).forEach(r=>{
     tq+=r.qty; ts+=r.supplied;
     const rep=(poLookup(r.pn)||{}).rep||'';
     const ents=rep?pnAltEntries(rep):[];
+    const marks=poSupplyMarks(r);
     const n=Math.max(1, ents.length);
     const at=body.length;
     for(let k=0;k<n;k++){
       body.push(xh.map(h=>{
         const key=h[0];
         if(ALT[key]){
+          if(key==='sup_ok') return marks[k]||'';
           const e=ents[k]; if(!e) return '';
           if(key==='alt')      return normBadgePN(pnAltResolve(e.p, e.f));
           if(key==='alt_name') return pnAltName(e.p, e.f);
