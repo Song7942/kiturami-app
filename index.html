@@ -2165,7 +2165,7 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
 </button>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 const SUPABASE_URL='https://urymuwyiiuhmmvrvlodk.supabase.co';
@@ -5128,7 +5128,7 @@ async function downloadOfflineHtml(){
     const DB={};
     for(const t of ['kt_pn_overrides','kt_pn_specs','kt_names_en','kt_price_calc','kt_price_settings','kt_company_prices','kt_users']){ DB[t]=await all(t); }
     let html=await (await fetch('/index.html')).text();
-    html=html.replace(/<script src="https:\/\/cdnjs\.cloudflare[^"]*"><\/script>\s*/,'');   // XLSX CDN 제거
+    html=html.replace(/<script src="https:\/\/[^"]*xlsx[^"]*"><\/script>\s*/i,'');   // XLSX CDN 제거
     html=html.replace(/<script src="https:\/\/cdn\.jsdelivr\.net\/npm\/@supabase[^"]*"><\/script>/, _offlineBoot(DB));   // Supabase → 가짜 sb
     const blob=new Blob([html],{type:'text/html;charset=utf-8'});
     const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='KITURAMI_오프라인앱_'+new Date().toISOString().slice(0,10)+'.html'; document.body.appendChild(a); a.click(); a.remove();
@@ -14284,6 +14284,19 @@ async function downloadASR(){
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'A/S부품 소요율'.replace('/','')); XLSX.utils.book_append_sheet(wb, note, '설명');
   XLSX.writeFile(wb, xlsxName('AS부품소요율','AS_zapchasti'));
 }
+// 내려받는 표의 글자 자리 — 왼쪽으로 붙이고 칸 높이의 가운데에 놓는다.
+//   합친 칸(대체품목이 여러 줄인 곳)은 이것을 안 적으면 글자가 칸 밑바닥에 붙는다.
+function xlsxAlignAll(ws, extra){
+  const ref=ws&&ws['!ref']; if(!ref) return ws;
+  const R=XLSX.utils.decode_range(ref);
+  const al=Object.assign({ horizontal:'left', vertical:'center', wrapText:false }, extra||{});
+  for(let r=R.s.r;r<=R.e.r;r++) for(let c=R.s.c;c<=R.e.c;c++){
+    const a=XLSX.utils.encode_cell({r,c});
+    if(!ws[a]) ws[a]={t:'s', v:''};                 // 합친 칸의 빈자리에도 자리를 맞춰 둔다
+    ws[a].s=Object.assign({}, ws[a].s, { alignment:al });
+  }
+  return ws;
+}
 function downloadPO(){
   renderPO();
   const ru=(lang==='ru');
@@ -14326,6 +14339,7 @@ function downloadPO(){
   const ws=XLSX.utils.aoa_to_sheet(aoa);
   ws['!merges']=merges.map(m=>({ s:{r:m.s.r+2, c:m.s.c}, e:{r:m.e.r+2, c:m.e.c} }));   // 머리글·합계 두 줄만큼 민다
   ws['!cols']=xh.map(h=>({wch:Math.max(7, Math.round(h[2]/7))}));
+  xlsxAlignAll(ws);                      // 글자는 왼쪽으로 붙이고, 칸 높이의 가운데에 놓는다
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'PO');
   XLSX.writeFile(wb, xlsxName('발주현황','Заказы'));
 }
