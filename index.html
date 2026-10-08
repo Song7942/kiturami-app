@@ -12736,6 +12736,12 @@ function renderPO(){
     + '<tr>'+poLeadCell
     + poTailArr.map((v,i)=>'<th style="'+poSumS+(i===poLabAt?';text-align:left':'')+'">'+v+'</th>').join('')
     + poEdCol+'</tr>';
+  // 머리글이 두 줄짜리 이름(대체품목 품번 …) 때문에 높아지면, 합계 줄도 그만큼 내려야 한다.
+  // 27px 로 못박아 두면 합계 줄이 머리글 둘째 줄을 덮어 '맨 윗줄만' 보인다.
+  if(thead && thead.rows[1]){
+    const h0=thead.rows[0]?thead.rows[0].offsetHeight:27;
+    [...thead.rows[1].children].forEach(th=>{ th.style.top=h0+'px'; });
+  }
   if(tbody) tbody.innerHTML=body;
   // 대표코드끼리 묶어 보기: 수주·공급·미공급 수량은 묶음 줄에서 합해 보여 준다
   if(poGroupOn()) ktGroupByRep('poTbody',{ rep:ixPO('rep'),
@@ -14283,21 +14289,42 @@ function downloadPO(){
   const ru=(lang==='ru');
   // 내려받는 열은 화면과 같다 — 보기에서 바꾼 차례도, 수출제한 권한도 그대로 따른다.
   const xh=poColDefs();
-  const aoa=[xh.map(h=>String(h[1]).replace(/<br>/g,' '))];
+  // 대체품목은 화면처럼 한 품번에 한 줄씩 적는다. 그만큼 줄을 늘리고
+  // 나머지 열은 첫 줄에만 적은 뒤 세로로 합쳐, 화면과 같은 모양으로 만든다.
+  const ALT={alt:1, alt_name:1, alt_qty:1};
+  const body=[], merges=[];
   let tq=0, ts=0;
   (_poFiltered||[]).forEach(r=>{
     tq+=r.qty; ts+=r.supplied;
-    aoa.push(xh.map(h=>{
-      if(h[0]==='qty')  return r.qty;
-      if(h[0]==='sup')  return r.supplied;
-      if(h[0]==='rest') return r.qty-r.supplied;
-      return poCellVal(h[0], r);
-    }));
+    const rep=(poLookup(r.pn)||{}).rep||'';
+    const ents=rep?pnAltEntries(rep):[];
+    const n=Math.max(1, ents.length);
+    const at=body.length;
+    for(let k=0;k<n;k++){
+      body.push(xh.map(h=>{
+        const key=h[0];
+        if(ALT[key]){
+          const e=ents[k]; if(!e) return '';
+          if(key==='alt')      return normBadgePN(pnAltResolve(e.p, e.f));
+          if(key==='alt_name') return pnAltName(e.p, e.f);
+          const q=Number(String(e.q||'').replace(/[,\s]/g,''));
+          return (e.q!=='' && isFinite(q)) ? q : (e.q||'');
+        }
+        if(k>0) return '';                       // 둘째 줄부터는 비우고 위 칸과 합친다
+        if(key==='qty')  return r.qty;
+        if(key==='sup')  return r.supplied;
+        if(key==='rest') return r.qty-r.supplied;
+        return poCellVal(key, r);
+      }));
+    }
+    if(n>1) xh.forEach((h,c)=>{ if(!ALT[h[0]]) merges.push({ s:{r:at,c}, e:{r:at+n-1,c} }); });
   });
   const xtot={qty:tq, sup:ts, rest:tq-ts};
-  aoa.splice(1,0, xh.map((h,i)=> (xtot[h[0]]!=null) ? xtot[h[0]]
-    : (i===0 ? ((ru?'Итого ':'합계 ')+(_poFiltered||[]).length+(ru?'':'건')) : '')));
+  const sum=xh.map((h,i)=> (xtot[h[0]]!=null) ? xtot[h[0]]
+    : (i===0 ? ((ru?'Итого ':'합계 ')+(_poFiltered||[]).length+(ru?'':'건')) : ''));
+  const aoa=[xh.map(h=>String(h[1]).replace(/<br>/g,' ')), sum].concat(body);
   const ws=XLSX.utils.aoa_to_sheet(aoa);
+  ws['!merges']=merges.map(m=>({ s:{r:m.s.r+2, c:m.s.c}, e:{r:m.e.r+2, c:m.e.c} }));   // 머리글·합계 두 줄만큼 민다
   ws['!cols']=xh.map(h=>({wch:Math.max(7, Math.round(h[2]/7))}));
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'PO');
   XLSX.writeFile(wb, xlsxName('발주현황','Заказы'));
