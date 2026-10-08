@@ -4355,6 +4355,7 @@ function ktAfterPnEdit(){
   _pnLookupMap=null; _pnByRepMap=null; _nameRuByRep=null;
   if(typeof _pnChkMap!=='undefined') _pnChkMap=null;
   if(typeof pnSumClear==='function') pnSumClear();
+  if(typeof poSupplyClear==='function') poSupplyClear();
   if(typeof simPlanUpClear==='function') simPlanUpClear();
   if(typeof simOrderClear==='function') simOrderClear();
   if(typeof priceCalcSyncRep==='function') priceCalcSyncRep();   // 가격은 호환품번을 따라 묶음이 바뀐다
@@ -12456,6 +12457,39 @@ function poAllPeriod(){
 }
 // ── 발주현황 머리글 거르개·정렬 (다른 화면과 같은 엑셀식) ─────
 //   규격은 한글 화면에만 붙으므로 열 목록을 한 군데서 만들어 쓴다.
+// ── 공급가 여부 ─────────────────────────────────────────
+//   가격정보(계산식)에 공급가(러시아 RUB · 카자흐 USD)가 적혀 있는 품번을 모아 둔다.
+//   판정은 최종품번 기준이고, 대체품목이 적혀 있으면 그 대체품목들로 본다
+//   (실제로 내보내는 것이 대체품목이기 때문).
+function poCanSeeSupply(){
+  try{
+    const r=userRole(currentUser); if(r && r.usesMasterView) return true;
+    const p=(typeof _myPermObj==='function')?_myPermObj():null;
+    return !!(p && p.price && p.price.v);
+  }catch(e){ return false; }
+}
+let _poSupSet=null;
+function poSupplyClear(){ _poSupSet=null; }
+function poSupplySet(){
+  if(_poSupSet) return _poSupSet;
+  const s=new Set();
+  try{
+    (typeof buildSupplyByCompat==='function'?buildSupplyByCompat():[]).forEach(m=>{
+      if(m.rub==null && m.usd==null) return;         // 둘 다 비어 있으면 공급가가 없는 것
+      const c=normPN(m.compat||''); if(c) s.add(c);
+      const f=normPN(m.final||'');  if(f) s.add(f);
+    });
+  }catch(e){ console.warn('공급가 목록', e); }
+  _poSupSet=s; return s;
+}
+function poHasSupply(pn){ const k=normPN(pn||''); return !!k && poSupplySet().has(k); }
+// 'O' / '' — 대체품목이 있으면 그것들이 모두 공급가를 가져야 O 로 본다.
+function poSupplyMark(r){
+  const i=(typeof poLookup==='function')?(poLookup(r.pn)||{}):{};
+  const ents=(i.rep && typeof pnAltEntries==='function')?pnAltEntries(i.rep):[];
+  if(ents.length) return ents.every(e=>poHasSupply(pnAltFinalOf(e.p)||pnAltResolve(e.p,e.f))) ? 'O' : '';
+  return poHasSupply(i.fin||r.pn) ? 'O' : '';
+}
 function poColDefs(){ return colOrdApply('po', poColDefsBase()); }
 function poColDefsBase(){
   const ru=(lang==='ru'), L=(ko,rr)=>(ru?rr:ko);
@@ -12472,6 +12506,8 @@ function poColDefsBase(){
     .concat([['alt',     L('대체품목<br>품번','Замена —<br>артикул'),112],
              ['alt_name',L('대체품목<br>품명','Замена —<br>наим.'),150],
              ['alt_qty', L('대체품목<br>필요수량','Замена —<br>кол-во'),74]])
+    // 가격정보에 공급가가 있는지 — 가격정보를 볼 수 있는 사람에게만
+    .concat(poCanSeeSupply()?[['sup_ok',L('공급가<br>여부','Цена<br>есть'),58]]:[])
     .concat([['qty',L('수주수량','Заказано'),70],['sup',L('공급수량','Поставлено'),70],
              ['rest',L('미공급수량','Недопоставка'),78]]);
 }
@@ -12509,6 +12545,7 @@ function poCellVal(key, r){
     case 'alt':      return i.rep?pnAltText(i.rep):'';
     case 'alt_name': return i.rep?pnAltNameText(i.rep):'';
     case 'alt_qty':  return i.rep?pnAltQtyText(i.rep):'';
+    case 'sup_ok':   return poSupplyMark(r);
     case 'qty':  return String(Number(r.qty)||0);
     case 'sup':  return String(Number(r.supplied)||0);
     case 'rest': return String((Number(r.qty)||0)-(Number(r.supplied)||0));
@@ -12721,6 +12758,7 @@ function renderPO(){
       name:'<td style="'+tdS+';word-break:break-all;font-size:10.5px;line-height:1.25">'+escapeHtml(poName(r.pn))+'</td>',
       spec:'<td style="'+tdS+';word-break:break-all;font-size:10.5px;line-height:1.25;color:var(--muted)">'+escapeHtml(poSpec(r.pn))+'</td>',
       alt:poAltTd(i.rep,'alt',tdS), alt_name:poAltTd(i.rep,'alt_name',tdS), alt_qty:poAltTd(i.rep,'alt_qty',tdS),
+      sup_ok:'<td style="'+tdS+';text-align:center;font-weight:700;color:#0ea5e9">'+poSupplyMark(r)+'</td>',
       qty:'<td class="'+(poIsManQ(r.cha,r.pn)?'po-man':'')+'" style="'+numS+'">'
         +(EDPO?poNumEdit(r.cha,r.pn,'qty',r.qty):(r.qty?r.qty.toLocaleString():'0'))+'</td>',
       sup:'<td class="'+(poIsMan(r.cha,r.pn)?'po-man':'')+'" style="'+numS+'">'
@@ -13560,6 +13598,16 @@ async function loadPOTab(){
   { const b=document.getElementById('poDelChaBtn');
     if(b) b.style.display=((typeof pnEditable==='function') && pnEditable())?'':'none'; }
   await Promise.all([loadPO(), loadPoMan(), (typeof loadPnAlt==='function')?loadPnAlt():Promise.resolve()]);
+  // 공급가 여부를 보려면 가격정보(계산식·환율)가 있어야 한다
+  if(poCanSeeSupply()){
+    try{
+      const need=[];
+      if(typeof loadPriceSettings==='function') need.push(loadPriceSettings());
+      if(typeof loadPriceCalc==='function' && !(priceCalcData||[]).length) need.push(loadPriceCalc());
+      if(need.length) await Promise.all(need);
+    }catch(e){ console.warn('공급가 자료', e); }
+    poSupplyClear();
+  }
   if(typeof loadPsiCols==='function') await loadPsiCols();   // 열 차례를 같은 곳에 담는다
   await loadKtHist();
   renderPO();
