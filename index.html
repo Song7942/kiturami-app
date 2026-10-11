@@ -4144,7 +4144,7 @@ function normPN(x){ return String(x==null?'':x).toUpperCase().replace(/\s+/g,'')
 function xlsxName(ko, ru, opt){
   const base=(lang==='ru'?ru:ko);
   const noDate=!!(opt&&opt.noDate);
-  return 'KITURAMI_'+base+(noDate?'':'_'+new Date().toISOString().slice(0,10))+'.xlsx';
+  return 'KITURAMI_'+base+(noDate?'':'_'+todayYMD())+'.xlsx';
 }
 // 오늘 날짜(YYYY-MM-DD, 로컬 기준). 1분 캐시 — 창을 오래 켜 둔 채 날짜가 바뀌어도 곧 따라간다.
 let _todayCache={ t:0, s:'' };
@@ -5068,7 +5068,7 @@ function downloadPNHtml(){
   const meta=pnColMetaOrdered(isKo, showEng, false);
   const labelFor=c=> c.group ? (c.group+' '+c.capLabel) : (String(c.label||'').replace(/<br>/g,' ').trim() || pnColLabelShort(c.key));
   const esc=s=>String(s==null?'':s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
-  const date=new Date().toISOString().slice(0,10);
+  const date=todayYMD();
   const title=(ru?'KITURAMI Артикулы ':'KITURAMI 품번조회 ')+date;
   const thead='<tr>'+meta.map(c=>'<th>'+esc(labelFor(c))+'</th>').join('')+'</tr>';
   const tbody=rows.map(r=>'<tr>'+meta.map(c=>'<td>'+esc(pnColText(c.key,r))+'</td>').join('')+'</tr>').join('');
@@ -5137,7 +5137,7 @@ async function downloadOfflineHtml(){
     html=html.replace(/<script src="https:\/\/[^"]*xlsx[^"]*"><\/script>\s*/i,'');   // XLSX CDN 제거
     html=html.replace(/<script src="https:\/\/cdn\.jsdelivr\.net\/npm\/@supabase[^"]*"><\/script>/, _offlineBoot(DB));   // Supabase → 가짜 sb
     const blob=new Blob([html],{type:'text/html;charset=utf-8'});
-    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='KITURAMI_오프라인앱_'+new Date().toISOString().slice(0,10)+'.html'; document.body.appendChild(a); a.click(); a.remove();
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='KITURAMI_오프라인앱_'+todayYMD()+'.html'; document.body.appendChild(a); a.click(); a.remove();
     setTimeout(function(){ URL.revokeObjectURL(a.href); },3000);
     alert('오프라인 앱 파일을 저장했습니다 (약 '+Math.round(html.length/1024/1024)+'MB).\n더블클릭해 열면 인터넷 없이 3개 화면(부품조회 분해도 포함)이 열립니다.\n환율은 인터넷 연결 시 자동으로 최신값을 가져옵니다.');
   }catch(e){ console.error(e); alert('생성 실패: '+(e.message||e)); }
@@ -15032,7 +15032,7 @@ function renderReport(){
     +'<div style="font-size:12px;color:var(--muted);margin-top:3px">'
       +'기간 '+H(psiYmLabel(c.from))+' ~ '+H(psiYmLabel(c.to))+' ('+yms.length+'개월)'
       +' · 재고 기준 '+c.low+'개월 · 보유월 향후 '+c.avg+'개월'
-      +' · 만든 날 '+H(new Date().toISOString().slice(0,10))+'</div></div>';
+      +' · 만든 날 '+H(todayYMD())+'</div></div>';
   h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 14px">'
     +card('대상 품목', N(items.length)+'개')
     +card('총 출고', N(tOut)+'개')
