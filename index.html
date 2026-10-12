@@ -12197,7 +12197,7 @@ async function shipApplyInvoice(pi){
   // 컨테이너 넘버·무상 여부는 인보이스 한 장에 하나
   _shipMeta[String(pi.inv)]={ c:String(pi.cont||'AIR'), nc:(pi.nc?1:0), fx:(pi.fx||[]) };
   saveShipMeta();
-  const arrive=shipAutoArrive(pi.sail);         // 기본 입고일 = 선적일 + 49일
+  const arrive=shipAutoArrive(pi.sail, pi.cont);   // 선적일 + 49일(항공이면 10일)
   const arrYm=shipYmOf(arrive);
   const rows=pi.items.map(it=>({ inv:pi.inv, pn:it.pn, sail:pi.sail, ym:pi.ym,
     arrive:arrive||null, arr_ym:arrYm||null, name_en:it.name_en,
@@ -12217,11 +12217,16 @@ async function shipApplyInvoice(pi){
 }
 // 입고일 기본값: 선적일 + 49일
 const SHIP_LEAD_DAYS=49;
-function shipAutoArrive(sail){
+const SHIP_AIR_DAYS=10;      // 항공(컨테이너 넘버 AIR)은 선적일 + 10일
+// 기본 입고일 = 선적일 + 49일. 다만 항공(컨테이너 넘버가 AIR)은 열흘이면 들어온다.
+function shipLeadDays(cont){ return /^air$/i.test(String(cont||'').trim()) ? SHIP_AIR_DAYS : SHIP_LEAD_DAYS; }
+function shipContOf(inv){ const m=(typeof _shipMeta==='object'&&_shipMeta)?_shipMeta[String(inv||'')]:null;
+  return m?String(m.c||''):''; }
+function shipAutoArrive(sail, cont){
   const m=String(sail||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if(!m) return '';
   const d=new Date(+m[1], +m[2]-1, +m[3]);
-  d.setDate(d.getDate()+SHIP_LEAD_DAYS);
+  d.setDate(d.getDate()+shipLeadDays(cont));
   const p=n=>(n<10?'0':'')+n;
   return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());
 }
@@ -12306,7 +12311,7 @@ function shipInvPanelList(){
     + list.map(o=>'<tr data-inv="'+escapeHtml(o.inv)+'">'
         + '<td style="'+td+'"><input class="siInv" style="'+inp+';width:100%;box-sizing:border-box" value="'+escapeHtml(o.inv)+'"></td>'
         + '<td style="'+td+'"><input class="siSail" placeholder="2026-09-15" style="'+inp+';width:104px" value="'+escapeHtml(o.sail||'')+'"></td>'
-        + '<td style="'+td+'"><input class="siArr" placeholder="'+escapeHtml(shipAutoArrive(o.sail)||'2026-10-10')+'" style="'+inp+';width:104px" value="'+escapeHtml(o.arrive||'')+'"></td>'
+        + '<td style="'+td+'"><input class="siArr" placeholder="'+escapeHtml(shipAutoArrive(o.sail, shipContOf(o.inv))||'2026-10-10')+'" style="'+inp+';width:104px" value="'+escapeHtml(o.arrive||'')+'"></td>'
         + '<td style="'+td+';text-align:right;color:var(--muted)">'+o.n+'</td>'
         + '<td style="'+td+';text-align:right">'+o.qty.toLocaleString()+'</td>'
         + '<td style="'+td+';white-space:nowrap"><button class="siSave" style="padding:4px 11px;border:none;border-radius:6px;background:var(--accent2);color:#fff;cursor:pointer;font-size:11px">'+L('저장','ОК')+'</button>'
@@ -12368,8 +12373,9 @@ async function shipSaveInvoice(oldInv, newInv, sail, arrive, btn){
   const oldSailYm=before.length?before[0].ym:'';
   const oldArrYm=before.length?(before[0].arr_ym||''):'';
   // 입고일을 비우거나 예전 선적일의 자동값 그대로면 새 선적일 기준으로 다시 잡는다
-  const autoOld=before.length?shipAutoArrive(before[0].sail):'';
-  if(!arrive || arrive===autoOld) arrive=shipAutoArrive(sail);
+  const cont=shipContOf(oldInv);
+  const autoOld=before.length?shipAutoArrive(before[0].sail, cont):'';
+  if(!arrive || arrive===autoOld) arrive=shipAutoArrive(sail, cont);
   const newSailYm=shipYmOf(sail), newArrYm=shipYmOf(arrive);
   if(btn){ btn.disabled=true; btn.textContent='…'; }
   try{
