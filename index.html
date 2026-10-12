@@ -11933,6 +11933,57 @@ function downloadShip(){
 // 무상 표시. 'FREE OF CHARGE' 는 줄마다(금액 칸), 'NON-COMMERCIAL INVOICE' 는 문서 전체에 붙는다.
 const SHIP_FOC_RE=/free\s*of\s*charge/i;
 const SHIP_NC_RE=/non[\s\-]*commercial\s*invoice/i;
+// 'Parts' 를 머리글처럼 한 번만 적어 두고, 그 아래로 품목을 죽 적는 양식을 읽는다.
+//   (줄마다 'Parts' 를 적는 양식은 본 함수를 쓰지 않는다)
+//   품번 열은 왼쪽 몇 칸 가운데 '품번처럼 생긴 값'이 가장 많은 열로 잡고,
+//   수량·단가·금액은 머리글 자리에서 찾되, 칸이 비어 있으면 바로 오른쪽까지 훑는다.
+const SHIP_SEC_END=/^(boilers?|burners?|accessor(y|ies)|total|sub\s*total|파렛트|pallets?)\b/i;
+function shipParseSectionItems(a, hdr, cQty, cPrice, cAmt, cHs){
+  let secRow=-1, secCol=-1;
+  for(let r=(hdr<0?0:hdr);r<a.length && secRow<0;r++){
+    const w=a[r]||[];
+    for(let c=0;c<w.length;c++){ if(/^parts$/i.test(String(w[c]||'').trim())){ secRow=r; secCol=c; break; } }
+  }
+  if(secRow<0) return [];
+  const looksPn=s=>{ const t=String(s==null?'':s).trim();
+    return !!t && t.length>=6 && t.length<=20 && /^[A-Za-z]{0,3}\d[A-Za-z0-9._\-\/]{3,}$/.test(t); };
+  // 품번 열 고르기 — 섹션 줄 아래에서 품번처럼 생긴 값이 가장 많은 열
+  const score=[];
+  for(let r=secRow+1;r<Math.min(secRow+400,a.length);r++){
+    const w=a[r]||[];
+    for(let c=0;c<Math.min(8,w.length);c++){ if(looksPn(w[c])) score[c]=(score[c]||0)+1; }
+  }
+  let pnCol=-1, best=0;
+  score.forEach((n,c)=>{ if(n>best){ best=n; pnCol=c; } });
+  if(pnCol<0 || best<2) return [];
+  const num=v=>{ const n=Number(String(v==null?'':v).replace(/,/g,'')); return isFinite(n)?n:0; };
+  // 머리글 자리가 병합되어 값이 한두 칸 오른쪽에 있는 양식이 있다. 비어 있으면 옆을 본다.
+  const near=(w,c)=>{ if(c<0) return 0;
+    for(let k=c;k<Math.min(c+3,w.length);k++){ const v=w[k];
+      if(v==null||v==='') continue;
+      const n=num(v); if(n) return n; }
+    return 0; };
+  const out=[];
+  let blank=0;
+  for(let r=secRow+1;r<a.length;r++){
+    const w=a[r]||[];
+    const pn=String(w[pnCol]==null?'':w[pnCol]).trim();
+    if(!pn){ if(++blank>8) break; continue; }
+    if(SHIP_SEC_END.test(pn)) break;                       // 다음 묶음이 시작되면 끊는다
+    if(!looksPn(pn)) continue;
+    blank=0;
+    const qty=near(w,cQty);
+    const price=near(w,cPrice);
+    let amount=near(w,cAmt);
+    let foc=false;
+    for(let c=pnCol+1;c<w.length;c++){ if(SHIP_FOC_RE.test(String(w[c]||''))){ foc=true; break; } }
+    if(foc) amount=0; else if(!amount) amount=qty*price;
+    let hs='';
+    if(cHs>=0) hs=String(w[cHs]==null?'':w[cHs]).trim();
+    out.push({ pn, name_en:String(w[pnCol+1]||'').trim(), hs, qty, price, amount, foc });
+  }
+  return out;
+}
 // 'Sailing on or about' 날짜 + 섹션이 Parts 인 줄만 뽑는다.
 function shipParseInvoice(wb){
   for(const sn of wb.SheetNames){
@@ -11943,8 +11994,14 @@ function shipParseInvoice(wb){
       for(let c=0;c<w.length;c++){
         const s=String(w[c]==null?'':w[c]);
         if(sail===null && /sailing\s+on\s+or\s+about/i.test(s)){
-          for(let k=c+1;k<Math.min(c+6,w.length);k++){
-            const v=w[k]; const t=String(v==null?'':v).replace(/^\s*:\s*/,'').trim();
+          // 날짜는 라벨 오른쪽에 적힌 양식도 있고, 라벨 바로 아랫줄에 적힌 양식도 있다.
+          const cand=[];
+          for(let k=c+1;k<Math.min(c+6,w.length);k++) cand.push(w[k]);
+          const nx=a[r+1]||[], nx2=a[r+2]||[];
+          for(let k=c;k<Math.min(c+6,nx.length);k++) cand.push(nx[k]);
+          for(let k=c;k<Math.min(c+6,nx2.length);k++) cand.push(nx2[k]);
+          for(const v of cand){
+            const t=String(v==null?'':v).replace(/^\s*:\s*/,'').trim();
             if(v instanceof Date){ sail=v; break; }
             if(/^\d{4}[-.\/]\d{1,2}[-.\/]\d{1,2}$/.test(t)){ sail=t; break; }
           }
@@ -11991,6 +12048,10 @@ function shipParseInvoice(wb){
         if(/^\d{6,10}$/.test(t)){ hs=t; break; } } }
       items.push({pn, name_en:String(w[1]||'').trim(), hs, qty, price, amount, foc});
     }
+    // 'Parts' 가 줄마다 적힌 양식이 아니라 머리글처럼 한 번만 적힌 양식도 있다.
+    //   그런 파일은 위 방법으로 한 줄도 못 건지거나 엉뚱한 줄 하나만 잡히므로 다시 읽는다.
+    if(items.length<2){ const alt=shipParseSectionItems(a, hdr, cQty, cPrice, cAmt, cHs);
+      if(alt.length>items.length){ items.length=0; alt.forEach(x=>items.push(x)); } }
     if(!items.length) continue;
     let d=null;
     if(sail instanceof Date) d=sail;
