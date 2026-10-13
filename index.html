@@ -15338,6 +15338,7 @@ function pnChkHeadDefs(){
   _pnChk.head.forEach((h,i)=>{
     out.push({t:h, k:'c'+i});
     if(i===pc){
+      out.push({t:L('대표품번','Осн. артикул'), k:'rep'});
       out.push({t:L('최종품번','Конечный артикул'), k:'fin'});
       out.push({t:L('단종','Снято'), k:'dan'});
       if(typeof canViewExportCtrl==='function' && canViewExportCtrl())
@@ -15362,6 +15363,7 @@ function pnChkExpOf(r){
 function pnChkIsNumCol(key){ const qc=pnChkQtyCol(); return qc>=0 && key==='c'+qc; }
 // 한 줄에서 그 열의 값 — 화면에 찍히는 글자와 같게 맞춘다
 function pnChkCellVal(key, r){
+  if(key==='rep') return String(r.rep||'');
   if(key==='fin') return String(r.fin||'');
   if(key==='dan') return String(r.dan||'');
   if(key==='exp') return pnChkExpOf(r);
@@ -15676,6 +15678,8 @@ function renderPnChk(){
       tds.push('<td style="'+tdS+'">'
         +(isPn?('<span style="'+codeS+'">'+escapeHtml(String(v))+'</span>'):escapeHtml(String(v)))+'</td>');
       if(i===pc){
+        tds.push('<td style="'+tdS+'">'
+          +(r.rep?('<span style="'+codeS+'">'+escapeHtml(normBadgePN(r.rep))+'</span>'):'')+'</td>');
         tds.push('<td style="'+tdS+'"'
           +(r.used?(' title="'+escapeHtml(L(r.used+' 로 찾았습니다', 'найдено по '+r.used))+'"'):'')+'>'
           +(r.fin?('<span style="'+codeS+';font-weight:700">'+escapeHtml(normBadgePN(r.fin))+'</span>'+(r.used?'<span style="color:var(--muted);font-size:9px"> ↩</span>':''))
