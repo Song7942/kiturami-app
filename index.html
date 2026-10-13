@@ -12157,9 +12157,7 @@ async function poRecalcSupply(){
   const need={};
   (shipData||[]).forEach(r=>{ if(!poCountShip(r)) return;      // 기준 시각 앞의 인보이스는 빼고 센다
     const k=normPN(r.pn); if(!k) return; need[k]=(need[k]||0)+(Number(r.qty)||0); });
-  // 코드별로 나눠 적은 줄(공급 내역)은 그 코드 인보이스에서 적은 만큼 먼저 떼어 간다 — 다른 줄에 두 번 잡히지 않게
-  poData.forEach(r=>{ const sp=_poSplit[poManKey(r.cha,r.pn)]; if(!sp) return;
-    sp.forEach(x=>{ const k=normPN(x.c); if(k && need[k]!=null) need[k]=Math.max(0, need[k]-(Number(x.q)||0)); }); });
+  // 변경코드(공급)에 적어 둔 코드·수량은 기록일 뿐이라 공급수량 셈에는 넣지 않는다.
   // 손으로 고쳐 둔 줄은 그대로 두고, 나머지만 0 으로 놓고 다시 채운다
   const before={}; poData.forEach(r=>{ before[r.cha+'\u0000'+r.pn]=r.supplied;
     if(!poIsMan(r.cha,r.pn)) r.supplied=0; });
@@ -12960,22 +12958,35 @@ function poSplitList(cha, pn, ed){
 // 공급 내역이 없는 줄의 변경코드(공급) 칸 — 코드를 적으면 코드별 공급수량 창을 그 코드로 연다
 function poChgNewEdit(cha, pn){
   return '<span contenteditable="true" class="po-sp-ed" data-pocha="'+escapeHtml(String(cha||''))+'" data-popn="'+escapeHtml(String(pn||''))+'"'
-    + ' title="'+escapeHtml((lang==='ru')?'Код поставки':'실제로 공급된 코드를 적으면 수량을 넣는 창이 열립니다')+'"'
+    + ' title="'+escapeHtml((lang==='ru')?'Код поставки — «код 10»':'실제로 공급된 코드를 적습니다. 수량까지 같이 적어도 됩니다 — 예: S323110027 10')+'"'
     + ' onclick="event.stopPropagation()" onmousedown="event.stopPropagation()"'
     + ' onblur="onPoChgNewBlur(this)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();this.blur();}"'
     + " style=\"display:inline-block;min-width:60px;min-height:14px;font-size:11px\"></span>";
 }
-// 적은 코드를 수량 없이 바로 저장한다(공급수량은 그대로 인보이스로 셈). 수량은 나중에 칸이나 ⇄ 창에서 넣는다.
+// 칸에 적은 글에서 코드와 수량을 가른다. 'S123100041 10' · 'S123100041x10' · 'S123100041*10' 모두 받는다.
+function poSplitParse(txt){
+  const s=String(txt==null?'':txt).trim();
+  if(!s) return null;
+  const m=s.match(/^(.*?)[\s*x×X,]+([0-9][0-9,.\s]*)$/);
+  if(m){
+    const c=pnUpAll(m[1].replace(/\s+/g,''));
+    const q=Math.round(Number(String(m[2]).replace(/[,\s]/g,''))||0);
+    if(c) return { c, q:(q>0?q:0) };
+  }
+  const c=pnUpAll(s.replace(/\s+/g,''));
+  return c?{ c, q:0 }:null;
+}
+// 적은 코드(와 수량)를 그대로 적어 둔다. 공급수량 열은 건드리지 않는다 — 그쪽은 인보이스로만 셈한다.
 async function onPoChgNewBlur(el){
   const ru=(lang==='ru');
-  const code=pnUpAll(String(el.textContent||'').replace(/\s+/g,''));
+  const got=poSplitParse(el.textContent);
   el.textContent='';
-  if(!code) return;
+  if(!got) return;
   if(!((typeof pnEditable==='function') && pnEditable())) return;
   const cha=String(el.getAttribute('data-pocha')||''), pn=String(el.getAttribute('data-popn')||'');
   const row=(poData||[]).find(x=>String(x.cha)===cha && normPN(x.pn)===normPN(pn)); if(!row) return;
-  if(!poName(code) && !confirm(ru?'Кода нет в справочнике. Сохранить?':(normBadgePN(code)+' 는 품번조회에 없는 코드입니다. 그래도 적을까요?'))) return;
-  await poSplitApply(row, [{c:code, q:0}]);
+  if(!poName(got.c) && !confirm(ru?'Кода нет в справочнике. Сохранить?':(normBadgePN(got.c)+' 는 품번조회에 없는 코드입니다. 그래도 적을까요?'))) return;
+  await poSplitApply(row, [got]);
 }
 function poSplitOpen(el, preCode){
   const ru=(lang==='ru');
@@ -12983,9 +12994,10 @@ function poSplitOpen(el, preCode){
   const cha=String(el.getAttribute('data-pocha')||''), pn=String(el.getAttribute('data-popn')||'');
   const row=(poData||[]).find(x=>String(x.cha)===cha && normPN(x.pn)===normPN(pn)); if(!row) return;
   const old=document.getElementById('poSplitPop'); if(old) old.remove();
-  // 칸에 적은 코드가 있으면 그 코드로, 없으면 지금 내역(없으면 발주코드)으로 시작한다. 수량은 지금 공급수량을 넣어 둔다.
-  const cur=preCode ? [{c:preCode, q:row.supplied||''}]
-                    : (poSplitOf(cha,pn) || [{c:pnUpAll(row.pn), q:row.supplied||''}]);
+  // 칸에 적은 코드가 있으면 그 코드로, 없으면 지금 내역(없으면 발주코드)으로 시작한다.
+  //   수량은 비워 둔다 — 여기 적는 수량은 공급수량 열과 상관없는 기록이다.
+  const cur=preCode ? [{c:preCode, q:''}]
+                    : (poSplitOf(cha,pn) || [{c:pnUpAll(row.pn), q:''}]);
   const box=document.createElement('div'); box.id='poSplitPop';
   box.setAttribute('data-pocha',cha); box.setAttribute('data-popn',row.pn);
   box.style.cssText='position:fixed;inset:0;z-index:10000;background:#0008;display:flex;align-items:center;justify-content:center';
@@ -13058,21 +13070,13 @@ async function poSplitApply(row, list){
   const cha=row.cha, pn=row.pn, key=poManKey(cha,pn);
   const before=poSplitOf(cha,pn);
   const clear=!(list && list.length);
-  // 수량을 하나라도 적었으면 공급수량 = 코드별 수량의 합(손으로 고친 줄).
-  //   코드만 적고 수량은 비웠으면 기록만 남기고, 공급수량은 전처럼 인보이스로 셈한다.
-  const sum=clear?0:list.reduce((a,x)=>a+(Number(x.q)||0),0);
+  // 변경코드(공급)에 적는 코드·수량은 '무엇이 어떤 코드로 나갔는지' 를 적어 두는 기록이다.
+  //   공급수량 열과는 상관없다 — 그쪽은 인보이스로만 셈한다.
   if(clear){ delete _poSplit[key]; delete _poMan[key]; }
-  else if(sum>0){ _poSplit[key]=list; _poMan[key]=1; row.supplied=sum; }
-  else { _poSplit[key]=list; delete _poMan[key]; }
+  else _poSplit[key]=list;
   savePoMan();
-  const { error }=await sb.from('kt_po').upsert(
-    { cha:row.cha, pn:row.pn, mon:row.mon, qty:row.qty, supplied:row.supplied, updated_at:new Date().toISOString() },{onConflict:'cha,pn'});
-  if(error){ alert((ru?'Ошибка сохранения':'저장 실패')+'\n['+(error.message||error.code)+']'); return false; }
   ktHistAdd('po.split', cha+'|'+pn, before?before.map(x=>x.c+'×'+x.q).join(', '):'', clear?'':list.map(x=>x.c+'×'+x.q).join(', '));
   _poLastEdit=new Date().toISOString();
-  // 적은 코드의 인보이스 몫이 바뀌었으므로 나머지 줄의 공급수량을 다시 센다
-  if(typeof poRecalcSupply==='function'){ await poRecalcSupply(); }
-  await loadPO();
   renderPO(); poManBtn(); poSimRefresh();
   if(!clear){
     await poSplitOfferFinal(row);                 // 코드 한 개로만 나갔으면 그 코드를 최종품번으로
@@ -13096,9 +13100,12 @@ async function onPoSplitCellBlur(el){
   if(!row || !cur || !cur[idx]){ el.textContent=before; return; }
   const list=cur.map(x=>({c:x.c, q:x.q}));
   if(field==='c'){
-    const c=pnUpAll(txt.replace(/\s+/g,''));
+    // 코드 칸에 'S123100041 10' 처럼 수량까지 적어도 받는다
+    const got=poSplitParse(txt);
+    const c=got?got.c:'';
     if(c && !poName(c) && !confirm(ru?'Кода нет в справочнике. Сохранить?':(normBadgePN(c)+' 는 품번조회에 없는 코드입니다. 그래도 적을까요?'))){ el.textContent=before; return; }
     list[idx].c=c;
+    if(got && got.q>0) list[idx].q=got.q;
   }else{
     const q=txt===''?0:Number(txt.replace(/[,\s]/g,''));
     if(!isFinite(q) || q<0){ alert(ru?'Введите число.':'숫자를 넣어 주세요.'); el.textContent=before; return; }
