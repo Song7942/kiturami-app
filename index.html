@@ -4336,7 +4336,10 @@ function prodNameOf(pn){
   }
   return _prodNameMap.get(k)||'';
 }
-function pnMdlName(e){ return String((e&&e.n)||'').trim() || prodNameOf(e&&e.p); }
+// 제품명은 제품목록이 기준이다 — 그 품번이 제품목록에 있으면 늘 목록의 이름을 쓴다.
+//   목록에 없는 모델만 적어 둔 이름(BOM 의 규격 등)을 그대로 보여 준다.
+function pnMdlName(e){ return prodNameOf(e&&e.p) || String((e&&e.n)||'').trim(); }
+function pnMdlFromProd(e){ return !!prodNameOf(e&&e.p); }
 function pnMdlText(pn){ return pnMdlEntries(pn).map(e=>e.p).filter(Boolean).join(', '); }
 function pnMdlNameText(pn){ return pnMdlEntries(pn).map(e=>pnMdlName(e)).filter(Boolean).join(', '); }
 // 칸 안에서 한 줄씩 고치는 입력란(대체품목과 같은 모양)
@@ -4800,9 +4803,12 @@ function pnCellHtml(col, r, ctx){
       const e=ents[i], last=(i===nRow-1);
       if(col.key==='mdl_name'){
         const nm=e?pnMdlName(e):'';
-        out.push(pnAltRow(isMaster
+        // 제품목록에서 온 이름은 고치지 못하게 둔다 — 고쳐도 목록 값으로 다시 덮인다
+        const fromProd=e?pnMdlFromProd(e):false;
+        const tip=fromProd?((lang==='ru')?'Из списка изделий':'제품목록에서 가져온 이름입니다'):nm;
+        out.push(pnAltRow((isMaster && !fromProd)
           ? pnMdlEdit(r.rep,i,nm,'mdln',!e)
-          : '<span title="'+escapeHtml(nm)+'" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escapeHtml(nm)+'</span>',
+          : '<span title="'+escapeHtml(tip)+'" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escapeHtml(nm)+'</span>',
           last, 'color:var(--muted)'));
       }else{
         const v=e?e.p:'';
@@ -13727,8 +13733,10 @@ async function loadProd(){
     prodData=rows.map(r=>({ pn:String(r.pn||'').trim(), name:String(r.name||'').trim() })).filter(r=>r.pn||r.name);
   }catch(e){ prodData=[]; }
   _prodLoaded=true;
+  if(typeof prodNameClear==='function') prodNameClear();   // 품번조회의 적용모델 제품명이 이 목록을 본다
 }
 async function saveProd(){
+  if(typeof prodNameClear==='function') prodNameClear();    // 품번조회의 적용모델 제품명도 새 목록을 따르게
   const { error }=await sb.from('kt_psi_cfg').upsert(
     { id:PROD_CFG_ID, cfg:{ rows:prodData, updated_at:new Date().toISOString() }, updated_at:new Date().toISOString() },
     {onConflict:'id'});
