@@ -4378,6 +4378,20 @@ function pnMdlEdit(rep, i, val, fld, isAdd){
     + (nm?'color:var(--muted);':"font-family:'Courier New',monospace;font-size:10px;")
     + 'white-space:nowrap">'+v+'</span>';
 }
+// 적용모델 한 줄 지우기
+function pnMdlDelete(rep, i){
+  const ru=(lang==='ru');
+  if(!((typeof pnEditable==='function') && pnEditable())) return;
+  const ents=pnMdlEntries(rep);
+  const e=ents[i]; if(!e) return;
+  const nm=pnMdlName(e);
+  if(!confirm(ru?('Удалить '+e.p+'?'):(normBadgePN(e.p)+(nm?(' · '+nm):'')+' 를 적용모델(신규)에서 지웁니다.\n\n계속할까요?'))) return;
+  ents.splice(i,1);
+  pnMdlSetEntries(rep, ents);
+  savePnMdl();
+  if(typeof recordPNHistory==='function') recordPNHistory(rep, 'mdl', e.p, '');
+  ktAfterPnEdit();
+}
 async function onPnMdlBlur(el){
   const rep=String(el.getAttribute('data-pnmdlrep')||'').trim();
   const i=parseInt(el.getAttribute('data-mdli'),10);
@@ -4670,8 +4684,8 @@ function pnBaseCols(isKo, showEng){
   { const g=ru?'Модели (новое)':'적용모델(신규)';
     c.push({key:'mdl',      cap:112, group:g, color:'#0ea5e9', capLabel:ru?'Артикул':'품번'});
     c.push({key:'mdl_name', cap:pnMdlNameCap(), group:g, color:'#0ea5e9', capLabel:ru?'Наименование':'제품명'}); }
-  c.push({key:'applied_models', cap:150, label:ru?'Модели (врем.)':'적용모델<br>(임시)'});
-  (typeof MODEL_DEFS!=='undefined'?MODEL_DEFS:[]).forEach(m=> c.push({key:'m:'+m.key, cap:36, group:m.group, color:m.color, capLabel:m.label, modelKey:m.key}));
+  // 적용모델(임시)과 모델 점 찍기 열(A.P · A.N S …)은 '적용모델(신규)' 이 대신하므로 뺐다.
+  //   MODEL_DEFS 자체는 주문·부품조회에서 그대로 쓴다.
   return c;
 }
 // ── 품번조회 '보기' — 표에 보일 열 고르기(아이디별 저장, PSI 계열과 같은 칸을 쓴다) ──
@@ -4832,7 +4846,12 @@ function pnCellHtml(col, r, ctx){
           last, 'color:var(--muted)'));
       }else{
         const v=e?e.p:'';
-        out.push(pnAltRow(isMaster?pnMdlEdit(r.rep,i,v,'mdl',!e):hlPN(v,kw), last));
+        const del=(isMaster && e)
+          ? ('<span onclick="event.stopPropagation();pnMdlDelete(&quot;'+escapeHtml(String(r.rep).replace(/"/g,''))+'&quot;,'+i+')"'
+             +' title="'+escapeHtml((lang==='ru')?'Удалить':'이 모델 지우기')+'"'
+             +' style="margin-left:auto;cursor:pointer;color:#ef4444;font-weight:700;font-size:11px;flex:none">✕</span>')
+          : '';
+        out.push(pnAltRow((isMaster?pnMdlEdit(r.rep,i,v,'mdl',!e):hlPN(v,kw))+del, last));
       }
     }
     const h=pnCellHist(r.rep, col.key==='mdl_name'?'mdl_name':'mdl');
@@ -5905,23 +5924,40 @@ async function handleBomRevUpload(wb){
       return ru?('Не найдено в справочнике: '+miss.slice(0,5).join(', '))
                :('품번조회의 호환품번에서 찾지 못했습니다: '+miss.slice(0,5).map(normBadgePN).join(', ')+(miss.length>5?' 외':''));
     }
-    const tot=hit.reduce((n,g)=>n+g.models.length,0);
-    if(!confirm((ru?'Обновить «Модели (новое)»?':'적용모델(신규)을 이 파일 내용으로 바꿉니다.')+'\n\n'
-      + hit.slice(0,6).map(g=>'· '+normBadgePN(g.base)+(g.name?(' ('+g.name+')'):'')+' → 모델 '+g.models.length+'개'
-          +'\n   '+g.models.slice(0,3).map(m=>normBadgePN(m.p)+(m.n?(' '+m.n):'')).join('\n   ')
-          +(g.models.length>3?'\n   …':'')).join('\n')
+    // 지금 적혀 있는 것에 더한다 — 같은 품번은 그대로 두고, 없던 모델만 뒤에 붙인다
+    let add=0, keepAll=0;
+    hit.forEach(g=>{
+      const cur=pnMdlEntries(g.rep)||[];
+      const have=new Set(cur.map(e=>String(e.p||'').trim().toUpperCase()));
+      const fresh=g.models.filter(m=>{ const k=String(m.p||'').trim().toUpperCase();
+        if(!k || have.has(k)) return false; have.add(k); return true; });
+      g.add=fresh; add+=fresh.length; keepAll+=cur.length;
+      g.merged=cur.concat(fresh);
+    });
+    const tot=hit.reduce((n,g)=>n+g.add.length,0);
+    if(!add){
+      return ru?'Нечего добавлять.'
+               :('새로 더할 모델이 없습니다 — 파일의 모델이 모두 이미 적혀 있습니다.'
+                 +(dropped?('\n(제품목록에 없어 뺀 모델 '+dropped+'개)'):''));
+    }
+    if(!confirm((ru?'Добавить в «Модели (новое)»?':'적용모델(신규)에 더합니다. (지금 적힌 모델은 지우지 않습니다)')+'\n\n'
+      + hit.filter(g=>g.add.length).slice(0,6).map(g=>'· '+normBadgePN(g.base)+(g.name?(' ('+g.name+')'):'')
+          +' → 지금 '+(g.merged.length-g.add.length)+'개 + 새로 '+g.add.length+'개 = '+g.merged.length+'개'
+          +'\n   '+g.add.slice(0,3).map(m=>normBadgePN(m.p)+(m.n?(' '+m.n):'')).join('\n   ')
+          +(g.add.length>3?'\n   …':'')).join('\n')
       + (hit.length>6?('\n… 그 밖 '+(hit.length-6)+'개'):'')
       + (dropped?('\n\n※ 제품목록에 없어 뺀 모델 '+dropped+'개'
                   +(dropEx.length?(': '+dropEx.map(normBadgePN).join(', ')+(dropped>dropEx.length?' 외':'')):'')):'')
       + (miss.length?('\n\n※ 품번조회에 없어 건너뜀: '+miss.slice(0,5).map(normBadgePN).join(', ')+(miss.length>5?' 외':'')):'')
       + '\n\n계속할까요?')) return (ru?'Отменено.':'취소했습니다.');
 
-    hit.forEach(g=>{ pnMdlSetEntries(g.rep, g.models);
-      if(typeof recordPNHistory==='function') recordPNHistory(g.rep, 'mdl', '', g.models.map(m=>m.p).join(', ')); });
+    hit.forEach(g=>{ if(!g.add.length) return;
+      pnMdlSetEntries(g.rep, g.merged);
+      if(typeof recordPNHistory==='function') recordPNHistory(g.rep, 'mdl', '', g.add.map(m=>m.p).join(', ')); });
     savePnMdl();
     if(typeof ktAfterPnEdit==='function') ktAfterPnEdit();
     return (ru?('Готово: '+hit.length+' / '+tot)
-             :('적용모델(신규)을 바꿨습니다 — 품목 '+hit.length+'개 · 모델 '+tot+'개'
+             :('적용모델(신규)에 더했습니다 — 품목 '+hit.filter(g=>g.add.length).length+'개 · 새 모델 '+tot+'개'
                +(dropped?('\n제품목록에 없어 뺀 모델 '+dropped+'개'
                           +(dropEx.length?(': '+dropEx.map(normBadgePN).join(', ')+(dropped>dropEx.length?' 외':'')):'')):'')
                +(miss.length?('\n품번조회에 없어 건너뛴 품번 '+miss.length+'개: '+miss.slice(0,5).map(normBadgePN).join(', ')+(miss.length>5?' 외':'')):'')));
