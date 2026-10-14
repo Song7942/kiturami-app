@@ -2487,7 +2487,7 @@ function switchTab(tab){
   if(tab==='pn'){ renderPN();
     // 출고·선적 열은 PSI 자료를 쓴다. 아직 안 읽었으면 뒤에서 읽고 다시 그린다.
     const needPsi = canSeePsi() && (typeof psiData==='undefined' || !Object.keys(psiData||{}).length);
-    Promise.all([loadPnAlt(), loadPsiCols(), needPsi?loadPSI():Promise.resolve()])
+    Promise.all([loadPnAlt(), loadPnMdl(), loadProd(), loadPsiCols(), needPsi?loadPSI():Promise.resolve()])
       .then(()=>{ pnSumClear(); if(ktPaneOn('pane-pn')) renderPN(); }); }
   if(tab==='prod') loadProdTab();
   // KAZAK 은 주문탭 공급가로 카자흐스탄 USD 를 쓰므로 계산식 데이터도 함께 읽는다.
@@ -4278,6 +4278,105 @@ function pnSumRow(r, f){
   let n=0; ((r&&r.compats)||[]).forEach(c=>{ n+=pnSumOf(c)[f]; });
   return n;
 }
+// ── 적용모델(신규) ────────────────────────────────────────────
+//   그 부품이 들어가는 완제품을 품번·제품명으로 적어 둔다. 여러 개 적을 수 있다.
+//   담는 꼴: { '<대표품번>': [ {p:'제품 품번', n:'제품명'} ] }  (kt_psi_cfg id=104)
+//   제품명을 비워 두면 제품목록(kt_psi_cfg id=93)에서 찾아 보여 준다.
+const PN_MDL_ID=104;
+let pnMdl={}, _pnMdlLoaded=false, _pnMdlT=null;
+async function loadPnMdl(){
+  if(_pnMdlLoaded) return;
+  _pnMdlLoaded=true;
+  try{
+    const { data, error }=await sb.from('kt_psi_cfg').select('cfg').eq('id',PN_MDL_ID).limit(1);
+    const c=(!error && data && data[0])?data[0].cfg:null;
+    if(c && typeof c==='object' && c.mdl && typeof c.mdl==='object') pnMdl=c.mdl;
+  }catch(e){}
+}
+function savePnMdl(){
+  clearTimeout(_pnMdlT);
+  _pnMdlT=setTimeout(async()=>{
+    try{
+      const { error }=await sb.from('kt_psi_cfg').upsert({ id:PN_MDL_ID, cfg:{ mdl:pnMdl } },{ onConflict:'id' });
+      if(error) console.error('적용모델(신규) 저장 실패:', error.message||error.code);
+    }catch(e){ console.error('적용모델(신규) 저장 실패', e); }
+  }, 500);
+}
+function pnMdlEntries(pn){
+  const k=normPN(pn); if(!k) return [];
+  const v=pnMdl[k];
+  if(Array.isArray(v)) return v.map(e=>({ p:String((e&&e.p)||'').trim(), n:String((e&&e.n)||'').trim() })).filter(e=>e.p||e.n);
+  return pnAltSplit(v).map(p=>({ p:String(p).trim(), n:'' }));      // 예전에 한 줄 글로 적어 둔 것도 받는다
+}
+function pnMdlSetEntries(pn, arr){
+  const k=normPN(pn); if(!k) return;
+  const seen=new Set(), out=[];
+  (arr||[]).forEach(e=>{
+    const p=String((e&&e.p)||'').trim(), n=String((e&&e.n)||'').trim();
+    if(!p && !n) return;
+    const key=p.toUpperCase()+'\u0001'+n.toUpperCase();
+    if(seen.has(key)) return; seen.add(key);
+    out.push({ p, n });
+  });
+  if(out.length) pnMdl[k]=out; else delete pnMdl[k];
+}
+// 제품목록에서 그 품번의 이름을 찾는다
+let _prodNameMap=null;
+function prodNameClear(){ _prodNameMap=null; }
+function prodNameOf(pn){
+  const k=String(pn||'').trim().toUpperCase().replace(/\s+/g,'');
+  if(!k) return '';
+  if(!_prodNameMap){
+    _prodNameMap=new Map();
+    (typeof prodData!=='undefined'?prodData:[]).forEach(r=>{
+      const a=String(r.pn||'').trim().toUpperCase().replace(/\s+/g,'');
+      if(a && !_prodNameMap.has(a)) _prodNameMap.set(a, String(r.name||'').trim());
+    });
+  }
+  return _prodNameMap.get(k)||'';
+}
+function pnMdlName(e){ return String((e&&e.n)||'').trim() || prodNameOf(e&&e.p); }
+function pnMdlText(pn){ return pnMdlEntries(pn).map(e=>e.p).filter(Boolean).join(', '); }
+function pnMdlNameText(pn){ return pnMdlEntries(pn).map(e=>pnMdlName(e)).filter(Boolean).join(', '); }
+// 칸 안에서 한 줄씩 고치는 입력란(대체품목과 같은 모양)
+function pnMdlEdit(rep, i, val, fld, isAdd){
+  const v=escapeHtml(val||''), raw=escapeHtml(rep||'');
+  const nm=(fld==='mdln');
+  const tip=(lang==='ru')?'Enter — сохранить':'Enter 로 저장';
+  const ph=isAdd?((lang==='ru')?(nm?'+ название':'+ артикул'):(nm?'':'+ 품번')):'';
+  return '<span contenteditable="true" class="pn-edit pn-alt'+(isAdd?' pn-alt-add':'')+'" data-pnmdlrep="'+raw+'" data-mdli="'+i+'"'
+    + ' data-pnfield="'+(nm?'mdln':'mdl')+'" data-pnorig="'+v+'"'
+    + (ph?(' data-ph="'+escapeHtml(ph)+'"'):'')
+    + ' title="'+escapeHtml(tip)+'" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()"'
+    + ' onblur="onPnMdlBlur(this)"'
+    + ' onkeydown="if(event.key===\'Enter\'||event.key===\'Escape\'){event.preventDefault();this.blur();}"'
+    + ' style="display:inline-block;min-width:'+(nm?'80':'64')+'px;outline:none;'
+    + 'border-bottom:1px dashed var(--border);cursor:text;padding:0 2px;'
+    + (nm?'color:var(--muted);':"font-family:'Courier New',monospace;font-size:10px;")
+    + 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%">'+v+'</span>';
+}
+async function onPnMdlBlur(el){
+  const rep=String(el.getAttribute('data-pnmdlrep')||'').trim();
+  const i=parseInt(el.getAttribute('data-mdli'),10);
+  const fld=String(el.getAttribute('data-pnfield')||'');
+  const oldV=el.getAttribute('data-pnorig')||'';
+  const v=String(el.textContent||'').replace(/\s+/g,' ').trim();
+  if(!rep || v===oldV){ el.textContent=oldV; return; }
+  const ents=pnMdlEntries(rep);
+  if(fld==='mdln'){
+    if(!(i>=0 && i<ents.length)){ el.textContent=oldV; return; }
+    ents[i].n=v;
+  }else{
+    // 품번 칸: 비우면 그 줄을 지우고, 새 줄이면 뒤에 붙인다. 제품명은 제품목록에서 채워 준다.
+    if(i<ents.length){
+      if(v) ents[i].p=v; else ents.splice(i,1);
+    } else if(v) ents.push({ p:v, n:'' });
+  }
+  pnMdlSetEntries(rep, ents);
+  savePnMdl();
+  recordPNHistory(rep, (fld==='mdln')?'mdl_name':'mdl', oldV, v);
+  ktAfterPnEdit();
+}
 // ── 대체품목(연결조립필요품목 포함) ───────────────────────────
 //   호환품번마다 '대신 쓸 수 있는 품번'을 여러 개 적어 둔다.
 //   kt_pn_specs 에는 자리가 없어 kt_psi_cfg(id=100) 한 칸에 모아 둔다.
@@ -4359,6 +4458,7 @@ function ktAfterPnEdit(){
   _pnLookupMap=null; _pnByRepMap=null; _nameRuByRep=null;
   if(typeof _pnChkMap!=='undefined') _pnChkMap=null;
   if(typeof pnSumClear==='function') pnSumClear();
+  if(typeof prodNameClear==='function') prodNameClear();
   if(typeof poSupplyClear==='function') poSupplyClear();
   if(typeof simPlanUpClear==='function') simPlanUpClear();
   if(typeof simOrderClear==='function') simOrderClear();
@@ -4542,6 +4642,10 @@ function pnBaseCols(isKo, showEng){
     c.push({key:'alt',      cap:112, group:g, color:'#f59e0b', capLabel:ru?'Артикул':'품번'});
     c.push({key:'alt_name', cap:150, group:g, color:'#f59e0b', capLabel:ru?'Наименование':'품명'});
     c.push({key:'alt_qty',  cap:74,  group:g, color:'#f59e0b', capLabel:ru?'Кол-во':'필요수량'}); }
+  // 적용모델(신규) — 품번·제품명 두 칸을 한 묶음으로
+  { const g=ru?'Модели (новое)':'적용모델(신규)';
+    c.push({key:'mdl',      cap:112, group:g, color:'#0ea5e9', capLabel:ru?'Артикул':'품번'});
+    c.push({key:'mdl_name', cap:160, group:g, color:'#0ea5e9', capLabel:ru?'Наименование':'제품명'}); }
   c.push({key:'applied_models', cap:150, label:ru?'Модели (врем.)':'적용모델<br>(임시)'});
   (typeof MODEL_DEFS!=='undefined'?MODEL_DEFS:[]).forEach(m=> c.push({key:'m:'+m.key, cap:36, group:m.group, color:m.color, capLabel:m.label, modelKey:m.key}));
   return c;
@@ -4654,6 +4758,8 @@ function pnColText(key, r){
     case 'alt': return pnAltText(r.rep);
     case 'alt_name': return pnAltNameText(r.rep);
     case 'alt_qty': return pnAltQtyText(r.rep);
+    case 'mdl': return pnMdlText(r.rep);
+    case 'mdl_name': return pnMdlNameText(r.rep);
     case 'applied_models': return r.applied_models||'';
     case 'export_ctrl': return r._split ? (isExportRestricted(r._compat)?'O':'') : ((r.compats||[]).some(isExportRestricted)?'O':'');
   }
@@ -4663,7 +4769,7 @@ function pnColText(key, r){
 function pnColLabelShort(key){
   const t=T[lang];
   if(key && key.indexOf('m:')===0){ const mk=key.slice(2); const md=(typeof MODEL_DEFS!=='undefined'?MODEL_DEFS:[]).find(m=>m.key===mk); return md?(md.group+' '+md.label):key; }
-  const M={export_ctrl:(lang==='ru'?'Эксп.контроль':'수출제한'), name:t.pnH0, spec:t.pnH0s, name_ru:(lang==='ru'?'Рус.название':'러시아어 품명'), name_en:(lang==='ru'?'Англ.название':'영문품명'), rep:t.pnH1, compat:t.pnH2, final:t.pnH3, nw:'N/W', gw:'G/W', cbm:'CBM', out:(lang==='ru'?'Расход (всего)':'출고(전체기간)'), ship:(lang==='ru'?'Отгрузка (всего)':'선적(전체기간)'), note:(lang==='ru'?'Снято с пр-ва':'단종'), alt:(lang==='ru'?'Замена — артикул':'대체품목 품번'), alt_name:(lang==='ru'?'Замена — наименование':'대체품목 품명'), alt_qty:(lang==='ru'?'Замена — кол-во':'대체품목 필요수량'), applied_models:(lang==='ru'?'Модели':'적용모델(임시)')};
+  const M={export_ctrl:(lang==='ru'?'Эксп.контроль':'수출제한'), name:t.pnH0, spec:t.pnH0s, name_ru:(lang==='ru'?'Рус.название':'러시아어 품명'), name_en:(lang==='ru'?'Англ.название':'영문품명'), rep:t.pnH1, compat:t.pnH2, final:t.pnH3, nw:'N/W', gw:'G/W', cbm:'CBM', out:(lang==='ru'?'Расход (всего)':'출고(전체기간)'), ship:(lang==='ru'?'Отгрузка (всего)':'선적(전체기간)'), note:(lang==='ru'?'Снято с пр-ва':'단종'), alt:(lang==='ru'?'Замена — артикул':'대체품목 품번'), alt_name:(lang==='ru'?'Замена — наименование':'대체품목 품명'), alt_qty:(lang==='ru'?'Замена — кол-во':'대체품목 필요수량'), applied_models:(lang==='ru'?'Модели':'적용모델(임시)'), mdl:(lang==='ru'?'Модели (новое) — артикул':'적용모델(신규) 품번'), mdl_name:(lang==='ru'?'Модели (новое) — наименование':'적용모델(신규) 제품명')};
   return String(M[key]||key).replace(/<br>/g,' ');
 }
 // 모델 열용 소형 필터 아이콘(셀이 좁아 콤팩트하게)
@@ -4683,6 +4789,28 @@ function pnCellHtml(col, r, ctx){
   const HC=(f)=>pnCellHist(r.rep, 'cspec:'+f+':'+normPN(r._compat||''));
   if(col.group && col.modelKey){ const md=_partsModels(r.rep)||{}; const bl=col.groupStart?'border-left:1px solid var(--border);':'';
     return _pnTd(col, dot(!!md[col.modelKey]), 'center', bl+'text-align:center'); }
+  // 적용모델(신규) 묶음(품번·제품명) — 대표품번마다 같은 내용을 보여 준다
+  if(col.key==='mdl'||col.key==='mdl_name'){
+    const bl=col.groupStart?'border-left:1px solid var(--border);':'';
+    const ents=pnMdlEntries(r.rep);
+    const nRow=ents.length+(isMaster?1:0);        // MASTER 에게는 새로 적을 빈 줄 하나를 더
+    const out=[];
+    for(let i=0;i<nRow;i++){
+      const e=ents[i], last=(i===nRow-1);
+      if(col.key==='mdl_name'){
+        const nm=e?pnMdlName(e):'';
+        out.push(pnAltRow(isMaster
+          ? pnMdlEdit(r.rep,i,nm,'mdln',!e)
+          : '<span title="'+escapeHtml(nm)+'" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escapeHtml(nm)+'</span>',
+          last, 'color:var(--muted)'));
+      }else{
+        const v=e?e.p:'';
+        out.push(pnAltRow(isMaster?pnMdlEdit(r.rep,i,v,'mdl',!e):hlPN(v,kw), last));
+      }
+    }
+    const h=pnCellHist(r.rep, col.key==='mdl_name'?'mdl_name':'mdl');
+    const badge=h.badge?'<span style="position:absolute;right:1px;top:0;line-height:1">'+h.badge+'</span>':'';
+    return _pnTd(col, out.join('')+badge, h.cls.trim(), bl+'font-size:11px;position:relative'); }
   // 대체품목 묶음(품번·품명·필요수량) — 대표품번마다 같은 내용을 보여 준다
   if(col.key==='alt'||col.key==='alt_name'||col.key==='alt_qty'){
     const bl=col.groupStart?'border-left:1px solid var(--border);':'';
@@ -22416,7 +22544,7 @@ function enterApp(user){
   loadAllMemberPerms().then(()=>{ applyPermTabVisibility(); return loadEngNames(); }).then(rerenderActiveTab);   // 권한→탭노출→영문명 로드→재렌더
   startLive();                                         // 폴링(8초)으로 실시간처럼 갱신
   startRealtime();                                     // Realtime 구독(활성화 시 즉시 반영)
-  Promise.all([loadMyOrderTotals(), loadInventory(), loadGlobalSuppliedTotals(), loadReceivedOrderTotals(), loadPrices(), loadPNOverrides(), loadExportCtrl(), loadPnSpecs(), loadPnAlt(), loadDiagEdits(), loadCompanyPrices(),
+  Promise.all([loadMyOrderTotals(), loadInventory(), loadGlobalSuppliedTotals(), loadReceivedOrderTotals(), loadPrices(), loadPNOverrides(), loadExportCtrl(), loadPnSpecs(), loadPnAlt(), loadPnMdl(), loadDiagEdits(), loadCompanyPrices(),
                (role.region==='kz'?Promise.all([loadPriceSettings(),loadPriceCalc()]):Promise.resolve())]).then(async()=>{
     // 오버라이드가 얹힌 뒤 새로 생긴 호환품번의 품명·규격을 뒤늦게 채운다
     const added=await pnSpecTopUp();
