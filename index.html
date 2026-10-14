@@ -907,7 +907,7 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
           <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           <span id="i18n-pnadd">품목 추가</span>
         </button>
-        <button class="dl-btn" id="pnUploadBtn" onclick="document.getElementById('pnFileInput').click()" title="헤더 자동 인식: 품번조회 양식 / 품목코드정보 / N/W·G/W·CBM / 부품 적용모델 / 부품리스트(영문명·단종 등) / 전략물자(수출제한)" style="background:var(--accent2);border-color:var(--accent2);color:#fff">
+        <button class="dl-btn" id="pnUploadBtn" onclick="document.getElementById('pnFileInput').click()" title="헤더 자동 인식: 품번조회 양식 / 사업장별BOM역전개(적용모델) / 품목코드정보 / N/W·G/W·CBM / 부품 적용모델 / 부품리스트(영문명·단종 등) / 전략물자(수출제한)" style="background:var(--accent2);border-color:var(--accent2);color:#fff">
           <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
           <span id="i18n-pnupload">엑셀 업로드</span>
         </button>
@@ -5790,9 +5790,80 @@ function pnFindHeaderRow(aoa){
   return null;
 }
 // 엑셀 업로드: 헤더를 보고 알아서 반영. 처리하면 알림 문자열 반환, 표준 품번 양식이면 null.
+// 사업장별 BOM 역전개 조회 → 적용모델(신규)
+//   level 0(= nLevel 1) 줄이 부품, 그 아래 줄들이 그 부품을 쓰는 완제품이다.
+//   올린 내용으로 그 품목의 적용모델(신규)을 통째로 갈아 끼운다.
+async function handleBomRevUpload(wb){
+  const ru=(lang==='ru');
+  const nk=s=>String(s==null?'':s).replace(/\s+/g,'').toLowerCase();
+  for(const sn of wb.SheetNames){
+    const a=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:'',raw:false});
+    let hdr=-1, cLv=-1, cPn=-1, cSp=-1, cNm=-1;
+    for(let r=0;r<Math.min(a.length,10) && hdr<0;r++){
+      const row=(a[r]||[]).map(nk);
+      const lv=row.indexOf('level'), pn=row.indexOf('품목코드'), sp=row.indexOf('규격');
+      if(lv>=0 && pn>=0 && sp>=0){ hdr=r; cLv=lv; cPn=pn; cSp=sp; cNm=row.indexOf('품목명'); }
+    }
+    if(hdr<0) continue;
+    // 묶음 가르기: level 이 '0' 인 줄이 부품, 그 아래가 완제품
+    const groups=[]; let cur=null;
+    for(let r=hdr+1;r<a.length;r++){
+      const w=a[r]||[];
+      const lv=String(w[cLv]==null?'':w[cLv]).trim();
+      const pn=String(w[cPn]==null?'':w[cPn]).trim();
+      if(!pn) continue;
+      if(lv==='0' || lv===''){ cur={ base:pn, name:String(w[cNm]||'').trim(), models:[] }; groups.push(cur); continue; }
+      if(!cur) continue;
+      cur.models.push({ p:pn, n:String(w[cSp]==null?'':w[cSp]).trim() });
+    }
+    const real=groups.filter(g=>g.models.length);
+    if(!real.length) continue;
+
+    if(!PN_DATA.length) await loadPNOverrides();
+    if(typeof loadPnMdl==='function') await loadPnMdl();
+    // 올린 부품을 품번조회의 호환품번에서 찾는다
+    const hit=[], miss=[];
+    real.forEach(g=>{
+      const raw=pnUpAll(g.base);
+      const rep=(getPNInfo(raw)?raw:'') || findMasterRep(raw) || findMasterRep(normPN(raw))
+              || ((typeof pnChkMap==='function')?(pnChkMap().get(normPN(raw))||''):'') || '';
+      if(rep) hit.push(Object.assign({rep}, g)); else miss.push(g.base);
+    });
+    if(!hit.length){
+      return ru?('Не найдено в справочнике: '+miss.slice(0,5).join(', '))
+               :('품번조회의 호환품번에서 찾지 못했습니다: '+miss.slice(0,5).map(normBadgePN).join(', ')+(miss.length>5?' 외':''));
+    }
+    const tot=hit.reduce((n,g)=>n+g.models.length,0);
+    if(!confirm((ru?'Обновить «Модели (новое)»?':'적용모델(신규)을 이 파일 내용으로 바꿉니다.')+'\n\n'
+      + hit.slice(0,6).map(g=>'· '+normBadgePN(g.base)+(g.name?(' ('+g.name+')'):'')+' → 모델 '+g.models.length+'개'
+          +'\n   '+g.models.slice(0,3).map(m=>normBadgePN(m.p)+(m.n?(' '+m.n):'')).join('\n   ')
+          +(g.models.length>3?'\n   …':'')).join('\n')
+      + (hit.length>6?('\n… 그 밖 '+(hit.length-6)+'개'):'')
+      + (miss.length?('\n\n※ 품번조회에 없어 건너뜀: '+miss.slice(0,5).map(normBadgePN).join(', ')+(miss.length>5?' 외':'')):'')
+      + '\n\n계속할까요?')) return (ru?'Отменено.':'취소했습니다.');
+
+    hit.forEach(g=>{ pnMdlSetEntries(g.rep, g.models);
+      if(typeof recordPNHistory==='function') recordPNHistory(g.rep, 'mdl', '', g.models.map(m=>m.p).join(', ')); });
+    savePnMdl();
+    if(typeof ktAfterPnEdit==='function') ktAfterPnEdit();
+    return (ru?('Готово: '+hit.length+' / '+tot)
+             :('적용모델(신규)을 바꿨습니다 — 품목 '+hit.length+'개 · 모델 '+tot+'개'
+               +(miss.length?('\n품번조회에 없어 건너뛴 품번 '+miss.length+'개: '+miss.slice(0,5).map(normBadgePN).join(', ')+(miss.length>5?' 외':'')):'')));
+  }
+  return '';
+}
 async function handleSpecialPNUpload(wb){
   const ru=lang==='ru';
   const V=(row,ci)=>ci!=null?String(row[ci]==null?'':row[ci]).trim():'';
+
+  // ── 0) 사업장별 BOM 역전개 조회 → 적용모델(신규) ──
+  //   맨 윗줄(level 0)이 부품이고, 그 아래 줄들이 그 부품을 쓰는 완제품이다.
+  //   윗줄의 품목코드를 품번조회의 호환품번에서 찾아, 아래 줄들의 품목코드·규격을
+  //   그 품목의 적용모델(신규)로 적는다. 한 장에 여러 부품이 들어 있어도 된다.
+  {
+    const r=await handleBomRevUpload(wb);
+    if(r) return r;
+  }
 
   // ── A) 전략물자 대장 (품번 + 갱신 결과) → 수출제한(비해당=면제) ──
   // 기준 품번은 '품번' 열. 면제(=화면에서 빈칸) 판단은 이렇게 한다.
