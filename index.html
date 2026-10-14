@@ -11269,7 +11269,9 @@ function ensureXlsxStyle(){
     if(window.XLSX && window.XLSX.__styled) return res(true);
     const sc=document.createElement('script');
     sc.src='https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js';
-    sc.onload=()=>{ try{ window.XLSX.__styled=true; }catch(e){} res(true); };
+    sc.onload=()=>{ try{ window.XLSX.__styled=true; }catch(e){}
+      try{ if(typeof ktInstallXlsxAlign==='function') ktInstallXlsxAlign(); }catch(e){}   // 새로 올린 판에도 글자 자리를 다시 건다
+      res(true); };
     sc.onerror=()=>res(false);
     document.head.appendChild(sc);
   });
@@ -14883,12 +14885,16 @@ function xlsxAlignAll(ws, extra){
   Object.keys(ws).forEach(k=>{
     if(k.charAt(0)==='!') return;                    // '!ref' 같은 살림살이는 건너뛴다
     const c=ws[k]; if(!c || typeof c!=='object') return;
-    c.s=Object.assign({}, c.s, { alignment:al });
+    // 칸 안 줄바꿈(머리글처럼 여러 줄로 적어 둔 것)은 살려 둔다
+    const prev=(c.s && c.s.alignment) || {};
+    c.s=Object.assign({}, c.s, { alignment:Object.assign({}, al, prev.wrapText?{wrapText:true}:{}) });
   });
   return ws;
 }
 // 어느 화면에서 내려받든 같은 모양이 되게, 쓰기 직전에 한 번 입힌다.
-(function(){
+//   ※ 엑셀 라이브러리를 다시 불러오면 window.XLSX 가 통째로 새 것이 되어 이 감싸기가
+//     날아간다. 그래서 다시 불러온 뒤에도 이 함수를 또 부른다(ensureXlsxStyle).
+function ktInstallXlsxAlign(){
   if(typeof XLSX==='undefined' || XLSX.__ktAlign) return;
   const w=XLSX.writeFile;
   XLSX.writeFile=function(wb){
@@ -14896,7 +14902,10 @@ function xlsxAlignAll(ws, extra){
     return w.apply(this, arguments);
   };
   XLSX.__ktAlign=1;
-})();
+  // 지금 올려 둔 판(xlsx-js-style)은 칸 색·글씨를 적을 수 있다 — 다시 받지 않아도 된다.
+  try{ XLSX.__styled=true; }catch(e){}
+}
+ktInstallXlsxAlign();
 function downloadPO(){
   renderPO();
   const ru=(lang==='ru');
