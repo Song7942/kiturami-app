@@ -40,6 +40,15 @@ if($OwnDb){
   $html=[regex]::Replace($html, "const SUPABASE_KEY\s*=\s*'[^']*'", "const SUPABASE_KEY=''")
 }
 
+# 1b) the excel library is baked in, so the page needs nothing from the outside
+$xtag=[regex]::Match($html, '<script src="https://[^"]*xlsx[^"]*"></script>')
+if($xtag.Success){
+  $u=[regex]::Match($xtag.Value,'src="([^"]+)"').Groups[1].Value
+  Write-Output ('xlsx   : fetching ' + $u)
+  $xjs=(Invoke-WebRequest -Uri $u -UseBasicParsing).Content
+  $html=$html.Replace($xtag.Value, '<script>' + $xjs + '</script>')
+}
+
 # 2) the two server paths are plain php files next to index.html
 $html=$html.Replace("fetch('/api/fxrate')","fetch('api/fxrate.php')")
 $html=$html.Replace("fetch('/api/notify'","fetch('api/notify.php'")
