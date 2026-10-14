@@ -4340,6 +4340,25 @@ function prodNameOf(pn){
 //   목록에 없는 모델만 적어 둔 이름(BOM 의 규격 등)을 그대로 보여 준다.
 function pnMdlName(e){ return prodNameOf(e&&e.p) || String((e&&e.n)||'').trim(); }
 function pnMdlFromProd(e){ return !!prodNameOf(e&&e.p); }
+// 제품명 열은 가장 긴 이름이 한 줄에 다 보이도록 폭을 잡는다(잘라 쓰지 않는다).
+//   한글은 폭이 넓어 글자마다 다르게 센다. 너무 길어지면 적당한 선에서 멈춘다.
+let _pnMdlCap=0;
+function pnMdlCapClear(){ _pnMdlCap=0; }
+function pnMdlNameCap(){
+  if(_pnMdlCap) return _pnMdlCap;
+  let w=0;
+  try{
+    Object.keys(pnMdl||{}).forEach(k=>{
+      (pnMdlEntries(k)||[]).forEach(e=>{
+        const s=pnMdlName(e); if(!s) return;
+        let n=0; for(const ch of s) n+=(ch.charCodeAt(0)>0x2000?11.5:6.3);   // 한글·한자는 넓게
+        if(n>w) w=n;
+      });
+    });
+  }catch(err){}
+  _pnMdlCap=Math.max(160, Math.min(460, Math.ceil(w)+22));
+  return _pnMdlCap;
+}
 function pnMdlText(pn){ return pnMdlEntries(pn).map(e=>e.p).filter(Boolean).join(', '); }
 function pnMdlNameText(pn){ return pnMdlEntries(pn).map(e=>pnMdlName(e)).filter(Boolean).join(', '); }
 // 칸 안에서 한 줄씩 고치는 입력란(대체품목과 같은 모양)
@@ -4357,7 +4376,7 @@ function pnMdlEdit(rep, i, val, fld, isAdd){
     + ' style="display:inline-block;min-width:'+(nm?'80':'64')+'px;outline:none;'
     + 'border-bottom:1px dashed var(--border);cursor:text;padding:0 2px;'
     + (nm?'color:var(--muted);':"font-family:'Courier New',monospace;font-size:10px;")
-    + 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%">'+v+'</span>';
+    + 'white-space:nowrap">'+v+'</span>';
 }
 async function onPnMdlBlur(el){
   const rep=String(el.getAttribute('data-pnmdlrep')||'').trim();
@@ -4463,6 +4482,7 @@ function ktAfterPnEdit(){
   if(typeof _pnChkMap!=='undefined') _pnChkMap=null;
   if(typeof pnSumClear==='function') pnSumClear();
   if(typeof prodNameClear==='function') prodNameClear();
+  if(typeof pnMdlCapClear==='function') pnMdlCapClear();
   if(typeof poSupplyClear==='function') poSupplyClear();
   if(typeof simPlanUpClear==='function') simPlanUpClear();
   if(typeof simOrderClear==='function') simOrderClear();
@@ -4649,7 +4669,7 @@ function pnBaseCols(isKo, showEng){
   // 적용모델(신규) — 품번·제품명 두 칸을 한 묶음으로
   { const g=ru?'Модели (новое)':'적용모델(신규)';
     c.push({key:'mdl',      cap:112, group:g, color:'#0ea5e9', capLabel:ru?'Артикул':'품번'});
-    c.push({key:'mdl_name', cap:160, group:g, color:'#0ea5e9', capLabel:ru?'Наименование':'제품명'}); }
+    c.push({key:'mdl_name', cap:pnMdlNameCap(), group:g, color:'#0ea5e9', capLabel:ru?'Наименование':'제품명'}); }
   c.push({key:'applied_models', cap:150, label:ru?'Модели (врем.)':'적용모델<br>(임시)'});
   (typeof MODEL_DEFS!=='undefined'?MODEL_DEFS:[]).forEach(m=> c.push({key:'m:'+m.key, cap:36, group:m.group, color:m.color, capLabel:m.label, modelKey:m.key}));
   return c;
@@ -4808,7 +4828,7 @@ function pnCellHtml(col, r, ctx){
         const tip=fromProd?((lang==='ru')?'Из списка изделий':'제품목록에서 가져온 이름입니다'):nm;
         out.push(pnAltRow((isMaster && !fromProd)
           ? pnMdlEdit(r.rep,i,nm,'mdln',!e)
-          : '<span title="'+escapeHtml(tip)+'" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escapeHtml(nm)+'</span>',
+          : '<span title="'+escapeHtml(tip)+'" style="white-space:nowrap">'+escapeHtml(nm)+'</span>',
           last, 'color:var(--muted)'));
       }else{
         const v=e?e.p:'';
@@ -5182,8 +5202,36 @@ async function downloadPN(){
     if(!NUM_COL[key]) return v;
     const t=String(v==null?'':v).replace(/,/g,'').trim(); if(t==='') return '';
     const n=Number(t); return isFinite(n) ? n : v; };
-  rows.forEach(r=> aoa.push(meta.map(c=> cellOf(c.key, r))));
+  // 대체품목·적용모델(신규)은 화면처럼 한 줄에 하나씩 적는다.
+  //   그만큼 줄을 늘리고 나머지 열은 세로로 합쳐, 화면과 같은 모양이 되게 한다.
+  const STACK={alt:1, alt_name:1, alt_qty:1, mdl:1, mdl_name:1};
+  const hasStack=meta.some(c=>STACK[c.key]);
+  const merges=[];
+  rows.forEach(r=>{
+    const alts=hasStack?(pnAltEntries(r.rep)||[]):[];
+    const mdls=hasStack?(pnMdlEntries(r.rep)||[]):[];
+    const n=Math.max(1, alts.length, mdls.length);
+    const at=aoa.length;
+    for(let k=0;k<n;k++){
+      aoa.push(meta.map(c=>{
+        const key=c.key;
+        if(STACK[key]){
+          if(key==='alt'){ const e=alts[k]; return e?normBadgePN(pnAltResolve(e.p,e.f)):''; }
+          if(key==='alt_name'){ const e=alts[k]; return e?pnAltName(e.p,e.f):''; }
+          if(key==='alt_qty'){ const e=alts[k]; if(!e) return '';
+            const q=Number(String(e.q||'').replace(/[,\s]/g,''));
+            return (e.q!=='' && isFinite(q))?q:(e.q||''); }
+          if(key==='mdl'){ const e=mdls[k]; return e?e.p:''; }
+          const e=mdls[k]; return e?pnMdlName(e):'';
+        }
+        if(k>0) return '';                     // 둘째 줄부터는 비우고 위 칸과 합친다
+        return cellOf(key, r);
+      }));
+    }
+    if(n>1) meta.forEach((c,ci)=>{ if(!STACK[c.key]) merges.push({ s:{r:at,c:ci}, e:{r:at+n-1,c:ci} }); });
+  });
   const ws=XLSX.utils.aoa_to_sheet(aoa);
+  if(merges.length) ws['!merges']=merges;
   ws['!cols']=meta.map(c=> ({ wch: Math.min(40, Math.max(6, Math.round((c.cap||60)/6.5))) }));
   // 출고·선적은 천 단위 쉼표로 보이게
   meta.forEach((c,ci)=>{ if(c.key!=='out' && c.key!=='ship') return;
@@ -13754,9 +13802,11 @@ async function loadProd(){
   }catch(e){ prodData=[]; }
   _prodLoaded=true;
   if(typeof prodNameClear==='function') prodNameClear();   // 품번조회의 적용모델 제품명이 이 목록을 본다
+  if(typeof pnMdlCapClear==='function') pnMdlCapClear();
 }
 async function saveProd(){
   if(typeof prodNameClear==='function') prodNameClear();    // 품번조회의 적용모델 제품명도 새 목록을 따르게
+  if(typeof pnMdlCapClear==='function') pnMdlCapClear();
   const { error }=await sb.from('kt_psi_cfg').upsert(
     { id:PROD_CFG_ID, cfg:{ rows:prodData, updated_at:new Date().toISOString() }, updated_at:new Date().toISOString() },
     {onConflict:'id'});
