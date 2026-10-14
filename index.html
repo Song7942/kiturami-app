@@ -5824,11 +5824,27 @@ async function handleBomRevUpload(wb){
       if(!cur) continue;
       cur.models.push({ p:pn, n:String(w[cSp]==null?'':w[cSp]).trim() });
     }
-    const real=groups.filter(g=>g.models.length);
-    if(!real.length) continue;
+    if(!groups.some(g=>g.models.length)) continue;
 
     if(!PN_DATA.length) await loadPNOverrides();
     if(typeof loadPnMdl==='function') await loadPnMdl();
+    if(typeof loadProd==='function' && !(typeof prodData!=='undefined' && prodData.length)) await loadProd();
+    // 제품목록에 없는 모델은 뺀다 — 적용모델은 제품목록에 있는 완제품만 다룬다
+    let dropped=0; const dropEx=[];
+    groups.forEach(g=>{
+      const keep=g.models.filter(m=>prodNameOf(m.p));
+      dropped+=g.models.length-keep.length;
+      g.models.filter(m=>!prodNameOf(m.p)).forEach(m=>{ if(dropEx.length<5) dropEx.push(m.p); });
+      g.models=keep;
+    });
+    const real=groups.filter(g=>g.models.length);
+    if(!real.length){
+      return ru?('В списке изделий нет ни одной модели из файла.')
+               :('제품목록에 있는 모델이 하나도 없어 올리지 않았습니다.\n'
+                 +'파일의 완제품 '+dropped+'개가 제품목록에 없습니다'
+                 +(dropEx.length?(': '+dropEx.map(normBadgePN).join(', ')+(dropped>dropEx.length?' 외':'')):'')
+                 +'\n\n제품목록 화면에 먼저 올려 주세요.');
+    }
     // 올린 부품을 품번조회의 호환품번에서 찾는다
     const hit=[], miss=[];
     real.forEach(g=>{
@@ -5847,6 +5863,8 @@ async function handleBomRevUpload(wb){
           +'\n   '+g.models.slice(0,3).map(m=>normBadgePN(m.p)+(m.n?(' '+m.n):'')).join('\n   ')
           +(g.models.length>3?'\n   …':'')).join('\n')
       + (hit.length>6?('\n… 그 밖 '+(hit.length-6)+'개'):'')
+      + (dropped?('\n\n※ 제품목록에 없어 뺀 모델 '+dropped+'개'
+                  +(dropEx.length?(': '+dropEx.map(normBadgePN).join(', ')+(dropped>dropEx.length?' 외':'')):'')):'')
       + (miss.length?('\n\n※ 품번조회에 없어 건너뜀: '+miss.slice(0,5).map(normBadgePN).join(', ')+(miss.length>5?' 외':'')):'')
       + '\n\n계속할까요?')) return (ru?'Отменено.':'취소했습니다.');
 
@@ -5856,6 +5874,8 @@ async function handleBomRevUpload(wb){
     if(typeof ktAfterPnEdit==='function') ktAfterPnEdit();
     return (ru?('Готово: '+hit.length+' / '+tot)
              :('적용모델(신규)을 바꿨습니다 — 품목 '+hit.length+'개 · 모델 '+tot+'개'
+               +(dropped?('\n제품목록에 없어 뺀 모델 '+dropped+'개'
+                          +(dropEx.length?(': '+dropEx.map(normBadgePN).join(', ')+(dropped>dropEx.length?' 외':'')):'')):'')
                +(miss.length?('\n품번조회에 없어 건너뛴 품번 '+miss.length+'개: '+miss.slice(0,5).map(normBadgePN).join(', ')+(miss.length>5?' 외':'')):'')));
   }
   return '';
