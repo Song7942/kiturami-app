@@ -1,4 +1,4 @@
-﻿param([switch]$WithPrice, [switch]$OwnDb)
+﻿param([switch]$WithPrice, [switch]$OwnDb, [switch]$NoCost)
 $ErrorActionPreference='Stop'
 # Make the self-hosting copy from index.html.
 #   in  : ..\index.html            (the one you edit)
@@ -32,6 +32,9 @@ if($OwnDb){
 }
 if(-not $WithPrice){
   $repl=$repl + "`r`n" + '<script id="ktNoPrice">' + [IO.File]::ReadAllText($SHIM,$U8) + '</script>'
+}
+if($NoCost){
+  $repl=$repl + "`r`n" + '<script id="ktNoCost">' + [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'nocost.js'),$U8) + '</script>'
 }
 $html=$html.Replace($stag, $repl)
 if($OwnDb){
