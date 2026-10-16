@@ -555,6 +555,8 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
       <input type="text" id="loginId" placeholder="아이디" autocomplete="username" oninput="this.value=this.value.toUpperCase()">
       <input type="password" id="loginPw" placeholder="비밀번호" autocomplete="current-password">
       <div id="authLoginErr" class="auth-err"></div>
+      <!-- 암호화 안 된 접속(http) 경고. ktInsecureGuard() 가 필요할 때만 보여 준다 -->
+      <div id="authInsecure" style="display:none;margin:6px 0 2px;padding:9px 11px;border:1px solid #ef4444;border-radius:8px;background:#fef2f2;color:#991b1b;font-size:12px;line-height:1.55;text-align:left"></div>
       <button class="auth-btn" id="al-btn" onclick="doLogin()">로그인</button>
       <div class="auth-links">
         <a id="al-link-signup" onclick="showAuth('signup')">회원가입</a>
@@ -21747,6 +21749,7 @@ function setAuthLang(l){
   document.getElementById('afp-link-back').textContent = t.backToLogin;
 
   const lb = document.getElementById('logoutBtn'); if(lb) lb.textContent = t.logoutBtn;
+  ktInsecureGuard();                 // 경고문도 고른 언어로 다시 쓴다
 }
 
 function normalizePhoneOnBlur(inputId){
@@ -21991,6 +21994,7 @@ async function ensureCompanyAccount(company, supplierCompany, contactName, count
   }catch(e){ console.error('회사 계정 생성 실패:', e); }
 }
 async function doSignup(){
+  if(ktInsecureHost()){ showAuth("login"); ktInsecureGuard(); return; }   // 암호화 안 된 접속에서는 막는다
   const t = AUTH_T[authLang];
   const company = document.getElementById('suCompany').value.trim();
   const contactName = document.getElementById('suContactName').value.trim();
@@ -22063,8 +22067,48 @@ async function refreshCurrentUser(){
     sessionStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(currentUser));
   }catch(e){ console.error(e); }
 }
+// ══ 암호화 안 된 접속(http) 에서는 로그인을 막는다 ═════════
+//   이 화면은 비밀번호를 서버로 보내 맞춰 보므로(자체 서버판 api/auth.php),
+//   https 가 아니면 비밀번호와 세션 쿠키가 가려지지 않은 채 지나간다.
+//   인증서가 달리면 저절로 풀린다 — 따로 고칠 것이 없다.
+//   내 컴퓨터(localhost)와 오프라인 파일(file://)은 네트워크를 타지 않으므로 그대로 둔다.
+function ktInsecureHost(){
+  try{
+    if(location.protocol!=='http:') return false;              // https · file 은 괜찮다
+    const h=String(location.hostname||'').toLowerCase();
+    if(h==='localhost' || h==='127.0.0.1' || h==='[::1]' || h==='::1') return false;
+    if(/(^|\.)localhost$/.test(h) || /(^|\.)test$/.test(h)) return false;
+    return true;
+  }catch(e){ return false; }
+}
+function ktInsecureGuard(){
+  const box=document.getElementById('authInsecure'); if(!box) return;
+  const bad=ktInsecureHost();
+  box.style.display = bad?'block':'none';
+  const dis=(id)=>{ const el=document.getElementById(id); if(!el) return;
+    el.disabled=bad; el.style.opacity=bad?'0.45':''; el.style.cursor=bad?'not-allowed':''; };
+  dis('al-btn');
+  ['loginId','loginPw'].forEach(dis);
+  // 가입·아이디찾기·비밀번호찾기도 막는다 — 모두 개인정보나 비밀번호가 오간다
+  ['al-link-signup','al-link-findid','al-link-findpw'].forEach(id=>{
+    const el=document.getElementById(id); if(!el) return;
+    el.style.pointerEvents=bad?'none':''; el.style.opacity=bad?'0.45':'';
+  });
+  if(!bad) return;
+  const https='https://'+location.host+location.pathname+location.search;
+  box.innerHTML = (authLang==='ru')
+    ? '<b>Небезопасное соединение (http)</b><br>'
+      + 'Пароль и cookie сессии пойдут без шифрования — вход отключён.<br>'
+      + 'Откройте <a href="'+escapeHtml(https)+'" style="color:#991b1b;font-weight:700">https://'+escapeHtml(location.host)+'</a>'
+      + ' или воспользуйтесь <a href="https://kiturami-service.pages.dev/" style="color:#991b1b;font-weight:700">kiturami-service.pages.dev</a>.'
+    : '<b>암호화되지 않은 접속입니다 (http)</b><br>'
+      + '이대로 로그인하면 비밀번호와 세션이 가려지지 않은 채 지나갑니다. 그래서 로그인을 막아 두었습니다.<br>'
+      + '<a href="'+escapeHtml(https)+'" style="color:#991b1b;font-weight:700">https://'+escapeHtml(location.host)+'</a> 로 여시거나, '
+      + '<a href="https://kiturami-service.pages.dev/" style="color:#991b1b;font-weight:700">kiturami-service.pages.dev</a> 를 쓰세요.';
+}
 async function doLogin(){
   const t = AUTH_T[authLang];
+  if(ktInsecureHost()){ ktInsecureGuard(); return; }          // 단추를 지나쳐 불러도 막는다
   const id = document.getElementById('loginId').value.trim();
   const pw = document.getElementById('loginPw').value;
   authSetErr('authLoginErr','');
@@ -22180,6 +22224,7 @@ function doLogout(){
 }
 
 async function doFindId(){
+  if(ktInsecureHost()){ showAuth("login"); ktInsecureGuard(); return; }   // 암호화 안 된 접속에서는 막는다
   const t = AUTH_T[authLang];
   const company = document.getElementById('fiCompany').value.trim();
   authSetErr('authFindIdErr',''); authSetOk('authFindIdResult','');
@@ -22191,6 +22236,7 @@ async function doFindId(){
 }
 
 async function doVerifyFindPw(){
+  if(ktInsecureHost()){ showAuth("login"); ktInsecureGuard(); return; }   // 암호화 안 된 접속에서는 막는다
   const t = AUTH_T[authLang];
   const company = document.getElementById('fpCompany').value.trim();
   const id = document.getElementById('fpId').value.trim();
@@ -22206,6 +22252,7 @@ async function doVerifyFindPw(){
 }
 
 async function doResetPw(){
+  if(ktInsecureHost()){ showAuth("login"); ktInsecureGuard(); return; }   // 암호화 안 된 접속에서는 막는다
   const t = AUTH_T[authLang];
   authSetErr('authFindPwErr2','');
   if(!_fpVerifiedUser){ authSetErr('authFindPwErr2', t.errNoMatch); return; }
@@ -22340,6 +22387,7 @@ function authInit(){
   }catch(e){}
   document.getElementById('authOverlay').style.display='flex';
   document.getElementById('appRoot').style.display='none';
+  ktInsecureGuard();                 // 암호화 안 된 접속이면 로그인을 막고 까닭을 적어 둔다
 }
 mountModelDiag('order'); // 기본 탭이 주문이므로 시작 시 공용 모델바/분해도를 주문 슬롯에 장착
 authInit();
