@@ -1540,21 +1540,21 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
     <div class="search-bar">
       <div class="search-wrap">
         <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-        <input type="text" id="asrInput" placeholder="분류·코드·모델로 검색…" oninput="clearTimeout(window._asrT);window._asrT=setTimeout(renderASR,200)">
+        <input type="text" id="asrInput" placeholder="분류·코드·모델로 검색…" data-i18n-ph="asrInput" oninput="clearTimeout(window._asrT);window._asrT=setTimeout(renderASR,200)">
       </div>
-      <span style="font-size:11px;color:var(--muted)">연도</span>
+      <span style="font-size:11px;color:var(--muted)" id="i18n-asr-year">연도</span>
       <select id="asrFrom" onchange="renderASR()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></select>
       <span style="font-size:11px;color:var(--muted)">~</span>
       <select id="asrTo" onchange="renderASR()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></select>
-      <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted)" title="가동대수 = 그 달을 포함해 최근 N개월 동안 판매(출고)한 제품 대수 — 품질보증기간(출고 후 최대 42개월) 안에 있는 제품 수">가동대수(보증기간)
+      <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted)" id="i18n-asr-iblab-wrap" title="가동대수 = 그 달을 포함해 최근 N개월 동안 판매(출고)한 제품 대수 — 품질보증기간(출고 후 최대 42개월) 안에 있는 제품 수"><span id="i18n-asr-iblab">가동대수(보증기간)</span>
         <select id="asrN" onchange="asrRecalc()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px">
           <option value="12">12개월</option><option value="24">24개월</option><option value="36">36개월</option><option value="42" selected>42개월</option><option value="48">48개월</option><option value="60">60개월</option>
         </select></label>
-      <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted)"><input type="checkbox" id="asrHideZero" checked onchange="renderASR()"> 부품 출고 없는 모델 숨기기</label>
+      <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted)"><input type="checkbox" id="asrHideZero" checked onchange="renderASR()"> <span id="i18n-asr-hide">부품 출고 없는 모델 숨기기</span></label>
       <div class="count-badge" id="asrBadge"></div>
       <button class="dl-btn" onclick="downloadASR()">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        <span>엑셀 다운로드</span>
+        <span id="i18n-asr-dl">엑셀 다운로드</span>
       </button>
     </div>
     <div id="asrInfo" style="font-size:11px;color:var(--muted);padding:2px 12px 0;line-height:1.5"></div>
@@ -2584,6 +2584,20 @@ function refreshPsiTexts(){
   set('i18n-rep-run','다시 만들기','Обновить');
   set('i18n-rep-dl',DL[0],DL[1]);
   set('i18n-rep-print','인쇄','Печать');
+  // A/S부품 소요율
+  set('i18n-asr-year','연도','Год');
+  set('i18n-asr-iblab','가동대수(보증기간)','Парк в эксплуатации (гарантия)');
+  set('i18n-asr-hide','부품 출고 없는 모델 숨기기','Скрыть модели без расхода');
+  set('i18n-asr-dl',DL[0],DL[1]);
+  { const el=document.getElementById('asrInput');
+    if(el) el.placeholder=(lang==='ru')?'Поиск: группа, код, модель…':'분류·코드·모델로 검색…';
+    const w=document.getElementById('i18n-asr-iblab-wrap');
+    if(w) w.title=(lang==='ru')
+      ? 'Парк в эксплуатации = сколько изделий продано (отгружено) за последние N мес., включая этот — то есть изделия в пределах гарантии (до 42 мес. после отгрузки)'
+      : '가동대수 = 그 달을 포함해 최근 N개월 동안 판매(출고)한 제품 대수 — 품질보증기간(출고 후 최대 42개월) 안에 있는 제품 수';
+    const n=document.getElementById('asrN');
+    if(n) [...n.options].forEach(o=>{ o.textContent=o.value+((lang==='ru')?' мес.':'개월'); }); }
+  if(ktPaneOn('pane-asr') && typeof renderASR==='function') renderASR();
   if(ktPaneOn('pane-report') && typeof renderReport==='function') renderReport();
   try{ paintDanLegend(); }catch(e){}      // 단종 표기 안내(O·△·□)
   // 품번확인
@@ -14863,7 +14877,7 @@ function asrView(){
   // 줄: 합계 → 분류 소계 → 모델 (제품 출고와 같은 차례)
   const rows=[];
   const all=A.models.map(r=>r.k);
-  rows.push({ lv:'t', t:'', g:'', m:'합계', keys:all });
+  rows.push({ lv:'t', t:'', g:'', m:AL('합계','Итого'), keys:all });
   PPSI_CATS.forEach(cat=>{
     const ms=A.models.filter(r=>ppsiCatOf(r)===cat); if(!ms.length) return;
     const vis=ms.filter(r=>{
@@ -14871,35 +14885,42 @@ function asrView(){
       if(hz && !yrs.some(y=>((A.alloc[r.k]||{})[y]||0)>0)) return false;
       return true; });
     if(!vis.length && (kw||hz)) return;
-    rows.push({ lv:'s', t:cat, g:'', m:'소계', keys:ms.map(r=>r.k) });
+    rows.push({ lv:'s', t:cat, g:'', m:AL('소계','Подытог'), keys:ms.map(r=>r.k) });
     vis.forEach(r=>rows.push({ lv:'m', t:r.t, g:r.g, m:r.m, k:r.k, keys:[r.k] }));
   });
   return { A, yrs, rows };
 }
 function asrFmtRate(v){ return v==null ? '' : (v>=10 ? v.toFixed(1) : v.toFixed(2)); }
+// 화면 언어에 맞는 글자 고르개 — A/S부품 소요율·보고서 화면에서 쓴다
+function AL(ko, ru){ return (lang==='ru') ? ru : ko; }
 function renderASR(){
   const thead=document.getElementById('asrThead'), tbody=document.getElementById('asrTbody'), cg=document.getElementById('asrColgroup');
   const empty=document.getElementById('asrEmpty'), badge=document.getElementById('asrBadge'), info=document.getElementById('asrInfo');
   if(!thead||!tbody) return;
   if(!_ppsi){ thead.innerHTML=''; tbody.innerHTML=''; if(cg) cg.innerHTML=''; if(info) info.textContent='';
-    if(empty){ empty.style.display='block'; empty.textContent='제품 출고 자료가 없습니다. 먼저 제품 출고 화면에 제품 PSI 엑셀을 올려 주세요.'; }
+    if(empty){ empty.style.display='block'; empty.textContent=AL("제품 출고 자료가 없습니다. 먼저 제품 출고 화면에 제품 PSI 엑셀을 올려 주세요.","Нет данных по отгрузке изделий. Сначала загрузите PSI изделий на экране «Отгрузка изделий»."); }
     updatePaneHBar('asr'); return; }
   if(empty) empty.style.display='none';
   const V=asrView(); if(!V) return;
   const { A, yrs, rows }=V;
-  const FX=[{k:'t',w:150,lab:'분류'},{k:'g',w:96,lab:'코드'},{k:'m',w:170,lab:'모델'}];
-  const SUB=[{k:'parts',w:66,lab:'부품 출고'},{k:'ib',w:70,lab:'가동대수'},{k:'rate',w:70,lab:'소요율'}];
+  const FX=[{k:"t",w:150,lab:AL("분류","Группа")},{k:"g",w:96,lab:AL("코드","Код")},{k:"m",w:170,lab:AL("모델","Модель")}];
+  const SUB=[{k:"parts",w:66,lab:AL("부품 출고","Расход")},{k:"ib",w:70,lab:AL("가동대수","В эксплуатации")},{k:"rate",w:70,lab:AL("소요율","Норма расхода")}];
   const left=[0]; FX.forEach((f,i)=>left.push(left[i]+f.w));
   if(cg) cg.innerHTML=FX.map(f=>'<col style="width:'+f.w+'px">').join('')+yrs.map(()=>SUB.map(s=>'<col style="width:'+s.w+'px">').join('')).join('');
   const tbl=document.getElementById('asrTable'); if(tbl) tbl.style.width=(left[3]+yrs.length*SUB.reduce((a,s)=>a+s.w,0))+'px';
   const thS='padding:5px 4px;text-align:center;vertical-align:middle;position:sticky;z-index:3;background:var(--surface2);font-size:11px;white-space:nowrap;border-bottom:1px solid var(--border)';
   const yLab=y=>{ const r=asrYear(A, [], y); const ms=A.months.filter(m=>m.slice(0,2)===y).length;
-    return '20'+y+(ms<12?(' <span style="font-weight:400;color:var(--muted)">(1~'+ms+'월)</span>'):'')
-      +((A.months.filter(m=>m.slice(0,2)===y).slice(-1)[0]<A.firstFull)?' <span style="font-weight:400;color:#b45309" title="이 해는 판매 자료가 2021년부터라 가동대수가 '+A.N+'개월을 다 채우지 못해 소요율이 실제보다 높게 나옵니다">참고</span>':''); };
+    return '20'+y+(ms<12?(' <span style="font-weight:400;color:var(--muted)">'+AL('(1~','(1–')+ms+AL('월)',' мес.)')+'</span>'):'')
+      +((A.months.filter(m=>m.slice(0,2)===y).slice(-1)[0]<A.firstFull)?' <span style="font-weight:400;color:#b45309" title="'
+        +AL('이 해는 판매 자료가 2021년부터라 가동대수가 '+A.N+'개월을 다 채우지 못해 소요율이 실제보다 높게 나옵니다',
+            'Данные о продажах есть только с 2021 года, поэтому за этот год парк в эксплуатации набран не за полные '+A.N+' мес. — норма расхода выходит выше реальной')
+        +'">'+AL('참고','Прим.')+'</span>':''); };
   thead.innerHTML='<tr>'+FX.map((f,i)=>'<th rowspan="2" style="'+thS+';top:0;left:'+left[i]+'px;z-index:4">'+f.lab+'</th>').join('')
     +yrs.map(y=>'<th colspan="3" style="'+thS+';top:0;border-left:1px solid var(--border)">'+yLab(y)+'</th>').join('')+'</tr>'
     +'<tr>'+yrs.map(()=>SUB.map((s,i)=>'<th style="'+thS+';top:27px'+(i===0?';border-left:1px solid var(--border)':'')
-      +(s.k==='rate'?'" title="보증기간 안 제품(가동대수) 100대당 한 해 동안 나간 A/S 부품 수(연 환산)':'')+'">'+s.lab+(s.k==='rate'?' <span style="font-weight:400;color:var(--muted)">/100대·연</span>':'')+'</th>').join('')).join('')+'</tr>';
+      +(s.k==='rate'?('" title="'+AL('보증기간 안 제품(가동대수) 100대당 한 해 동안 나간 A/S 부품 수(연 환산)',
+                                    'Сколько запчастей уходит за год на 100 изделий, находящихся на гарантии (в пересчёте на год)')):'')
+      +'">'+s.lab+(s.k==='rate'?(' <span style="font-weight:400;color:var(--muted)">'+AL('/100대·연','/100 шт. в год')+'</span>'):'')+'</th>').join('')).join('')+'</tr>';
   const tdS='padding:4px 5px;font-size:11px;border-bottom:1px solid var(--border);white-space:nowrap';
   tbody.innerHTML=rows.map(r=>{
     const sub=r.lv!=='m', bgFix=sub?'var(--surface2)':'var(--surface)', fw=sub?'700':'400';
@@ -14910,15 +14931,24 @@ function renderASR(){
       const c=(x,i,extra)=>'<td style="'+tdS+';text-align:right;background:'+(sub?'var(--surface2)':'var(--surface)')+';font-weight:'+fw+(i===0?';border-left:1px solid var(--border)':'')+(extra||'')+'">'+x+'</td>';
       return c(v.parts?Math.round(v.parts).toLocaleString():'',0)
         +c(v.ibAvg?Math.round(v.ibAvg).toLocaleString():'',1,';color:var(--muted)')
-        +c(asrFmtRate(v.rate),2,';color:'+((v.ibAvg>0 && v.ibAvg<30)?'var(--muted)':(early?'#b45309':'var(--accent2)'))+';font-weight:'+((v.ibAvg>0 && v.ibAvg<30)?'400':'700')+((v.ibAvg>0 && v.ibAvg<30)?'" title="가동대수가 30대 미만이라 소요율을 믿기 어렵습니다':'')); }).join('');
+        +c(asrFmtRate(v.rate),2,';color:'+((v.ibAvg>0 && v.ibAvg<30)?'var(--muted)':(early?'#b45309':'var(--accent2)'))+';font-weight:'+((v.ibAvg>0 && v.ibAvg<30)?'400':'700')+((v.ibAvg>0 && v.ibAvg<30)?('" title="'+AL('가동대수가 30대 미만이라 소요율을 믿기 어렵습니다','В эксплуатации менее 30 шт. — норме расхода доверять нельзя')):'')); }).join('');
     return '<tr>'+fix+nums+'</tr>'; }).join('');
-  if(badge) badge.textContent=rows.filter(r=>r.lv==='m').length+'개 모델';
+  if(badge) badge.textContent=rows.filter(r=>r.lv==='m').length+AL('개 모델',' моделей');
   if(info){
-    const ul=yrs.map(y=>'20'+y+' '+Math.round(A.unlinked[y]||0).toLocaleString()+'개('+((A.unlinkedReps[y]||new Set()).size)+'품목)').join(' · ');
-    info.innerHTML='가동대수 = 그 달 포함 최근 <b>'+A.N+'개월</b> 판매 누계(품질보증기간 출고 후 최대 42개월) · 소요율 = 부품 출고 ÷ 평균 가동대수 × 100 (연 환산) · '+psiYmLabel(A.cut)+'까지'
-      +'<br>공용 부품은 그 달 적용 모델들의 가동대수 비율로 나눴습니다. 적용 모델을 알 수 없거나 그 모델 판매가 없는 부품 출고는 빼고 셈했습니다: '+ul
-      +'<br><span style="color:var(--muted)">흐린 숫자</span>는 평균 가동대수가 30대 미만이라 믿기 어려운 값입니다. 기름·펠렛처럼 2021년 전에 팔린 제품이 많이 쓰이고 있는 분류는 분모(최근 '+A.N+'개월 판매)보다 실제 쓰이는 대수가 많아 소요율이 높게 나옵니다.'
-      +(A.firstFull?('<br><span style="color:#b45309">참고</span> 표시된 해는 판매 자료가 2021년 1월부터라 가동대수가 '+A.N+'개월을 다 채우지 못해('+psiYmLabel(A.firstFull)+'부터 다 참) 소요율이 실제보다 높게 나옵니다.'):'');
+    const ul=yrs.map(y=>'20'+y+' '+Math.round(A.unlinked[y]||0).toLocaleString()
+      +AL('개(',' шт. (')+((A.unlinkedReps[y]||new Set()).size)+AL('품목)',' позиций)')).join(' · ');
+    info.innerHTML=AL(
+        '가동대수 = 그 달 포함 최근 <b>'+A.N+'개월</b> 판매 누계(품질보증기간 출고 후 최대 42개월) · 소요율 = 부품 출고 ÷ 평균 가동대수 × 100 (연 환산) · '+psiYmLabel(A.cut)+'까지',
+        'В эксплуатации = продажи за последние <b>'+A.N+' мес.</b> включая этот месяц (гарантия — до 42 мес. после отгрузки) · Норма расхода = расход запчастей ÷ средний парк × 100 (в пересчёте на год) · по '+psiYmLabel(A.cut))
+      +'<br>'+AL(
+        '공용 부품은 그 달 적용 모델들의 가동대수 비율로 나눴습니다. 적용 모델을 알 수 없거나 그 모델 판매가 없는 부품 출고는 빼고 셈했습니다: ',
+        'Общие запчасти разнесены пропорционально парку применяемых моделей за тот месяц. Расход без известной модели или по моделям без продаж в счёт не берётся: ')+ul
+      +'<br>'+AL(
+        '<span style="color:var(--muted)">흐린 숫자</span>는 평균 가동대수가 30대 미만이라 믿기 어려운 값입니다. 기름·펠렛처럼 2021년 전에 팔린 제품이 많이 쓰이고 있는 분류는 분모(최근 '+A.N+'개월 판매)보다 실제 쓰이는 대수가 많아 소요율이 높게 나옵니다.',
+        '<span style="color:var(--muted)">Бледные числа</span> — средний парк менее 30 шт., доверять нельзя. Там, где много работает изделий, проданных до 2021 года (дизель, пеллеты), реальный парк больше знаменателя (продажи за последние '+A.N+' мес.), поэтому норма выходит завышенной.')
+      +(A.firstFull?('<br><span style="color:#b45309">'+AL('참고','Прим.')+'</span> '+AL(
+        '표시된 해는 판매 자료가 2021년 1월부터라 가동대수가 '+A.N+'개월을 다 채우지 못해('+psiYmLabel(A.firstFull)+'부터 다 참) 소요율이 실제보다 높게 나옵니다.',
+        'Отмеченные годы: данные о продажах только с января 2021, парк набран не за полные '+A.N+' мес. (полностью — с '+psiYmLabel(A.firstFull)+'), поэтому норма выходит выше реальной.')):'');
   }
   updatePaneHBar('asr');
 }
@@ -14935,25 +14965,28 @@ function asrDetail(k){
   box.style.cssText='position:fixed;inset:0;z-index:10000;background:#0008;display:flex;align-items:center;justify-content:center';
   box.onmousedown=e=>{ if(e.target===box) box.remove(); };
   box.innerHTML='<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;width:640px;max-width:94vw;max-height:86vh;display:flex;flex-direction:column;box-shadow:0 16px 44px #000a;font-size:12px;color:var(--text)">'
-    +'<div style="padding:12px 14px;border-bottom:1px solid var(--border)"><div style="font-weight:700;font-size:13px">'+escapeHtml(m)+' — 20'+y+' A/S 부품</div>'
-    +'<div style="color:var(--muted);margin-top:3px">부품 출고 '+Math.round(v.parts||0).toLocaleString()+' · 평균 가동대수 '+Math.round(v.ibAvg||0).toLocaleString()+' · 소요율 '+asrFmtRate(v.rate)+' /100대·연 · 공용 부품은 배분한 몫</div></div>'
+    +'<div style="padding:12px 14px;border-bottom:1px solid var(--border)"><div style="font-weight:700;font-size:13px">'+escapeHtml(m)+' — 20'+y+AL(' A/S 부품',' — запчасти')+'</div>'
+    +'<div style="color:var(--muted);margin-top:3px">'+AL('부품 출고 ','Расход ')+Math.round(v.parts||0).toLocaleString()
+      +AL(' · 평균 가동대수 ',' · средний парк ')+Math.round(v.ibAvg||0).toLocaleString()
+      +AL(' · 소요율 ',' · норма ')+asrFmtRate(v.rate)
+      +AL(' /100대·연 · 공용 부품은 배분한 몫',' /100 шт. в год · общие запчасти — разнесённая доля')+'</div></div>'
     +'<div style="overflow:auto;padding:6px 14px"><table style="width:100%;border-collapse:collapse"><thead><tr style="color:var(--muted);font-size:11px">'
-    +'<th style="text-align:left;padding:4px">대표품번</th><th style="text-align:left;padding:4px">품명</th><th style="text-align:left;padding:4px">규격</th><th style="text-align:right;padding:4px">배분 수량</th><th style="text-align:right;padding:4px">100대당</th></tr></thead><tbody>'
+    +'<th style="text-align:left;padding:4px">'+AL('대표품번','Осн. артикул')+'</th><th style="text-align:left;padding:4px">'+AL('품명','Наименование')+'</th><th style="text-align:left;padding:4px">'+AL('규격','Характеристика')+'</th><th style="text-align:right;padding:4px">'+AL('배분 수량','Доля, шт.')+'</th><th style="text-align:right;padding:4px">'+AL('100대당','на 100 шт.')+'</th></tr></thead><tbody>'
     +(list.length?list.slice(0,200).map(x=>'<tr><td style="padding:3px 4px;font-family:\'Courier New\',monospace;font-size:10.5px">'+escapeHtml(x.rep)+'</td>'
       +'<td style="padding:3px 4px">'+escapeHtml(x.p.name_ko||'')+'</td><td style="padding:3px 4px;color:var(--muted)">'+escapeHtml(x.p.spec||'')+'</td>'
       +'<td style="padding:3px 4px;text-align:right">'+(x.q>=10?Math.round(x.q).toLocaleString():x.q.toFixed(1))+'</td>'
       +'<td style="padding:3px 4px;text-align:right;color:var(--accent2)">'+(v.ibAvg?asrFmtRate(x.q/v.ibAvg*100*(12/(v.nMonths||12))):'')+'</td></tr>').join('')
-      :'<tr><td colspan="5" style="padding:10px;color:var(--muted)">이 해에 배분된 부품이 없습니다.</td></tr>')
+      :'<tr><td colspan="5" style="padding:10px;color:var(--muted)">'+AL('이 해에 배분된 부품이 없습니다.','За этот год запчастей не разнесено.')+'</td></tr>')
     +'</tbody></table></div>'
-    +'<div style="padding:10px 14px;border-top:1px solid var(--border);text-align:right"><button class="dl-btn" onclick="document.getElementById(\'asrDetailPop\').remove()">닫기</button></div></div>';
+    +'<div style="padding:10px 14px;border-top:1px solid var(--border);text-align:right"><button class="dl-btn" onclick="document.getElementById(\'asrDetailPop\').remove()">'+AL('닫기','Закрыть')+'</button></div></div>';
   document.body.appendChild(box);
 }
 async function downloadASR(){
   const V=asrView(); if(!V) return;
   await ensureXlsxStyle();
   const { A, yrs, rows }=V;
-  const h1=['분류','코드','모델'], h2=['','',''];
-  yrs.forEach(y=>{ h1.push('20'+y,'',''); h2.push('부품 출고','가동대수(평균)','소요율(/100대·연)'); });
+  const h1=[AL('분류','Группа'),AL('코드','Код'),AL('모델','Модель')], h2=['','',''];
+  yrs.forEach(y=>{ h1.push('20'+y,'',''); h2.push(AL('부품 출고','Расход'),AL('가동대수(평균)','Парк (среднее)'),AL('소요율(/100대·연)','Норма (/100 шт. в год)')); });
   const aoa=[h1,h2];
   rows.forEach(r=>{ const line=[r.t||'', r.g||'', r.m||''];
     yrs.forEach(y=>{ const v=asrYear(A, r.keys, y)||{};
@@ -14969,10 +15002,20 @@ async function downloadASR(){
   for(let ri=2;ri<aoa.length;ri++) yrs.forEach((y,i)=>{ [0,1].forEach(j=>{ const a=XLSX.utils.encode_cell({r:ri,c:3+i*3+j}); if(ws[a]&&ws[a].t==='n') ws[a].z='#,##0'; });
     const a=XLSX.utils.encode_cell({r:ri,c:5+i*3}); if(ws[a]&&ws[a].t==='n') ws[a].z='0.00'; });
   // 설명 시트
-  const note=XLSX.utils.aoa_to_sheet([['A/S부품 소요율'],['가동대수','그 달 포함 최근 '+A.N+'개월 판매 누계(품질보증기간 출고 후 최대 42개월)'],
-    ['소요율','그 해 부품 출고 ÷ 그 해 평균 가동대수 × 100, 연 환산(/100대·연)'],['공용 부품','그 달 적용 모델들의 가동대수 비율로 배분'],
-    ['기간', '2021-01 ~ '+psiYmLabel(A.cut)],['주의','가동대수가 '+A.N+'개월을 다 채운 것은 '+psiYmLabel(A.firstFull)+'부터. 그 전 해의 소요율은 높게 나옴(참고)']]);
-  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'A/S부품 소요율'.replace('/','')); XLSX.utils.book_append_sheet(wb, note, '설명');
+  const note=XLSX.utils.aoa_to_sheet([
+    [AL('A/S부품 소요율','Расход запчастей')],
+    [AL('가동대수','Парк в эксплуатации'), AL('그 달 포함 최근 '+A.N+'개월 판매 누계(품질보증기간 출고 후 최대 42개월)',
+        'Продажи за последние '+A.N+' мес. включая этот (гарантия — до 42 мес. после отгрузки)')],
+    [AL('소요율','Норма расхода'), AL('그 해 부품 출고 ÷ 그 해 평균 가동대수 × 100, 연 환산(/100대·연)',
+        'Расход за год ÷ средний парк за год × 100, в пересчёте на год (/100 шт. в год)')],
+    [AL('공용 부품','Общие запчасти'), AL('그 달 적용 모델들의 가동대수 비율로 배분',
+        'Разнесены пропорционально парку применяемых моделей за тот месяц')],
+    [AL('기간','Период'), '2021-01 ~ '+psiYmLabel(A.cut)],
+    [AL('주의','Внимание'), AL('가동대수가 '+A.N+'개월을 다 채운 것은 '+psiYmLabel(A.firstFull)+'부터. 그 전 해의 소요율은 높게 나옴(참고)',
+        'Парк набран за полные '+A.N+' мес. только с '+psiYmLabel(A.firstFull)+'. За более ранние годы норма выходит завышенной (прим.)')]]);
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, AL('AS부품 소요율','Raskhod zapchastey'));
+  XLSX.utils.book_append_sheet(wb, note, AL('설명','Пояснение'));
   XLSX.writeFile(wb, xlsxName('AS부품소요율','AS_zapchasti'));
 }
 // 내려받는 표의 글자 자리 — 왼쪽으로 붙이고 칸 높이의 가운데에 놓는다.
@@ -15539,7 +15582,8 @@ function repAgg(from,to,avgN){
       const avg=s/avgN;
       rows[y].mo = avg>0 ? Math.round((rows[y].st/avg)*10)/10 : null;
     });
-    out.push({ rep:p.rep, final:p.final||'', name:pnNameKo(p.rep,p.name_ko), spec:pnSpec(p.rep,p.spec), rows, open, yms });
+    // 품명은 보고 있는 화면 언어를 따른다(러시아어 품명이 없으면 한국어로 보인다 — 다른 화면과 같은 규칙)
+    out.push({ rep:p.rep, final:p.final||'', name:pnName(p.rep, p.name_ko, p.name_ru), spec:pnSpec(p.rep,p.spec), rows, open, yms });
   });
   return { yms, items:out };
 }
@@ -15567,13 +15611,22 @@ function repReason(it, worstYm, yms, po){
   const oPrev=i3.reduce((a,y)=>a+((r[y]||{}).o||0),0)/3;
   const list=[];
   if(po.qty>0){
-    const late=po.oldest?('발주 '+psiYmLabel(po.oldest)+' 분 '+psiFmt(po.qty)+'개가 아직 안 들어옴'):('발주 잔량 '+psiFmt(po.qty)+'개 미도착');
-    list.push({ k:'po', t:'발주 대비 선적 지연', d:late });
+    const late=po.oldest
+      ? AL('발주 '+psiYmLabel(po.oldest)+' 분 '+psiFmt(po.qty)+'개가 아직 안 들어옴',
+           'Заказ за '+psiYmLabel(po.oldest)+': '+psiFmt(po.qty)+' шт. ещё не поступило')
+      : AL('발주 잔량 '+psiFmt(po.qty)+'개 미도착',
+           'Остаток по заказу '+psiFmt(po.qty)+' шт. не поступил');
+    list.push({ k:'po', t:AL('발주 대비 선적 지연','Задержка отгрузки по заказу'), d:late });
   }
-  if(msSum>0) list.push({ k:'ms', t:'미출 발생', d:'기간 중 미출 '+psiFmt(msSum)+'개' });
-  if(shPrev===0 && inPrev===0) list.push({ k:'noship', t:'선적·입고 없음', d:'앞선 3개월 동안 들어온 수량이 없음' });
-  if(oPrev>0 && (cur.o||0) >= oPrev*1.5) list.push({ k:'surge', t:'출고 급증', d:'앞선 3개월 평균 '+psiFmt(Math.round(oPrev))+'개 → '+psiFmt(cur.o||0)+'개' });
-  if(!list.length) list.push({ k:'base', t:'기초 재고 부족', d:'들어온 양보다 나간 양이 꾸준히 많음' });
+  if(msSum>0) list.push({ k:'ms', t:AL('미출 발생','Недопоставка'),
+    d:AL('기간 중 미출 '+psiFmt(msSum)+'개','Недопоставлено за период: '+psiFmt(msSum)+' шт.') });
+  if(shPrev===0 && inPrev===0) list.push({ k:'noship', t:AL('선적·입고 없음','Нет отгрузок и поступлений'),
+    d:AL('앞선 3개월 동안 들어온 수량이 없음','За предыдущие 3 мес. не поступило ничего') });
+  if(oPrev>0 && (cur.o||0) >= oPrev*1.5) list.push({ k:'surge', t:AL('출고 급증','Резкий рост расхода'),
+    d:AL('앞선 3개월 평균 '+psiFmt(Math.round(oPrev))+'개 → '+psiFmt(cur.o||0)+'개',
+         'Среднее за 3 мес. '+psiFmt(Math.round(oPrev))+' шт. → '+psiFmt(cur.o||0)+' шт.') });
+  if(!list.length) list.push({ k:'base', t:AL('기초 재고 부족','Недостаточный начальный запас'),
+    d:AL('들어온 양보다 나간 양이 꾸준히 많음','Расход стабильно превышал поступление') });
   return list;
 }
 function repFmtMo(v){ return (v==null)?'-':(Math.round(v*10)/10).toFixed(1); }
@@ -15585,7 +15638,7 @@ function renderReport(){
   if(fEl && document.activeElement!==fEl) fEl.value=psiYmLabel(c.from);
   if(tEl && document.activeElement!==tEl) tEl.value=psiYmLabel(c.to);
   if(typeof psiData==='undefined' || !Object.keys(psiData||{}).length){
-    out.innerHTML='<div class="no-result" style="display:block">PSI 자료를 읽는 중입니다…</div>';
+    out.innerHTML='<div class="no-result" style="display:block">'+AL('PSI 자료를 읽는 중입니다…','Загружаются данные PSI…')+'</div>';
     return;
   }
   const A=repAgg(c.from, c.to, c.avg), yms=A.yms;
@@ -15636,26 +15689,29 @@ function renderReport(){
   const code="font-family:'Courier New',monospace;font-size:10px";
   let h='';
   h+='<div style="padding:14px 2px 6px">'
-    +'<div style="font-size:19px;font-weight:800">PSI 결과 보고서</div>'
+    +'<div style="font-size:19px;font-weight:800">'+AL('PSI 결과 보고서','Отчёт по результатам PSI')+'</div>'
     +'<div style="font-size:12px;color:var(--muted);margin-top:3px">'
-      +'기간 '+H(psiYmLabel(c.from))+' ~ '+H(psiYmLabel(c.to))+' ('+yms.length+'개월)'
-      +' · 재고 기준 '+c.low+'개월 · 보유월 향후 '+c.avg+'개월'
-      +' · 만든 날 '+H(todayYMD())+'</div></div>';
+      +AL('기간 ','Период ')+H(psiYmLabel(c.from))+' ~ '+H(psiYmLabel(c.to))+' ('+yms.length+AL('개월',' мес.')+')'
+      +AL(' · 재고 기준 '+c.low+'개월 · 보유월 향후 '+c.avg+'개월',
+          ' · норма запаса '+c.low+' мес. · мес. вперёд '+c.avg)
+      +AL(' · 만든 날 ',' · составлен ')+H(todayYMD())+'</div></div>';
   h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 14px">'
-    +card('대상 품목', N(items.length)+'개')
-    +card('총 출고', N(tOut)+'개')
-    +card('총 입고', N(tIn)+'개', '선적 '+N(tSh)+'개')
-    +card('총 미출', N(tMs)+'개')
-    +card('재고 부족 품목', N(lows.length)+'개', '보유월 '+c.low+'개월 미만')
+    +card(AL('대상 품목','Позиций'),      N(items.length)+AL('개',' шт.'))
+    +card(AL('총 출고','Всего расход'),   N(tOut)+AL('개',' шт.'))
+    +card(AL('총 입고','Всего приход'),   N(tIn)+AL('개',' шт.'), AL('선적 ','Отгрузка ')+N(tSh)+AL('개',' шт.'))
+    +card(AL('총 미출','Всего недопост.'),N(tMs)+AL('개',' шт.'))
+    +card(AL('재고 부족 품목','Позиций с нехваткой'), N(lows.length)+AL('개',' шт.'),
+          AL('보유월 '+c.low+'개월 미만','менее '+c.low+' мес. запаса'))
     +'</div>';
   // ① 많이 나간 부품
-  h+='<h3 style="font-size:14px;margin:16px 0 6px">1. 많이 나간 부품 (상위 '+Math.min(TOPN,outs.length)+')</h3>';
-  if(!outs.length) h+='<div style="font-size:12px;color:var(--muted)">기간 중 출고가 없습니다.</div>';
+  h+='<h3 style="font-size:14px;margin:16px 0 6px">'+AL('1. 많이 나간 부품 (상위 '+Math.min(TOPN,outs.length)+')',
+      '1. Наибольший расход (топ '+Math.min(TOPN,outs.length)+')')+'</h3>';
+  if(!outs.length) h+='<div style="font-size:12px;color:var(--muted)">'+AL('기간 중 출고가 없습니다.','За период расхода не было.')+'</div>';
   else{
     let acc=0;
     h+='<table style="width:100%;border-collapse:collapse"><thead><tr>'
-      +'<th style="'+th+';text-align:center">순위</th><th style="'+thL+'">대표품번</th><th style="'+thL+'">최종품번</th>'
-      +'<th style="'+thL+'">품명</th><th style="'+th+'">출고</th><th style="'+th+'">비중</th><th style="'+th+'">누적</th>'
+      +'<th style="'+th+';text-align:center">'+AL('순위','№')+'</th><th style="'+thL+'">'+AL('대표품번','Осн. артикул')+'</th><th style="'+thL+'">'+AL('최종품번','Актуальный')+'</th>'
+      +'<th style="'+thL+'">'+AL('품명','Наименование')+'</th><th style="'+th+'">'+AL('출고','Расход')+'</th><th style="'+th+'">'+AL('비중','Доля')+'</th><th style="'+th+'">'+AL('누적','Накопл.')+'</th>'
       +'<th style="'+thL+'" width="120"></th></tr></thead><tbody>';
     outs.slice(0,TOPN).forEach((x,i)=>{
       const pc=per(x.q); acc+=pc;
@@ -15670,17 +15726,22 @@ function renderReport(){
     });
     h+='</tbody></table>';
     const top10=outs.slice(0,10).reduce((a,x)=>a+x.q,0);
-    h+='<div style="font-size:11px;color:var(--muted);margin:6px 2px">상위 10개 품목이 전체 출고의 '
-      +(totOut>0?((top10/totOut)*100).toFixed(1):'0')+'% 를 차지합니다.</div>';
+    h+='<div style="font-size:11px;color:var(--muted);margin:6px 2px">'
+      +AL('상위 10개 품목이 전체 출고의 '+(totOut>0?((top10/totOut)*100).toFixed(1):'0')+'% 를 차지합니다.',
+          'На 10 верхних позиций приходится '+(totOut>0?((top10/totOut)*100).toFixed(1):'0')+'% всего расхода.')+'</div>';
   }
   // ② 재고가 모자랐던 부품
-  h+='<h3 style="font-size:14px;margin:18px 0 6px">2. 재고가 모자랐던 부품 (보유월 '+c.low+'개월 미만, 상위 '+Math.min(TOPN,lows.length)+')</h3>';
-  if(!lows.length) h+='<div style="font-size:12px;color:var(--muted)">기간 중 보유월이 '+c.low+'개월 아래로 내려간 품목이 없습니다.</div>';
+  h+='<h3 style="font-size:14px;margin:18px 0 6px">'
+    +AL('2. 재고가 모자랐던 부품 (보유월 '+c.low+'개월 미만, 상위 '+Math.min(TOPN,lows.length)+')',
+        '2. Нехватка запаса (менее '+c.low+' мес., топ '+Math.min(TOPN,lows.length)+')')+'</h3>';
+  if(!lows.length) h+='<div style="font-size:12px;color:var(--muted)">'
+    +AL('기간 중 보유월이 '+c.low+'개월 아래로 내려간 품목이 없습니다.',
+        'За период ни одна позиция не опускалась ниже '+c.low+' мес. запаса.')+'</div>';
   else{
     h+='<table style="width:100%;border-collapse:collapse"><thead><tr>'
-      +'<th style="'+th+';text-align:center">순위</th><th style="'+thL+'">대표품번</th><th style="'+thL+'">품명</th>'
-      +'<th style="'+th+'">부족 달</th><th style="'+th+'">최저 보유월</th><th style="'+thL+'">그 달</th>'
-      +'<th style="'+th+'">그 달 재고</th><th style="'+th+'">그 달 출고</th><th style="'+thL+'">까닭</th></tr></thead><tbody>';
+      +'<th style="'+th+';text-align:center">'+AL('순위','№')+'</th><th style="'+thL+'">'+AL('대표품번','Осн. артикул')+'</th><th style="'+thL+'">'+AL('품명','Наименование')+'</th>'
+      +'<th style="'+th+'">'+AL('부족 달','Мес. нехватки')+'</th><th style="'+th+'">'+AL('최저 보유월','Минимум, мес.')+'</th><th style="'+thL+'">'+AL('그 달','Месяц')+'</th>'
+      +'<th style="'+th+'">'+AL('그 달 재고','Запас')+'</th><th style="'+th+'">'+AL('그 달 출고','Расход')+'</th><th style="'+thL+'">'+AL('까닭','Причина')+'</th></tr></thead><tbody>';
     lows.slice(0,TOPN).forEach((L,i)=>{
       const w=L.it.rows[L.worst]||{};
       h+='<tr><td style="'+td+';text-align:center">'+(i+1)+'</td>'
@@ -15697,10 +15758,10 @@ function renderReport(){
   }
   // ③ 까닭 모음
   const rk=Object.keys(reasonCnt).sort((a,b)=>reasonCnt[b]-reasonCnt[a]);
-  h+='<h3 style="font-size:14px;margin:18px 0 6px">3. 모자랐던 까닭</h3>';
-  if(!rk.length) h+='<div style="font-size:12px;color:var(--muted)">헤아릴 것이 없습니다.</div>';
+  h+='<h3 style="font-size:14px;margin:18px 0 6px">'+AL('3. 모자랐던 까닭','3. Причины нехватки')+'</h3>';
+  if(!rk.length) h+='<div style="font-size:12px;color:var(--muted)">'+AL('헤아릴 것이 없습니다.','Считать нечего.')+'</div>';
   else{
-    h+='<table style="width:100%;border-collapse:collapse"><thead><tr><th style="'+thL+'">까닭</th><th style="'+th+'">품목 수</th><th style="'+thL+'" width="260"></th></tr></thead><tbody>';
+    h+='<table style="width:100%;border-collapse:collapse"><thead><tr><th style="'+thL+'">'+AL('까닭','Причина')+'</th><th style="'+th+'">'+AL('품목 수','Позиций')+'</th><th style="'+thL+'" width="260"></th></tr></thead><tbody>';
     rk.forEach(k=>{
       const n=reasonCnt[k], pc=lows.length?((n/lows.length)*100):0;
       h+='<tr><td style="'+tdL+'">'+H(k)+'</td><td style="'+td+'">'+N(n)+'</td>'
@@ -15708,31 +15769,38 @@ function renderReport(){
     });
     h+='</tbody></table>';
     h+='<div style="font-size:11px;color:var(--muted);margin:6px 2px;line-height:1.6">'
-      +'· <b>발주 대비 선적 지연</b> — 발주는 넣었는데 아직 안 들어온 수량이 남아 있는 품목입니다(발주현황의 미공급).<br>'
-      +'· <b>미출 발생</b> — 그 기간에 달라는 만큼 못 준 수량이 있었습니다.<br>'
-      +'· <b>선적·입고 없음</b> — 모자라기 앞선 석 달 동안 들어온 것이 없었습니다.<br>'
-      +'· <b>출고 급증</b> — 앞선 석 달 평균보다 1.5배 넘게 나갔습니다.<br>'
-      +'· <b>기초 재고 부족</b> — 들어온 양보다 나간 양이 꾸준히 많았습니다.</div>';
+      +AL('· <b>발주 대비 선적 지연</b> — 발주는 넣었는데 아직 안 들어온 수량이 남아 있는 품목입니다(발주현황의 미공급).<br>'
+        + '· <b>미출 발생</b> — 그 기간에 달라는 만큼 못 준 수량이 있었습니다.<br>'
+        + '· <b>선적·입고 없음</b> — 모자라기 앞선 석 달 동안 들어온 것이 없었습니다.<br>'
+        + '· <b>출고 급증</b> — 앞선 석 달 평균보다 1.5배 넘게 나갔습니다.<br>'
+        + '· <b>기초 재고 부족</b> — 들어온 양보다 나간 양이 꾸준히 많았습니다.',
+          '· <b>Задержка отгрузки по заказу</b> — заказ размещён, но часть ещё не поступила (непоставленное в «Заказах»).<br>'
+        + '· <b>Недопоставка</b> — в этот период отгрузили меньше, чем просили.<br>'
+        + '· <b>Нет отгрузок и поступлений</b> — за три месяца до нехватки ничего не поступало.<br>'
+        + '· <b>Резкий рост расхода</b> — ушло более чем в 1,5 раза больше среднего за предыдущие три месяца.<br>'
+        + '· <b>Недостаточный начальный запас</b> — расход стабильно превышал поступление.')+'</div>';
   }
   // ④ 달별 흐름
-  h+='<h3 style="font-size:14px;margin:18px 0 6px">4. 달별 흐름</h3>';
+  h+='<h3 style="font-size:14px;margin:18px 0 6px">'+AL('4. 달별 흐름','4. Помесячная динамика')+'</h3>';
   h+='<table style="width:100%;border-collapse:collapse"><thead><tr>'
-    +'<th style="'+thL+'">연월</th><th style="'+th+'">선적</th><th style="'+th+'">입고</th><th style="'+th+'">출고</th>'
-    +'<th style="'+th+'">미출</th><th style="'+th+'">재고 부족 품목</th></tr></thead><tbody>';
+    +'<th style="'+thL+'">'+AL('연월','Месяц')+'</th><th style="'+th+'">'+AL('선적','Отгрузка')+'</th><th style="'+th+'">'+AL('입고','Приход')+'</th><th style="'+th+'">'+AL('출고','Расход')+'</th>'
+    +'<th style="'+th+'">'+AL('미출','Недопост.')+'</th><th style="'+th+'">'+AL('재고 부족 품목','Позиций с нехваткой')+'</th></tr></thead><tbody>';
   mrows.forEach(m=>{
     h+='<tr><td style="'+tdL+'">'+H(psiYmLabel(m.ym))+'</td>'
       +'<td style="'+td+'">'+N(m.sh)+'</td><td style="'+td+'">'+N(m.i)+'</td><td style="'+td+'">'+N(m.o)+'</td>'
       +'<td style="'+td+(m.ms?';color:#ef4444':'')+'">'+N(m.ms)+'</td>'
       +'<td style="'+td+(m.low?';color:#ef4444':'')+'">'+N(m.low)+'</td></tr>';
   });
-  h+='<tr><td style="'+tdL+';font-weight:700">합계</td>'
+  h+='<tr><td style="'+tdL+';font-weight:700">'+AL('합계','Итого')+'</td>'
     +'<td style="'+td+';font-weight:700">'+N(tSh)+'</td><td style="'+td+';font-weight:700">'+N(tIn)+'</td>'
     +'<td style="'+td+';font-weight:700">'+N(tOut)+'</td><td style="'+td+';font-weight:700">'+N(tMs)+'</td>'
     +'<td style="'+td+'">-</td></tr>';
   h+='</tbody></table>';
   h+='<div style="font-size:11px;color:var(--muted);margin:14px 2px 0;line-height:1.6">'
-    +'재고 = 이월재고 + 입고 − 출고, 보유월 = 그 달 재고 ÷ (다음 달부터 '+c.avg+'개월 출고 평균). PSI 화면과 같은 산식입니다.<br>'
-    +'대표품번마다 호환품번의 값을 모두 더해 셈했고, 사용불가 수량은 재고에서 뺐습니다.</div>';
+    +AL('재고 = 이월재고 + 입고 − 출고, 보유월 = 그 달 재고 ÷ (다음 달부터 '+c.avg+'개월 출고 평균). PSI 화면과 같은 산식입니다.<br>'
+      + '대표품번마다 호환품번의 값을 모두 더해 셈했고, 사용불가 수량은 재고에서 뺐습니다.',
+        'Запас = переходящий остаток + приход − расход; мес. запаса = запас на конец месяца ÷ (средний расход за следующие '+c.avg+' мес.). Формула та же, что на экране PSI.<br>'
+      + 'Значения совместимых артикулов просуммированы по основному артикулу, непригодное количество вычтено из запаса.')+'</div>';
   out.innerHTML=h;
 }
 function downloadReport(){
@@ -15741,34 +15809,34 @@ function downloadReport(){
   const wb=XLSX.utils.book_new();
   const add=(name,aoa)=>XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), name);
   const tOut=R.mrows.reduce((a,m)=>a+m.o,0);
-  add('요약', [
-    ['PSI 결과 보고서'], [],
-    ['기간', psiYmLabel(R.c.from)+' ~ '+psiYmLabel(R.c.to)],
-    ['재고 기준(개월)', R.c.low], ['보유월 향후(개월)', R.c.avg],
-    ['대상 품목', R.items.length], ['총 선적', R.mrows.reduce((a,m)=>a+m.sh,0)],
-    ['총 입고', R.mrows.reduce((a,m)=>a+m.i,0)], ['총 출고', tOut],
-    ['총 미출', R.mrows.reduce((a,m)=>a+m.ms,0)], ['재고 부족 품목', R.lows.length]
+  add(AL('요약','Сводка'), [
+    [AL('PSI 결과 보고서','Отчёт по результатам PSI')], [],
+    [AL('기간','Период'), psiYmLabel(R.c.from)+' ~ '+psiYmLabel(R.c.to)],
+    [AL('재고 기준(개월)','Норма запаса (мес.)'), R.c.low], [AL('보유월 향후(개월)','Мес. вперёд'), R.c.avg],
+    [AL('대상 품목','Позиций'), R.items.length], [AL('총 선적','Всего отгрузка'), R.mrows.reduce((a,m)=>a+m.sh,0)],
+    [AL('총 입고','Всего приход'), R.mrows.reduce((a,m)=>a+m.i,0)], [AL('총 출고','Всего расход'), tOut],
+    [AL('총 미출','Всего недопоставка'), R.mrows.reduce((a,m)=>a+m.ms,0)], [AL('재고 부족 품목','Позиций с нехваткой'), R.lows.length]
   ]);
-  add('출고순위', [['순위','대표품번','최종품번','품명','규격','출고','비중(%)']].concat(
+  add(AL('출고순위','Расход — рейтинг'), [[AL('순위','№'),AL('대표품번','Осн. артикул'),AL('최종품번','Актуальный артикул'),AL('품명','Наименование'),AL('규격','Характеристика'),AL('출고','Расход'),AL('비중(%)','Доля (%)')]].concat(
     R.outs.map((x,i)=>[i+1, x.it.rep, x.it.final, x.it.name, x.it.spec, x.q, tOut>0?Math.round((x.q/tOut)*1000)/10:0])));
-  add('재고부족', [['순위','대표품번','최종품번','품명','부족 달','기간 달수','최저 보유월','그 달','그 달 재고','그 달 출고','기간 출고','미공급 발주','까닭']].concat(
+  add(AL('재고부족','Нехватка запаса'), [[AL('순위','№'),AL('대표품번','Осн. артикул'),AL('최종품번','Актуальный артикул'),AL('품명','Наименование'),AL('부족 달','Мес. нехватки'),AL('기간 달수','Мес. в периоде'),AL('최저 보유월','Минимум, мес.'),AL('그 달','Месяц'),AL('그 달 재고','Запас'),AL('그 달 출고','Расход'),AL('기간 출고','Расход за период'),AL('미공급 발주','Непоставлено по заказу'),AL('까닭','Причина')]].concat(
     R.lows.map((L,i)=>{ const w=L.it.rows[L.worst]||{};
       return [i+1, L.it.rep, L.it.final, L.it.name, L.n, R.yms.length, L.mo, psiYmLabel(L.worst),
               Math.round(w.st||0), Math.round(w.o||0), L.q, (L.po&&L.po.qty)||0,
               L.rs.map(r=>r.t+'('+r.d+')').join(' / ')]; })));
-  add('달별흐름', [['연월','선적','입고','출고','미출','재고 부족 품목']].concat(
+  add(AL('달별흐름','Помесячно'), [[AL('연월','Месяц'),AL('선적','Отгрузка'),AL('입고','Приход'),AL('출고','Расход'),AL('미출','Недопоставка'),AL('재고 부족 품목','Позиций с нехваткой')]].concat(
     R.mrows.map(m=>[psiYmLabel(m.ym), m.sh, m.i, m.o, m.ms, m.low])));
   XLSX.writeFile(wb, xlsxName('PSI결과보고서','Отчет_PSI'));
 }
 function printReport(){
   if(!_repData) renderReport();
   const el=document.getElementById('repOut'); if(!el) return;
-  const w=window.open('', '_blank'); if(!w){ alert('인쇄 창을 열지 못했습니다. 팝업 차단을 풀어 주세요.'); return; }
+  const w=window.open('', '_blank'); if(!w){ alert(AL('인쇄 창을 열지 못했습니다. 팝업 차단을 풀어 주세요.','Не удалось открыть окно печати. Разрешите всплывающие окна.')); return; }
   const css='body{font-family:"Malgun Gothic","Segoe UI",sans-serif;margin:24px;color:#111;background:#fff}'
     +'table{border-collapse:collapse;width:100%}th,td{border-bottom:1px solid #ddd;padding:5px 8px;font-size:11px}'
     +'h3{font-size:14px;margin:16px 0 6px}'
     +':root{--border:#ddd;--muted:#666;--text:#111;--surface:#fff;--accent2:#4f46e5}';
-  w.document.write('<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>PSI 결과 보고서</title><style>'+css+'</style></head><body>'+el.innerHTML+'</body></html>');
+  w.document.write('<!doctype html><html lang="'+(lang==='ru'?'ru':'ko')+'"><head><meta charset="utf-8"><title>'+AL('PSI 결과 보고서','Отчёт по результатам PSI')+'</title><style>'+css+'</style></head><body>'+el.innerHTML+'</body></html>');
   w.document.close();
   setTimeout(()=>{ try{ w.focus(); w.print(); }catch(e){} }, 400);
 }
