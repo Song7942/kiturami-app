@@ -62,7 +62,6 @@ td.hc{position:relative}
     <span class="tag">기준 GP</span><input type="text" id="gp" title="0 ~ 99.9 사이의 퍼센트로 적습니다 (예: 40)" style="width:52px;text-align:right"><span class="tag">%</span>
     <span class="sep"></span>
     <button id="sync">웹과 맞추기</button>
-    <button id="save" title="고칠 때마다 저절로 담깁니다. 이 단추는 지금 바로 담고 알려 주기만 합니다.">저장</button>
     <button id="exp">파일로 내보내기</button>
     <button id="imp">파일에서 불러오기</button>
     <button id="imx">원가 엑셀 올리기</button>
@@ -93,7 +92,7 @@ td.hc{position:relative}
  *   [웹에 공급가 보내기] 를 누를 때에만 '품번 + 공급가 RUB' 가 웹으로 갑니다.
  *   품명·규격·대표품번·최종품번은 웹의 품번조회가 주인입니다 — 열 때마다
  *   [웹과 맞추기] 가 저절로 한 번 돌아 웹에서 고친 것을 끌어옵니다.
- *   고친 것은 [저장] 을 눌러 이 브라우저에 담아 둡니다.
+ *   고친 것은 그때그때 이 브라우저에 저절로 담깁니다(바닥의 '저장됨' 표시).
  *   컴퓨터를 바꾸거나 백업하려면 [파일로 내보내기] 로 .json 을 받아 두세요.
  */
 const SEED = /*__SEED__*/null;
@@ -126,13 +125,13 @@ function load(){
   D = saved || JSON.parse(JSON.stringify(SEED));
   if(!D.rows) D.rows=[];
 }
-// 고칠 때마다 저절로 담깁니다 — [저장] 은 지금 바로 담고 알려 주기만 합니다.
+// 고칠 때마다 저절로 담는다. 담긴 시각은 바닥에 '저장됨' 으로 적는다.
+//   (quiet 는 예전 [저장] 단추가 쓰던 자리 — 지금은 쓰지 않지만 부르는 곳이 많아 그대로 둔다)
 function save(quiet){
   try{
     localStorage.setItem(LS_KEY, JSON.stringify(D));
     const t=new Date().toLocaleTimeString();
     const s=$('saved'); if(s) s.textContent='저장됨 '+t;
-    if(!quiet) msg('저장했습니다 ('+t+')','ok');
   }
   catch(e){
     const s=$('saved'); if(s) s.textContent='저장 안 됨';
@@ -671,7 +670,6 @@ $("onlyNew").addEventListener("change", render);
 $("fclrAll").onclick=filterReset;
 $("vbtn").onclick=openViewPanel;
 $("hbtn").onclick=openHistAll;
-$('save').onclick=()=>save();
 
 /* 파일로 내보내기 / 불러오기 */
 $('exp').onclick=()=>{
