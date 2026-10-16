@@ -774,33 +774,33 @@ async function costXlApply(aoa, fname){
   const gpTxt=(gpUse==null)?'-':((Math.round(gpUse*1000)/10)+'%');
   const chg=hit.filter(h=>num(D.rows[h.i].cost)!==h.v).length;
   const same=hit.length-chg;
-  // 원래 원가가 없던 줄 — 원가가 들어오면 공급가를 기준 GP 로 다시 셈한다
-  //   (손으로 적어 둔 공급가 KRW 를 비워 두면 '원가 ÷ (1-GP)' 가 그대로 쓰인다)
-  const fresh=hit.filter(h=>{ const r=D.rows[h.i];
-    return num(r.cost)==null && num(r.cost)!==h.v; });
-  const freshSup=fresh.filter(h=>num(D.rows[h.i].sup)!=null).length;
+  // 공급가 KRW 가 비어 있는 줄은 '원가 ÷ (1-GP)' 로 공급가가 셈해진다.
+  //   공급가가 적혀 있는 줄은 원가가 들어와도 그 공급가를 그대로 둔다.
+  const calcN=hit.filter(h=>{ const r=D.rows[h.i];
+    return num(r.sup)==null && num(r.cost)!==h.v; }).length;
+  const keepN=hit.filter(h=>{ const r=D.rows[h.i];
+    return num(r.sup)!=null && num(r.cost)!==h.v; }).length;
   const ok=confirm('올린 엑셀: '+(fname||'')+'\n'
     + '읽은 품번 '+up.size.toLocaleString()+'개 ('+C.how+'으로 열을 찾음)\n'
     + (xlGp!=null ? ('엑셀에 적힌 기준 GP : '+gpTxt+' → 이 값으로 바꿉니다\n') : ('기준 GP : '+gpTxt+' (지금 값 그대로)\n'))
     + '\n· 원가가 바뀌는 품목 : '+chg.toLocaleString()+'개\n'
     + '· 값이 같아 그대로  : '+same.toLocaleString()+'개\n'
     + '· 여기에 없는 품번  : '+miss.length.toLocaleString()+'개 (그냥 넘어갑니다)\n'
-    + (fresh.length ? ('\n· 원래 원가가 없던 품목 '+fresh.length.toLocaleString()+'개는\n'
-        + '  공급가를 기준 GP '+gpTxt+' 로 다시 셈합니다'
-        + (freshSup ? ('\n  (그중 '+freshSup.toLocaleString()+'개는 손으로 적어 둔 공급가가 지워집니다)') : '')
-        + '\n') : '')
+    + (calcN ? ('\n· 그중 공급가가 비어 있는 '+calcN.toLocaleString()+'개는\n'
+        + '  공급가를 기준 GP '+gpTxt+' 로 셈합니다\n') : '')
+    + (keepN ? ('· 공급가가 적혀 있는 '+keepN.toLocaleString()+'개는\n'
+        + '  그 공급가를 그대로 둡니다 (원가만 바뀝니다)\n') : '')
     + '\n엑셀에 없는 품목은 지금 원가를 그대로 둡니다.\n계속할까요?');
   if(!ok) return;
   if(xlGp!=null && num(D.gp)!==xlGp){ hAdd('@gp','', (num(D.gp)!=null?Math.round(num(D.gp)*1000)/10:''), Math.round(xlGp*1000)/10, '엑셀'); D.gp=xlGp; }
   D.rows.forEach(r=>{ if(r.costNew) delete r.costNew; });     // 지난번 표시는 지운다
+  // 바꾸는 것은 원가 하나뿐이다. 적어 둔 공급가 KRW 는 그대로 둔다
+  //   (공급가가 비어 있는 줄만 '원가 ÷ (1-GP)' 로 저절로 셈해진다 — supKrw 참고).
   hit.forEach(h=>{ const r=D.rows[h.i];
     if(num(r.cost)===h.v) return;
-    const wasEmpty=(num(r.cost)==null);
-    const pn=hPnOf(r), b0=r.cost, s0=r.sup;
+    const b0=r.cost;
     r.cost=h.v; r.costNew=1;
-    hAdd('cost', pn, b0, r.cost, '엑셀');
-    // 원가가 없던 줄은 공급가를 기준 GP 로 다시 셈하게 비워 둔다
-    if(wasEmpty){ r.sup=null; hAdd('sup', pn, s0, null, '엑셀'); }
+    hAdd('cost', hPnOf(r), b0, r.cost, '엑셀');
   });
   D.costAt=new Date().toISOString();
   save(true); fill(); render();
