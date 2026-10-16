@@ -42,6 +42,8 @@ td.man input.cell{background:#ffedd5;color:#9a3412;font-weight:700}
 .flag.n{background:#dcfce7;color:#166534}
 .flag.g{background:#fee2e2;color:#991b1b}
 .flag.u{background:#dbeafe;color:#1e40af}
+td.hc{position:relative}
+.hdot{position:absolute;right:1px;top:1px;width:6px;height:6px;border-radius:50%;background:#ef4444;cursor:pointer}
 </style>
 </head>
 <body>
@@ -66,6 +68,7 @@ td.man input.cell{background:#ffedd5;color:#9a3412;font-weight:700}
     <button id="imx">원가 엑셀 올리기</button>
     <button id="fclrAll" style="display:none">거르개 해제</button>
     <button id="vbtn">보기</button>
+    <button id="hbtn">변경이력</button>
     <button id="xls">엑셀 내려받기</button>
     <span class="sep"></span>
     <button id="push" class="pri">웹에 공급가 보내기</button>
@@ -161,6 +164,127 @@ const COLS = [
   {k:'gp',  t:'GP',          w:58}
 ];
 
+/* ══ 변경이력 ══════════════════════════════════════════════
+ *   웹과 같은 방식으로 담습니다 — '어디서 고쳤나' 마다 한 줄,
+ *   처음 고치기 전 값에서 마지막 값으로. 여러 번 고쳐도 줄이 늘지 않습니다.
+ *   원래 값으로 되돌려 놓으면 그 줄은 지워집니다.
+ *     D.hist = { '<열키>|<품번>': [ {b:전, a:후, t:시각, u:출처} ] }
+ */
+const HIST_MAX=600;                       // 담아 둘 칸 수(넘으면 오래된 것부터 버린다)
+function hKey(f, pn){ return String(f)+'|'+String(pn||''); }
+function hStore(){ if(!D.hist || typeof D.hist!=='object') D.hist={}; return D.hist; }
+function hPnOf(r){ return norm(r.cmp) || norm(r.fin) || norm(r.rep); }
+function hNum(v){ return String(v==null?'':v).replace(/[,\s]/g,'').trim(); }
+function hAdd(f, pn, before, after, who){
+  const b=hNum(before), a=hNum(after);
+  if(b===a) return;
+  const H=hStore(), k=hKey(f,pn);
+  const arr=Array.isArray(H[k])?H[k]:(H[k]=[]);
+  const u=String(who||'손으로');
+  const i=arr.findIndex(h=>String(h.u||'')===u);
+  const now=new Date().toISOString();
+  if(i<0) arr.push({ b, a, t:now, u });
+  else { arr[i].a=a; arr[i].t=now; if(arr[i].b===a) arr.splice(i,1); }
+  if(!arr.length) delete H[k];
+  // 너무 불어나면 가장 오래 손대지 않은 칸부터 버린다
+  const keys=Object.keys(H);
+  if(keys.length>HIST_MAX){
+    keys.map(x=>({x, t:(H[x][H[x].length-1]||{}).t||''}))
+        .sort((p,q)=>String(p.t).localeCompare(String(q.t)))
+        .slice(0, keys.length-HIST_MAX)
+        .forEach(o=>{ delete H[o.x]; });
+  }
+}
+function hOf(f, pn){ const a=hStore()[hKey(f,pn)]; return Array.isArray(a)&&a.length?a:null; }
+function hCount(){ let n=0; const H=hStore(); Object.keys(H).forEach(k=>{ n+=(H[k]||[]).length; }); return n; }
+function hTime(t){
+  try{ const d=new Date(t), p=x=>(x<10?'0':'')+x;
+    return String(d.getFullYear()).slice(2)+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes());
+  }catch(e){ return ''; }
+}
+function hFmt(v){ const s=String(v==null?'':v); if(s==='') return '(빈칸)';
+  const n=Number(s); return isFinite(n)?n.toLocaleString():s; }
+const H_LABEL={ cost:'원가 KRW', sup:'공급가 KRW', '@gp':'기준 GP(%)', '@rub':'환율 RUB', '@usd':'환율 USD' };
+function hLabel(f){ return H_LABEL[f]||f; }
+// 칸 모서리에 붙이는 표시
+function hDot(f, pn){
+  return hOf(f,pn)
+    ? '<span class="hdot" data-f="'+f+'" data-pn="'+esc(pn)+'" title="변경이력 보기"></span>'
+    : '';
+}
+function hClose(){ const b=$('hPop'); if(b) b.remove();
+  document.removeEventListener('mousedown', _hOut); document.removeEventListener('keydown', _hEsc); }
+function _hOut(e){ const b=$('hPop'); if(b && !b.contains(e.target)) hClose(); }
+function _hEsc(e){ if(e.key==='Escape') hClose(); }
+function hRowsHtml(arr){
+  return arr.slice().sort((x,y)=>String(y.t||'').localeCompare(String(x.t||''))).map((h,i)=>
+    '<div style="padding:4px 0'+(i?';border-top:1px solid var(--border)':'')+'">'
+    + '<div style="display:flex;align-items:baseline;gap:6px">'
+    +   '<span style="flex:none;font-weight:700;min-width:46px">'+esc(String(h.u||'(모름)'))+'</span>'
+    +   '<span style="flex:none;color:var(--muted);text-decoration:line-through">'+esc(hFmt(h.b))+'</span>'
+    +   '<span style="flex:none;color:var(--muted)">→</span>'
+    +   '<span style="flex:none;font-weight:700;color:var(--accent2)">'+esc(hFmt(h.a))+'</span>'
+    +   '<span style="flex:1;min-width:0;text-align:right;color:var(--muted);font-size:10px;white-space:nowrap">'+esc(hTime(h.t))+'</span>'
+    + '</div></div>').join('');
+}
+// 칸 하나의 이력 쪽지
+function hShow(f, pn, anchor){
+  hClose();
+  const arr=hOf(f,pn); if(!arr) return;
+  const rect=anchor.getBoundingClientRect(), W=300;
+  const box=document.createElement('div'); box.id='hPop';
+  box.style.cssText='position:fixed;top:'+(rect.bottom+4)+'px;left:'+Math.max(6,Math.min(rect.left-120,innerWidth-W-6))+'px;'
+    +'z-index:10000;width:'+W+'px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;'
+    +'box-shadow:0 10px 30px #0006;font-size:12px;color:var(--text);padding:9px 11px';
+  box.innerHTML='<div style="font-size:11px;color:var(--muted);margin-bottom:4px">'
+    + esc(pn)+' · '+esc(hLabel(f))+'</div>'+hRowsHtml(arr);
+  document.body.appendChild(box);
+  setTimeout(()=>{ document.addEventListener('mousedown', _hOut); document.addEventListener('keydown', _hEsc); },0);
+}
+// 전체 이력 창
+function openHistAll(){
+  hClose();
+  const H=hStore();
+  const list=[];
+  Object.keys(H).forEach(k=>{
+    const i=k.indexOf('|'); const f=k.slice(0,i), pn=k.slice(i+1);
+    (H[k]||[]).forEach(h=>list.push({ f, pn, h }));
+  });
+  list.sort((x,y)=>String(y.h.t||'').localeCompare(String(x.h.t||'')));
+  const box=document.createElement('div'); box.id='hPop';
+  box.style.cssText='position:fixed;inset:0;z-index:10000;background:#0008;display:flex;align-items:center;justify-content:center';
+  const line=o=>'<div class="hitem" data-s="'+esc((o.pn+' '+hLabel(o.f)).toLowerCase())+'"'
+    +' style="display:flex;align-items:baseline;gap:7px;padding:4px 2px;border-bottom:1px solid var(--border)">'
+    +'<span style="flex:none;width:112px;font-family:\'Courier New\',monospace;font-size:10.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(o.pn||'—')+'</span>'
+    +'<span style="flex:none;width:76px;font-size:11px;color:var(--muted)">'+esc(hLabel(o.f))+'</span>'
+    +'<span style="flex:none;color:var(--muted);text-decoration:line-through">'+esc(hFmt(o.h.b))+'</span>'
+    +'<span style="flex:none;color:var(--muted)">→</span>'
+    +'<span style="flex:none;font-weight:700;color:var(--accent2)">'+esc(hFmt(o.h.a))+'</span>'
+    +'<span style="flex:none;width:40px;font-size:10px;color:var(--muted)">'+esc(String(o.h.u||''))+'</span>'
+    +'<span style="flex:1;min-width:0;text-align:right;font-size:10px;color:var(--muted);white-space:nowrap">'+esc(hTime(o.h.t))+'</span>'
+    +'</div>';
+  box.innerHTML='<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;width:720px;max-width:94vw;'
+    +'max-height:86vh;display:flex;flex-direction:column;box-shadow:0 16px 44px #000a;font-size:12px;color:var(--text)">'
+    +'<div style="padding:12px 14px;border-bottom:1px solid var(--border);font-weight:700;font-size:13px">'
+    +'변경이력 <span style="font-weight:400;font-size:11px;color:var(--muted)">모두 '+list.length.toLocaleString()+'건 · 새것부터</span></div>'
+    +'<div style="padding:10px 14px 6px"><input id="hq" type="text" placeholder="품번·열 이름으로 찾기…" style="width:100%;box-sizing:border-box;padding:6px 9px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:12px"></div>'
+    +'<div id="hlist" style="flex:1;min-height:0;overflow:auto;padding:0 14px 10px">'
+    + (list.length?list.map(line).join(''):'<div style="padding:26px;text-align:center;color:var(--muted)">아직 고친 것이 없습니다.</div>')
+    +'</div>'
+    +'<div style="display:flex;gap:7px;padding:11px 14px;border-top:1px solid var(--border)">'
+    +'<button id="hClr" style="flex:none;padding:7px 12px;border:1px solid #ef4444;border-radius:7px;background:var(--bg);color:#ef4444;cursor:pointer;font-size:12px">이력 지우기</button>'
+    +'<button id="hX" style="flex:1;padding:7px;border:none;border-radius:7px;background:var(--accent2);color:#fff;cursor:pointer;font-size:12px;font-weight:700">닫기</button>'
+    +'</div></div>';
+  document.body.appendChild(box);
+  box.querySelector('#hq').oninput=function(){ const s=this.value.trim().toLowerCase();
+    box.querySelectorAll('.hitem').forEach(x=>{ x.style.display=(!s||(x.getAttribute('data-s')||'').includes(s))?'':'none'; }); };
+  box.querySelector('#hClr').onclick=()=>{
+    if(!confirm('담아 둔 변경이력을 모두 지웁니다.\n(원가·공급가 값은 그대로 둡니다)\n\n계속할까요?')) return;
+    D.hist={}; save(true); hClose(); render(); msg('변경이력을 지웠습니다','ok');
+  };
+  box.querySelector('#hX').onclick=hClose;
+  box.onmousedown=e=>{ if(e.target===box) hClose(); };
+}
 /* ══ 머리글 거르개·정렬 ════════════════════════════════════
  *   엑셀처럼 머리글의 ▾ 를 눌러 오름·내림차순으로 세우거나 값을 골라 거릅니다.
  *   화면에 보이는 값 그대로를 기준으로 삼습니다(셈해서 나오는 칸도 그 값으로).
@@ -334,6 +458,7 @@ function render(){
     const cRub = (c!=null&&rub)?fmt(c/rub,1):'';
     const cUsd = (c!=null&&usd)?fmt(c/usd,2):'';
     const manSup = (r.sup!=null && r.sup!=='') ? ' man' : '';
+    const pn=hPnOf(r);
     const flag = r.gone    ? '<span class="flag g">없어짐</span>'
                : r.isNew   ? '<span class="flag n">새</span>'
                : r.costNew ? '<span class="flag u">갱신</span>' : '';
@@ -343,16 +468,21 @@ function render(){
       rep: '<td class="code">'+esc(r.rep)+'</td>',
       cmp: '<td class="code">'+esc(r.cmp)+'</td>',
       fin: '<td class="code">'+esc(r.fin)+'</td>',
-      cost:'<td class="num'+((r.cost!=null&&r.cost!=='')?' man':'')+'"><input class="cell" data-f="cost" value="'+(c!=null?fmt(c,1):'')+'"></td>',
+      cost:'<td class="num hc'+((r.cost!=null&&r.cost!=='')?' man':'')+'">'+hDot('cost',pn)+'<input class="cell" data-f="cost" value="'+(c!=null?fmt(c,1):'')+'"></td>',
       cRub:'<td class="num" style="color:var(--muted)">'+cRub+'</td>',
       cUsd:'<td class="num" style="color:var(--muted)">'+cUsd+'</td>',
-      sup: '<td class="num'+manSup+'"><input class="cell" data-f="sup" value="'+(r.sup!=null&&r.sup!==''?fmt(num(r.sup),1):'')+'" placeholder="'+(sk!=null?fmt(sk,0):'')+'"></td>',
+      sup: '<td class="num hc'+manSup+'">'+hDot('sup',pn)+'<input class="cell" data-f="sup" value="'+(r.sup!=null&&r.sup!==''?fmt(num(r.sup),1):'')+'" placeholder="'+(sk!=null?fmt(sk,0):'')+'"></td>',
       sRub:'<td class="num" style="font-weight:700;color:var(--accent2)">'+(sr!=null?fmt(sr,1):'')+'</td>',
       gp:  '<td class="num" style="color:var(--muted)">'+(g!=null?(Math.round(g*1000)/10)+'%':'')+'</td>'
     };
     return '<tr data-i="'+i+'" class="'+(r.gone?'gone':(r.isNew?'isnew':''))+'">'
       + cols.map(cc=>td[cc.k]||'<td></td>').join('') + '</tr>';
   }).join('');
+  // 이력 표시를 누르면 그 칸의 변경이력 쪽지가 뜬다
+  $('tb').querySelectorAll('.hdot').forEach(s=>{ s.onclick=e=>{ e.stopPropagation();
+    hShow(s.getAttribute('data-f'), s.getAttribute('data-pn'), s); }; });
+  { const n=hCount(); const b=$('hbtn');
+    if(b){ b.textContent='변경이력'+(n?(' '+n):''); b.style.opacity=n?'1':'0.55'; } }
   $('empty').style.display = view.length?'none':'block';
   const withSup = D.rows.filter(r=>supRub(r)!=null).length;
   const nNew = D.rows.filter(r=>r.isNew).length, nGone = D.rows.filter(r=>r.gone).length;
@@ -374,7 +504,9 @@ $('tb').addEventListener('change', e=>{
   const tr=inp.closest('tr'); const r=view[+tr.getAttribute('data-i')];
   const f=inp.getAttribute('data-f');
   const v=inp.value.trim();
+  const before=r[f];
   r[f] = (v==='') ? null : num(v);
+  hAdd(f, hPnOf(r), before, r[f], '손으로');      // 변경이력에 남긴다
   save(true); render();
 });
 
@@ -511,19 +643,24 @@ async function getFx(auto){
 }
 $('fx').onclick=()=>getFx(false);
 ['rub','usd'].forEach(id=>{ $(id).addEventListener('change',()=>{
-  D[id] = num($(id).value); save(true); render(); }); });
+  const b=D[id]; D[id] = num($(id).value);
+  hAdd('@'+id, '', b, D[id], '손으로');
+  save(true); render(); }); });
 // 기준 GP 는 퍼센트로 적는다(40 → 0.4). '40%' 처럼 적어도 받는다.
 $('gp').addEventListener('change',()=>{
   const p=num(String($('gp').value).replace(/%/g,''));
+  const b=(num(D.gp)!=null)?Math.round(num(D.gp)*1000)/10:'';
   if(p==null){ D.gp=null; }
   else if(p>=0 && p<100){ D.gp=Math.round(p*10)/1000; }
   else { msg('기준 GP 는 0 ~ 99.9 사이의 퍼센트로 적어 주세요 (예: 40)','no'); fill(); return; }
+  hAdd('@gp', '', b, (num(D.gp)!=null?Math.round(num(D.gp)*1000)/10:''), '손으로');
   save(true); fill(); render();
 });
 $('q').addEventListener('input', render);
 $("onlyNew").addEventListener("change", render);
 $("fclrAll").onclick=filterReset;
 $("vbtn").onclick=openViewPanel;
+$("hbtn").onclick=openHistAll;
 $('save').onclick=()=>save();
 
 /* 파일로 내보내기 / 불러오기 */
@@ -654,14 +791,16 @@ async function costXlApply(aoa, fname){
         + '\n') : '')
     + '\n엑셀에 없는 품목은 지금 원가를 그대로 둡니다.\n계속할까요?');
   if(!ok) return;
-  if(xlGp!=null) D.gp=xlGp;
+  if(xlGp!=null && num(D.gp)!==xlGp){ hAdd('@gp','', (num(D.gp)!=null?Math.round(num(D.gp)*1000)/10:''), Math.round(xlGp*1000)/10, '엑셀'); D.gp=xlGp; }
   D.rows.forEach(r=>{ if(r.costNew) delete r.costNew; });     // 지난번 표시는 지운다
   hit.forEach(h=>{ const r=D.rows[h.i];
     if(num(r.cost)===h.v) return;
     const wasEmpty=(num(r.cost)==null);
+    const pn=hPnOf(r), b0=r.cost, s0=r.sup;
     r.cost=h.v; r.costNew=1;
+    hAdd('cost', pn, b0, r.cost, '엑셀');
     // 원가가 없던 줄은 공급가를 기준 GP 로 다시 셈하게 비워 둔다
-    if(wasEmpty) r.sup=null;
+    if(wasEmpty){ r.sup=null; hAdd('sup', pn, s0, null, '엑셀'); }
   });
   D.costAt=new Date().toISOString();
   save(true); fill(); render();
