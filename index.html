@@ -22095,16 +22095,10 @@ function ktInsecureGuard(){
     el.style.pointerEvents=bad?'none':''; el.style.opacity=bad?'0.45':'';
   });
   if(!bad) return;
-  const https='https://'+location.host+location.pathname+location.search;
+  // 밖에서 보는 사람에게는 까닭을 길게 적지 않는다(다른 사이트 주소도 알리지 않는다).
   box.innerHTML = (authLang==='ru')
-    ? '<b>Небезопасное соединение (http)</b><br>'
-      + 'Пароль и cookie сессии пойдут без шифрования — вход отключён.<br>'
-      + 'Откройте <a href="'+escapeHtml(https)+'" style="color:#991b1b;font-weight:700">https://'+escapeHtml(location.host)+'</a>'
-      + ' или воспользуйтесь <a href="https://kiturami-service.pages.dev/" style="color:#991b1b;font-weight:700">kiturami-service.pages.dev</a>.'
-    : '<b>암호화되지 않은 접속입니다 (http)</b><br>'
-      + '이대로 로그인하면 비밀번호와 세션이 가려지지 않은 채 지나갑니다. 그래서 로그인을 막아 두었습니다.<br>'
-      + '<a href="'+escapeHtml(https)+'" style="color:#991b1b;font-weight:700">https://'+escapeHtml(location.host)+'</a> 로 여시거나, '
-      + '<a href="https://kiturami-service.pages.dev/" style="color:#991b1b;font-weight:700">kiturami-service.pages.dev</a> 를 쓰세요.';
+    ? 'Сайт в процессе открытия — вход пока недоступен.<br>До скорой встречи!'
+    : '현재 개설중으로 접속이 되지 않습니다.<br>빠른 시일내에 뵙겠습니다.';
 }
 async function doLogin(){
   const t = AUTH_T[authLang];
