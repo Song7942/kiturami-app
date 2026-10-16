@@ -1,5 +1,10 @@
-﻿param([string]$OutDir = "C:\Users\admin\Documents\원가관리",
+﻿param([string]$OutDir = '',
       [string]$HostUrl = "http://kituramiparts.com/api/supply.php")
+# 원가관리 폴더는 D:\원가관리 를 먼저 본다(옮겨 두었으면 그 쪽).
+#   둘 다 있으면 D: 를 쓴다 — 어느 것이 최신인지 헷갈리지 않게 한 군데만 쓴다.
+if($OutDir -eq ''){
+  $OutDir = if(Test-Path 'D:\원가관리'){ 'D:\원가관리' } else { "$env:USERPROFILE\Documents\원가관리" }
+}
 $ErrorActionPreference='Stop'
 # 원가관리 HTML 을 만든다.
 #   원가·환율·기준GP·계산식은 이 파일(내 컴퓨터)에만 두고,
