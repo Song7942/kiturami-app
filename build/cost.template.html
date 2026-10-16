@@ -21,7 +21,7 @@ input[type=text],input[type=search]{padding:5px 8px;border:1px solid var(--borde
 .tag{font-size:11px;color:var(--muted)}
 .wrap{padding:0 10px 60px}
 table{border-collapse:separate;border-spacing:0;width:100%;font-size:12px}
-th{position:sticky;top:0;background:var(--surface2);padding:6px 6px;text-align:center;white-space:nowrap;
+th{position:sticky;top:var(--hh,0px);background:var(--surface2);padding:6px 6px;text-align:center;white-space:nowrap;
    border-bottom:1px solid var(--border);border-right:1px solid var(--border);font-size:11px;z-index:5}
 td{padding:3px 6px;border-bottom:1px solid var(--border);border-right:1px solid var(--border);vertical-align:middle}
 td.num{text-align:right;font-variant-numeric:tabular-nums}
@@ -41,6 +41,7 @@ td.man input.cell{background:#ffedd5;color:#9a3412;font-weight:700}
 .flag{font-size:10px;padding:0 4px;border-radius:4px;margin-left:4px;vertical-align:middle}
 .flag.n{background:#dcfce7;color:#166534}
 .flag.g{background:#fee2e2;color:#991b1b}
+.flag.u{background:#dbeafe;color:#1e40af}
 </style>
 </head>
 <body>
@@ -48,7 +49,7 @@ td.man input.cell{background:#ffedd5;color:#9a3412;font-weight:700}
   <h1>원가관리 <small id="made"></small></h1>
   <div class="bar">
     <input type="search" id="q" placeholder="품명·규격·품번으로 찾기…" style="width:230px">
-    <label class="tag" style="display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="onlyNew">새·없어진 것만</label>
+    <label class="tag" style="display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="onlyNew">새·갱신·없어진 것만</label>
     <span class="sep"></span>
     <span class="tag">환율</span>
     <span class="tag">RUB</span><input type="text" id="rub" style="width:72px;text-align:right">
@@ -56,12 +57,15 @@ td.man input.cell{background:#ffedd5;color:#9a3412;font-weight:700}
     <button id="fx">환율 받아오기</button>
     <span class="tag" id="fxinfo"></span>
     <span class="sep"></span>
-    <span class="tag">기준 GP</span><input type="text" id="gp" style="width:58px;text-align:right">
+    <span class="tag">기준 GP</span><input type="text" id="gp" title="0 ~ 99.9 사이의 퍼센트로 적습니다 (예: 40)" style="width:52px;text-align:right"><span class="tag">%</span>
     <span class="sep"></span>
     <button id="sync">웹과 맞추기</button>
     <button id="save">저장</button>
     <button id="exp">파일로 내보내기</button>
     <button id="imp">파일에서 불러오기</button>
+    <button id="imx">원가 엑셀 올리기</button>
+    <button id="fclrAll" style="display:none">거르개 해제</button>
+    <button id="vbtn">보기</button>
     <button id="xls">엑셀 내려받기</button>
     <span class="sep"></span>
     <button id="push" class="pri">웹에 공급가 보내기</button>
@@ -76,6 +80,7 @@ td.man input.cell{background:#ffedd5;color:#9a3412;font-weight:700}
   <span id="msg" class="tag"></span>
 </div>
 <input type="file" id="file" accept=".json" style="display:none">
+<input type="file" id="xfile" accept=".xlsx,.xls" style="display:none">
 <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
@@ -156,42 +161,210 @@ const COLS = [
   {k:'gp',  t:'GP',          w:58}
 ];
 
+/* ══ 머리글 거르개·정렬 ════════════════════════════════════
+ *   엑셀처럼 머리글의 ▾ 를 눌러 오름·내림차순으로 세우거나 값을 골라 거릅니다.
+ *   화면에 보이는 값 그대로를 기준으로 삼습니다(셈해서 나오는 칸도 그 값으로).
+ */
+let _fSort={ k:null, dir:'asc' };
+let _fSel={};                      // {열키: [고른 값들]}
+// 그 줄의 그 열 값(거르개·정렬이 쓰는 기준값). 화면에 찍히는 것과 같게 맞춘다.
+function fVal(r, k){
+  const rub=num(D.rub), usd=num(D.usd);
+  const c=num(r.cost);
+  switch(k){
+    case 'nm': case 'sp': case 'rep': case 'cmp': case 'fin': return String(r[k]||'');
+    case 'cost': return c;
+    case 'cRub': return (c!=null&&rub)?Math.round(c/rub*10)/10:null;
+    case 'cUsd': return (c!=null&&usd)?Math.round(c/usd*100)/100:null;
+    case 'sup':  { const v=supKrw(r); return (v==null)?null:Math.round(v); }
+    case 'sRub': return supRub(r);
+    case 'gp':   { const g=gpOf(r); return (g==null)?null:Math.round(g*1000)/10; }
+  }
+  return '';
+}
+function fText(r, k){ const v=fVal(r,k); return (v==null||v==='')?'':String(v); }
+function fIsNum(k){ return ['cost','cRub','cUsd','sup','sRub','gp'].indexOf(k)>=0; }
+function closeFilter(){ const b=$('fPop'); if(b) b.remove();
+  document.removeEventListener('mousedown', _fOut); document.removeEventListener('keydown', _fEsc); }
+function _fOut(e){ const b=$('fPop'); if(b && !b.contains(e.target)) closeFilter(); }
+function _fEsc(e){ if(e.key==='Escape') closeFilter(); }
+function openFilter(k, anchor){
+  closeFilter();
+  const col=COLS.find(c=>c.k===k)||{t:k};
+  const rect=anchor.getBoundingClientRect();
+  const set=new Set(); D.rows.forEach(r=>set.add(fText(r,k)));
+  const numeric=fIsNum(k);
+  let vals=[...set].sort((a,b)=>{
+    if(a==='') return 1; if(b==='') return -1;
+    return numeric ? (Number(a)-Number(b)) : String(a).localeCompare(String(b),'ko');
+  });
+  const capped=vals.length>800; if(capped) vals=vals.slice(0,800);
+  const cur=_fSel[k]?new Set(_fSel[k]):null;
+  const W=250;
+  const box=document.createElement('div'); box.id='fPop';
+  box.style.cssText='position:fixed;top:'+(rect.bottom+4)+'px;left:'+Math.max(6,Math.min(rect.left,innerWidth-W-6))+'px;'
+    +'z-index:9999;width:'+W+'px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;'
+    +'box-shadow:0 10px 30px #0006;font-size:12px;color:var(--text);overflow:hidden';
+  const sb=(dir,txt)=>'<button class="fsort" data-dir="'+dir+'" style="width:100%;text-align:left;padding:6px 8px;border:none;'
+    +'background:'+((_fSort.k===k&&_fSort.dir===dir)?'var(--accent2)':'none')+';'
+    +'color:'+((_fSort.k===k&&_fSort.dir===dir)?'#fff':'var(--text)')+';cursor:pointer;border-radius:6px;font-size:12px">'+txt+'</button>';
+  box.innerHTML='<div style="padding:8px 8px 6px;border-bottom:1px solid var(--border)">'
+    +'<div style="font-size:11px;color:var(--muted);margin:0 2px 5px">'+esc(col.t)+'</div>'
+    +sb('asc','▲ 오름차순 정렬')+sb('desc','▼ 내림차순 정렬')+'</div>'
+    +'<div style="padding:8px">'
+    +'<input id="fq" type="text" placeholder="값 검색…" style="width:100%;box-sizing:border-box;padding:5px 8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:12px">'
+    +'<label style="display:flex;align-items:center;gap:6px;padding:5px 4px 4px;cursor:pointer;font-weight:600;border-bottom:1px solid var(--border);margin-top:4px">'
+    +'<input type="checkbox" id="fall" checked style="cursor:pointer;flex:none"><span>(모두 선택)</span></label>'
+    +'<div id="flist" style="max-height:230px;overflow:auto;margin-top:2px">'
+    + vals.map(v=>'<label class="fitem" data-v="'+esc(v)+'" style="display:flex;align-items:center;gap:6px;padding:3px 6px;cursor:pointer;line-height:1.3">'
+       +'<input type="checkbox" class="fchk" '+((!cur||cur.has(v))?'checked':'')+' style="cursor:pointer;flex:none">'
+       +'<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(v===''?'(비어 있음)':esc(v))+'</span></label>').join('')
+    +'</div>'
+    +(capped?'<div style="font-size:10.5px;color:var(--muted);margin-top:4px">값이 많아 앞 800개만 보여 줍니다 — 검색으로 찾으세요.</div>':'')
+    +'</div>'
+    +'<div style="display:flex;gap:6px;padding:8px;border-top:1px solid var(--border)">'
+    +'<button id="fok" style="flex:1;padding:6px;border:none;border-radius:7px;background:var(--accent2);color:#fff;cursor:pointer;font-size:12px;font-weight:600">적용</button>'
+    +'<button id="fclr" style="flex:1;padding:6px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);cursor:pointer;font-size:12px">해제</button>'
+    +'<button id="fx2" style="flex:none;padding:6px 10px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);cursor:pointer;font-size:12px">✕</button>'
+    +'</div>';
+  document.body.appendChild(box);
+  const items=()=>[...box.querySelectorAll('.fitem')];
+  const visIt=()=>items().filter(x=>x.style.display!=='none');
+  box.querySelectorAll('.fsort').forEach(b=>{ b.onclick=()=>{ _fSort={k, dir:b.getAttribute('data-dir')}; closeFilter(); render(); }; });
+  box.querySelector('#fq').oninput=function(){ const s=this.value.trim().toLowerCase();
+    items().forEach(x=>{ const v=x.getAttribute('data-v')||''; x.style.display=(!s||v.toLowerCase().includes(s))?'':'none'; }); };
+  box.querySelector('#fall').onchange=function(){ visIt().forEach(x=>{ x.querySelector('.fchk').checked=this.checked; }); };
+  box.querySelector('#fok').onclick=()=>{
+    const picked=items().filter(x=>x.querySelector('.fchk').checked).map(x=>x.getAttribute('data-v')||'');
+    if(picked.length===items().length && !capped) delete _fSel[k]; else _fSel[k]=picked;
+    closeFilter(); render();
+  };
+  box.querySelector('#fclr').onclick=()=>{ delete _fSel[k]; if(_fSort.k===k) _fSort={k:null,dir:'asc'}; closeFilter(); render(); };
+  box.querySelector('#fx2').onclick=closeFilter;
+  setTimeout(()=>{ document.addEventListener('mousedown', _fOut); document.addEventListener('keydown', _fEsc); },0);
+}
+function filterReset(){ _fSel={}; _fSort={k:null,dir:'asc'}; closeFilter(); render(); }
+function fChip(k){
+  const on=(_fSel[k]!=null)||(_fSort.k===k);
+  const g=(_fSort.k===k)?(_fSort.dir==='desc'?'▼':'▲'):'▾';
+  return '<span class="fchip" data-k="'+k+'" title="거르개·정렬"'
+    +' style="display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:14px;margin-left:3px;'
+    +'border-radius:4px;border:1px solid '+(on?'var(--accent2)':'var(--border)')+';'
+    +'background:'+(on?'var(--accent2)':'var(--bg)')+';color:'+(on?'#fff':'var(--muted)')+';'
+    +'font-size:9px;line-height:1;cursor:pointer">'+g+'</span>';
+}
 function filtered(){
   const q=$('q').value.trim().toLowerCase();
   const onlyNew=$('onlyNew').checked;
   let a=D.rows;
-  if(onlyNew) a=a.filter(r=>r.isNew||r.gone);
+  if(onlyNew) a=a.filter(r=>r.isNew||r.gone||r.costNew);
   if(q) a=a.filter(r=>[r.nm,r.sp,r.rep,r.cmp,r.fin].some(v=>String(v||'').toLowerCase().includes(q)));
+  // 머리글에서 고른 값만 남긴다(여러 열을 걸면 모두 맞아야 한다)
+  const fk=Object.keys(_fSel);
+  if(fk.length){
+    const sets={}; fk.forEach(k=>{ sets[k]=new Set(_fSel[k]); });
+    a=a.filter(r=>fk.every(k=>sets[k].has(fText(r,k))));
+  }
+  // 머리글에서 고른 차례대로 세운다. 빈 칸은 늘 뒤로.
+  if(_fSort.k){
+    const k=_fSort.k, dir=(_fSort.dir==='desc')?-1:1, numeric=fIsNum(k);
+    a=a.slice().sort((x,y)=>{
+      const vx=fVal(x,k), vy=fVal(y,k);
+      const ex=(vx==null||vx===''), ey=(vy==null||vy==='');
+      if(ex&&ey) return 0;
+      if(ex) return 1; if(ey) return -1;
+      return numeric ? (Number(vx)-Number(vy))*dir : String(vx).localeCompare(String(vy),'ko')*dir;
+    });
+  }
   return a;
 }
+/* ══ 보기 — 표에 보일 열 고르기 ════════════════════════════
+ *   고른 것은 이 브라우저에 담아 둬서 다음에 열 때도 그대로입니다.
+ */
+const VIS_KEY='kt_cost_cols';
+let _hide={};
+try{ const s=localStorage.getItem(VIS_KEY); if(s) _hide=JSON.parse(s)||{}; }catch(e){ _hide={}; }
+function visCols(){ const v=COLS.filter(c=>!_hide[c.k]); return v.length?v:COLS.slice(); }
+function saveVis(){ try{ localStorage.setItem(VIS_KEY, JSON.stringify(_hide)); }catch(e){} }
+function openViewPanel(){
+  const old=$('vPop'); if(old) old.remove();
+  const box=document.createElement('div'); box.id='vPop';
+  box.style.cssText='position:fixed;inset:0;z-index:10000;background:#0008;display:flex;align-items:center;justify-content:center';
+  box.innerHTML='<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;width:300px;max-width:92vw;'
+    +'max-height:86vh;overflow:auto;box-shadow:0 16px 44px #000a;font-size:12px;color:var(--text)">'
+    +'<div style="padding:12px 14px;border-bottom:1px solid var(--border);font-weight:700;font-size:13px">보기 — 표에 보일 열</div>'
+    +'<div style="padding:10px 14px">'
+    + COLS.map(c=>'<label style="display:flex;align-items:center;gap:8px;padding:4px 2px;cursor:pointer">'
+        +'<input type="checkbox" class="vcol" data-k="'+c.k+'" '+(_hide[c.k]?'':'checked')+' style="cursor:pointer;flex:none">'
+        +'<span>'+esc(c.t)+'</span></label>').join('')
+    +'<div style="font-size:11px;color:var(--muted);margin-top:8px;line-height:1.5">끈 열은 화면에서만 숨습니다 — 엑셀 내려받기와 웹에 보내는 공급가에는 그대로 들어갑니다.</div>'
+    +'</div>'
+    +'<div style="display:flex;gap:7px;padding:11px 14px;border-top:1px solid var(--border)">'
+    +'<button id="vAll" style="flex:none;padding:7px 12px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);cursor:pointer;font-size:12px">전체 선택</button>'
+    +'<button id="vClose" style="flex:1;padding:7px;border:none;border-radius:7px;background:var(--accent2);color:#fff;cursor:pointer;font-size:12px;font-weight:700">닫기</button>'
+    +'</div></div>';
+  document.body.appendChild(box);
+  const commit=()=>{
+    box.querySelectorAll('.vcol').forEach(c=>{ const k=c.getAttribute('data-k');
+      if(c.checked) delete _hide[k]; else _hide[k]=true; });
+    saveVis(); box.remove(); render();
+  };
+  box.querySelector('#vAll').onclick=()=>box.querySelectorAll('.vcol').forEach(c=>c.checked=true);
+  box.querySelector('#vClose').onclick=commit;
+  box.onmousedown=e=>{ if(e.target===box) commit(); };
+}
+
+// 머리글이 위 도구막대에 가리지 않도록, 도구막대 높이만큼 내려 붙인다
+function fixHeadTop(){
+  const h=document.querySelector('header');
+  if(h) document.documentElement.style.setProperty('--hh', h.offsetHeight+'px');
+}
+addEventListener('resize', fixHeadTop);
+
 function render(){
   view = filtered();
-  $('th').innerHTML = '<tr>'+COLS.map(c=>'<th style="width:'+c.w+'px">'+c.t+'</th>').join('')+'</tr>';
+  const cols=visCols();
+  $('th').innerHTML = '<tr>'+cols.map(c=>'<th style="width:'+c.w+'px">'+c.t+fChip(c.k)+'</th>').join('')+'</tr>';
+  $('th').querySelectorAll('.fchip').forEach(s=>{ s.onclick=e=>{ e.stopPropagation(); openFilter(s.getAttribute('data-k'), s); }; });
+  { const n=Object.keys(_fSel).length + (_fSort.k?1:0);
+    const b=$('fclrAll'); if(b){ b.style.display=n?'':'none'; b.textContent='거르개 해제'+(n>1?(' '+n):''); } }
   const rub=num(D.rub), usd=num(D.usd);
   $('tb').innerHTML = view.map((r,i)=>{
     const c=num(r.cost), sk=supKrw(r), sr=supRub(r), g=gpOf(r);
     const cRub = (c!=null&&rub)?fmt(c/rub,1):'';
     const cUsd = (c!=null&&usd)?fmt(c/usd,2):'';
     const manSup = (r.sup!=null && r.sup!=='') ? ' man' : '';
-    const flag = r.gone ? '<span class="flag g">없어짐</span>' : (r.isNew ? '<span class="flag n">새</span>' : '');
+    const flag = r.gone    ? '<span class="flag g">없어짐</span>'
+               : r.isNew   ? '<span class="flag n">새</span>'
+               : r.costNew ? '<span class="flag u">갱신</span>' : '';
+    const td={
+      nm:  '<td>'+esc(r.nm)+flag+'</td>',
+      sp:  '<td style="color:var(--muted)">'+esc(r.sp)+'</td>',
+      rep: '<td class="code">'+esc(r.rep)+'</td>',
+      cmp: '<td class="code">'+esc(r.cmp)+'</td>',
+      fin: '<td class="code">'+esc(r.fin)+'</td>',
+      cost:'<td class="num'+((r.cost!=null&&r.cost!=='')?' man':'')+'"><input class="cell" data-f="cost" value="'+(c!=null?fmt(c,1):'')+'"></td>',
+      cRub:'<td class="num" style="color:var(--muted)">'+cRub+'</td>',
+      cUsd:'<td class="num" style="color:var(--muted)">'+cUsd+'</td>',
+      sup: '<td class="num'+manSup+'"><input class="cell" data-f="sup" value="'+(r.sup!=null&&r.sup!==''?fmt(num(r.sup),1):'')+'" placeholder="'+(sk!=null?fmt(sk,0):'')+'"></td>',
+      sRub:'<td class="num" style="font-weight:700;color:var(--accent2)">'+(sr!=null?fmt(sr,1):'')+'</td>',
+      gp:  '<td class="num" style="color:var(--muted)">'+(g!=null?(Math.round(g*1000)/10)+'%':'')+'</td>'
+    };
     return '<tr data-i="'+i+'" class="'+(r.gone?'gone':(r.isNew?'isnew':''))+'">'
-      + '<td>'+esc(r.nm)+flag+'</td><td style="color:var(--muted)">'+esc(r.sp)+'</td>'
-      + '<td class="code">'+esc(r.rep)+'</td><td class="code">'+esc(r.cmp)+'</td><td class="code">'+esc(r.fin)+'</td>'
-      + '<td class="num'+((r.cost!=null&&r.cost!=='')?' man':'')+'"><input class="cell" data-f="cost" value="'+(c!=null?fmt(c,1):'')+'"></td>'
-      + '<td class="num" style="color:var(--muted)">'+cRub+'</td>'
-      + '<td class="num" style="color:var(--muted)">'+cUsd+'</td>'
-      + '<td class="num'+manSup+'"><input class="cell" data-f="sup" value="'+(r.sup!=null&&r.sup!==''?fmt(num(r.sup),1):'')+'" placeholder="'+(sk!=null?fmt(sk,0):'')+'"></td>'
-      + '<td class="num" style="font-weight:700;color:var(--accent2)">'+(sr!=null?fmt(sr,1):'')+'</td>'
-      + '<td class="num" style="color:var(--muted)">'+(g!=null?(Math.round(g*1000)/10)+'%':'')+'</td>'
-      + '</tr>';
+      + cols.map(cc=>td[cc.k]||'<td></td>').join('') + '</tr>';
   }).join('');
   $('empty').style.display = view.length?'none':'block';
   const withSup = D.rows.filter(r=>supRub(r)!=null).length;
   const nNew = D.rows.filter(r=>r.isNew).length, nGone = D.rows.filter(r=>r.gone).length;
+  const nUp = D.rows.filter(r=>r.costNew).length;
+  const nOff = COLS.length-cols.length;
   $('cnt').textContent = '품목 '+D.rows.length.toLocaleString()+'개 · 공급가 있는 것 '+withSup.toLocaleString()+'개'
+    + (nUp?('  · 원가 갱신 '+nUp.toLocaleString()+'개'):'')
     + (nNew?('  · 새 품번 '+nNew.toLocaleString()+'개'):'')
     + (nGone?('  · 품번조회에 없음 '+nGone.toLocaleString()+'개'):'')
+    + (nOff?('  · 숨긴 열 '+nOff+'개'):'')
     + (view.length!==D.rows.length ? ('  (찾은 것 '+view.length.toLocaleString()+'개)') : '');
+  fixHeadTop();
 }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 
@@ -337,11 +510,20 @@ async function getFx(auto){
   }
 }
 $('fx').onclick=()=>getFx(false);
-['rub','usd','gp'].forEach(id=>{ $(id).addEventListener('change',()=>{
-  D[id==='rub'?'rub':id==='usd'?'usd':'gp'] = num($(id).value);
-  save(true); render(); }); });
+['rub','usd'].forEach(id=>{ $(id).addEventListener('change',()=>{
+  D[id] = num($(id).value); save(true); render(); }); });
+// 기준 GP 는 퍼센트로 적는다(40 → 0.4). '40%' 처럼 적어도 받는다.
+$('gp').addEventListener('change',()=>{
+  const p=num(String($('gp').value).replace(/%/g,''));
+  if(p==null){ D.gp=null; }
+  else if(p>=0 && p<100){ D.gp=Math.round(p*10)/1000; }
+  else { msg('기준 GP 는 0 ~ 99.9 사이의 퍼센트로 적어 주세요 (예: 40)','no'); fill(); return; }
+  save(true); fill(); render();
+});
 $('q').addEventListener('input', render);
-$('onlyNew').addEventListener('change', render);
+$("onlyNew").addEventListener("change", render);
+$("fclrAll").onclick=filterReset;
+$("vbtn").onclick=openViewPanel;
 $('save').onclick=()=>save();
 
 /* 파일로 내보내기 / 불러오기 */
@@ -363,6 +545,177 @@ $('file').onchange=async e=>{
   }catch(err){ msg('불러오기 실패 — '+err.message,'no'); }
 };
 
+
+/* ══ 원가 엑셀 올리기 ══════════════════════════════════════
+ *   같은 품번은 올린 엑셀의 원가로 갈아 끼우고, 엑셀에 없는 품번은 그대로 둡니다.
+ *   바뀌는 것은 그 품번의 '원가' 하나뿐입니다 — 공급가·품명·규격·품번은 손대지 않습니다.
+ *   창 아무 데나 엑셀을 끌어다 놓아도 됩니다.
+ */
+// 엑셀에서 품번 열과 원가 열이 어디인지 가려낸다.
+function xlFindCols(aoa){
+  const nz=s=>String(s==null?'':s).replace(/\s+/g,'').toLowerCase();
+  const isPn  =s=>/품번|품목코드|부품코드|코드|артикул|код|partno|part_no|itemcode/.test(s);
+  const isCost=s=>/원가|매입|구매단가|cost|себестоим/.test(s) && !/공급|판매|판가|price/.test(s);
+  for(let r=0;r<Math.min(14,aoa.length);r++){
+    const row=aoa[r]||[];
+    let pn=-1, cost=-1;
+    for(let c=0;c<row.length;c++){
+      const s=nz(row[c]); if(!s) continue;
+      if(pn<0   && isPn(s))   pn=c;
+      if(cost<0 && isCost(s)) cost=c;
+    }
+    if(pn>=0 && cost>=0) return { head:r, pn, cost, how:'머리글' };
+  }
+  // 머리글을 못 찾으면: 품번처럼 생긴 칸이 가장 많은 열을 품번으로,
+  //   그 오른쪽에서 숫자가 가장 많은 열을 원가로 본다.
+  const looksPn=v=>/^[A-Za-z]{0,3}[0-9][0-9A-Za-z-]{5,}$/.test(String(v==null?'':v).trim());
+  const w=Math.max(0, ...aoa.map(r=>(r||[]).length));
+  let best=-1, bestN=0;
+  for(let c=0;c<w;c++){ let n=0; aoa.forEach(r=>{ if(looksPn((r||[])[c])) n++; }); if(n>bestN){ bestN=n; best=c; } }
+  if(best<0 || bestN<3) return null;
+  let cc=-1, ccN=0;
+  for(let c=best+1;c<w;c++){ let n=0;
+    aoa.forEach(r=>{ const v=(r||[])[c]; if(v==null||v==='') return; if(num(v)!=null) n++; });
+    if(n>ccN){ ccN=n; cc=c; } }
+  if(cc<0) return null;
+  return { head:-1, pn:best, cost:cc, how:'품번 모양' };
+}
+// 엑셀 어딘가에 적어 둔 '기준 GP' 를 찾는다(라벨 오른쪽의 첫 숫자). 없으면 null.
+function xlFindGp(aoa){
+  const nz=s=>String(s==null?'':s).replace(/\s+/g,'').toLowerCase();
+  for(let r=0;r<Math.min(24, aoa.length);r++){
+    const row=aoa[r]||[];
+    for(let c=0;c<row.length;c++){
+      if(!/기준gp|gp\(%\)|базовыйgp|basegp/.test(nz(row[c]))) continue;
+      for(let d=c+1; d<Math.min(row.length, c+6); d++){
+        const v=num(String(row[d]).replace(/%/g,''));
+        if(v==null) continue;
+        if(v>0 && v<1)    return v;                      // 0.4 로 적힌 경우
+        if(v>=1 && v<100) return Math.round(v*10)/1000;  // 40 으로 적힌 경우
+      }
+    }
+  }
+  return null;
+}
+async function costXlApply(aoa, fname){
+  const C=xlFindCols(aoa);
+  if(!C){
+    msg('엑셀에서 품번·원가 열을 찾지 못했습니다','no');
+    alert('품번과 원가가 어느 열인지 알아보지 못했습니다.\n\n머리글에 "품번" 과 "원가" 가 적혀 있으면 가장 잘 읽습니다.');
+    return;
+  }
+  const start=(C.head>=0)?C.head+1:0;
+  const up=new Map();                       // 품번 → 원가 (같은 품번이 여럿이면 뒤엣것)
+  let badNum=0;
+  for(let i=start;i<aoa.length;i++){
+    const row=aoa[i]||[];
+    const pn=norm(row[C.pn]); if(!pn) continue;
+    const v=num(row[C.cost]);
+    if(v==null){ badNum++; continue; }
+    up.set(pn, v);
+  }
+  if(!up.size){ msg('엑셀에서 읽을 원가가 없었습니다','no'); alert('품번과 원가를 한 줄도 읽지 못했습니다.'); return; }
+  // 짝 맞추기 — 한 줄은 호환품번 하나다. 그 품번이 엑셀에 있을 때만 그 줄의 원가를 고친다.
+  //   최종품번·대표품번으로 끌어다 맞추지 않는다 — 그러면 엑셀에 없는 다른 품번의
+  //   원가까지 건드리게 된다. 못 찾은 품번은 그냥 넘어간다.
+  const byPn=new Map();
+  D.rows.forEach((r,i)=>{
+    const k=norm(r.cmp) || norm(r.fin) || norm(r.rep);   // 그 줄의 품번
+    if(!k) return;
+    if(!byPn.has(k)) byPn.set(k, []);
+    byPn.get(k).push(i);
+  });
+  const hit=[], miss=[];
+  up.forEach((v,pn)=>{
+    const list=byPn.get(pn);
+    if(!list){ miss.push(pn); return; }
+    list.forEach(i=>hit.push({ i, v }));
+  });
+  // 엑셀에 기준 GP 가 적혀 있으면 그것을 따른다
+  const xlGp=xlFindGp(aoa);
+  const gpUse=(xlGp!=null)?xlGp:num(D.gp);
+  const gpTxt=(gpUse==null)?'-':((Math.round(gpUse*1000)/10)+'%');
+  const chg=hit.filter(h=>num(D.rows[h.i].cost)!==h.v).length;
+  const same=hit.length-chg;
+  // 원래 원가가 없던 줄 — 원가가 들어오면 공급가를 기준 GP 로 다시 셈한다
+  //   (손으로 적어 둔 공급가 KRW 를 비워 두면 '원가 ÷ (1-GP)' 가 그대로 쓰인다)
+  const fresh=hit.filter(h=>{ const r=D.rows[h.i];
+    return num(r.cost)==null && num(r.cost)!==h.v; });
+  const freshSup=fresh.filter(h=>num(D.rows[h.i].sup)!=null).length;
+  const ok=confirm('올린 엑셀: '+(fname||'')+'\n'
+    + '읽은 품번 '+up.size.toLocaleString()+'개 ('+C.how+'으로 열을 찾음)\n'
+    + (xlGp!=null ? ('엑셀에 적힌 기준 GP : '+gpTxt+' → 이 값으로 바꿉니다\n') : ('기준 GP : '+gpTxt+' (지금 값 그대로)\n'))
+    + '\n· 원가가 바뀌는 품목 : '+chg.toLocaleString()+'개\n'
+    + '· 값이 같아 그대로  : '+same.toLocaleString()+'개\n'
+    + '· 여기에 없는 품번  : '+miss.length.toLocaleString()+'개 (그냥 넘어갑니다)\n'
+    + (fresh.length ? ('\n· 원래 원가가 없던 품목 '+fresh.length.toLocaleString()+'개는\n'
+        + '  공급가를 기준 GP '+gpTxt+' 로 다시 셈합니다'
+        + (freshSup ? ('\n  (그중 '+freshSup.toLocaleString()+'개는 손으로 적어 둔 공급가가 지워집니다)') : '')
+        + '\n') : '')
+    + '\n엑셀에 없는 품목은 지금 원가를 그대로 둡니다.\n계속할까요?');
+  if(!ok) return;
+  if(xlGp!=null) D.gp=xlGp;
+  D.rows.forEach(r=>{ if(r.costNew) delete r.costNew; });     // 지난번 표시는 지운다
+  hit.forEach(h=>{ const r=D.rows[h.i];
+    if(num(r.cost)===h.v) return;
+    const wasEmpty=(num(r.cost)==null);
+    r.cost=h.v; r.costNew=1;
+    // 원가가 없던 줄은 공급가를 기준 GP 로 다시 셈하게 비워 둔다
+    if(wasEmpty) r.sup=null;
+  });
+  D.costAt=new Date().toISOString();
+  save(true); fill(); render();
+  msg('원가를 갱신했습니다 — 바뀐 품목 '+chg.toLocaleString()+'개'
+      + (miss.length?(' · 여기에 없는 품번 '+miss.length.toLocaleString()+'개'):''), 'ok');
+  if(miss.length){
+    alert('이 파일에 없는 품번 '+miss.length+'개는 넘어갔습니다.\n\n'
+      + miss.slice(0,15).join('\n') + (miss.length>15?('\n… 그 밖 '+(miss.length-15)+'개'):'')
+      + '\n\n품번조회에 있는 품번이면 [웹과 맞추기] 를 눌러 품목을 받아온 뒤 다시 올려 보세요.');
+  }
+}
+async function costXlRead(file){
+  try{
+    msg('엑셀을 읽는 중…','busy');
+    const buf=await file.arrayBuffer();
+    const wb=XLSX.read(new Uint8Array(buf), {type:'array'});
+    const aoa=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1, raw:true, defval:''});
+    await costXlApply(aoa, file.name);
+  }catch(e){ msg('엑셀을 읽지 못했습니다 — '+e.message,'no'); }
+}
+$('imx').onclick=()=>$('xfile').click();
+$('xfile').onchange=async e=>{ const f=e.target.files[0]; e.target.value=''; if(f) await costXlRead(f); };
+
+/* 끌어다 놓기 — 엑셀이면 원가 갱신, .json 이면 자료 불러오기 */
+(function(){
+  const vis=(on,txt)=>{ let d=$('dropMask');
+    if(!d){ d=document.createElement('div'); d.id='dropMask';
+      d.style.cssText='position:fixed;inset:0;z-index:9999;display:none;align-items:center;justify-content:center;'
+        +'background:#2563eb22;border:3px dashed var(--accent2);font-size:16px;font-weight:700;color:var(--accent2)';
+      document.body.appendChild(d); }
+    d.textContent=txt||'';
+    d.style.display=on?'flex':'none'; };
+  let depth=0;
+  window.addEventListener('dragenter', e=>{ e.preventDefault(); depth++; vis(true,'여기에 놓으세요 — 엑셀이면 원가를 갱신합니다'); });
+  window.addEventListener('dragover',  e=>{ e.preventDefault(); e.dataTransfer.dropEffect='copy'; });
+  window.addEventListener('dragleave', e=>{ e.preventDefault(); if(--depth<=0){ depth=0; vis(false); } });
+  window.addEventListener('drop', async e=>{
+    e.preventDefault(); depth=0; vis(false);
+    const f=(e.dataTransfer && e.dataTransfer.files)?e.dataTransfer.files[0]:null;
+    if(!f) return;
+    const n=String(f.name||'').toLowerCase();
+    if(/\.xlsx?$/.test(n)) return costXlRead(f);
+    if(/\.json$/.test(n)){
+      try{
+        const j=JSON.parse(await f.text());
+        if(!j.rows) throw new Error('원가관리 파일이 아닙니다');
+        if(!confirm('지금 자료를 이 파일 내용으로 바꿉니다.\n품목 '+j.rows.length+'개\n\n계속할까요?')) return;
+        D=j; save(true); fill(); render(); msg('불러왔습니다','ok');
+      }catch(err){ msg('불러오기 실패 — '+err.message,'no'); }
+      return;
+    }
+    msg('엑셀(.xlsx) 이나 내보낸 파일(.json) 만 받습니다','no');
+  });
+})();
 /* 엑셀 */
 $('xls').onclick=()=>{
   const head=COLS.map(c=>c.t).concat(['표시']);
@@ -427,9 +780,11 @@ $('push').onclick=async()=>{
 function fill(){
   $('rub').value=D.rub==null?'':D.rub;
   $('usd').value=D.usd==null?'':D.usd;
-  $('gp').value =D.gp==null?'':D.gp;
+  // 기준 GP 는 퍼센트로 보여 준다(0.4 가 아니라 40)
+  $('gp').value = (D.gp==null||D.gp==='') ? '' : (Math.round(Number(D.gp)*1000)/10);
   const bits=['자료 '+(D.made||'')+' 기준'];
   if(D.catAt)   bits.push('품목 맞춤 '+new Date(D.catAt).toLocaleString());
+  if(D.costAt)  bits.push('원가 갱신 '+new Date(D.costAt).toLocaleString());
   if(D.pushedAt)bits.push('마지막 보냄 '+new Date(D.pushedAt).toLocaleString());
   $('made').textContent='('+bits.join(' · ')+')';
 }
