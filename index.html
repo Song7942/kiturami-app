@@ -5763,8 +5763,8 @@ function pnEditSpan(rep, field, raw){
   return `<span contenteditable="true" class="pn-edit" data-pnrep="${escapeHtml(rep)}" data-pnfield="${field}" data-pnorig="${v}" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()" onblur="onPNCellBlur(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}" style="display:inline-block;min-width:20px;outline:none;border-bottom:1px dashed var(--accent2);cursor:text;padding:0 2px">${v}</span>`;
 }
 // contenteditable 셀에서 포커스가 빠질 때 저장. 값이 안 바뀌었으면 아무 것도 안 한다.
-// 품명은 늘 대문자로 담는다. 한글은 그대로이고 영문만 대문자가 된다.
-const PN_UPPER_FIELDS={ name_ko:1, 'cspec:name':1 };
+// 품명·규격은 늘 대문자로 담는다. 한글은 그대로이고 영문만 대문자가 된다.
+const PN_UPPER_FIELDS={ name_ko:1, 'cspec:name':1, spec:1, 'cspec:spec':1 };
 function pnUpName(field, v){ return PN_UPPER_FIELDS[field] ? String(v==null?'':v).toUpperCase() : v; }
 async function onPNCellBlur(el){
   const rep=el.getAttribute('data-pnrep'), field=el.getAttribute('data-pnfield');
@@ -6073,8 +6073,8 @@ async function handleSpecialPNUpload(wb){
       fileRows++;
       if(!wantPn.has(pn)) continue;                 // 품번조회에 없는 품번은 건너뛴다
       const o=specMap[pn]||(specMap[pn]={});
-      if(C.name!=null){ const v=V(row,C.name); if(v){o.name=v; seen.name=1;} }
-      if(C.spec!=null){ const v=V(row,C.spec); if(v){o.spec=v; seen.spec=1;} }
+      if(C.name!=null){ const v=V(row,C.name); if(v){o.name=String(v).toUpperCase(); seen.name=1;} }   // 품명·규격은 늘 대문자
+      if(C.spec!=null){ const v=V(row,C.spec); if(v){o.spec=String(v).toUpperCase(); seen.spec=1;} }
       if(C.nw!=null){ const v=V(row,C.nw); if(v){o.nw=v; seen.nw=1;} }
       if(C.gw!=null){ const v=V(row,C.gw); if(v){o.gw=v; seen.gw=1;} }
       if(C.cbm!=null){ const v=V(row,C.cbm); if(v){o.cbm=v; seen.cbm=1;} }
@@ -6183,7 +6183,7 @@ async function handlePNUpload(event){
           const key=normPN(cmp);
           const s=specRows.get(key)||{pn:cmp.trim()};
           if(name) s.name=String(name).toUpperCase();   // 품명은 늘 대문자로
-          if(spec) s.spec=spec;
+          if(spec) s.spec=String(spec).toUpperCase();   // 규격도 대문자로
           specRows.set(key,s);
         }
       }
@@ -10160,7 +10160,7 @@ async function pnAddSave(){
   if(!rep){ alert(L('대표품번을 적어 주세요.','Укажите осн. артикул.')); g('paRep').focus(); return; }
   const cs=[...new Set(pnAltSplit(g('paCmp').value).map(pnUpAll))];
   const fin=pnUpAll(g('paFin').value);
-  const nm=String(g('paName').value||'').trim().toUpperCase(), sp=String(g('paSpec').value||'').trim();   // 품명은 늘 대문자
+  const nm=String(g('paName').value||'').trim().toUpperCase(), sp=String(g('paSpec').value||'').trim().toUpperCase();   // 품명·규격은 늘 대문자
   const btn=g('paSave'); btn.disabled=true; btn.textContent=L('저장 중…','Сохранение…');
   try{
     // 대표품번은 kt_pn_overrides 의 열쇠라, 같은 값으로 품목을 둘 만들 수 없다.
