@@ -5818,8 +5818,9 @@ async function onPNCellBlur(el){
   }
   const r=await savePNCell(rep, field, val);
   if(r && r.ok){
-    if(r.rerender){ ktAfterPnEdit(); }   // 대표품번·호환품번 변경은 표시(뱃지·행 식별)가 달라져 다시 그린다
-    else { el.setAttribute('data-pnorig', val); el.textContent=val; ktAfterPnEdit(); }
+    el.setAttribute('data-pnorig', val);
+    el.textContent=val;                  // 품명처럼 담을 때 모양이 바뀌는 값은 칸에도 바로 보여 준다
+    ktAfterPnEdit();                     // 대표품번·호환품번 변경은 표시(뱃지·행 식별)가 달라져 다시 그린다
   } else { el.textContent=el.getAttribute('data-pnorig')||''; }
 }
 async function loadPNOverrides(){
