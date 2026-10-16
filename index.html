@@ -1283,6 +1283,10 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
         <span id="i18n-pnchk-up">엑셀 업로드</span>
       </button>
       <input type="file" id="pnChkFile" accept=".xlsx,.xls" style="display:none" onchange="handlePnChkUpload(event)">
+      <button class="dl-btn" id="pnChkViewBtn" onclick="openPnChkViewPanel()" title="표에 보일 열을 고르고 차례를 바꿉니다(아이디별로 저장)" style="display:none">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
+        <span id="i18n-pnchk-view">보기</span>
+      </button>
       <button class="dl-btn" id="pnChkFltBtn" onclick="pnChkResetFilters()" title="머리글 필터·정렬을 기본값으로" style="display:none">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
         <span id="i18n-pnchk-flt">필터 초기화</span>
@@ -15817,7 +15821,8 @@ let _pnChkFilters={};                     // {열: [고른 값들]}
 let _pnChkSort={key:null, dir:'asc'};
 let _pnChkAllRows=[];                     // 거르개 창에 보일 값의 바탕
 // 표의 열 목록 — 원래 열들 + 품번 열 오른쪽에 붙인 네 열
-function pnChkHeadDefs(){
+// 쓸 수 있는 열 전부(보기 창에서 쓴다). 올린 파일의 열 + 우리가 붙이는 열.
+function pnChkHeadDefsAll(){
   if(!_pnChk) return [];
   const ru=(lang==='ru'), L=(ko,rr)=>(ru?rr:ko);
   const out=[], pc=_pnChk.pnCol;
@@ -15833,6 +15838,8 @@ function pnChkHeadDefs(){
         out.push({t:L('공급가<br>(RUB)','Цена<br>(RUB)'), k:'sup'});
       out.push({t:L('품명','Наименование'), k:'nm'});
       out.push({t:L('규격','Хар-ки'), k:'sp'});
+      if(typeof canViewEngName==='function' && canViewEngName())
+        out.push({t:L('영문품명','Англ. название'), k:'en'});
       // 대체품목(연결조립필요품목포함) — 품번조회에 적어 둔 것을 대표품번으로 찾아 온다
       out.push({t:L('대체품목<br>품번','Замена —<br>артикул'), k:'alt'});
       out.push({t:L('대체품목<br>품명','Замена —<br>наим.'), k:'alt_name'});
@@ -15841,7 +15848,20 @@ function pnChkHeadDefs(){
   });
   return out;
 }
-function pnChkColLabel(key){ const d=pnChkHeadDefs().find(x=>x.k===key); return d?String(d.t).replace(/<br>/g,' '):key; }
+// 보기에서 끈 열을 빼고, 바꿔 둔 차례대로 돌려준다
+function pnChkColsMap(){
+  const src=(typeof psiCols!=='undefined' && psiCols && psiCols.__pnchk && typeof psiCols.__pnchk==='object')?psiCols.__pnchk:null;
+  const m={};
+  if(src) Object.keys(src).forEach(k=>{ if(typeof src[k]==='boolean') m[k]=src[k]; });
+  return m;
+}
+function pnChkHeadDefs(){
+  const all=(typeof colOrdApply==='function')?colOrdApply('pnchk', pnChkHeadDefsAll()):pnChkHeadDefsAll();
+  const m=pnChkColsMap();
+  const v=all.filter(c=>m[c.k]!==false);
+  return v.length?v:all.filter(c=>c.k==='c'+(_pnChk?_pnChk.pnCol:0));
+}
+function pnChkColLabel(key){ const d=pnChkHeadDefsAll().find(x=>x.k===key); return d?String(d.t).replace(/<br>/g,' '):key; }
 // 수출제한 — 단종과 같이 최종품번 기준(없으면 적힌 품번)
 function pnChkExpOf(r){
   if(typeof isExportRestricted!=='function') return '';
@@ -15866,6 +15886,7 @@ function pnChkCellVal(key, r){
   if(key==='sup') return pnChkSupOf(r);
   if(key==='nm')  return String(r.name||'');
   if(key==='sp')  return String(r.spec||'');
+  if(key==='en')  return (typeof engNameText==='function' && r.rep)?String(engNameText(r.rep)||''):'';
   if(key==='alt')      return r.rep?pnAltText(r.rep):'';
   if(key==='alt_name') return r.rep?pnAltNameText(r.rep):'';
   if(key==='alt_qty')  return r.rep?pnAltQtyText(r.rep):'';
@@ -15912,6 +15933,55 @@ function _pnChkFilterOutside(e){ const b=document.getElementById('pnChkFilterPop
 function closePnChkFilter(){ const b=document.getElementById('pnChkFilterPop'); if(b) b.remove();
   document.removeEventListener('mousedown', _pnChkFilterOutside); document.removeEventListener('keydown', _pnChkFilterEsc); }
 function pnChkResetFilters(){ _pnChkFilters={}; _pnChkSort={key:null,dir:'asc'}; closePnChkFilter(); renderPnChk(); }
+// ── 보기 — 열 고르기·차례 (아이디별로 저장) ───────────────
+function closePnChkViewPanel(){ const b=document.getElementById('pnChkViewPop'); if(b) b.remove(); }
+function openPnChkViewPanel(){
+  closePnChkViewPanel();
+  if(!_pnChk){ alert((lang==='ru')?'Сначала загрузите файл.':'먼저 엑셀을 올려 주세요.'); return; }
+  const ru=(lang==='ru');
+  const list=(typeof colOrdApply==='function')?colOrdApply('pnchk', pnChkHeadDefsAll()):pnChkHeadDefsAll();
+  const m=pnChkColsMap();
+  const box=document.createElement('div'); box.id='pnChkViewPop';
+  box.style.cssText='position:fixed;inset:0;z-index:10000;background:#0008;display:flex;align-items:center;justify-content:center';
+  box.innerHTML=
+    '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;width:330px;max-width:92vw;'
+      +'max-height:86vh;display:flex;flex-direction:column;box-shadow:0 16px 44px #000a;font-size:12px;color:var(--text)">'
+    + '<div style="padding:12px 14px;border-bottom:1px solid var(--border);font-weight:700;font-size:13px">'+(ru?'Вид — столбцы':'보기 — 열 선택·차례')+'</div>'
+    + '<div style="padding:10px 14px;overflow:auto">'
+      + ((typeof colOrdHint==='function')?colOrdHint(ru):'')
+      + '<div id="pnChkColList" style="border:1px solid var(--border);border-radius:8px;padding:4px 6px">'
+      + list.map(c=>colOrdRow(c.k, String(c.t).replace(/<br>/g,' '), m[c.k]!==false, ru, 'pcv')).join('')
+      + '</div></div>'
+    + '<div style="display:flex;gap:7px;padding:11px 14px;border-top:1px solid var(--border)">'
+      + '<button id="pcvAll" style="flex:none;padding:7px 10px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);cursor:pointer;font-size:12px">'+(ru?'Все':'전체 선택')+'</button>'
+      + '<button id="pcvNone" style="flex:none;padding:7px 10px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);cursor:pointer;font-size:12px">'+(ru?'Снять':'전체 해제')+'</button>'
+      + '<button id="pcvOrd" style="flex:none;padding:7px 10px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);cursor:pointer;font-size:12px">'+(ru?'По умолч.':'되돌리기')+'</button>'
+      + '<button id="pcvClose" style="flex:1;padding:7px;border:none;border-radius:7px;background:var(--accent2);color:#fff;cursor:pointer;font-size:12px;font-weight:700">'+(ru?'Закрыть':'닫기')+'</button>'
+    + '</div></div>';
+  document.body.appendChild(box);
+  if(typeof colOrdWire==='function') colOrdWire(box.querySelector('#pnChkColList'));
+  let done=false;
+  const commit=async()=>{
+    if(done) return; done=true;
+    const v={}; box.querySelectorAll('.pcv').forEach(c=>{ v[c.getAttribute('data-k')]=c.checked; });
+    if(typeof psiCols!=='object' || !psiCols) psiCols={};
+    psiCols.__pnchk=v;
+    if(typeof colOrdSet==='function') colOrdSet('pnchk', colOrdRead(box.querySelector('#pnChkColList')));
+    closePnChkViewPanel(); renderPnChk();
+    try{ await savePsiCols(); }catch(e){}
+  };
+  box.querySelector('#pcvAll').onclick=()=>box.querySelectorAll('.pcv').forEach(c=>c.checked=true);
+  box.querySelector('#pcvNone').onclick=()=>box.querySelectorAll('.pcv').forEach(c=>c.checked=false);
+  box.querySelector('#pcvOrd').onclick=async()=>{
+    done=true;
+    if(psiCols && typeof psiCols==='object') delete psiCols.__pnchk;
+    if(typeof colOrdSet==='function') colOrdSet('pnchk', []);
+    closePnChkViewPanel(); renderPnChk();
+    try{ await savePsiCols(); }catch(e){}
+  };
+  box.querySelector('#pcvClose').onclick=commit;
+  box.onmousedown=e=>{ if(e.target===box) commit(); };
+}
 function openPnChkFilter(key, anchor){
   closePnChkFilter();
   const ru=(lang==='ru');
@@ -16089,12 +16159,12 @@ function renderPnChk(){
   const empty=document.getElementById('pnChkEmpty');
   const note=document.getElementById('pnChkNote');
   const badge=document.getElementById('pnChkBadge');
-  const dl=document.getElementById('pnChkDlBtn'), clr=document.getElementById('pnChkClrBtn'), flt=document.getElementById('pnChkFltBtn');
+  const dl=document.getElementById('pnChkDlBtn'), clr=document.getElementById('pnChkClrBtn'), flt=document.getElementById('pnChkFltBtn'), vw=document.getElementById('pnChkViewBtn');
   if(!_pnChk){
     if(thead) thead.innerHTML=''; if(tbody) tbody.innerHTML='';
     if(badge) badge.innerHTML='';
     { const box=document.getElementById('pnChkSum'); if(box){ box.innerHTML=''; box.style.display='none'; } }
-    if(dl) dl.style.display='none'; if(flt) flt.style.display='none';
+    if(dl) dl.style.display='none'; if(flt) flt.style.display='none'; if(vw) vw.style.display='none';
     if(clr) clr.style.display='none';
     if(note) note.textContent=L('품번이 든 엑셀을 이 화면에 끌어다 놓거나 \'엑셀 업로드\' 로 올려 주세요. '
                                 +'품번 열 오른쪽에 최종품번과 단종을 붙여 드립니다.',
@@ -16123,7 +16193,7 @@ function renderPnChk(){
   if(kw) rows=rows.filter(r=> [r.code,r.fin,r.name,r.spec].some(v=>String(v||'').toLowerCase().includes(kw)));
   rows=pnChkApplySort(rows);
   if(badge) badge.innerHTML='<b>'+rows.length+'</b>';
-  if(dl) dl.style.display=''; if(flt) flt.style.display='';
+  if(dl) dl.style.display=''; if(flt) flt.style.display=''; if(vw) vw.style.display='';
   if(clr) clr.style.display='';
   const qLab=(qc>=0)?String((_pnChk.head||[])[qc]||'').trim():'';   // 수량으로 삼은 열 이름(신발주 등)
   // 상단 합계: 품목수(최종품번 기준)와 수량 합계. 검색 중이면 보이는 것 기준으로 센다.
@@ -16167,38 +16237,36 @@ function renderPnChk(){
   // 대체품목 칸은 줄을 쌓으므로 위아래 여백 없이, 다른 칸과 같은 테두리를 두른다
   const altPad='padding:0 8px;font-size:11px;text-align:center;vertical-align:middle;'
     +'border-bottom:1px solid var(--border);border-right:1px solid var(--border)';
-  if(tbody) tbody.innerHTML=rows.map(r=>{
-    const tds=[];
-    _pnChk.head.forEach((h,i)=>{
-      const v=r.cells[i];
-      const isPn=(i===pc);
-      tds.push('<td style="'+tdS+'">'
-        +(isPn?('<span style="'+codeS+'">'+escapeHtml(String(v))+'</span>'):escapeHtml(String(v)))+'</td>');
-      if(i===pc){
-        tds.push('<td style="'+tdS+'">'
-          +(r.rep?('<span style="'+codeS+'">'+escapeHtml(normBadgePN(r.rep))+'</span>'):'')+'</td>');
-        tds.push('<td style="'+tdS+'"'
+  // 칸 하나를 만든다. 보기에서 열 차례를 바꿔도 따라가도록 열쇠로 찾는다.
+  const cellOf=(key, r)=>{
+    const m=/^c(\d+)$/.exec(key);
+    if(m){
+      const i=+m[1], v=r.cells[i];
+      return '<td style="'+tdS+'">'
+        +((i===pc)?('<span style="'+codeS+'">'+escapeHtml(String(v==null?'':v))+'</span>'):escapeHtml(String(v==null?'':v)))+'</td>';
+    }
+    switch(key){
+      case 'rep': return '<td style="'+tdS+'">'+(r.rep?('<span style="'+codeS+'">'+escapeHtml(normBadgePN(r.rep))+'</span>'):'')+'</td>';
+      case 'fin': return '<td style="'+tdS+'"'
           +(r.used?(' title="'+escapeHtml(L(r.used+' 로 찾았습니다', 'найдено по '+r.used))+'"'):'')+'>'
           +(r.fin?('<span style="'+codeS+';font-weight:700">'+escapeHtml(normBadgePN(r.fin))+'</span>'+(r.used?'<span style="color:var(--muted);font-size:9px"> ↩</span>':''))
                  :('<span style="color:#ef4444">'+escapeHtml(r.found?L('(최종품번 없음)','(нет)'):L('(품번조회에 없음)','(нет в базе)'))+'</span>'))
-          +'</td>');
-        tds.push('<td style="'+tdS+';color:#ef4444;font-weight:700">'+escapeHtml(r.dan||'')+'</td>');
-        if(typeof canViewExportCtrl==='function' && canViewExportCtrl())
-          tds.push('<td style="'+tdS+';color:#ef4444;font-weight:700">'+pnChkExpOf(r)+'</td>');
-        if(typeof poCanSeeSupply==='function' && poCanSeeSupply()){
-          const sv=pnChkSupOf(r);
-          tds.push('<td style="'+tdS+';text-align:right;color:#0ea5e9;font-weight:600">'
-            +(sv===''?'':escapeHtml(Number(sv).toLocaleString(undefined,{maximumFractionDigits:2})))+'</td>');
-        }
-        tds.push('<td style="'+tdS+'">'+escapeHtml(r.name||'')+'</td>');
-        tds.push('<td style="'+tdS+';color:var(--muted)">'+escapeHtml(r.spec||'')+'</td>');
-        // 대체품목 — 품번조회와 같이 품번마다 한 줄씩 쌓는다
-        tds.push(poAltTd(r.rep,'alt',tdS,altPad));
-        tds.push(poAltTd(r.rep,'alt_name',tdS,altPad));
-        tds.push(poAltTd(r.rep,'alt_qty',tdS,altPad));
-      }
-    });
-    return '<tr>'+tds.join('')+'</tr>';
+          +'</td>';
+      case 'dan': return '<td style="'+tdS+';color:#ef4444;font-weight:700">'+escapeHtml(r.dan||'')+'</td>';
+      case 'exp': return '<td style="'+tdS+';color:#ef4444;font-weight:700">'+pnChkExpOf(r)+'</td>';
+      case 'sup': { const sv=pnChkSupOf(r);
+        return '<td style="'+tdS+';text-align:right;color:#0ea5e9;font-weight:600">'
+          +(sv===''?'':escapeHtml(Number(sv).toLocaleString(undefined,{maximumFractionDigits:2})))+'</td>'; }
+      case 'nm':  return '<td style="'+tdS+'">'+escapeHtml(r.name||'')+'</td>';
+      case 'sp':  return '<td style="'+tdS+';color:var(--muted)">'+escapeHtml(r.spec||'')+'</td>';
+      case 'en':  return '<td style="'+tdS+';color:var(--accent2);font-weight:600">'+escapeHtml(pnChkCellVal('en', r))+'</td>';
+      case 'alt': case 'alt_name': case 'alt_qty':
+        return poAltTd(r.rep, key, tdS, altPad);
+    }
+    return '<td style="'+tdS+'"></td>';
+  };
+  if(tbody) tbody.innerHTML=rows.map(r=>{
+    return '<tr>'+head.map(h=>cellOf(h.k, r)).join('')+'</tr>';
   }).join('');
   if(empty){ empty.style.display=rows.length?'none':'block';
              empty.textContent=L('찾는 품번이 없습니다.','Ничего не найдено.'); }
