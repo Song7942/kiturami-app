@@ -12846,48 +12846,68 @@ function poCanSeeSupply(){
   }catch(e){ return false; }
 }
 let _poSupSet=null;
-function poSupplyClear(){ _poSupSet=null; _poSupRub=null;
+function poSupplyClear(){ _poSupSet=null; _poSupRub=null; _poSupRepRub=null;
   try{ _supRepMapCache=null; }catch(e){} }    // 대표품번별 공급가 캐시도 함께 비운다
-let _poSupRub=null;
+let _poSupRub=null;       // 호환품번·최종품번 → RUB
+let _poSupRepRub=null;    // 대표품번 → RUB (그 묶음에서 가장 높은 값)
 function poSupplySet(){
   if(_poSupSet) return _poSupSet;
-  const s=new Set(); const rub=new Map();
+  const s=new Set(); const rub=new Map(); const rrub=new Map();
   try{
     (typeof buildSupplyByCompat==='function'?buildSupplyByCompat():[]).forEach(m=>{
       if(m.rub==null && m.usd==null) return;         // 둘 다 비어 있으면 공급가가 없는 것
       const c=normPN(m.compat||''); if(c) s.add(c);
       const f=normPN(m.final||'');  if(f) s.add(f);
+      const p=normPN(m.rep||'');    if(p) s.add(p);
       // 공급가(RUB) — 한 품번에 여러 줄이면 큰 값을 쓴다(가격정보 화면과 같은 기준)
       if(m.rub!=null){
         [c,f].forEach(k=>{ if(!k) return; const cur=rub.get(k);
           if(cur==null || m.rub>cur) rub.set(k, m.rub); });
+        if(p){ const cur=rrub.get(p); if(cur==null || m.rub>cur) rrub.set(p, m.rub); }
       }
     });
   }catch(e){ console.warn('공급가 목록', e); }
-  _poSupSet=s; _poSupRub=rub; return s;
+  _poSupSet=s; _poSupRub=rub; _poSupRepRub=rrub; return s;
 }
 function poHasSupply(pn){ const k=normPN(pn||''); return !!k && poSupplySet().has(k); }
 // 그 품번의 공급가(RUB). 없으면 null.
 function poSupplyRub(pn){
   poSupplySet();
   const k=normPN(pn||''); if(!k) return null;
-  const v=_poSupRub?_poSupRub.get(k):null;
+  let v=_poSupRub?_poSupRub.get(k):null;
+  if(v==null && _poSupRepRub) v=_poSupRepRub.get(k);   // 대표품번으로 적힌 경우
   return (v==null)?null:v;
 }
+// 공급가를 찾는 차례: 호환품번 → 최종품번 → 대표품번.
+//   앞의 것에 값이 있으면 그것으로 끝낸다. 품번마다 값이 다를 수 있기 때문이다.
+function poSupplyRubFor(compat, fin, rep){
+  poSupplySet();
+  const get=(k,map)=>{ const n=normPN(k||''); if(!n||!map) return null; const v=map.get(n); return (v==null)?null:v; };
+  let v=get(compat,_poSupRub); if(v!=null) return v;
+  v=get(fin,_poSupRub);        if(v!=null) return v;
+  return get(rep,_poSupRepRub);
+}
+// 공급가가 있는지도 같은 차례로 본다.
+function poHasSupplyFor(compat, fin, rep){
+  const set=poSupplySet();
+  for(const k of [compat, fin, rep]){ const n=normPN(k||''); if(n && set.has(n)) return true; }
+  return false;
+}
 // 그 줄의 공급가 표시. 대체품목이 있으면 품목마다 하나씩 ['O','',…] 로 돌려준다.
-//   대체품목이 없으면 최종품번(없으면 발주코드) 하나로 본다.
+//   대체품목이 없으면 호환품번(발주코드) → 최종품번 → 대표품번 차례로 본다.
 function poSupplyMarks(r){
   const i=(typeof poLookup==='function')?(poLookup(r.pn)||{}):{};
   const ents=(i.rep && typeof pnAltEntries==='function')?pnAltEntries(i.rep):[];
   if(ents.length) return ents.map(e=>poHasSupply(pnAltFinalOf(e.p)||pnAltResolve(e.p,e.f))?'O':'');
-  return [ poHasSupply(i.fin||r.pn)?'O':'' ];
+  return [ poHasSupplyFor(r.pn, i.fin, i.rep)?'O':'' ];
 }
 function poSupplyMark(r){ return poSupplyMarks(r).join(', '); }
 function poColDefs(){ return colOrdApply('po', poColDefsBase()); }
 function poColDefsBase(){
   const ru=(lang==='ru'), L=(ko,rr)=>(ru?rr:ko);
-  // 단종·수출제한은 최종품번 기준이다(없으면 발주코드) — 품번조회·PSI 의 대표품번 줄과 같은 규칙.
+  // 단종·수출제한은 호환품번(= 발주코드) 기준이다 — 품번조회와 같은 규칙.
   //   값은 품번조회와 같은 자리(kt_pn_specs·kt_export_ctrl)를 읽으므로 어느 화면에서 고쳐도 같이 바뀐다.
+  // 공급가 여부는 호환품번 → 최종품번 → 대표품번 차례로 찾는다.
   return [['cha',L('차수','Партия'),90],['mon',L('발주년월','Мес. заказа'),68],
           ['rep',L('대표코드','Осн. код'),104],['pn',L('발주코드','Код заказа'),104],
           ['final',L('최종품번','Акт. артикул'),104],
@@ -12943,7 +12963,9 @@ function poCellVal(key, r){
     case 'pn':   return normBadgePN(r.pn)||'';
     case 'final': return pnUpperLead(((getPNInfo(i.rep||'')||{}).final)||'');
     case 'chg':  { const sp=poSplitShown(r.cha,r.pn); return sp ? sp.map(x=>normBadgePN(x.c)+((Number(x.q)||0)>0?('×'+x.q):'')).join(', ') : ''; }   // 적어 둔 공급 내역만(최종품번을 저절로 가져오지 않는다)
-    case 'dan':  return String((pnSpecOf(i.fin||r.pn)||{}).dan||'');      // 단종은 최종품번 기준(없으면 발주코드)
+    // 단종도 수출제한과 같이 호환품번(= 발주코드) 기준이다.
+    //   그 품번에 자료가 아예 없을 때만 최종품번 것을 가져다 쓴다.
+    case 'dan':  return String((pnSpecOf(r.pn)||pnSpecOf(i.fin)||{}).dan||'');
     // 수출제한은 호환품번(= 발주코드) 기준이다. 같은 묶음이라도 품번마다 다르고,
     // 실제로 내보내는 것은 이 품번이라 최종품번 것을 가져오면 안 된다.
     case 'exp':  return isExportRestricted(r.pn || i.fin) ? 'O' : '';
@@ -13160,7 +13182,7 @@ function renderPO(){
       //   비어 있으면 코드를 적는 칸 — 적으면 코드별 공급수량 창이 그 코드로 열린다(수량은 거기서).
       chg:'<td style="'+tdS+'">'+((!poSplitShown(r.cha,r.pn) && EDPO) ? poChgNewEdit(r.cha, r.pn) : '')
           + poSplitList(r.cha, r.pn, EDPO)+'</td>',
-      dan:'<td style="'+tdS+';text-align:center;color:var(--muted)">'+escapeHtml(String((pnSpecOf(i.fin||r.pn)||{}).dan||''))+'</td>',
+      dan:'<td style="'+tdS+';text-align:center;color:var(--muted)">'+escapeHtml(String((pnSpecOf(r.pn)||pnSpecOf(i.fin)||{}).dan||''))+'</td>',
       exp:'<td style="'+tdS+';text-align:center;color:#ef4444;font-weight:700">'+(isExportRestricted(r.pn||i.fin)?'O':'')+'</td>',
       name:'<td style="'+tdS+';word-break:break-all;font-size:10.5px;line-height:1.25">'+escapeHtml(poName(r.pn))+'</td>',
       spec:'<td style="'+tdS+';word-break:break-all;font-size:10.5px;line-height:1.25;color:var(--muted)">'+escapeHtml(poSpec(r.pn))+'</td>',
@@ -15753,7 +15775,11 @@ function pnChkLookup(code){
   const ru=(lang==='ru');
   const name=(sp&&(ru?sp.name_ru:sp.name)) || (ru?(info.name_ru||info.name_ko):(info.name_ko||'')) || '';
   const spec=(sp&&sp.spec) || info.spec || '';
-  return { rep, fin, dan:String((sp&&sp.dan)||''), name:String(name||''), spec:String(spec||''), found:true };
+  // 단종은 적힌 품번(호환품번) 기준이다 — 품번조회·발주현황과 같은 규칙.
+  //   그 품번에 자료가 아예 없을 때만 최종품번 것을 가져다 쓴다.
+  const spOwn=pnSpecOf(raw);
+  const dan=String(((spOwn||sp)||{}).dan||'');
+  return { rep, fin, dan, name:String(name||''), spec:String(spec||''), found:true };
 }
 // 한 줄을 푼다. 품번 칸으로 못 찾으면 그 줄의 다른 칸(대표·호환·최종품번 아무거나)도 훑는다.
 function pnChkResolveRow(cells, pc){
@@ -15873,12 +15899,12 @@ function pnChkExpOf(r){
   const k=String(r.code||'')||String(r.fin||'');
   return (k && isExportRestricted(k)) ? 'O' : '';
 }
-// 공급가(RUB) — 가격정보에 적힌 값을 그대로 가져온다. 단종·수출제한과 같이 최종품번 기준.
+// 공급가(RUB) — 가격정보에 적힌 값을 그대로 가져온다.
+//   찾는 차례는 호환품번(적힌 품번) → 최종품번 → 대표품번.
 //   거르개·정렬·엑셀이 숫자로 다루도록 쉼표 없는 글자로 돌려준다(화면에서만 쉼표를 찍는다).
 function pnChkSupOf(r){
-  if(typeof poSupplyRub!=='function') return '';
-  const k=String(r.fin||'')||String(r.code||'');
-  const v=k?poSupplyRub(k):null;
+  if(typeof poSupplyRubFor!=='function') return '';
+  const v=poSupplyRubFor(r.code, r.fin, r.rep);
   return (v==null)?'':String(v);
 }
 function pnChkIsNumCol(key){ if(key==='sup') return true; const qc=pnChkQtyCol(); return qc>=0 && key==='c'+qc; }
