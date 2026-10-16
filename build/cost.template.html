@@ -62,7 +62,7 @@ td.hc{position:relative}
     <span class="tag">기준 GP</span><input type="text" id="gp" title="0 ~ 99.9 사이의 퍼센트로 적습니다 (예: 40)" style="width:52px;text-align:right"><span class="tag">%</span>
     <span class="sep"></span>
     <button id="sync">웹과 맞추기</button>
-    <button id="save">저장</button>
+    <button id="save" title="고칠 때마다 저절로 담깁니다. 이 단추는 지금 바로 담고 알려 주기만 합니다.">저장</button>
     <button id="exp">파일로 내보내기</button>
     <button id="imp">파일에서 불러오기</button>
     <button id="imx">원가 엑셀 올리기</button>
@@ -80,6 +80,7 @@ td.hc{position:relative}
 </div>
 <div class="foot">
   <span id="cnt"></span>
+  <span id="saved" class="tag" style="color:#16a34a"></span>
   <span id="msg" class="tag"></span>
 </div>
 <input type="file" id="file" accept=".json" style="display:none">
@@ -125,9 +126,18 @@ function load(){
   D = saved || JSON.parse(JSON.stringify(SEED));
   if(!D.rows) D.rows=[];
 }
+// 고칠 때마다 저절로 담깁니다 — [저장] 은 지금 바로 담고 알려 주기만 합니다.
 function save(quiet){
-  try{ localStorage.setItem(LS_KEY, JSON.stringify(D)); if(!quiet) msg('저장했습니다 ('+new Date().toLocaleTimeString()+')','ok'); }
-  catch(e){ msg('저장 실패 — 파일로 내보내기를 쓰세요: '+e.message,'no'); }
+  try{
+    localStorage.setItem(LS_KEY, JSON.stringify(D));
+    const t=new Date().toLocaleTimeString();
+    const s=$('saved'); if(s) s.textContent='저장됨 '+t;
+    if(!quiet) msg('저장했습니다 ('+t+')','ok');
+  }
+  catch(e){
+    const s=$('saved'); if(s) s.textContent='저장 안 됨';
+    msg('저장 실패 — 파일로 내보내기를 쓰세요: '+e.message,'no');
+  }
 }
 
 /* 공급가 RUB = 공급가KRW ÷ 환율RUB.  공급가KRW 를 안 적었으면 원가와 기준 GP 로 셈한다. */
