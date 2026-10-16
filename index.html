@@ -1503,7 +1503,7 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
       <span style="font-size:11px;color:var(--muted)">~</span>
       <select id="ppsiTo" onchange="renderPPSI()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></select>
       <select id="ppsiMode" onchange="renderPPSI()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px">
-        <option value="m">월별 + 연합계</option><option value="y">연합계만</option>
+        <option value="m" id="i18n-ppsi-mm">월별 + 연합계</option><option value="y" id="i18n-ppsi-my">연합계만</option>
       </select>
       <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted)"><input type="checkbox" id="ppsiHideZero" checked onchange="renderPPSI()"> <span id="i18n-ppsi-hz">수량 없는 줄 숨기기</span></label>
       <div class="count-badge" id="ppsiBadge"></div>
@@ -2584,6 +2584,20 @@ function refreshPsiTexts(){
   set('i18n-rep-run','다시 만들기','Обновить');
   set('i18n-rep-dl',DL[0],DL[1]);
   set('i18n-rep-print','인쇄','Печать');
+  // 제품 출고
+  set('i18n-ppsi-yr','연도','Год');
+  set('i18n-ppsi-hz','수량 없는 줄 숨기기','Скрыть строки без количества');
+  set('i18n-ppsi-up','엑셀 업로드','Загрузить Excel');
+  set('i18n-ppsi-dl',DL[0],DL[1]);
+  set('i18n-ppsi-mm','월별 + 연합계','По месяцам + итог года');
+  set('i18n-ppsi-my','연합계만','Только итог года');
+  { const el=document.getElementById('ppsiInput');
+    if(el) el.placeholder=(lang==='ru')?'Поиск: тип, код, модель…':'타입·코드·모델로 검색…';
+    const up=document.getElementById('ppsiUpBtn');
+    if(up) up.title=(lang==='ru')
+      ? 'Загрузите Excel с отгрузкой изделий (файл PSI изделий — листы Москва, Владивосток, сводный, 2021) — таблица будет построена заново'
+      : '제품 출고 엑셀(제품 PSI 파일 — 모스크바·블라디보스톡·합본·2021년 시트)을 올리면 표를 새로 만듭니다'; }
+  if(ktPaneOn('pane-ppsi') && typeof renderPPSI==='function') renderPPSI();
   // A/S부품 소요율
   set('i18n-asr-year','연도','Год');
   set('i18n-asr-iblab','가동대수(보증기간)','Парк в эксплуатации (гарантия)');
@@ -14610,11 +14624,11 @@ function ppsiCatOf(r){
 }
 // 줄을 다시 세운다: 맨 위 합계, 그 아래 분류(가스벽걸이보일러…)마다 소계와 그 모델들. 합계·소계는 모델 줄을 더한 값이다.
 function ppsiBuild(models, d){
-  const outRows=[{ k:'T:ALL', t:'', g:'', m:'합계', lv:'t' }], dd={};
+  const outRows=[{ k:'T:ALL', t:'', g:'', m:AL('합계','Итого'), lv:'t' }], dd={};
   const addTo=(k,o)=>Object.keys(o||{}).forEach(ym=>{ (dd[k]=dd[k]||{}); dd[k][ym]=(dd[k][ym]||0)+o[ym]; });
   PPSI_CATS.forEach(cat=>{
     const list=models.filter(r=>ppsiCatOf(r)===cat); if(!list.length) return;
-    outRows.push({ k:'S:'+cat, t:cat, g:'', m:'소계', lv:'s' });
+    outRows.push({ k:'S:'+cat, t:cat, g:'', m:AL('소계','Подытог'), lv:'s' });
     list.forEach(r=>{ outRows.push(r); if(d[r.k]){ dd[r.k]=d[r.k]; addTo('S:'+cat, d[r.k]); addTo('T:ALL', d[r.k]); } });
   });
   const yms=new Set(); Object.values(dd).forEach(o=>Object.keys(o).forEach(y=>yms.add(y)));
@@ -14700,8 +14714,9 @@ function ppsiCols(){
   const mode=(document.getElementById('ppsiMode')||{}).value||'m';
   const cols=[];
   ys.filter(y=>y>=lo && y<=hi).forEach(y=>{
-    if(mode==='m') for(let m=1;m<=12;m++) cols.push({ y, ym:y+String(m).padStart(2,'0'), lab:m+'월' });
-    cols.push({ y, ym:'', lab:(mode==='m'?'합계':'20'+y), sum:true });
+    const ru=(lang==='ru');
+    if(mode==='m') for(let m=1;m<=12;m++) cols.push({ y, ym:y+String(m).padStart(2,'0'), lab:ru?String(m):(m+'월') });
+    cols.push({ y, ym:'', lab:(mode==='m'?(ru?'Итого':'합계'):('20'+y)), sum:true });
   });
   return { cols, mode, yrs:ys.filter(y=>y>=lo && y<=hi) };
 }
