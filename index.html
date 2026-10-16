@@ -14762,7 +14762,7 @@ function renderPPSI(){
     const bg=r.lv==='t'?'#fde68a55':(r.lv==='s'?'var(--surface2)':'var(--surface)');
     const fw=r.lv==='m'?'400':'700';
     const fix=FX.map((f,i)=>'<td style="'+tdS+';position:sticky;left:'+left[i]+'px;z-index:2;background:'+(r.lv==='m'?'var(--surface)':'var(--surface2)')+';font-weight:'+fw
-      +(f.k==='g'?";font-family:'Courier New',monospace;font-size:10px":'')+';overflow:hidden;text-overflow:ellipsis" title="'+escapeHtml(r[f.k]||'')+'">'+escapeHtml(r[f.k]||'')+'</td>').join('');
+      +(f.k==='g'?";font-family:'Courier New',monospace;font-size:10px":'')+';overflow:hidden;text-overflow:ellipsis" title="'+escapeHtml(f.k==='t'?ptypeLabel(r.t):(r[f.k]||''))+'">'+escapeHtml(f.k==='t'?ptypeLabel(r.t):(r[f.k]||''))+'</td>').join('');
     const nums=C.cols.map(c=>{ const v=ppsiVal(r.k,c);
       return '<td style="'+tdS+';text-align:right;background:'+(c.sum?'var(--surface2)':bg)+';font-weight:'+(c.sum?'700':fw)
         +((C.mode==='m'&&c.ym.slice(2)==='01')?';border-left:1px solid var(--border)':'')+(v<0?';color:#b91c1c':'')+'">'+((v==null||v===0)?'':v.toLocaleString())+'</td>'; }).join('');
@@ -14770,7 +14770,7 @@ function renderPPSI(){
   if(badge) badge.textContent=(ru?'Строк ':'')+rows.length+(ru?'':'줄');
   if(info){ const at=_ppsi.at?new Date(_ppsi.at):null, p2=x=>String(x).padStart(2,'0');
     info.textContent=(ru?'Файл: ':'올린 파일: ')+(_ppsi.file||'')+(at?(' · '+at.getFullYear()+'-'+p2(at.getMonth()+1)+'-'+p2(at.getDate())+' '+p2(at.getHours())+':'+p2(at.getMinutes())):'')
-      +' · '+((_ppsi.notes||[]).join(' / ')); }
+      +' · '+((_ppsi.notes||[]).map(ppsiNoteText).join(' / ')); }
   updatePaneHBar('ppsi');
 }
 async function downloadPPSI(){
@@ -14780,7 +14780,7 @@ async function downloadPPSI(){
   const h1=[ru?'Тип':'타입', ru?'Код':'코드', ru?'Модель':'모델'], h2=['','',''];
   C.cols.forEach(c=>{ h1.push('20'+c.y); h2.push(c.lab); });
   const aoa=[h1,h2];
-  rows.forEach(r=>aoa.push([r.t||'', r.g||'', r.m||''].concat(C.cols.map(c=>{ const v=ppsiVal(r.k,c); return v==null?'':v; }))));
+  rows.forEach(r=>aoa.push([ptypeLabel(r.t), r.g||'', r.m||''].concat(C.cols.map(c=>{ const v=ppsiVal(r.k,c); return v==null?'':v; }))));
   const ws=XLSX.utils.aoa_to_sheet(aoa);
   const merges=[{s:{r:0,c:0},e:{r:1,c:0}},{s:{r:0,c:1},e:{r:1,c:1}},{s:{r:0,c:2},e:{r:1,c:2}}];
   let c0=3; C.yrs.forEach(y=>{ const n=C.cols.filter(c=>c.y===y).length; if(n>1) merges.push({s:{r:0,c:c0},e:{r:0,c:c0+n-1}}); c0+=n; });
@@ -14907,6 +14907,41 @@ function asrView(){
 }
 function asrFmtRate(v){ return v==null ? '' : (v>=10 ? v.toFixed(1) : v.toFixed(2)); }
 // 화면 언어에 맞는 글자 고르개 — A/S부품 소요율·보고서 화면에서 쓴다
+// ── 제품 타입(분류) 이름 — 러시아어 ─────────────────────────
+//   엑셀에서 읽어 온 분류명은 자료에 한글로 담겨 있다. 키는 그대로 두고
+//   화면·엑셀에 찍을 때만 러시아어로 바꿔 준다(표에 없는 이름은 한글 그대로).
+const PTYPE_RU={
+  '가스벽걸이보일러':'Газовый настенный котёл',
+  '가스바닥형보일러':'Газовый напольный котёл',
+  '기름바닥형보일러':'Дизельный напольный котёл',
+  '화목보일러':'Дровяной котёл',
+  '펠렛보일러':'Пеллетный котёл',
+  '하이브리드(기름/화목)보일러':'Гибридный котёл (дизель/дрова)',
+  '가스':'Газ',
+  '기름':'Дизель',
+  '화목':'Дрова',
+  '펠렛':'Пеллеты',
+  '하이브리드(기름/화목)':'Гибрид (дизель/дрова)'
+};
+function ptypeLabel(t){
+  const s=String(t==null?'':t);
+  if(lang!=='ru' || !s) return s;
+  return PTYPE_RU[s] || PTYPE_RU[s.trim()] || s;
+}
+// 올린 파일 안내줄 — 올릴 때 적어 둔 한글 기록을 화면 언어에 맞춰 바꿔 읽는다.
+//   (자료에 담긴 글자라 통째로 다시 쓸 수 없어, 쓰이는 말만 짝지어 바꾼다)
+const PNOTE_RU=[
+  ['판매(수량)','продажи (кол-во)'], ['판매 계','продажи, итого'], ['판매','продажи'],
+  ['(따로 올림)','(загружено отдельно)'],
+  ['모스크바','Москва'], ['블라디보스톡','Владивосток'], ['합본','сводный'],
+  ['개월',' мес.'], ['없음','нет'], ['년 ',' ']
+];
+function ppsiNoteText(s){
+  let out=String(s==null?'':s);
+  if(lang!=='ru') return out;
+  PNOTE_RU.forEach(p=>{ out=out.split(p[0]).join(p[1]); });
+  return out;
+}
 function AL(ko, ru){ return (lang==='ru') ? ru : ko; }
 function renderASR(){
   const thead=document.getElementById('asrThead'), tbody=document.getElementById('asrTbody'), cg=document.getElementById('asrColgroup');
@@ -14940,8 +14975,8 @@ function renderASR(){
   tbody.innerHTML=rows.map(r=>{
     const sub=r.lv!=='m', bgFix=sub?'var(--surface2)':'var(--surface)', fw=sub?'700':'400';
     const fix=FX.map((f,i)=>'<td style="'+tdS+';position:sticky;left:'+left[i]+'px;z-index:2;background:'+bgFix+';font-weight:'+fw
-      +(f.k==='g'?";font-family:'Courier New',monospace;font-size:10px":'')+';overflow:hidden;text-overflow:ellipsis" title="'+escapeHtml(r[f.k]||'')+'">'
-      +(r.lv==='m'&&f.k==='m'?('<span style="cursor:pointer;color:var(--accent2)" onclick="asrDetail(\''+escapeHtml(r.k).replace(/'/g,"\\'")+'\')">'+escapeHtml(r.m)+'</span>'):escapeHtml(r[f.k]||''))+'</td>').join('');
+      +(f.k==='g'?";font-family:'Courier New',monospace;font-size:10px":'')+';overflow:hidden;text-overflow:ellipsis" title="'+escapeHtml(f.k==='t'?ptypeLabel(r.t):(r[f.k]||''))+'">'
+      +(r.lv==='m'&&f.k==='m'?('<span style="cursor:pointer;color:var(--accent2)" onclick="asrDetail(\''+escapeHtml(r.k).replace(/'/g,"\\'")+'\')">'+escapeHtml(r.m)+'</span>'):escapeHtml(f.k==='t'?ptypeLabel(r.t):(r[f.k]||'')))+'</td>').join('');
     const nums=yrs.map(y=>{ const v=asrYear(A, r.keys, y)||{}; const early=v.early;
       const c=(x,i,extra)=>'<td style="'+tdS+';text-align:right;background:'+(sub?'var(--surface2)':'var(--surface)')+';font-weight:'+fw+(i===0?';border-left:1px solid var(--border)':'')+(extra||'')+'">'+x+'</td>';
       return c(v.parts?Math.round(v.parts).toLocaleString():'',0)
@@ -15003,7 +15038,7 @@ async function downloadASR(){
   const h1=[AL('분류','Группа'),AL('코드','Код'),AL('모델','Модель')], h2=['','',''];
   yrs.forEach(y=>{ h1.push('20'+y,'',''); h2.push(AL('부품 출고','Расход'),AL('가동대수(평균)','Парк (среднее)'),AL('소요율(/100대·연)','Норма (/100 шт. в год)')); });
   const aoa=[h1,h2];
-  rows.forEach(r=>{ const line=[r.t||'', r.g||'', r.m||''];
+  rows.forEach(r=>{ const line=[ptypeLabel(r.t), r.g||'', r.m||''];
     yrs.forEach(y=>{ const v=asrYear(A, r.keys, y)||{};
       line.push(v.parts?Math.round(v.parts):'', v.ibAvg?Math.round(v.ibAvg):'', v.rate==null?'':Math.round(v.rate*100)/100); });
     aoa.push(line); });
