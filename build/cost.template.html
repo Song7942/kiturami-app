@@ -27,6 +27,9 @@ td{padding:3px 6px;border-bottom:1px solid var(--border);border-right:1px solid 
 td.num{text-align:right;font-variant-numeric:tabular-nums}
 td.code{font-family:'Courier New',monospace;font-size:10.5px;white-space:nowrap}
 tr:nth-child(even) td{background:var(--surface)}
+tr.isnew td:first-child{box-shadow:inset 3px 0 0 #16a34a}
+tr.gone td{opacity:.55}
+tr.gone td.code{color:#dc2626}
 input.cell{width:100%;padding:2px 4px;border:1px solid transparent;border-radius:5px;background:transparent;color:var(--text);
            text-align:right;font-size:12px;font-variant-numeric:tabular-nums}
 input.cell:hover{border-color:var(--border)}
@@ -34,7 +37,10 @@ input.cell:focus{outline:none;border-color:var(--accent2);background:var(--bg)}
 td.man input.cell{background:#ffedd5;color:#9a3412;font-weight:700}
 .foot{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--border);
       padding:7px 14px;font-size:12px;display:flex;gap:14px;align-items:center}
-.ok{color:#16a34a}.no{color:#dc2626}
+.ok{color:#16a34a}.no{color:#dc2626}.busy{color:var(--accent2)}
+.flag{font-size:10px;padding:0 4px;border-radius:4px;margin-left:4px;vertical-align:middle}
+.flag.n{background:#dcfce7;color:#166534}
+.flag.g{background:#fee2e2;color:#991b1b}
 </style>
 </head>
 <body>
@@ -42,6 +48,7 @@ td.man input.cell{background:#ffedd5;color:#9a3412;font-weight:700}
   <h1>원가관리 <small id="made"></small></h1>
   <div class="bar">
     <input type="search" id="q" placeholder="품명·규격·품번으로 찾기…" style="width:230px">
+    <label class="tag" style="display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="onlyNew">새·없어진 것만</label>
     <span class="sep"></span>
     <span class="tag">환율</span>
     <span class="tag">RUB</span><input type="text" id="rub" style="width:72px;text-align:right">
@@ -51,6 +58,7 @@ td.man input.cell{background:#ffedd5;color:#9a3412;font-weight:700}
     <span class="sep"></span>
     <span class="tag">기준 GP</span><input type="text" id="gp" style="width:58px;text-align:right">
     <span class="sep"></span>
+    <button id="sync">웹과 맞추기</button>
     <button id="save">저장</button>
     <button id="exp">파일로 내보내기</button>
     <button id="imp">파일에서 불러오기</button>
@@ -74,17 +82,25 @@ td.man input.cell{background:#ffedd5;color:#9a3412;font-weight:700}
 /* ── 원가관리 — 내 컴퓨터에만 두는 자료 ──────────────────────
  *   원가 · 환율 · 기준 GP · 계산식은 이 파일에만 있습니다. 서버로 나가지 않습니다.
  *   [웹에 공급가 보내기] 를 누를 때에만 '품번 + 공급가 RUB' 가 웹으로 갑니다.
+ *   품명·규격·대표품번·최종품번은 웹의 품번조회가 주인입니다 — 열 때마다
+ *   [웹과 맞추기] 가 저절로 한 번 돌아 웹에서 고친 것을 끌어옵니다.
  *   고친 것은 [저장] 을 눌러 이 브라우저에 담아 둡니다.
  *   컴퓨터를 바꾸거나 백업하려면 [파일로 내보내기] 로 .json 을 받아 두세요.
  */
 const SEED = /*__SEED__*/null;
+const PN_BASE = /*__PNBASE__*/null;      /* 품번조회 바탕 자료(웹과 같은 것) */
 const SB_URL='__SB_URL__', SB_KEY='__SB_KEY__';
+/* 자체 서버(kituramiparts.com)에도 같이 보낸다. 비어 있으면 안 보낸다. */
+const HOST_URL='__HOST_URL__', HOST_KEY='__HOST_KEY__';
 const SUP_CFG_ID = 105;                 /* 웹이 보는 공급가 자리 (kt_psi_cfg) */
+const PN_TOMBSTONE = '__DELETED__';     /* 품번조회에서 지운 품목 표시 */
 const FX_URL = 'https://kiturami-service.pages.dev/api/fxrate';
 const LS_KEY = 'kt_cost_v1';
 
 let D = null;                            /* {rows, rub, usd, gp, month, made} */
 let view = [];
+let _sb = null;
+function sbc(){ if(!_sb) _sb = supabase.createClient(SB_URL, SB_KEY); return _sb; }
 
 const $ = id => document.getElementById(id);
 /* 빈 칸은 0 이 아니라 '없음' 이다 — 원가도 공급가도 없는 품목이 0원으로 둔갑하면 안 된다 */
@@ -92,6 +108,8 @@ const num = v => { const s=String(v==null?'':v).replace(/[, ]/g,'').trim();
                    if(s==='') return null; const n=Number(s); return isFinite(n)?n:null; };
 const fmt = (v,d) => (v==null||v==='')?'' : Number(v).toLocaleString(undefined,{maximumFractionDigits:(d==null?1:d)});
 const msg = (s,cls) => { const e=$('msg'); e.textContent=s||''; e.className='tag '+(cls||''); };
+/* 웹의 normPN 과 같은 규칙 — 이 열쇠로 공급가도 보내고 품목도 맞춘다 */
+const norm = x => String(x==null?'':x).toUpperCase().replace(/\s+/g,'');
 
 function load(){
   let saved=null;
@@ -140,8 +158,11 @@ const COLS = [
 
 function filtered(){
   const q=$('q').value.trim().toLowerCase();
-  if(!q) return D.rows;
-  return D.rows.filter(r=>[r.nm,r.sp,r.rep,r.cmp,r.fin].some(v=>String(v||'').toLowerCase().includes(q)));
+  const onlyNew=$('onlyNew').checked;
+  let a=D.rows;
+  if(onlyNew) a=a.filter(r=>r.isNew||r.gone);
+  if(q) a=a.filter(r=>[r.nm,r.sp,r.rep,r.cmp,r.fin].some(v=>String(v||'').toLowerCase().includes(q)));
+  return a;
 }
 function render(){
   view = filtered();
@@ -152,8 +173,9 @@ function render(){
     const cRub = (c!=null&&rub)?fmt(c/rub,1):'';
     const cUsd = (c!=null&&usd)?fmt(c/usd,2):'';
     const manSup = (r.sup!=null && r.sup!=='') ? ' man' : '';
-    return '<tr data-i="'+i+'">'
-      + '<td>'+esc(r.nm)+'</td><td style="color:var(--muted)">'+esc(r.sp)+'</td>'
+    const flag = r.gone ? '<span class="flag g">없어짐</span>' : (r.isNew ? '<span class="flag n">새</span>' : '');
+    return '<tr data-i="'+i+'" class="'+(r.gone?'gone':(r.isNew?'isnew':''))+'">'
+      + '<td>'+esc(r.nm)+flag+'</td><td style="color:var(--muted)">'+esc(r.sp)+'</td>'
       + '<td class="code">'+esc(r.rep)+'</td><td class="code">'+esc(r.cmp)+'</td><td class="code">'+esc(r.fin)+'</td>'
       + '<td class="num'+((r.cost!=null&&r.cost!=='')?' man':'')+'"><input class="cell" data-f="cost" value="'+(c!=null?fmt(c,1):'')+'"></td>'
       + '<td class="num" style="color:var(--muted)">'+cRub+'</td>'
@@ -165,7 +187,10 @@ function render(){
   }).join('');
   $('empty').style.display = view.length?'none':'block';
   const withSup = D.rows.filter(r=>supRub(r)!=null).length;
+  const nNew = D.rows.filter(r=>r.isNew).length, nGone = D.rows.filter(r=>r.gone).length;
   $('cnt').textContent = '품목 '+D.rows.length.toLocaleString()+'개 · 공급가 있는 것 '+withSup.toLocaleString()+'개'
+    + (nNew?('  · 새 품번 '+nNew.toLocaleString()+'개'):'')
+    + (nGone?('  · 품번조회에 없음 '+nGone.toLocaleString()+'개'):'')
     + (view.length!==D.rows.length ? ('  (찾은 것 '+view.length.toLocaleString()+'개)') : '');
 }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
@@ -180,10 +205,124 @@ $('tb').addEventListener('change', e=>{
   save(true); render();
 });
 
+/* ══ 웹과 맞추기 ══════════════════════════════════════════
+ *   품명·규격·대표품번·최종품번의 주인은 웹의 품번조회다.
+ *   바탕 자료(PN_BASE) 위에 kt_pn_overrides 를 얹고, 호환품번별 품명·규격은
+ *   kt_pn_specs 에서 가져온다 — 웹 화면이 쓰는 규칙 그대로다.
+ *   원가·공급가는 호환품번으로 짝을 맞춰 그대로 둔다. 건드리지 않는다.
+ */
+async function catalogBuild(onStep){
+  const sb=sbc();
+  // 1) 바탕 + 고친 것
+  const pn=(PN_BASE||[]).map(p=>({ rep:p.rep, compats:(p.compats||[]).slice(),
+                                   final:p.final||'', name_ko:p.name_ko||'', spec:p.spec||'' }));
+  const byRep=new Map(pn.map(p=>[p.rep,p]));
+  if(onStep) onStep('품번조회 고친 내용을 읽는 중…');
+  for(let from=0;;from+=1000){
+    const { data, error }=await sb.from('kt_pn_overrides')
+      .select('rep,name_ko,spec,final,compats').order('rep').range(from, from+999);
+    if(error) throw new Error('kt_pn_overrides — '+(error.message||error.code));
+    (data||[]).forEach(r=>{
+      if(r.final===PN_TOMBSTONE){            // 품번조회에서 지운 품목
+        const i=pn.findIndex(p=>p.rep===r.rep);
+        if(i>=0){ pn.splice(i,1); byRep.delete(r.rep); }
+        return;
+      }
+      let cp=r.compats;
+      if(typeof cp==='string'){ try{ cp=JSON.parse(cp); }catch(e){ cp=[]; } }
+      const cur=byRep.get(r.rep);
+      if(cur){
+        if(r.name_ko) cur.name_ko=r.name_ko;
+        if(r.spec)    cur.spec=r.spec;
+        if(r.final)   cur.final=r.final;
+        if(Array.isArray(cp) && cp.length) cur.compats=cp.slice();
+      }else{
+        const nw={ rep:r.rep, compats:Array.isArray(cp)?cp.slice():[], final:r.final||'',
+                   name_ko:r.name_ko||'', spec:r.spec||'' };
+        pn.push(nw); byRep.set(r.rep, nw);
+      }
+    });
+    if(!data || data.length<1000) break;
+  }
+  // 2) 호환품번별 품명·규격 (12만 행짜리 표라 쓰는 품번만 200개씩 끊어 묻는다)
+  const want=new Set();
+  pn.forEach(p=>{ (p.compats||[]).forEach(c=>{ const k=norm(c); if(k) want.add(k); });
+                  const f=norm(p.final); if(f) want.add(f); });
+  const list=[...want], specs=new Map();
+  const chunks=[]; for(let i=0;i<list.length;i+=200) chunks.push(list.slice(i,i+200));
+  for(let i=0;i<chunks.length;i+=8){                       // 한 번에 8묶음씩
+    const part=chunks.slice(i,i+8);
+    const got=await Promise.all(part.map(async c=>{
+      const r=await sb.from('kt_pn_specs').select('pn,name,spec,dan').in('pn', c);
+      return r.error?[]:(r.data||[]);
+    }));
+    got.forEach(rows=>rows.forEach(r=>{ const k=norm(r.pn); if(!k) return;
+      specs.set(k,{ name:r.name||'', spec:r.spec||'', dan:r.dan||'' }); }));
+    if(onStep) onStep('품명·규격을 읽는 중… '+Math.min(i+8,chunks.length)+'/'+chunks.length);
+  }
+  // 3) 호환품번 한 개가 한 줄
+  const cat=new Map();
+  pn.forEach(p=>{
+    const finSp=specs.get(norm(p.final))||null;
+    (p.compats||[]).forEach(c=>{
+      const k=norm(c); if(!k) return;
+      const own=specs.get(k)||null;
+      // 그 품번에 제 이름이 있으면 그것, 없으면 최종품번 것, 그것도 없으면 대표품번 것
+      const sp=(own && (own.name || own.spec)) ? own : (finSp || own || {});
+      cat.set(k, { rep:p.rep, fin:p.final||'', cmp:String(c),
+                   nm:(sp.name && String(sp.name).trim()) ? String(sp.name) : (p.name_ko||''),
+                   sp:(sp.spec && String(sp.spec).trim()) ? String(sp.spec) : (p.spec||''),
+                   dan:(own&&own.dan)||'' });
+    });
+  });
+  return cat;
+}
+let _syncing=false;
+async function catalogSync(auto){
+  if(_syncing) return;
+  _syncing=true;
+  const btn=$('sync'); const t0=btn.textContent; btn.disabled=true; btn.textContent='맞추는 중…';
+  try{
+    const cat=await catalogBuild(s=>msg(s,'busy'));
+    let fixed=0, added=0, gone=0;
+    const seen=new Set();
+    D.rows.forEach(r=>{
+      const k=norm(r.cmp||r.rep);
+      const c=cat.get(k);
+      if(!c){ if(!r.gone){ r.gone=1; gone++; } return; }
+      if(r.gone){ delete r.gone; }
+      seen.add(k);
+      let ch=false;
+      if((r.nm||'')!==c.nm){ r.nm=c.nm; ch=true; }
+      if((r.sp||'')!==c.sp){ r.sp=c.sp; ch=true; }
+      if((r.rep||'')!==c.rep){ r.rep=c.rep; ch=true; }
+      if((r.fin||'')!==c.fin){ r.fin=c.fin; ch=true; }
+      if(ch) fixed++;
+    });
+    let n=0; D.rows.forEach(r=>{ const x=Number(r.n); if(isFinite(x)&&x>n) n=x; });
+    cat.forEach((c,k)=>{
+      if(seen.has(k)) return;
+      D.rows.push({ n:++n, nm:c.nm, sp:c.sp, rep:c.rep, cmp:c.cmp, fin:c.fin,
+                    cost:null, sup:null, isNew:1 });
+      added++;
+    });
+    D.catAt=new Date().toISOString();
+    save(true); fill(); render();
+    const parts=[];
+    if(fixed) parts.push('품명·규격 '+fixed.toLocaleString()+'개를 고쳤습니다');
+    if(added) parts.push('새 품번 '+added.toLocaleString()+'개를 넣었습니다');
+    if(gone)  parts.push('품번조회에 없는 것 '+gone.toLocaleString()+'개를 표시했습니다');
+    msg(parts.length?('웹과 맞췄습니다 — '+parts.join(' · ')):'웹과 같습니다 — 고칠 것이 없었습니다', 'ok');
+  }catch(e){
+    msg((auto?'웹과 맞추지 못했습니다 — ':'맞추기 실패 — ')+e.message, 'no');
+  }finally{ _syncing=false; btn.disabled=false; btn.textContent=t0; }
+}
+$('sync').onclick=()=>catalogSync(false);
+
 /* 환율 */
 async function getFx(auto){
   try{
-    msg('환율을 받아오는 중…');
+    msg('환율을 받아오는 중…','busy');
     const r=await fetch(FX_URL,{cache:'no-store'});
     const j=await r.json();
     if(j.rub){ D.rub=j.rub; $('rub').value=j.rub; }
@@ -202,6 +341,7 @@ $('fx').onclick=()=>getFx(false);
   D[id==='rub'?'rub':id==='usd'?'usd':'gp'] = num($(id).value);
   save(true); render(); }); });
 $('q').addEventListener('input', render);
+$('onlyNew').addEventListener('change', render);
 $('save').onclick=()=>save();
 
 /* 파일로 내보내기 / 불러오기 */
@@ -225,16 +365,17 @@ $('file').onchange=async e=>{
 
 /* 엑셀 */
 $('xls').onclick=()=>{
-  const head=COLS.map(c=>c.t);
+  const head=COLS.map(c=>c.t).concat(['표시']);
   const rub=num(D.rub), usd=num(D.usd);
   const aoa=[head].concat(view.map(r=>{
     const c=num(r.cost), sr=supRub(r), g=gpOf(r);
     return [r.nm,r.sp,r.rep,r.cmp,r.fin, c,
             (c!=null&&rub)?Math.round(c/rub*10)/10:'', (c!=null&&usd)?Math.round(c/usd*100)/100:'',
-            (r.sup!=null&&r.sup!=='')?num(r.sup):'', sr!=null?sr:'', g!=null?Math.round(g*1000)/10:''];
+            (r.sup!=null&&r.sup!=='')?num(r.sup):'', sr!=null?sr:'', g!=null?Math.round(g*1000)/10:'',
+            r.gone?'품번조회에 없음':(r.isNew?'새 품번':'')];
   }));
   const ws=XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols']=COLS.map(c=>({wch:Math.max(8,Math.round(c.w/7))}));
+  ws['!cols']=COLS.map(c=>({wch:Math.max(8,Math.round(c.w/7))})).concat([{wch:14}]);
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'원가관리');
   XLSX.writeFile(wb,'원가관리_'+new Date().toISOString().slice(0,10)+'.xlsx');
 };
@@ -242,40 +383,61 @@ $('xls').onclick=()=>{
 /* 웹에 공급가 보내기 — 품번 + 공급가 RUB 만 */
 $('push').onclick=async()=>{
   const map={};
-  let n=0;
   D.rows.forEach(r=>{
     const v=supRub(r); if(v==null) return;
-    const pn=String(r.cmp||r.rep||'').trim().toUpperCase().replace(/\s+/g,'');
+    const pn=norm(r.cmp||r.rep);
     if(!pn) return;
     if(map[pn]==null || v>map[pn]) map[pn]=v;   /* 같은 품번이 여럿이면 큰 값 */
-    n++;
   });
   const pns=Object.keys(map);
   if(!pns.length){ alert('보낼 공급가가 없습니다.'); return; }
-  if(!confirm('웹에 공급가(RUB)를 보냅니다.\n\n· 품번 '+pns.length.toLocaleString()+'개\n'
+  const where = HOST_URL ? '클라우드와 kituramiparts.com' : '웹';
+  if(!confirm(where+'에 공급가(RUB)를 보냅니다.\n\n· 품번 '+pns.length.toLocaleString()+'개\n'
     +'· 원가·GP·환율은 보내지 않습니다\n\n웹의 값은 이 내용으로 바뀝니다. 계속할까요?')) return;
   const btn=$('push'); btn.disabled=true; const t0=btn.textContent; btn.textContent='보내는 중…';
+  const now=new Date().toISOString();
+  const done=[], failed=[];
+  /* 1) 클라우드 */
   try{
-    const sb=supabase.createClient(SB_URL,SB_KEY);
-    const { error }=await sb.from('kt_psi_cfg').upsert(
-      { id:SUP_CFG_ID, cfg:{ sup:map, at:new Date().toISOString() }, updated_at:new Date().toISOString() },
-      { onConflict:'id' });
+    const { error }=await sbc().from('kt_psi_cfg').upsert(
+      { id:SUP_CFG_ID, cfg:{ sup:map, at:now }, updated_at:now }, { onConflict:'id' });
     if(error) throw new Error(error.message||error.code);
-    D.pushedAt=new Date().toISOString(); save(true);
-    msg('웹에 보냈습니다 — 품번 '+pns.length.toLocaleString()+'개 ('+new Date().toLocaleTimeString()+')','ok');
-  }catch(e){ msg('보내기 실패 — '+e.message,'no'); alert('보내기 실패\n\n'+e.message); }
-  finally{ btn.disabled=false; btn.textContent=t0; }
+    done.push('클라우드');
+  }catch(e){ failed.push('클라우드 — '+e.message); }
+  /* 2) 자체 서버 (api/supply.php) */
+  if(HOST_URL){
+    try{
+      const r=await fetch(HOST_URL, { method:'POST', headers:{'Content-Type':'application/json'},
+                                      body:JSON.stringify({ key:HOST_KEY, sup:map }) });
+      const j=await r.json().catch(()=>({}));
+      if(!r.ok || j.error) throw new Error(j.error || ('HTTP '+r.status));
+      done.push('kituramiparts.com');
+    }catch(e){ failed.push('kituramiparts.com — '+e.message); }
+  }
+  if(done.length){ D.pushedAt=now; save(true); fill(); }
+  const head='품번 '+pns.length.toLocaleString()+'개 — ';
+  if(!failed.length) msg(head+done.join(' · ')+'에 보냈습니다 ('+new Date().toLocaleTimeString()+')','ok');
+  else{
+    msg(head+(done.length?(done.join(' · ')+'은 됐고, '):'')+'못 보낸 곳: '+failed.join(' / '),'no');
+    alert('보내지 못한 곳이 있습니다.\n\n'+failed.join('\n'));
+  }
+  btn.disabled=false; btn.textContent=t0;
 };
 
 function fill(){
   $('rub').value=D.rub==null?'':D.rub;
   $('usd').value=D.usd==null?'':D.usd;
   $('gp').value =D.gp==null?'':D.gp;
-  $('made').textContent='(자료 '+(D.made||'')+' 기준'+(D.pushedAt?(' · 마지막 보냄 '+new Date(D.pushedAt).toLocaleString()):'')+')';
+  const bits=['자료 '+(D.made||'')+' 기준'];
+  if(D.catAt)   bits.push('품목 맞춤 '+new Date(D.catAt).toLocaleString());
+  if(D.pushedAt)bits.push('마지막 보냄 '+new Date(D.pushedAt).toLocaleString());
+  $('made').textContent='('+bits.join(' · ')+')';
 }
 load(); fill(); render();
 /* 달이 바뀌었으면 환율을 한 번 받아 온다(지금 웹과 같은 방식) */
 if(D.month !== (new Date()).toISOString().slice(0,7)) getFx(true);
+/* 열 때마다 웹의 품번조회와 한 번 맞춘다 */
+setTimeout(()=>catalogSync(true), 400);
 </script>
 </body>
 </html>
