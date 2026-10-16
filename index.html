@@ -12854,20 +12854,33 @@ function poCanSeeSupply(){
   }catch(e){ return false; }
 }
 let _poSupSet=null;
-function poSupplyClear(){ _poSupSet=null; }
+function poSupplyClear(){ _poSupSet=null; _poSupRub=null; }
+let _poSupRub=null;
 function poSupplySet(){
   if(_poSupSet) return _poSupSet;
-  const s=new Set();
+  const s=new Set(); const rub=new Map();
   try{
     (typeof buildSupplyByCompat==='function'?buildSupplyByCompat():[]).forEach(m=>{
       if(m.rub==null && m.usd==null) return;         // 둘 다 비어 있으면 공급가가 없는 것
       const c=normPN(m.compat||''); if(c) s.add(c);
       const f=normPN(m.final||'');  if(f) s.add(f);
+      // 공급가(RUB) — 한 품번에 여러 줄이면 큰 값을 쓴다(가격정보 화면과 같은 기준)
+      if(m.rub!=null){
+        [c,f].forEach(k=>{ if(!k) return; const cur=rub.get(k);
+          if(cur==null || m.rub>cur) rub.set(k, m.rub); });
+      }
     });
   }catch(e){ console.warn('공급가 목록', e); }
-  _poSupSet=s; return s;
+  _poSupSet=s; _poSupRub=rub; return s;
 }
 function poHasSupply(pn){ const k=normPN(pn||''); return !!k && poSupplySet().has(k); }
+// 그 품번의 공급가(RUB). 없으면 null.
+function poSupplyRub(pn){
+  poSupplySet();
+  const k=normPN(pn||''); if(!k) return null;
+  const v=_poSupRub?_poSupRub.get(k):null;
+  return (v==null)?null:v;
+}
 // 그 줄의 공급가 표시. 대체품목이 있으면 품목마다 하나씩 ['O','',…] 로 돌려준다.
 //   대체품목이 없으면 최종품번(없으면 발주코드) 하나로 본다.
 function poSupplyMarks(r){
@@ -15817,7 +15830,7 @@ function pnChkHeadDefs(){
       if(typeof canViewExportCtrl==='function' && canViewExportCtrl())
         out.push({t:L('수출제한','Эксп.контроль'), k:'exp'});
       if(typeof poCanSeeSupply==='function' && poCanSeeSupply())
-        out.push({t:L('공급가격','Цена есть'), k:'sup'});
+        out.push({t:L('공급가<br>(RUB)','Цена<br>(RUB)'), k:'sup'});
       out.push({t:L('품명','Наименование'), k:'nm'});
       out.push({t:L('규격','Хар-ки'), k:'sp'});
       // 대체품목(연결조립필요품목포함) — 품번조회에 적어 둔 것을 대표품번으로 찾아 온다
@@ -15835,13 +15848,15 @@ function pnChkExpOf(r){
   const k=String(r.fin||'')||String(r.code||'');
   return (k && isExportRestricted(k)) ? 'O' : '';
 }
-// 공급가격 — 가격정보에 공급가(RUB·USD)가 적혀 있으면 O. 단종·수출제한과 같이 최종품번 기준.
+// 공급가(RUB) — 가격정보에 적힌 값을 그대로 가져온다. 단종·수출제한과 같이 최종품번 기준.
+//   거르개·정렬·엑셀이 숫자로 다루도록 쉼표 없는 글자로 돌려준다(화면에서만 쉼표를 찍는다).
 function pnChkSupOf(r){
-  if(typeof poHasSupply!=='function') return '';
+  if(typeof poSupplyRub!=='function') return '';
   const k=String(r.fin||'')||String(r.code||'');
-  return (k && poHasSupply(k)) ? 'O' : '';
+  const v=k?poSupplyRub(k):null;
+  return (v==null)?'':String(v);
 }
-function pnChkIsNumCol(key){ const qc=pnChkQtyCol(); return qc>=0 && key==='c'+qc; }
+function pnChkIsNumCol(key){ if(key==='sup') return true; const qc=pnChkQtyCol(); return qc>=0 && key==='c'+qc; }
 // 한 줄에서 그 열의 값 — 화면에 찍히는 글자와 같게 맞춘다
 function pnChkCellVal(key, r){
   if(key==='rep') return String(r.rep||'');
@@ -16170,8 +16185,11 @@ function renderPnChk(){
         tds.push('<td style="'+tdS+';color:#ef4444;font-weight:700">'+escapeHtml(r.dan||'')+'</td>');
         if(typeof canViewExportCtrl==='function' && canViewExportCtrl())
           tds.push('<td style="'+tdS+';color:#ef4444;font-weight:700">'+pnChkExpOf(r)+'</td>');
-        if(typeof poCanSeeSupply==='function' && poCanSeeSupply())
-          tds.push('<td style="'+tdS+';color:#0ea5e9;font-weight:700">'+pnChkSupOf(r)+'</td>');
+        if(typeof poCanSeeSupply==='function' && poCanSeeSupply()){
+          const sv=pnChkSupOf(r);
+          tds.push('<td style="'+tdS+';text-align:right;color:#0ea5e9;font-weight:600">'
+            +(sv===''?'':escapeHtml(Number(sv).toLocaleString(undefined,{maximumFractionDigits:2})))+'</td>');
+        }
         tds.push('<td style="'+tdS+'">'+escapeHtml(r.name||'')+'</td>');
         tds.push('<td style="'+tdS+';color:var(--muted)">'+escapeHtml(r.spec||'')+'</td>');
         // 대체품목 — 품번조회와 같이 품번마다 한 줄씩 쌓는다
@@ -16220,6 +16238,7 @@ function downloadPnChk(){
         if(k>0) return '';                      // 둘째 줄부터는 비우고 위 칸과 합친다
         const mm=/^c(\d+)$/.exec(d.k);
         if(mm){ const i=+mm[1]; return (i===qc && q!=null) ? q : r.cells[i]; }   // 수량은 숫자로
+        if(d.k==='sup'){ const sv=pnChkCellVal('sup', r); return sv===''?'':Number(sv); }   // 공급가도 숫자로
         return pnChkCellVal(d.k, r);
       }));
     }
