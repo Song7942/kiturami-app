@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>원가관리</title>
+<style>
+:root{--bg:#fff;--surface:#f8fafc;--surface2:#f1f5f9;--border:#e2e8f0;--text:#0f172a;--muted:#64748b;--accent:#0ea5e9;--accent2:#2563eb}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f172a;--surface:#1e293b;--surface2:#263447;--border:#334155;--text:#e2e8f0;--muted:#94a3b8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:"Malgun Gothic","맑은 고딕",system-ui,sans-serif;font-size:13px}
+header{position:sticky;top:0;z-index:10;background:var(--surface);border-bottom:1px solid var(--border);padding:10px 14px}
+h1{margin:0 0 8px;font-size:15px;display:flex;align-items:center;gap:8px}
+h1 small{font-weight:400;font-size:11px;color:var(--muted)}
+.bar{display:flex;gap:7px;flex-wrap:wrap;align-items:center}
+button{padding:6px 11px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);cursor:pointer;font-size:12px}
+button.pri{background:var(--accent2);border-color:var(--accent2);color:#fff;font-weight:700}
+button:disabled{opacity:.5;cursor:default}
+input[type=text],input[type=search]{padding:5px 8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:12px}
+.sep{width:1px;height:20px;background:var(--border);margin:0 2px}
+.tag{font-size:11px;color:var(--muted)}
+.wrap{padding:0 10px 60px}
+table{border-collapse:separate;border-spacing:0;width:100%;font-size:12px}
+th{position:sticky;top:0;background:var(--surface2);padding:6px 6px;text-align:center;white-space:nowrap;
+   border-bottom:1px solid var(--border);border-right:1px solid var(--border);font-size:11px;z-index:5}
+td{padding:3px 6px;border-bottom:1px solid var(--border);border-right:1px solid var(--border);vertical-align:middle}
+td.num{text-align:right;font-variant-numeric:tabular-nums}
+td.code{font-family:'Courier New',monospace;font-size:10.5px;white-space:nowrap}
+tr:nth-child(even) td{background:var(--surface)}
+input.cell{width:100%;padding:2px 4px;border:1px solid transparent;border-radius:5px;background:transparent;color:var(--text);
+           text-align:right;font-size:12px;font-variant-numeric:tabular-nums}
+input.cell:hover{border-color:var(--border)}
+input.cell:focus{outline:none;border-color:var(--accent2);background:var(--bg)}
+td.man input.cell{background:#ffedd5;color:#9a3412;font-weight:700}
+.foot{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--border);
+      padding:7px 14px;font-size:12px;display:flex;gap:14px;align-items:center}
+.ok{color:#16a34a}.no{color:#dc2626}
+</style>
+</head>
+<body>
+<header>
+  <h1>원가관리 <small id="made"></small></h1>
+  <div class="bar">
+    <input type="search" id="q" placeholder="품명·규격·품번으로 찾기…" style="width:230px">
+    <span class="sep"></span>
+    <span class="tag">환율</span>
+    <span class="tag">RUB</span><input type="text" id="rub" style="width:72px;text-align:right">
+    <span class="tag">USD</span><input type="text" id="usd" style="width:78px;text-align:right">
+    <button id="fx">환율 받아오기</button>
+    <span class="tag" id="fxinfo"></span>
+    <span class="sep"></span>
+    <span class="tag">기준 GP</span><input type="text" id="gp" style="width:58px;text-align:right">
+    <span class="sep"></span>
+    <button id="save">저장</button>
+    <button id="exp">파일로 내보내기</button>
+    <button id="imp">파일에서 불러오기</button>
+    <button id="xls">엑셀 내려받기</button>
+    <span class="sep"></span>
+    <button id="push" class="pri">웹에 공급가 보내기</button>
+  </div>
+</header>
+<div class="wrap">
+  <table id="t"><thead id="th"></thead><tbody id="tb"></tbody></table>
+  <div id="empty" style="padding:30px;text-align:center;color:var(--muted);display:none">찾는 품목이 없습니다.</div>
+</div>
+<div class="foot">
+  <span id="cnt"></span>
+  <span id="msg" class="tag"></span>
+</div>
+<input type="file" id="file" accept=".json" style="display:none">
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+/* ── 원가관리 — 내 컴퓨터에만 두는 자료 ──────────────────────
+ *   원가 · 환율 · 기준 GP · 계산식은 이 파일에만 있습니다. 서버로 나가지 않습니다.
+ *   [웹에 공급가 보내기] 를 누를 때에만 '품번 + 공급가 RUB' 가 웹으로 갑니다.
+ *   고친 것은 [저장] 을 눌러 이 브라우저에 담아 둡니다.
+ *   컴퓨터를 바꾸거나 백업하려면 [파일로 내보내기] 로 .json 을 받아 두세요.
+ */
+const SEED = /*__SEED__*/null;
+const SB_URL='__SB_URL__', SB_KEY='__SB_KEY__';
+const SUP_CFG_ID = 105;                 /* 웹이 보는 공급가 자리 (kt_psi_cfg) */
+const FX_URL = 'https://kiturami-service.pages.dev/api/fxrate';
+const LS_KEY = 'kt_cost_v1';
+
+let D = null;                            /* {rows, rub, usd, gp, month, made} */
+let view = [];
+
+const $ = id => document.getElementById(id);
+/* 빈 칸은 0 이 아니라 '없음' 이다 — 원가도 공급가도 없는 품목이 0원으로 둔갑하면 안 된다 */
+const num = v => { const s=String(v==null?'':v).replace(/[, ]/g,'').trim();
+                   if(s==='') return null; const n=Number(s); return isFinite(n)?n:null; };
+const fmt = (v,d) => (v==null||v==='')?'' : Number(v).toLocaleString(undefined,{maximumFractionDigits:(d==null?1:d)});
+const msg = (s,cls) => { const e=$('msg'); e.textContent=s||''; e.className='tag '+(cls||''); };
+
+function load(){
+  let saved=null;
+  try{ const s=localStorage.getItem(LS_KEY); if(s) saved=JSON.parse(s); }catch(e){}
+  D = saved || JSON.parse(JSON.stringify(SEED));
+  if(!D.rows) D.rows=[];
+}
+function save(quiet){
+  try{ localStorage.setItem(LS_KEY, JSON.stringify(D)); if(!quiet) msg('저장했습니다 ('+new Date().toLocaleTimeString()+')','ok'); }
+  catch(e){ msg('저장 실패 — 파일로 내보내기를 쓰세요: '+e.message,'no'); }
+}
+
+/* 공급가 RUB = 공급가KRW ÷ 환율RUB.  공급가KRW 를 안 적었으면 원가와 기준 GP 로 셈한다. */
+function supKrw(r){
+  const s = num(r.sup);
+  if(s!=null) return s;
+  const c = num(r.cost);
+  const gp = num(D.gp);
+  if(c==null || gp==null || gp>=1) return null;
+  return c/(1-gp);
+}
+function supRub(r){
+  const k = supKrw(r), rub = num(D.rub);
+  if(k==null || !rub) return null;
+  return Math.round((k/rub)*10)/10;
+}
+function gpOf(r){
+  const c=num(r.cost), k=supKrw(r);
+  if(c==null || k==null || !k) return null;
+  return (k-c)/k;
+}
+
+const COLS = [
+  {k:'nm',  t:'품명',        w:210},
+  {k:'sp',  t:'규격',        w:200},
+  {k:'rep', t:'대표품번',    w:104},
+  {k:'cmp', t:'호환품번',    w:104},
+  {k:'fin', t:'최종품번',    w:104},
+  {k:'cost',t:'원가 KRW',    w:86},
+  {k:'cRub',t:'원가 RUB',    w:76},
+  {k:'cUsd',t:'원가 USD',    w:76},
+  {k:'sup', t:'공급가 KRW',  w:92},
+  {k:'sRub',t:'공급가 RUB',  w:86},
+  {k:'gp',  t:'GP',          w:58}
+];
+
+function filtered(){
+  const q=$('q').value.trim().toLowerCase();
+  if(!q) return D.rows;
+  return D.rows.filter(r=>[r.nm,r.sp,r.rep,r.cmp,r.fin].some(v=>String(v||'').toLowerCase().includes(q)));
+}
+function render(){
+  view = filtered();
+  $('th').innerHTML = '<tr>'+COLS.map(c=>'<th style="width:'+c.w+'px">'+c.t+'</th>').join('')+'</tr>';
+  const rub=num(D.rub), usd=num(D.usd);
+  $('tb').innerHTML = view.map((r,i)=>{
+    const c=num(r.cost), sk=supKrw(r), sr=supRub(r), g=gpOf(r);
+    const cRub = (c!=null&&rub)?fmt(c/rub,1):'';
+    const cUsd = (c!=null&&usd)?fmt(c/usd,2):'';
+    const manSup = (r.sup!=null && r.sup!=='') ? ' man' : '';
+    return '<tr data-i="'+i+'">'
+      + '<td>'+esc(r.nm)+'</td><td style="color:var(--muted)">'+esc(r.sp)+'</td>'
+      + '<td class="code">'+esc(r.rep)+'</td><td class="code">'+esc(r.cmp)+'</td><td class="code">'+esc(r.fin)+'</td>'
+      + '<td class="num'+((r.cost!=null&&r.cost!=='')?' man':'')+'"><input class="cell" data-f="cost" value="'+(c!=null?fmt(c,1):'')+'"></td>'
+      + '<td class="num" style="color:var(--muted)">'+cRub+'</td>'
+      + '<td class="num" style="color:var(--muted)">'+cUsd+'</td>'
+      + '<td class="num'+manSup+'"><input class="cell" data-f="sup" value="'+(r.sup!=null&&r.sup!==''?fmt(num(r.sup),1):'')+'" placeholder="'+(sk!=null?fmt(sk,0):'')+'"></td>'
+      + '<td class="num" style="font-weight:700;color:var(--accent2)">'+(sr!=null?fmt(sr,1):'')+'</td>'
+      + '<td class="num" style="color:var(--muted)">'+(g!=null?(Math.round(g*1000)/10)+'%':'')+'</td>'
+      + '</tr>';
+  }).join('');
+  $('empty').style.display = view.length?'none':'block';
+  const withSup = D.rows.filter(r=>supRub(r)!=null).length;
+  $('cnt').textContent = '품목 '+D.rows.length.toLocaleString()+'개 · 공급가 있는 것 '+withSup.toLocaleString()+'개'
+    + (view.length!==D.rows.length ? ('  (찾은 것 '+view.length.toLocaleString()+'개)') : '');
+}
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+/* 칸 고치기 */
+$('tb').addEventListener('change', e=>{
+  const inp=e.target.closest('input.cell'); if(!inp) return;
+  const tr=inp.closest('tr'); const r=view[+tr.getAttribute('data-i')];
+  const f=inp.getAttribute('data-f');
+  const v=inp.value.trim();
+  r[f] = (v==='') ? null : num(v);
+  save(true); render();
+});
+
+/* 환율 */
+async function getFx(auto){
+  try{
+    msg('환율을 받아오는 중…');
+    const r=await fetch(FX_URL,{cache:'no-store'});
+    const j=await r.json();
+    if(j.rub){ D.rub=j.rub; $('rub').value=j.rub; }
+    if(j.usd){ D.usd=j.usd; $('usd').value=j.usd; }
+    D.month=(new Date()).toISOString().slice(0,7);
+    save(true); render();
+    $('fxinfo').textContent = (j.source||'') + (j.date?(' · '+j.date):'');
+    msg('환율을 받았습니다','ok');
+  }catch(e){
+    $('fxinfo').textContent='';
+    msg(auto?'환율을 못 받아 저장해 둔 값을 씁니다':'환율을 받지 못했습니다 — 직접 적어 주세요','no');
+  }
+}
+$('fx').onclick=()=>getFx(false);
+['rub','usd','gp'].forEach(id=>{ $(id).addEventListener('change',()=>{
+  D[id==='rub'?'rub':id==='usd'?'usd':'gp'] = num($(id).value);
+  save(true); render(); }); });
+$('q').addEventListener('input', render);
+$('save').onclick=()=>save();
+
+/* 파일로 내보내기 / 불러오기 */
+$('exp').onclick=()=>{
+  const b=new Blob([JSON.stringify(D,null,1)],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(b);
+  a.download='원가관리_'+new Date().toISOString().slice(0,10)+'.json';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),3000);
+};
+$('imp').onclick=()=>$('file').click();
+$('file').onchange=async e=>{
+  const f=e.target.files[0]; e.target.value=''; if(!f) return;
+  try{
+    const j=JSON.parse(await f.text());
+    if(!j.rows) throw new Error('원가관리 파일이 아닙니다');
+    if(!confirm('지금 자료를 이 파일 내용으로 바꿉니다.\n품목 '+j.rows.length+'개\n\n계속할까요?')) return;
+    D=j; save(true); fill(); render(); msg('불러왔습니다','ok');
+  }catch(err){ msg('불러오기 실패 — '+err.message,'no'); }
+};
+
+/* 엑셀 */
+$('xls').onclick=()=>{
+  const head=COLS.map(c=>c.t);
+  const rub=num(D.rub), usd=num(D.usd);
+  const aoa=[head].concat(view.map(r=>{
+    const c=num(r.cost), sr=supRub(r), g=gpOf(r);
+    return [r.nm,r.sp,r.rep,r.cmp,r.fin, c,
+            (c!=null&&rub)?Math.round(c/rub*10)/10:'', (c!=null&&usd)?Math.round(c/usd*100)/100:'',
+            (r.sup!=null&&r.sup!=='')?num(r.sup):'', sr!=null?sr:'', g!=null?Math.round(g*1000)/10:''];
+  }));
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols']=COLS.map(c=>({wch:Math.max(8,Math.round(c.w/7))}));
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'원가관리');
+  XLSX.writeFile(wb,'원가관리_'+new Date().toISOString().slice(0,10)+'.xlsx');
+};
+
+/* 웹에 공급가 보내기 — 품번 + 공급가 RUB 만 */
+$('push').onclick=async()=>{
+  const map={};
+  let n=0;
+  D.rows.forEach(r=>{
+    const v=supRub(r); if(v==null) return;
+    const pn=String(r.cmp||r.rep||'').trim().toUpperCase().replace(/\s+/g,'');
+    if(!pn) return;
+    if(map[pn]==null || v>map[pn]) map[pn]=v;   /* 같은 품번이 여럿이면 큰 값 */
+    n++;
+  });
+  const pns=Object.keys(map);
+  if(!pns.length){ alert('보낼 공급가가 없습니다.'); return; }
+  if(!confirm('웹에 공급가(RUB)를 보냅니다.\n\n· 품번 '+pns.length.toLocaleString()+'개\n'
+    +'· 원가·GP·환율은 보내지 않습니다\n\n웹의 값은 이 내용으로 바뀝니다. 계속할까요?')) return;
+  const btn=$('push'); btn.disabled=true; const t0=btn.textContent; btn.textContent='보내는 중…';
+  try{
+    const sb=supabase.createClient(SB_URL,SB_KEY);
+    const { error }=await sb.from('kt_psi_cfg').upsert(
+      { id:SUP_CFG_ID, cfg:{ sup:map, at:new Date().toISOString() }, updated_at:new Date().toISOString() },
+      { onConflict:'id' });
+    if(error) throw new Error(error.message||error.code);
+    D.pushedAt=new Date().toISOString(); save(true);
+    msg('웹에 보냈습니다 — 품번 '+pns.length.toLocaleString()+'개 ('+new Date().toLocaleTimeString()+')','ok');
+  }catch(e){ msg('보내기 실패 — '+e.message,'no'); alert('보내기 실패\n\n'+e.message); }
+  finally{ btn.disabled=false; btn.textContent=t0; }
+};
+
+function fill(){
+  $('rub').value=D.rub==null?'':D.rub;
+  $('usd').value=D.usd==null?'':D.usd;
+  $('gp').value =D.gp==null?'':D.gp;
+  $('made').textContent='(자료 '+(D.made||'')+' 기준'+(D.pushedAt?(' · 마지막 보냄 '+new Date(D.pushedAt).toLocaleString()):'')+')';
+}
+load(); fill(); render();
+/* 달이 바뀌었으면 환율을 한 번 받아 온다(지금 웹과 같은 방식) */
+if(D.month !== (new Date()).toISOString().slice(0,7)) getFx(true);
+</script>
+</body>
+</html>
