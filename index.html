@@ -15855,10 +15855,24 @@ function pnChkColsMap(){
   if(src) Object.keys(src).forEach(k=>{ if(typeof src[k]==='boolean') m[k]=src[k]; });
   return m;
 }
+// 처음에 켜 둘지 — 올린 파일의 열 가운데 머리글이 영문뿐인 것은 꺼 둔다.
+//   (품번 열과 수량 열은 머리글이 영문이어도 늘 보여 준다)
+function pnChkColDefaultOn(key){
+  const m=/^c(\d+)$/.exec(key);
+  if(!m) return true;
+  const i=+m[1];
+  if(!_pnChk) return true;
+  if(i===_pnChk.pnCol) return true;
+  if(i===pnChkQtyCol()) return true;
+  const h=String((_pnChk.head||[])[i]||'');
+  if(!h.trim()) return false;                       // 이름 없는 열도 꺼 둔다
+  return /[가-힣ᄀ-ᇿ㄰-㆏Ѐ-ӿ]/.test(h);   // 한글·러시아어가 있으면 켠다
+}
 function pnChkHeadDefs(){
   const all=(typeof colOrdApply==='function')?colOrdApply('pnchk', pnChkHeadDefsAll()):pnChkHeadDefsAll();
   const m=pnChkColsMap();
-  const v=all.filter(c=>m[c.k]!==false);
+  const on=c=>(typeof m[c.k]==='boolean') ? m[c.k] : pnChkColDefaultOn(c.k);
+  const v=all.filter(on);
   return v.length?v:all.filter(c=>c.k==='c'+(_pnChk?_pnChk.pnCol:0));
 }
 function pnChkColLabel(key){ const d=pnChkHeadDefsAll().find(x=>x.k===key); return d?String(d.t).replace(/<br>/g,' '):key; }
@@ -15950,7 +15964,8 @@ function openPnChkViewPanel(){
     + '<div style="padding:10px 14px;overflow:auto">'
       + ((typeof colOrdHint==='function')?colOrdHint(ru):'')
       + '<div id="pnChkColList" style="border:1px solid var(--border);border-radius:8px;padding:4px 6px">'
-      + list.map(c=>colOrdRow(c.k, String(c.t).replace(/<br>/g,' '), m[c.k]!==false, ru, 'pcv')).join('')
+      + list.map(c=>colOrdRow(c.k, String(c.t).replace(/<br>/g,' '),
+          (typeof m[c.k]==='boolean')?m[c.k]:pnChkColDefaultOn(c.k), ru, 'pcv')).join('')
       + '</div></div>'
     + '<div style="display:flex;gap:7px;padding:11px 14px;border-top:1px solid var(--border)">'
       + '<button id="pcvAll" style="flex:none;padding:7px 10px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);cursor:pointer;font-size:12px">'+(ru?'Все':'전체 선택')+'</button>'
@@ -16148,6 +16163,13 @@ async function handlePnChkUpload(ev){
     }
     _pnChk=best;
     _pnChkFilters={}; _pnChkSort={key:null,dir:'asc'};   // 새 파일이면 거르개는 처음부터
+    // 올린 파일의 열(c0·c1…)은 파일마다 뜻이 달라, 지난 파일의 켜고 끔을 물려받으면 안 된다.
+    //   우리가 붙이는 열(대표품번·단종 …)의 설정은 그대로 둔다.
+    try{
+      if(psiCols && psiCols.__pnchk) Object.keys(psiCols.__pnchk).forEach(k=>{ if(/^c\d+$/.test(k)) delete psiCols.__pnchk[k]; });
+      if(typeof colOrdSet==='function') colOrdSet('pnchk', []);
+      if(typeof savePsiCols==='function') savePsiCols();
+    }catch(e){}
     renderPnChk();
   }catch(e){ console.error(e); alert(ru?'Ошибка чтения файла.':'파일을 읽지 못했습니다.'); }
 }
