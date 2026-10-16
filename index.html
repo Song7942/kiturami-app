@@ -15816,6 +15816,8 @@ function pnChkHeadDefs(){
       out.push({t:L('단종','Снято'), k:'dan'});
       if(typeof canViewExportCtrl==='function' && canViewExportCtrl())
         out.push({t:L('수출제한','Эксп.контроль'), k:'exp'});
+      if(typeof poCanSeeSupply==='function' && poCanSeeSupply())
+        out.push({t:L('공급가격','Цена есть'), k:'sup'});
       out.push({t:L('품명','Наименование'), k:'nm'});
       out.push({t:L('규격','Хар-ки'), k:'sp'});
       // 대체품목(연결조립필요품목포함) — 품번조회에 적어 둔 것을 대표품번으로 찾아 온다
@@ -15833,6 +15835,12 @@ function pnChkExpOf(r){
   const k=String(r.fin||'')||String(r.code||'');
   return (k && isExportRestricted(k)) ? 'O' : '';
 }
+// 공급가격 — 가격정보에 공급가(RUB·USD)가 적혀 있으면 O. 단종·수출제한과 같이 최종품번 기준.
+function pnChkSupOf(r){
+  if(typeof poHasSupply!=='function') return '';
+  const k=String(r.fin||'')||String(r.code||'');
+  return (k && poHasSupply(k)) ? 'O' : '';
+}
 function pnChkIsNumCol(key){ const qc=pnChkQtyCol(); return qc>=0 && key==='c'+qc; }
 // 한 줄에서 그 열의 값 — 화면에 찍히는 글자와 같게 맞춘다
 function pnChkCellVal(key, r){
@@ -15840,6 +15848,7 @@ function pnChkCellVal(key, r){
   if(key==='fin') return String(r.fin||'');
   if(key==='dan') return String(r.dan||'');
   if(key==='exp') return pnChkExpOf(r);
+  if(key==='sup') return pnChkSupOf(r);
   if(key==='nm')  return String(r.name||'');
   if(key==='sp')  return String(r.spec||'');
   if(key==='alt')      return r.rep?pnAltText(r.rep):'';
@@ -16161,6 +16170,8 @@ function renderPnChk(){
         tds.push('<td style="'+tdS+';color:#ef4444;font-weight:700">'+escapeHtml(r.dan||'')+'</td>');
         if(typeof canViewExportCtrl==='function' && canViewExportCtrl())
           tds.push('<td style="'+tdS+';color:#ef4444;font-weight:700">'+pnChkExpOf(r)+'</td>');
+        if(typeof poCanSeeSupply==='function' && poCanSeeSupply())
+          tds.push('<td style="'+tdS+';color:#0ea5e9;font-weight:700">'+pnChkSupOf(r)+'</td>');
         tds.push('<td style="'+tdS+'">'+escapeHtml(r.name||'')+'</td>');
         tds.push('<td style="'+tdS+';color:var(--muted)">'+escapeHtml(r.spec||'')+'</td>');
         // 대체품목 — 품번조회와 같이 품번마다 한 줄씩 쌓는다
@@ -16232,6 +16243,16 @@ async function loadPnChkTab(){
   if(typeof loadPnSpecs==='function'){ try{ await loadPnSpecs(); }catch(e){} }
   if(typeof loadPnAlt==='function'){ try{ await loadPnAlt(); }catch(e){} }           // 대체품목
   if(typeof loadExportCtrl==='function'){ try{ await loadExportCtrl(); }catch(e){} } // 수출제한
+  // 공급가격 여부를 보려면 가격정보(계산식·환율)가 있어야 한다
+  if(typeof poCanSeeSupply==='function' && poCanSeeSupply()){
+    try{
+      const need=[];
+      if(typeof loadPriceSettings==='function') need.push(loadPriceSettings());
+      if(typeof loadPriceCalc==='function' && !(priceCalcData||[]).length) need.push(loadPriceCalc());
+      if(need.length) await Promise.all(need);
+    }catch(e){ console.warn('공급가 자료', e); }
+    if(typeof poSupplyClear==='function') poSupplyClear();
+  }
   renderPnChk();
 }
 // ══════════════════════════════════════════
