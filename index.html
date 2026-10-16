@@ -4668,7 +4668,7 @@ function pnBaseCols(isKo, showEng){
     c.push({key:'alt_name', cap:150, group:g, color:'#f59e0b', capLabel:ru?'Наименование':'품명'});
     c.push({key:'alt_qty',  cap:74,  group:g, color:'#f59e0b', capLabel:ru?'Кол-во':'필요수량'}); }
   // 적용모델(신규) — 품번·제품명 두 칸을 한 묶음으로
-  { const g=ru?'Модели (новое)':'적용모델(신규)';
+  { const g=ru?'Модели':'적용모델';
     c.push({key:'mdl',      cap:112, group:g, color:'#0ea5e9', capLabel:ru?'Артикул':'품번'});
     c.push({key:'mdl_name', cap:pnMdlNameCap(), group:g, color:'#0ea5e9', capLabel:ru?'Наименование':'제품명'}); }
   // 적용모델(임시)과 모델 점 찍기 열(A.P · A.N S …)은 '적용모델(신규)' 이 대신하므로 뺐다.
@@ -4794,7 +4794,7 @@ function pnColText(key, r){
 function pnColLabelShort(key){
   const t=T[lang];
   if(key && key.indexOf('m:')===0){ const mk=key.slice(2); const md=(typeof MODEL_DEFS!=='undefined'?MODEL_DEFS:[]).find(m=>m.key===mk); return md?(md.group+' '+md.label):key; }
-  const M={export_ctrl:(lang==='ru'?'Эксп.контроль':'수출제한'), name:t.pnH0, spec:t.pnH0s, name_ru:(lang==='ru'?'Рус.название':'러시아어 품명'), name_en:(lang==='ru'?'Англ.название':'영문품명'), rep:t.pnH1, compat:t.pnH2, final:t.pnH3, nw:'N/W', gw:'G/W', cbm:'CBM', out:(lang==='ru'?'Расход (всего)':'출고(전체기간)'), ship:(lang==='ru'?'Отгрузка (всего)':'선적(전체기간)'), note:(lang==='ru'?'Снято с пр-ва':'단종'), alt:(lang==='ru'?'Замена — артикул':'대체품목 품번'), alt_name:(lang==='ru'?'Замена — наименование':'대체품목 품명'), alt_qty:(lang==='ru'?'Замена — кол-во':'대체품목 필요수량'), applied_models:(lang==='ru'?'Модели':'적용모델(임시)'), mdl:(lang==='ru'?'Модели (новое) — артикул':'적용모델(신규) 품번'), mdl_name:(lang==='ru'?'Модели (новое) — наименование':'적용모델(신규) 제품명')};
+  const M={export_ctrl:(lang==='ru'?'Эксп.контроль':'수출제한'), name:t.pnH0, spec:t.pnH0s, name_ru:(lang==='ru'?'Рус.название':'러시아어 품명'), name_en:(lang==='ru'?'Англ.название':'영문품명'), rep:t.pnH1, compat:t.pnH2, final:t.pnH3, nw:'N/W', gw:'G/W', cbm:'CBM', out:(lang==='ru'?'Расход (всего)':'출고(전체기간)'), ship:(lang==='ru'?'Отгрузка (всего)':'선적(전체기간)'), note:(lang==='ru'?'Снято с пр-ва':'단종'), alt:(lang==='ru'?'Замена — артикул':'대체품목 품번'), alt_name:(lang==='ru'?'Замена — наименование':'대체품목 품명'), alt_qty:(lang==='ru'?'Замена — кол-во':'대체품목 필요수량'), applied_models:(lang==='ru'?'Модели':'적용모델(임시)'), mdl:(lang==='ru'?'Модели — артикул':'적용모델 품번'), mdl_name:(lang==='ru'?'Модели — наименование':'적용모델 제품명')};
   return String(M[key]||key).replace(/<br>/g,' ');
 }
 // 모델 열용 소형 필터 아이콘(셀이 좁아 콤팩트하게)
@@ -20610,8 +20610,8 @@ function openPriceViewPanel(){
     +'<input type="checkbox" id="pvGroup" '+(priceGroupOn()?'checked':'')+' style="cursor:pointer;flex:none">'
     +'<span>'+(ru?'Группировать по осн. артикулу':'대표품번끼리 묶어 보기')+'</span></label>'
     +'<div style="font-size:11px;color:var(--muted);margin-top:6px;line-height:1.5">'
-    +(ru?'Строки одного осн. артикула собираются вместе, сверху — строка осн. артикула. При группировке сортировка по заголовку отключена.'
-        :'같은 대표품번끼리 모으고 그 위에 대표품번 줄을 얹습니다. 묶어 보는 동안에는 머리글 정렬을 쓸 수 없습니다.')
+    +(ru?'Строки одного осн. артикула собираются вместе, сверху — строка осн. артикула. Сортировка по заголовку работает и здесь — переставляются целые группы.'
+        :'같은 대표품번끼리 모으고 그 위에 대표품번 줄을 얹습니다. 머리글 정렬도 그대로 쓸 수 있고, 묶음째 자리를 옮깁니다.')
     +'<br>'+(ru?'Выбор столбцов сохраняется отдельно для каждого экрана и ID.':'열 선택은 화면마다·아이디별로 따로 저장됩니다.')
     +'</div></div>'
     +'<div style="display:flex;gap:7px;padding:11px 14px;border-top:1px solid var(--border)">'
@@ -20758,20 +20758,39 @@ function priceApplyFilters(){
     });
     close();
   }
-  if(_prSort.i!=null && trs.length===all.length){
+  if(_prSort.i!=null){
     const i=_prSort.i, dir=(_prSort.dir==='desc')?-1:1;
-    const nums=trs.map(tr=>_prNum(priceCellVal(tr,i)));
-    const allNum=nums.every(x=>x==null||typeof x==='number') && nums.some(x=>x!=null);
-    const arr=trs.slice();
-    arr.sort((a,b)=>{
-      const x=priceCellVal(a,i), y=priceCellVal(b,i);
-      if(allNum){ const nx=_prNum(x), ny=_prNum(y);
-        if(nx==null && ny==null) return 0;
-        if(nx==null) return 1; if(ny==null) return -1;
-        return (nx-ny)*dir; }
-      return String(x).localeCompare(String(y),'ko')*dir;
-    });
-    arr.forEach(tr=>tbody.appendChild(tr));
+    const cmp=(get, list)=>{
+      const nums=list.map(x=>_prNum(get(x)));
+      const allNum=nums.every(x=>x==null||typeof x==='number') && nums.some(x=>x!=null);
+      return (a,b)=>{
+        const x=get(a), y=get(b);
+        if(allNum){ const nx=_prNum(x), ny=_prNum(y);
+          if(nx==null && ny==null) return 0;
+          if(nx==null) return 1; if(ny==null) return -1;
+          return (nx-ny)*dir; }
+        if(x==='' && y==='') return 0;
+        if(x==='') return 1; if(y==='') return -1;      // 빈 칸은 늘 뒤로
+        return String(x).localeCompare(String(y),'ko')*dir;
+      };
+    };
+    if(trs.length===all.length){
+      const arr=trs.slice();
+      arr.sort(cmp(tr=>priceCellVal(tr,i), arr));
+      arr.forEach(tr=>tbody.appendChild(tr));
+    }else{
+      // 묶어 보기: 대표품번 줄과 그 아래 호환품번 줄을 한 덩어리로 묶어 옮긴다.
+      //   값은 대표품번 줄의 칸으로 본다 — 화면에 적혀 있는 그 값이다.
+      const blocks=[]; let cur=null;
+      all.forEach(tr=>{
+        if(tr.classList.contains('price-grp')){ cur={head:tr, rows:[]}; blocks.push(cur); }
+        else if(cur){ cur.rows.push(tr); }
+        else { cur={head:null, rows:[tr]}; blocks.push(cur); }
+      });
+      const get=b=> b.head ? priceCellVal(b.head,i) : (b.rows.length?priceCellVal(b.rows[0],i):'');
+      blocks.sort(cmp(get, blocks));
+      blocks.forEach(b=>{ if(b.head) tbody.appendChild(b.head); b.rows.forEach(r=>tbody.appendChild(r)); });
+    }
   }
   const badge=document.getElementById('priceCountBadge');
   if(badge && (keys.length||hideZero)) badge.innerHTML=T[lang].priceCount(vis);
@@ -20805,11 +20824,11 @@ function openPRFilter(i, anchor){
   box.style.cssText='position:fixed;top:'+(rect.bottom+4)+'px;left:'+Math.max(6,Math.min(rect.left, window.innerWidth-W-6))+'px;'
     + 'z-index:9999;background:var(--surface2);border:1px solid var(--border);border-radius:10px;box-shadow:0 10px 30px #0009;'
     + 'width:'+W+'px;font-size:12px;color:var(--text);overflow:hidden';
-  const grouped=priceGroupOn();
-  const sortBtn=(dir,txt)=>'<button class="prf-sort" data-dir="'+dir+'"'+(grouped?' disabled':'')+' style="width:100%;text-align:left;padding:6px 8px;border:none;'
-    + 'background:'+((!grouped&&_prSort.i===i&&_prSort.dir===dir)?'var(--accent2)':'none')+';'
-    + 'color:'+(grouped?'var(--muted)':((_prSort.i===i&&_prSort.dir===dir)?'#fff':'var(--text)'))+';'
-    + 'cursor:'+(grouped?'default':'pointer')+';border-radius:6px;font-size:12px">'+txt+'</button>';
+  // 묶어 보기 중에도 정렬을 쓸 수 있다 — 묶음(대표품번 덩어리) 단위로 옮긴다.
+  const sortBtn=(dir,txt)=>'<button class="prf-sort" data-dir="'+dir+'" style="width:100%;text-align:left;padding:6px 8px;border:none;'
+    + 'background:'+((_prSort.i===i&&_prSort.dir===dir)?'var(--accent2)':'none')+';'
+    + 'color:'+((_prSort.i===i&&_prSort.dir===dir)?'#fff':'var(--text)')+';'
+    + 'cursor:pointer;border-radius:6px;font-size:12px">'+txt+'</button>';
   const itemsHtml=vals.map(v=>'<label class="prf-item" data-v="'+escapeHtml(v)+'" style="display:flex;align-items:center;gap:6px;padding:4px 8px;cursor:pointer;line-height:1.3">'
     + '<input type="checkbox" class="prf-chk" '+((!cur||cur.has(v))?'checked':'')+' style="cursor:pointer;flex:none">'
     + '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(v===''?blank:escapeHtml(v))+'</span></label>').join('');
