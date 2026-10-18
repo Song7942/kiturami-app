@@ -43,6 +43,8 @@ td.man input.cell{background:#ffedd5;color:#9a3412;font-weight:700}
 .flag.g{background:#fee2e2;color:#991b1b}
 .flag.u{background:#dbeafe;color:#1e40af}
 td.hc{position:relative}
+td.del{text-align:center;color:var(--border);cursor:pointer;font-weight:700;user-select:none}
+td.del:hover{color:#ef4444;background:#fee2e2}
 .hdot{position:absolute;right:1px;top:1px;width:6px;height:6px;border-radius:50%;background:#ef4444;cursor:pointer}
 </style>
 </head>
@@ -68,6 +70,8 @@ td.hc{position:relative}
     <button id="fclrAll" style="display:none">거르개 해제</button>
     <button id="vbtn">보기</button>
     <button id="hbtn">변경이력</button>
+    <button id="delShown" title="찾기·거르개로 추려 놓은 줄을 한꺼번에 지웁니다">보이는 것 지우기</button>
+    <button id="dropClr" style="display:none" title="지워 둔 품번을 다시 받을 수 있게 합니다">지워 둔 품번 비우기</button>
     <button id="xls">엑셀 내려받기</button>
     <span class="sep"></span>
     <button id="push" class="pri">웹에 공급가 보내기</button>
@@ -213,7 +217,7 @@ function hTime(t){
 }
 function hFmt(v){ const s=String(v==null?'':v); if(s==='') return '(빈칸)';
   const n=Number(s); return isFinite(n)?n.toLocaleString():s; }
-const H_LABEL={ cost:'원가 KRW', sup:'공급가 KRW', '@gp':'기준 GP(%)', '@rub':'환율 RUB', '@usd':'환율 USD' };
+const H_LABEL={ cost:'원가 KRW', sup:'공급가 KRW', '@gp':'기준 GP(%)', '@rub':'환율 RUB', '@usd':'환율 USD', '@del':'품목 지움' };
 function hLabel(f){ return H_LABEL[f]||f; }
 // 칸 모서리에 붙이는 표시
 function hDot(f, pn){
@@ -454,10 +458,56 @@ function fixHeadTop(){
 }
 addEventListener('resize', fixHeadTop);
 
+/* ══ 품목 지우기 ═══════════════════════════════════════════
+ *   줄 왼쪽 ✕ 로 한 줄씩, 또는 [보이는 것 지우기] 로 지금 걸러 놓은 줄을 한꺼번에.
+ *   지운 품번은 적어 두었다가 [웹과 맞추기] 때 다시 넣지 않는다.
+ *   (되살리려면 '지워 둔 품번 비우기' 를 누르고 한 번 더 맞춥니다)
+ */
+function dropBag(){ if(!D.dropped || typeof D.dropped!=='object') D.dropped={}; return D.dropped; }
+function dropCount(){ return Object.keys(dropBag()).length; }
+function rowPn(r){ return norm(r.cmp) || norm(r.fin) || norm(r.rep); }
+function costDelete(i){
+  const r=view[i]; if(!r) return;
+  const pn=rowPn(r);
+  const nm=[r.nm, r.sp].filter(Boolean).join(' · ');
+  if(!confirm('이 품목을 지웁니다.\n\n'+(r.cmp||r.rep||'')+(nm?('\n'+nm):'')
+    +'\n\n· 원가·공급가도 함께 사라집니다\n· [웹과 맞추기] 를 해도 다시 들어오지 않습니다\n\n계속할까요?')) return;
+  const k=D.rows.indexOf(r);
+  if(k<0) return;
+  D.rows.splice(k,1);
+  if(pn) dropBag()[pn]=1;
+  hAdd('@del', pn, (r.nm||r.cmp||r.rep||'있음'), '지웠음', '손으로');
+  save(true); fill(); render();
+  msg('지웠습니다 — '+(r.cmp||r.rep||'')+(dropCount()?('  · 지워 둔 품번 '+dropCount().toLocaleString()+'개'):''), 'ok');
+}
+function costDeleteShown(){
+  const n=view.length;
+  if(!n){ msg('지울 줄이 없습니다','no'); return; }
+  if(n===D.rows.length){
+    alert('지금은 모든 품목이 보이고 있습니다.\n\n먼저 찾기나 머리글 거르개로 지울 것만 추린 뒤에 눌러 주세요.');
+    return;
+  }
+  if(!confirm('지금 보이는 '+n.toLocaleString()+'개를 모두 지웁니다.\n\n'
+    +'· 원가·공급가도 함께 사라집니다\n· [웹과 맞추기] 를 해도 다시 들어오지 않습니다\n\n계속할까요?')) return;
+  const kill=new Set(view);
+  view.forEach(r=>{ const pn=rowPn(r); if(pn) dropBag()[pn]=1;
+    hAdd('@del', pn, (r.nm||r.cmp||r.rep||'있음'), '지웠음', '손으로'); });
+  D.rows=D.rows.filter(r=>!kill.has(r));
+  save(true); fill(); render();
+  msg(n.toLocaleString()+'개를 지웠습니다 · 지워 둔 품번 '+dropCount().toLocaleString()+'개','ok');
+}
+function dropClear(){
+  const n=dropCount();
+  if(!n){ msg('지워 둔 품번이 없습니다','no'); return; }
+  if(!confirm('지워 둔 품번 '+n.toLocaleString()+'개를 다시 받을 수 있게 합니다.\n'
+    +'([웹과 맞추기] 를 누르면 품번조회에 있는 것은 다시 들어옵니다)\n\n계속할까요?')) return;
+  D.dropped={}; save(true); render();
+  msg('지워 둔 품번 표시를 비웠습니다 — [웹과 맞추기] 를 눌러 보세요','ok');
+}
 function render(){
   view = filtered();
   const cols=visCols();
-  $('th').innerHTML = '<tr>'+cols.map(c=>'<th style="width:'+c.w+'px">'+c.t+fChip(c.k)+'</th>').join('')+'</tr>';
+  $('th').innerHTML = '<tr><th style="width:26px" title="줄을 지웁니다">✕</th>'+cols.map(c=>'<th style="width:'+c.w+'px">'+c.t+fChip(c.k)+'</th>').join('')+'</tr>';
   $('th').querySelectorAll('.fchip').forEach(s=>{ s.onclick=e=>{ e.stopPropagation(); openFilter(s.getAttribute('data-k'), s); }; });
   { const n=Object.keys(_fSel).length + (_fSort.k?1:0);
     const b=$('fclrAll'); if(b){ b.style.display=n?'':'none'; b.textContent='거르개 해제'+(n>1?(' '+n):''); } }
@@ -485,11 +535,15 @@ function render(){
       gp:  '<td class="num" style="color:var(--muted)">'+(g!=null?(Math.round(g*1000)/10)+'%':'')+'</td>'
     };
     return '<tr data-i="'+i+'" class="'+(r.gone?'gone':(r.isNew?'isnew':''))+'">'
+      + '<td class="del" data-i="'+i+'" title="이 품목을 지웁니다">✕</td>'
       + cols.map(cc=>td[cc.k]||'<td></td>').join('') + '</tr>';
   }).join('');
   // 이력 표시를 누르면 그 칸의 변경이력 쪽지가 뜬다
+  $('tb').querySelectorAll('.del').forEach(e=>{ e.onclick=()=>costDelete(+e.getAttribute('data-i')); });
   $('tb').querySelectorAll('.hdot').forEach(s=>{ s.onclick=e=>{ e.stopPropagation();
     hShow(s.getAttribute('data-f'), s.getAttribute('data-pn'), s); }; });
+  { const dn=dropCount(); const db=$('dropClr');
+    if(db){ db.style.display=dn?'':'none'; db.textContent='지워 둔 품번 비우기'+(dn?(' '+dn):''); } }
   { const n=hCount(); const b=$('hbtn');
     if(b){ b.textContent='변경이력'+(n?(' '+n):''); b.style.opacity=n?'1':'0.55'; } }
   $('empty').style.display = view.length?'none':'block';
@@ -591,7 +645,7 @@ async function catalogBuild(onStep){
   });
   return cat;
 }
-let _syncing=false;
+let _syncing=false, _syncSkipped=0;
 async function catalogSync(auto){
   if(_syncing) return;
   _syncing=true;
@@ -614,18 +668,22 @@ async function catalogSync(auto){
       if(ch) fixed++;
     });
     let n=0; D.rows.forEach(r=>{ const x=Number(r.n); if(isFinite(x)&&x>n) n=x; });
+    const drop=dropBag(); let skipped=0;
     cat.forEach((c,k)=>{
       if(seen.has(k)) return;
+      if(drop[k]){ skipped++; return; }        // 손으로 지워 둔 품번은 다시 넣지 않는다
       D.rows.push({ n:++n, nm:c.nm, sp:c.sp, rep:c.rep, cmp:c.cmp, fin:c.fin,
                     cost:null, sup:null, isNew:1 });
       added++;
     });
+    _syncSkipped=skipped;
     D.catAt=new Date().toISOString();
     save(true); fill(); render();
     const parts=[];
     if(fixed) parts.push('품명·규격 '+fixed.toLocaleString()+'개를 고쳤습니다');
     if(added) parts.push('새 품번 '+added.toLocaleString()+'개를 넣었습니다');
     if(gone)  parts.push('품번조회에 없는 것 '+gone.toLocaleString()+'개를 표시했습니다');
+    if(_syncSkipped) parts.push('지워 둔 품번 '+_syncSkipped.toLocaleString()+'개는 넣지 않았습니다');
     msg(parts.length?('웹과 맞췄습니다 — '+parts.join(' · ')):'웹과 같습니다 — 고칠 것이 없었습니다', 'ok');
   }catch(e){
     msg((auto?'웹과 맞추지 못했습니다 — ':'맞추기 실패 — ')+e.message, 'no');
@@ -670,6 +728,8 @@ $("onlyNew").addEventListener("change", render);
 $("fclrAll").onclick=filterReset;
 $("vbtn").onclick=openViewPanel;
 $("hbtn").onclick=openHistAll;
+$("delShown").onclick=costDeleteShown;
+$("dropClr").onclick=dropClear;
 
 /* 파일로 내보내기 / 불러오기 */
 $('exp').onclick=()=>{
