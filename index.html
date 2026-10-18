@@ -4797,8 +4797,11 @@ function pnColMetaOrdered(isKo, showEng, isMaster, showAll){
     base.forEach((c,bi)=>{ if(!seen.has(c.key)){ out.splice(Math.min(bi,out.length),0,c); seen.add(c.key); } });
     ordered=out;
   }
-  // 분할 보기: 수출제한을 호환품번 바로 뒤로 강제 배치
-  if(_pnSplit){
+  // 분할 보기의 기본 자리: 수출제한을 호환품번 바로 뒤에 둔다.
+  //   다만 '보기' 에서 차례를 손수 정해 둔 경우에는 그 뜻을 따른다 —
+  //   안 그러면 수출제한만 아무리 옮겨도 제자리로 돌아와 버린다.
+  const expPinned = !(saved && saved.length && saved.indexOf('export_ctrl')>=0);
+  if(_pnSplit && expPinned){
     const ei=ordered.findIndex(c=>c.key==='export_ctrl');
     if(ei>=0){ const ec=ordered.splice(ei,1)[0]; const ci=ordered.findIndex(c=>c.key==='compat'); if(ci>=0) ordered.splice(ci+1,0,ec); else ordered.unshift(ec); }
   }
