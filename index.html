@@ -13261,7 +13261,7 @@ function renderPO(){
       qty:'<td class="'+(poIsManQ(r.cha,r.pn)?'po-man':'')+'" style="'+numS+'">'
         +(EDPO?poNumEdit(r.cha,r.pn,'qty',r.qty):(r.qty?r.qty.toLocaleString():'0'))+'</td>',
       sup:'<td class="'+(poIsMan(r.cha,r.pn)?'po-man':'')+'" style="'+numS+'">'
-        // 공급수량은 언제나 칸에서 바로 고친다(⇄ 를 누르지 않아도). 지우면 인보이스 기준으로 돌아간다(onPoNumBlur).
+        // 공급수량은 언제나 칸에서 바로 고친다(⇄ 를 누르지 않아도). 비우면 0 이 된다(onPoNumBlur).
         +(EDPO ? poNumEdit(r.cha,r.pn,'supplied',r.supplied)
                : (poSplitOf(r.cha,r.pn)
                    ? ('<span title="'+escapeHtml(poSplitOf(r.cha,r.pn).map(x=>normBadgePN(x.c)+((Number(x.q)||0)>0?(' × '+x.q):'')).join('\n'))+'">'
@@ -13592,24 +13592,19 @@ async function onPoNumBlur(el){
   const row=(poData||[]).find(x=>String(x.cha)===cha && normPN(x.pn)===normPN(pn));
   if(!row){ el.textContent=before; return; }
   if(field==='supplied'){
-    const key=poManKey(cha,pn), sp=poSplitOf(cha,pn);
-    const selfOnly=!!(sp && sp.every(x=>normPN(x.c)===normPN(pn)));
-    // 칸을 비우면 손으로 적은 공급수량을 지운다 → 인보이스 기준으로 다시 셈(공급코드는 기록으로 남긴다)
-    if(txt===''){
-      if(sp && !selfOnly){ await poSplitApply(row, sp.map(x=>({c:x.c, q:0}))); return; }
-      if(sp) delete _poSplit[key];
-      delete _poMan[key]; savePoMan();
-      _poLastEdit=new Date().toISOString();
-      if(typeof poRecalcSupply==='function') await poRecalcSupply();
-      await loadPO(); renderPO(); poManBtn(); poSimRefresh();
-      return;
-    }
+    const sp=poSplitOf(cha,pn);
+    // 칸을 비우면 0 으로 적은 것과 똑같이 둔다.
+    //   손으로 고친 값으로 담기 때문에, 인보이스로 다시 셈해도 0 이 그대로 남는다.
+    //   인보이스 기준으로 되돌리려면 위쪽 [수기 초기화] 를 쓴다.
     // 코드별로 나눠 적은 줄: 코드가 하나면 그 코드의 수량으로 고친다. 여러 개면 코드별로 고쳐야 한다.
     if(sp){
-      if(sp.length===1){ await poSplitApply(row, [{c:sp[0].c, q:Math.round(num)}]); return; }
-      alert(ru?'Разбито по кодам — правьте количество по каждому коду.'
-              :'여러 코드로 나눠 적은 줄입니다.\n변경코드(공급) 칸에서 코드마다 수량을 고치거나 ⇄ 를 눌러 주세요.');
-      el.textContent=before; return;
+      if(txt===''){ await poSplitApply(row, sp.map(x=>({c:x.c, q:0}))); }   // 나눠 적은 수량도 0 으로
+      else if(sp.length===1){ await poSplitApply(row, [{c:sp[0].c, q:Math.round(num)}]); return; }
+      else {
+        alert(ru?'Разбито по кодам — правьте количество по каждому коду.'
+                :'여러 코드로 나눠 적은 줄입니다.\n변경코드(공급) 칸에서 코드마다 수량을 고치거나 ⇄ 를 눌러 주세요.');
+        el.textContent=before; return;
+      }
     }
   }
   const was=Math.round(Number(row[field])||0);
