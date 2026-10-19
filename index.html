@@ -13404,7 +13404,9 @@ function poSplitParse(txt){
   const c=pnUpAll(s.replace(/\s+/g,''));
   return c?{ c, q:0 }:null;
 }
-// 적은 코드(와 수량)를 이미 적어 둔 내역 뒤에 한 단 더 붙인다. 같은 코드면 수량을 합친다.
+// 적은 코드(와 수량)를 '화면에 보이는' 내역 뒤에 한 단 더 붙인다. 같은 코드면 수량을 합친다.
+//   발주코드 자신만 한 줄 적혀 있던 것(화면에 안 보이는 기록)은 끌어오지 않는다 —
+//   실제로 나간 코드를 적는 것이므로, 적은 코드만 남아야 한다.
 async function onPoChgNewBlur(el){
   const ru=(lang==='ru');
   const got=poSplitParse(el.textContent);
@@ -13415,7 +13417,7 @@ async function onPoChgNewBlur(el){
   const row=(poData||[]).find(x=>String(x.cha)===cha && normPN(x.pn)===normPN(pn)); if(!row) return;
   if(!poName(got.c) && !confirm(ru?'Кода нет в справочнике. Сохранить?':(normBadgePN(got.c)+' 는 품번조회에 없는 코드입니다. 그래도 적을까요?'))) return;
   const m={}, order=[];
-  (poSplitOf(cha,pn)||[]).concat([got]).forEach(x=>{ if(!x.c) return; const k=normPN(x.c);
+  (poSplitShown(cha,pn)||[]).concat([got]).forEach(x=>{ if(!x.c) return; const k=normPN(x.c);
     if(!(k in m)){ m[k]={c:x.c, q:0}; order.push(k); } m[k].q+=(Number(x.q)||0); });
   await poSplitApply(row, order.map(k=>m[k]));
 }
