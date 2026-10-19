@@ -52,6 +52,32 @@ if($xtag.Success){
   $html=$html.Replace($xtag.Value, '<script>' + $xjs + '</script>')
 }
 
+# 1c) 분해도 그림은 따로 떼어 낸다.
+#   index.html 안에 base64 로 박혀 있던 그림 18장이 2.7 MB 를 차지한다.
+#   파일로 꺼내 두면 첫 화면이 그만큼 가벼워지고, 브라우저가 보는 그림만 받아
+#   한 번 받은 것은 다음부터 다시 안 받는다.
+$IMGDIR = Join-Path $DIR 'img'
+if(Test-Path $IMGDIR){ Get-ChildItem $IMGDIR -Filter '*.png' | Remove-Item -Force }
+else { [void](New-Item -ItemType Directory -Path $IMGDIR) }
+$script:imgN = 0
+$script:imgBytes = 0
+$evalImg = {
+  param($m)
+  $b64 = $m.Groups[1].Value
+  $script:imgN++
+  $name = 'd{0:D2}.png' -f $script:imgN
+  try{
+    $bytes = [Convert]::FromBase64String($b64)
+    [IO.File]::WriteAllBytes((Join-Path $IMGDIR $name), $bytes)
+    $script:imgBytes += $bytes.Length
+    return 'img/' + $name
+  }catch{
+    return $m.Value          # 못 풀면 그대로 둔다
+  }
+}
+$html = [regex]::Replace($html, 'data:image/png;base64,([A-Za-z0-9+/=]+)', $evalImg)
+Write-Output ('images : {0} files, {1:N2} MB -> img\' -f $script:imgN, ($script:imgBytes/1MB))
+
 # 2) the two server paths are plain php files next to index.html
 $html=$html.Replace("fetch('/api/fxrate')","fetch('api/fxrate.php')")
 $html=$html.Replace("fetch('/api/notify'","fetch('api/notify.php'")

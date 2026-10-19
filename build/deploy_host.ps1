@@ -43,32 +43,57 @@ try { $ftpPass = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr) }
 finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr) }
 
 # ── 3) 올리기 ───────────────────────────────────────────
-$uri = 'ftp://' + $ftpHost + $Remote
-Write-Output ('upload : ' + $uri)
-$t0 = Get-Date
-try {
-  $req = [Net.FtpWebRequest]::Create($uri)
-  $req.Method      = [Net.WebRequestMethods+Ftp]::UploadFile
-  $req.Credentials = New-Object Net.NetworkCredential($ftpUser, $ftpPass)
-  $req.UseBinary   = $true
-  $req.UsePassive  = $true
-  $req.KeepAlive   = $false
-  $req.Timeout     = 600000
-  $req.ReadWriteTimeout = 600000
-  $req.ContentLength = $len
-  $in  = [IO.File]::OpenRead($SRC)
-  $out = $req.GetRequestStream()
-  try {
-    $buf = New-Object byte[] 262144
-    $done = 0; $tick = 0
-    while(($n = $in.Read($buf,0,$buf.Length)) -gt 0){
-      $out.Write($buf,0,$n); $done += $n
-      if((++$tick % 8) -eq 0){ Write-Output ('  {0,3:N0}%  {1:N0} / {2:N0}' -f (100*$done/$len), $done, $len) }
+$cred = New-Object Net.NetworkCredential($ftpUser, $ftpPass)
+function Ftp-MakeDir($path){
+  try{
+    $r=[Net.FtpWebRequest]::Create('ftp://'+$ftpHost+$path)
+    $r.Method=[Net.WebRequestMethods+Ftp]::MakeDirectory
+    $r.Credentials=$cred; $r.UsePassive=$true; $r.KeepAlive=$false
+    $r.GetResponse().Close()
+  }catch{}            # 이미 있으면 그만
+}
+function Ftp-Put($local, $path, $quiet){
+  $size=(Get-Item $local).Length
+  $r=[Net.FtpWebRequest]::Create('ftp://'+$ftpHost+$path)
+  $r.Method=[Net.WebRequestMethods+Ftp]::UploadFile
+  $r.Credentials=$cred; $r.UseBinary=$true; $r.UsePassive=$true; $r.KeepAlive=$false
+  $r.Timeout=600000; $r.ReadWriteTimeout=600000; $r.ContentLength=$size
+  $in=[IO.File]::OpenRead($local); $out=$r.GetRequestStream()
+  try{
+    $buf=New-Object byte[] 262144; $done=0; $tick=0
+    while(($n=$in.Read($buf,0,$buf.Length)) -gt 0){
+      $out.Write($buf,0,$n); $done+=$n
+      if(-not $quiet -and (++$tick % 8) -eq 0){ Write-Output ('  {0,3:N0}%  {1:N0} / {2:N0}' -f (100*$done/$size), $done, $size) }
     }
   } finally { $out.Close(); $in.Close() }
-  $res = $req.GetResponse()
-  Write-Output ('server : ' + $res.StatusDescription.Trim())
-  $res.Close()
+  $res=$r.GetResponse(); $st=$res.StatusDescription.Trim(); $res.Close()
+  return $st
+}
+$t0 = Get-Date
+try {
+  Write-Output ('upload : ftp://' + $ftpHost + $Remote)
+  Write-Output ('server : ' + (Ftp-Put $SRC $Remote $false))
+  # 분해도 그림은 따로 떼어 두었다 — 바뀐 것만 올린다
+  $imgLocal = Join-Path $HOSTDIR 'img'
+  if(Test-Path $imgLocal){
+    $base = ($Remote -replace '/[^/]+$','') + '/img'
+    Ftp-MakeDir $base
+    $pngs = Get-ChildItem $imgLocal -Filter '*.png' | Sort-Object Name
+    $sent = 0
+    foreach($p in $pngs){
+      $same = $false
+      try{
+        $q=[Net.FtpWebRequest]::Create('ftp://'+$ftpHost+$base+'/'+$p.Name)
+        $q.Method=[Net.WebRequestMethods+Ftp]::GetFileSize
+        $q.Credentials=$cred; $q.UsePassive=$true; $q.KeepAlive=$false; $q.Timeout=60000
+        $rr=$q.GetResponse(); $same = ($rr.ContentLength -eq $p.Length); $rr.Close()
+      }catch{}
+      if($same){ continue }
+      [void](Ftp-Put $p.FullName ($base+'/'+$p.Name) $true)
+      $sent++
+    }
+    Write-Output ('images : {0}장 중 {1}장을 올렸습니다 (크기가 같은 것은 건너뜀)' -f $pngs.Count, $sent)
+  }
 } catch {
   Fail ('올리지 못했습니다 — ' + $_.Exception.Message)
 } finally { $ftpPass = $null }
