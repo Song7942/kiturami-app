@@ -96,6 +96,46 @@ Write-Output ('images : {0} files, {1:N2} MB -> img\{2}' -f $script:imgN, ($scri
 $html=$html.Replace("fetch('/api/fxrate')","fetch('api/fxrate.php')")
 $html=$html.Replace("fetch('/api/notify'","fetch('api/notify.php'")
 
+# 1d) 주석 줄과 들여쓰기를 걷어낸다(자체 서버판만. 원본은 그대로 읽기 좋게 둔다).
+#   · '//' 로만 시작하는 줄을 버린다
+#   · 줄 앞 빈칸을 없앤다
+#   백틱(`) 템플릿 안쪽과 /* */ 주석 안쪽은 건드리지 않는다 —
+#   거기서는 그 글자들이 '글'이지 주석이 아니기 때문이다.
+$lines = $html -split "`r`n|`n"
+$sb = New-Object Text.StringBuilder
+$inTpl = $false      # 백틱 템플릿 안인가
+$inBlk = $false      # /* */ 안인가
+$cut = 0
+foreach($ln in $lines){
+  $keep = $ln
+  if(-not $inTpl -and -not $inBlk){
+    $t = $ln.TrimStart()
+    if($t.StartsWith('//')){ $cut++; continue }      # 주석 줄은 버린다
+    $keep = $t                                        # 들여쓰기를 없앤다
+  }
+  [void]$sb.AppendLine($keep)
+  # 이 줄을 지나면서 상태가 어떻게 바뀌는지 센다(따옴표 안의 백틱까지 세지는 않지만
+  #   이 파일에는 그런 것이 없다 — 전체 백틱 수가 짝수인 것으로 확인했다)
+  for($i=0; $i -lt $ln.Length; $i++){
+    $c = $ln[$i]
+    $prev = if($i -gt 0){ $ln[$i-1] } else { [char]0 }
+    if($inBlk){
+      if($c -eq '/' -and $prev -eq '*'){ $inBlk = $false }
+      continue
+    }
+    if($inTpl){
+      if($c -eq '`' -and $prev -ne '\'){ $inTpl = $false }
+      continue
+    }
+    if($c -eq '`' -and $prev -ne '\'){ $inTpl = $true; continue }
+    if($c -eq '*' -and $prev -eq '/'){ $inBlk = $true; continue }
+    if($c -eq '/' -and $prev -eq '/'){ break }        # 줄 끝 주석 — 이 줄은 여기서 그만 본다
+  }
+}
+$before = $html.Length
+$html = $sb.ToString()
+Write-Output ('strip  : 주석 {0}줄 걷어 {1:N0} -> {2:N0} bytes' -f $cut, $before, $html.Length)
+
 # 3) the offline-app button needs a snapshot build, so hide it here
 $html=$html.Replace('<button class="dl-btn" id="pnOfflineBtn"','<button class="dl-btn" id="pnOfflineBtn" hidden')
 
