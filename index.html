@@ -1653,6 +1653,10 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
       <span id="simOpenNote" style="display:none;font-size:10px;color:var(--muted);white-space:nowrap"></span>
       <label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--muted)" title="발주현황의 미공급수량을 '선적계획' 으로 찍을 달입니다.&#10;비워 두면 발주현황을 마지막으로 고친 날의 다음 달로 저절로 잡습니다."><span id="i18n-sim-planlab">미공급 선적달</span>
         <input type="text" id="simPlanYm" list="ktOutYmOpts" placeholder="저절로" onfocus="this.select()" onchange="simPlanYmSet()" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"><button type="button" class="ym-pick" onclick="ktYmPickOpen('simPlanYm',this)">▼</button></label>
+      <button class="dl-btn" id="simPlanShipBtn" onclick="simPlanToShip()" title="수출작업의뢰서로 올린 '선적계획' 은 계획이라 실제선적에는 안 들어갑니다.&#10;인보이스를 아직 안 올렸을 때, 그 달 계획을 실제선적으로 옮깁니다." style="display:none">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M5 12h14"/><polyline points="13 6 19 12 13 18"/></svg>
+        <span id="i18n-sim-plan2ship">계획→실제선적</span>
+      </button>
       <label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--muted)" title="보유월 = 그 달 재고 ÷ (다음 달부터 이 개월 수만큼의 출고 합계 ÷ 개월 수)"><span id="i18n-sim-avg">보유월 향후</span>
         <input type="number" id="simAvgN" min="1" max="24" onchange="renderSIM()" style="width:48px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"><span id="i18n-sim-avgunit">개월</span></label>
       <button class="dl-btn" onclick="openPsiColsPanel()" title="표에 보일 열을 고릅니다(아이디별로 저장)">
@@ -2661,6 +2665,7 @@ function refreshPsiTexts(){
   set('i18n-sim-approve','재가','Согласовать');
   set('i18n-sim-confirm','승인','Утвердить');
   set('i18n-sim-needup','발주필요 업로드','Загрузить дозаказ');
+  set('i18n-sim-plan2ship','계획→실제선적','План → отгрузка');
   set('i18n-sim-reset','필터 초기화','Сброс фильтров');
   set('i18n-sim-manual','수기 초기화','Сброс ручных');
   set('i18n-price-manual','수기 초기화','Сброс ручных');
@@ -18575,6 +18580,51 @@ function simPlanGapShow(){
     +'\n\n'+body
     +'\n\n'+(ru?'' : '품번조회에서 이 코드들을 대표품번 아래 호환품번으로 넣어 주시면 다음부터 함께 잡힙니다.'));
 }
+// 그 달 '선적계획' 을 대표품번마다 얼마인지 낸다.
+//   · 수출작업의뢰서를 올린 달이면 올린 값
+//   · 미공급이 찍히는 달이면 발주현황 미공급
+function simPlanRepMapFor(ym){
+  const out={};
+  const up=(simPlanUpByRep()||{})[ym];
+  if(up){ Object.keys(up).forEach(r=>{ const q=Math.round(Number(up[r])||0); if(q>0) out[r]=q; }); return out; }
+  if(_simPlanYm===ym) _simPlan.forEach((q,r)=>{ const n=Math.round(Number(q)||0); if(n>0) out[r]=n; });
+  return out;
+}
+// 그 달 선적계획을 '실제선적' 으로 옮긴다.
+//   수출작업의뢰서를 올리면 그것은 '계획' 이라 실제선적에는 들어가지 않는다.
+//   실제로 그 달에 나간 것으로 잡으려면(인보이스를 아직 안 올렸을 때) 이것을 쓴다.
+//   담는 곳은 손으로 고칠 때와 같은 PSI 자료(kt_psi)다 — 인보이스를 올리면 그 값이 다시 기준이 된다.
+async function simPlanToShip(){
+  const ru=(lang==='ru');
+  if(!canEditPsi()){ alert(ru?'Нет прав.':'권한이 없습니다.'); return; }
+  simBuild();
+  const upYms=Object.keys(simPlanUpYms()).sort();
+  const def=(upYms.length===1?upYms[0]:(upYms[upYms.length-1]||_simPlanYm||''));
+  const ans=prompt((ru?'Месяц (например 2026-09):':'선적계획을 실제선적으로 옮길 달을 적어 주세요 (예: 2026-09)')
+    +(upYms.length?('\n\n의뢰서로 올린 달: '+upYms.map(psiYmLabel).join(', ')):'')
+    +(_simPlanYm?('\n미공급이 찍히는 달: '+psiYmLabel(_simPlanYm)):''), def?psiYmLabel(def):'');
+  if(ans==null) return;
+  const ym=psiYmParse(ans);
+  if(!ym){ alert(ru?'Укажите месяц, например 2026-09.':'달을 2026-09 처럼 적어 주세요.'); return; }
+  const map=simPlanRepMapFor(ym), reps=Object.keys(map);
+  if(!reps.length){ alert(psiYmLabel(ym)+(ru?' — плана нет.':' 에 선적계획이 없습니다.')); return; }
+  let tot=0; reps.forEach(r=>tot+=map[r]);
+  if(!confirm(psiYmLabel(ym)+' 선적계획을 실제선적으로 옮깁니다.\n\n'
+    +'· 대표품번 '+reps.length+'개 / '+tot.toLocaleString()+'개\n'
+    +'· 그 달 실제선적(PSI 선적 자료)을 이 숫자로 덮어씁니다\n'
+    +'· 뒤에 인보이스를 올리면 그 값이 다시 기준이 됩니다\n\n계속할까요?')) return;
+  let ok=0; const bad=[];
+  for(const r of reps){
+    const p=getPNInfo(r)||{};
+    let was=0; (p.compats||[]).forEach(k=>{ was+=psiShipOf((psiData[normPN(k)]||{}).data, ym); });
+    if(await simShipSave(r, ym, map[r])){ ok++; ktHistAdd('sim.sh', r+'|'+ym, String(was), String(map[r])); }
+    else bad.push(r);
+  }
+  renderSIM();
+  try{ if(ktPaneOn('pane-psi') && typeof renderPSI==='function') renderPSI(); }catch(e){}
+  alert((ru?'Готово. ':'옮겼습니다 — ')+psiYmLabel(ym)+'\n실제선적 '+ok+'줄 / '+tot.toLocaleString()+'개'
+    +(bad.length?('\n※ 품번조회에서 호환품번을 못 찾아 건너뜀 '+bad.length+'개: '+bad.slice(0,8).map(normBadgePN).join(', ')):''));
+}
 // 손으로 고친 값(실제선적·발주필요)을 셈한 값으로 되돌린다
 function simManualCount(){ return Object.keys(_simNeed).length + Object.keys(_simShip).length + Object.keys(_simPlanUp||{}).length + Object.keys(_simOrder||{}).length; }
 function simResetManual(){
@@ -18816,6 +18866,7 @@ function poReqBtns(){
   one('simApproveBtn', poReqCanApprove(), poReqPending().length,  '재가', 'Согласовать');
   one('simConfirmBtn', poReqCanConfirm(), poReqApproved().length, '승인', 'Утвердить');
   const nu=document.getElementById('simNeedUpBtn'); if(nu) nu.style.display=canEditPsi()?'':'none';
+  const p2s=document.getElementById('simPlanShipBtn'); if(p2s) p2s.style.display=canEditPsi()?'':'none';
 }
 // ══════════════════════════════════════════
 // 발주필요 엑셀 올리기
