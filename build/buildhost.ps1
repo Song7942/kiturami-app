@@ -96,6 +96,16 @@ Write-Output ('images : {0} files, {1:N2} MB -> img\{2}' -f $script:imgN, ($scri
 $html=$html.Replace("fetch('/api/fxrate')","fetch('api/fxrate.php')")
 $html=$html.Replace("fetch('/api/notify'","fetch('api/notify.php'")
 
+# 1e) 품번 자료도 옆에 따로 둔다 — 로그인한 뒤에 받는다(280 KB).
+#   같은 배열에 담아야 다른 곳이 들고 있는 참조가 끊기지 않으므로 push 로 채운다.
+$pm = [regex]::Match($html, "(?m)^const PN_DATA=(\[.*\]);$")
+if($pm.Success){
+  $pf = Join-Path $DIR 'pndata.js'
+  [IO.File]::WriteAllText($pf, ('PN_DATA.push.apply(PN_DATA,' + $pm.Groups[1].Value + ');'), $U8)
+  $html = $html.Replace($pm.Value, 'const PN_DATA=[];window.KT_PNDATA_SRC="pndata.js";')
+  Write-Output ('pndata : {0:N0} bytes -> pndata.js (로그인한 뒤에 받는다)' -f (Get-Item $pf).Length)
+}
+
 # 1d) 주석 줄과 들여쓰기를 걷어낸다(자체 서버판만. 원본은 그대로 읽기 좋게 둔다).
 #   · '//' 로만 시작하는 줄을 버린다
 #   · 줄 앞 빈칸을 없앤다

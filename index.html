@@ -22561,6 +22561,36 @@ function authInit(){
   ktInsecureGuard();                 // 암호화 안 된 접속이면 로그인을 막고 까닭을 적어 둔다
 }
 mountModelDiag('order'); // 기본 탭이 주문이므로 시작 시 공용 모델바/분해도를 주문 슬롯에 장착
+// ══ 품번 자료는 로그인한 뒤에 받는다 ══════════════════════
+//   자체 서버판은 첫 화면을 가볍게 하려고 품번 자료(280 KB)를 옆에 따로 둔다.
+//   로그인이 끝나고 화면을 그리기 직전에 받아 PN_DATA 에 채운다.
+//   (클라우드판은 처음부터 들어 있어 이 함수가 바로 끝난다)
+let _pnDataLoad=null;
+function ktLoadPnData(){
+  if(_pnDataLoad) return _pnDataLoad;
+  if(!window.KT_PNDATA_SRC || (Array.isArray(PN_DATA) && PN_DATA.length)){
+    return (_pnDataLoad=Promise.resolve(true));
+  }
+  _pnDataLoad=new Promise(res=>{
+    const sc=document.createElement('script');
+    sc.src=window.KT_PNDATA_SRC;
+    sc.onload=()=>{ try{ _pnLookupMap=null; _pnByRepMap=null; }catch(e){} res(true); };
+    sc.onerror=()=>res(false);
+    document.head.appendChild(sc);
+  });
+  return _pnDataLoad;
+}
+// 로그인·세션 복구 둘 다 enterApp 을 지나므로 그 앞에 한 겹 둘러 둔다.
+(function(){
+  const f=window.enterApp;
+  if(typeof f!=='function' || f.__pnWrap) return;
+  const w=function(){
+    const args=arguments, self=this;
+    return Promise.resolve(ktLoadPnData()).then(()=>f.apply(self, args));
+  };
+  w.__pnWrap=1;
+  window.enterApp=w;
+})();
 // ══ 엑셀 판(xlsx)은 쓸 때 받는다 ═══════════════════════════
 //   자체 서버판은 첫 화면을 가볍게 하려고 엑셀 판을 미리 싣지 않는다(420 KB).
 //   내려받기·올리기는 모두 사람이 단추를 누르거나 파일을 고른 뒤에 시작되므로,

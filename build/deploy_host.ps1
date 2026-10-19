@@ -83,11 +83,12 @@ try {
       return $same
     }catch{ return $false }
   }
-  # 엑셀 판은 옆에 따로 둔다 — 바뀌었을 때만 올린다
-  $xf = Join-Path $HOSTDIR 'xlsx.bundle.js'
-  if(Test-Path $xf){
-    if(Ftp-Same $xf ($dirBase+'/xlsx.bundle.js')){ Write-Output 'xlsx   : 그대로 (건너뜀)' }
-    else { [void](Ftp-Put $xf ($dirBase+'/xlsx.bundle.js') $true); Write-Output 'xlsx   : 올렸습니다' }
+  # 엑셀 판·품번 자료는 옆에 따로 둔다 — 바뀌었을 때만 올린다
+  foreach($extra in 'xlsx.bundle.js','pndata.js'){
+    $ef = Join-Path $HOSTDIR $extra
+    if(-not (Test-Path $ef)){ continue }
+    if(Ftp-Same $ef ($dirBase + '/' + $extra)){ Write-Output ('{0,-15} 그대로 (건너뜀)' -f $extra) }
+    else { [void](Ftp-Put $ef ($dirBase + '/' + $extra) $true); Write-Output ('{0,-15} 올렸습니다' -f $extra) }
   }
   # 분해도 그림은 따로 떼어 두었다 — 바뀐 것만 올린다
   $imgLocal = Join-Path $HOSTDIR 'img'
