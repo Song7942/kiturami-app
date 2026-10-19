@@ -43,13 +43,19 @@ if($OwnDb){
   $html=[regex]::Replace($html, "const SUPABASE_KEY\s*=\s*'[^']*'", "const SUPABASE_KEY=''")
 }
 
-# 1b) the excel library is baked in, so the page needs nothing from the outside
+# 1b) 엑셀 판은 옆에 따로 둔다 — 첫 화면에서 받지 않고, 엑셀을 쓸 때 받는다.
+#   바깥(CDN)으로 나가지 않는 것은 종전과 같다.
 $xtag=[regex]::Match($html, '<script src="https://[^"]*xlsx[^"]*"></script>')
 if($xtag.Success){
   $u=[regex]::Match($xtag.Value,'src="([^"]+)"').Groups[1].Value
-  Write-Output ('xlsx   : fetching ' + $u)
-  $xjs=(Invoke-WebRequest -Uri $u -UseBasicParsing).Content
-  $html=$html.Replace($xtag.Value, '<script>' + $xjs + '</script>')
+  $xf=Join-Path $DIR 'xlsx.bundle.js'
+  if(-not (Test-Path $xf)){
+    Write-Output ('xlsx   : fetching ' + $u)
+    $xjs=(Invoke-WebRequest -Uri $u -UseBasicParsing).Content
+    [IO.File]::WriteAllText($xf, $xjs, $U8)
+  }
+  Write-Output ('xlsx   : {0:N0} bytes -> xlsx.bundle.js (쓸 때 받는다)' -f (Get-Item $xf).Length)
+  $html=$html.Replace($xtag.Value, '<script>window.KT_XLSX_SRC="xlsx.bundle.js";</script>')
 }
 
 # 1c) 분해도 그림은 따로 떼어 낸다.
@@ -61,6 +67,7 @@ if(Test-Path $IMGDIR){ Get-ChildItem $IMGDIR -Filter '*.png' | Remove-Item -Forc
 else { [void](New-Item -ItemType Directory -Path $IMGDIR) }
 $script:imgN = 0
 $script:imgBytes = 0
+$script:imgBad = 0
 $evalImg = {
   param($m)
   $b64 = $m.Groups[1].Value
@@ -72,11 +79,18 @@ $evalImg = {
     $script:imgBytes += $bytes.Length
     return 'img/' + $name
   }catch{
-    return $m.Value          # 못 풀면 그대로 둔다
+    # 자료 자체가 망가져 브라우저에서도 안 보이는 그림이다(ALPHA PLUS S·T 의 2번째 장).
+    #   그대로 두면 180 KB 를 괜히 싣고 다니므로 '그림 없음' 자리표로 바꾼다.
+    $script:imgBad++
+    return 'img/missing.png'
   }
 }
 $html = [regex]::Replace($html, 'data:image/png;base64,([A-Za-z0-9+/=]+)', $evalImg)
-Write-Output ('images : {0} files, {1:N2} MB -> img\' -f $script:imgN, ($script:imgBytes/1MB))
+if($script:imgBad){
+  Copy-Item (Join-Path $PSScriptRoot 'missing.png') (Join-Path $IMGDIR 'missing.png') -Force
+}
+Write-Output ('images : {0} files, {1:N2} MB -> img\{2}' -f $script:imgN, ($script:imgBytes/1MB),
+  $(if($script:imgBad){ ('  (망가진 그림 ' + $script:imgBad + '장은 자리표로 바꿈)') } else { '' }))
 
 # 2) the two server paths are plain php files next to index.html
 $html=$html.Replace("fetch('/api/fxrate')","fetch('api/fxrate.php')")

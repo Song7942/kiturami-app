@@ -11366,7 +11366,7 @@ function ensureXlsxStyle(){
   _xlsxStyleLoad=new Promise(res=>{
     if(window.XLSX && window.XLSX.__styled) return res(true);
     const sc=document.createElement('script');
-    sc.src='https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js';
+    sc.src=(window.KT_XLSX_SRC || 'https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js');
     sc.onload=()=>{ try{ window.XLSX.__styled=true; }catch(e){}
       try{ if(typeof ktInstallXlsxAlign==='function') ktInstallXlsxAlign(); }catch(e){}   // 새로 올린 판에도 글자 자리를 다시 건다
       res(true); };
@@ -22561,6 +22561,37 @@ function authInit(){
   ktInsecureGuard();                 // 암호화 안 된 접속이면 로그인을 막고 까닭을 적어 둔다
 }
 mountModelDiag('order'); // 기본 탭이 주문이므로 시작 시 공용 모델바/분해도를 주문 슬롯에 장착
+// ══ 엑셀 판(xlsx)은 쓸 때 받는다 ═══════════════════════════
+//   자체 서버판은 첫 화면을 가볍게 하려고 엑셀 판을 미리 싣지 않는다(420 KB).
+//   내려받기·올리기는 모두 사람이 단추를 누르거나 파일을 고른 뒤에 시작되므로,
+//   그 앞에 '판 받아 오기' 를 한 겹 둘러 둔다. 이미 받아 두었으면 그냥 지나간다.
+//   (클라우드판은 처음부터 실려 있어 ensureXlsxStyle 이 바로 끝난다)
+(function(){
+  const NAMES=[
+    'downloadParts','downloadPN','downloadPnChk','downloadOrder','downloadMyOrders',
+    'downloadAdminOrders','downloadAdminMyOrders','downloadMembers','downloadProd',
+    'downloadInventoryData','downloadInventoryTemplate','downloadShipmentsData',
+    'downloadPSI','downloadPO','downloadShip','downloadMS','downloadMOQ','downloadSS',
+    'downloadBLK','downloadPPSI','downloadASR','downloadReport',
+    'downloadPriceActive','downloadPriceRegion','downloadPriceCompany',
+    'handlePNUpload','handlePOUpload','handleOrderUpload','handleInventoryUpload',
+    'handleShipmentsUpload','handleProdUpload','handlePnChkUpload','handleEngNameUpload',
+    'handleSpecialPNUpload','handleMoqUpload','handleBlockedUpload','handleBomRevUpload',
+    'handleCompanyPriceUpload','handlePriceUpload','handlePriceCalcUpload',
+    'handleShipQtyUpload','handlePPSIUpload','handleSimNeedUpload','handleSimReqUpload',
+    'handleSimDrop','poReqUpload'
+  ];
+  NAMES.forEach(n=>{
+    const f=window[n];
+    if(typeof f!=='function' || f.__xlWrap) return;
+    const w=function(){
+      const args=arguments, self=this;
+      return Promise.resolve(ensureXlsxStyle()).then(()=>f.apply(self, args));
+    };
+    w.__xlWrap=1;
+    window[n]=w;
+  });
+})();
 authInit();
 </script>
 </body>

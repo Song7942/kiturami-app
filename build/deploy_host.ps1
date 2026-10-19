@@ -73,6 +73,22 @@ $t0 = Get-Date
 try {
   Write-Output ('upload : ftp://' + $ftpHost + $Remote)
   Write-Output ('server : ' + (Ftp-Put $SRC $Remote $false))
+  $dirBase = ($Remote -replace '/[^/]+$','')
+  function Ftp-Same($local, $path){
+    try{
+      $q=[Net.FtpWebRequest]::Create('ftp://'+$ftpHost+$path)
+      $q.Method=[Net.WebRequestMethods+Ftp]::GetFileSize
+      $q.Credentials=$cred; $q.UsePassive=$true; $q.KeepAlive=$false; $q.Timeout=60000
+      $rr=$q.GetResponse(); $same=($rr.ContentLength -eq (Get-Item $local).Length); $rr.Close()
+      return $same
+    }catch{ return $false }
+  }
+  # 엑셀 판은 옆에 따로 둔다 — 바뀌었을 때만 올린다
+  $xf = Join-Path $HOSTDIR 'xlsx.bundle.js'
+  if(Test-Path $xf){
+    if(Ftp-Same $xf ($dirBase+'/xlsx.bundle.js')){ Write-Output 'xlsx   : 그대로 (건너뜀)' }
+    else { [void](Ftp-Put $xf ($dirBase+'/xlsx.bundle.js') $true); Write-Output 'xlsx   : 올렸습니다' }
+  }
   # 분해도 그림은 따로 떼어 두었다 — 바뀐 것만 올린다
   $imgLocal = Join-Path $HOSTDIR 'img'
   if(Test-Path $imgLocal){
@@ -81,15 +97,8 @@ try {
     $pngs = Get-ChildItem $imgLocal -Filter '*.png' | Sort-Object Name
     $sent = 0
     foreach($p in $pngs){
-      $same = $false
-      try{
-        $q=[Net.FtpWebRequest]::Create('ftp://'+$ftpHost+$base+'/'+$p.Name)
-        $q.Method=[Net.WebRequestMethods+Ftp]::GetFileSize
-        $q.Credentials=$cred; $q.UsePassive=$true; $q.KeepAlive=$false; $q.Timeout=60000
-        $rr=$q.GetResponse(); $same = ($rr.ContentLength -eq $p.Length); $rr.Close()
-      }catch{}
-      if($same){ continue }
-      [void](Ftp-Put $p.FullName ($base+'/'+$p.Name) $true)
+      if(Ftp-Same $p.FullName ($base + '/' + $p.Name)){ continue }
+      [void](Ftp-Put $p.FullName ($base + '/' + $p.Name) $true)
       $sent++
     }
     Write-Output ('images : {0}장 중 {1}장을 올렸습니다 (크기가 같은 것은 건너뜀)' -f $pngs.Count, $sent)
