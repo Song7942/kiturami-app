@@ -13326,6 +13326,7 @@ let _poMan={};          // '차수|발주코드' -> 1  (손으로 고친 공급�
 let _poManQ={};         // '차수|발주코드' -> 1  (손으로 고친 수주수량 — 표시만 한다)
 let _poSplit={};        // '차수|발주코드' -> [{c:공급코드, q:수량}]  (여러 호환품번으로 나눠 나간 줄)
 let _poPnSkip={};       // '차수|발주코드' -> 1  ('발주현황에만' 을 고른 줄 — 품번조회는 그대로 둔다)
+let _poDanSkip={};      // 공급코드 -> 1  (단종 풀기를 한 번 물어본 코드 — 다시 묻지 않는다)
 let _poSince='';        // 이 시각 뒤에 올린 인보이스만 공급수량에 센다(비면 전부)
 let _poFromYm='';       // 이 달부터 실제로 선적된 것만 공급수량에 센다(YYMM, 비면 전부)
 let _poManLoaded=false;
@@ -13339,7 +13340,8 @@ async function loadPoMan(){
     if(c){
       if(c.man && typeof c.man==='object'){ _poMan=c.man; _poSplit=(c.split && typeof c.split==="object")?c.split:{}; _poSince=String(c.since||''); _poFromYm=String(c.fromYm||'');
         _poManQ=(c.manQ && typeof c.manQ==='object')?c.manQ:{};
-        _poPnSkip=(c.pnSkip && typeof c.pnSkip==='object')?c.pnSkip:{}; }
+        _poPnSkip=(c.pnSkip && typeof c.pnSkip==='object')?c.pnSkip:{};
+        _poDanSkip=(c.danSkip && typeof c.danSkip==='object')?c.danSkip:{}; }
       else { _poMan=c; _poSince=''; }        // 옛 모양(맵만 있던 것)도 읽는다
     }
   }catch(e){}
@@ -13349,7 +13351,7 @@ function savePoMan(){
   clearTimeout(_poManT);
   _poManT=setTimeout(async function(){
     try{ const { error }=await sb.from('kt_psi_cfg').upsert({ id:PO_MAN_ID,
-      cfg:{ since:_poSince, fromYm:_poFromYm, man:_poMan, manQ:_poManQ, split:_poSplit, pnSkip:_poPnSkip },
+      cfg:{ since:_poSince, fromYm:_poFromYm, man:_poMan, manQ:_poManQ, split:_poSplit, pnSkip:_poPnSkip, danSkip:_poDanSkip },
       updated_at:new Date().toISOString() },{onConflict:'id'});
       if(error) console.error('발주현황 수기 표시 저장 실패', error);
     }catch(e){ console.error('발주현황 수기 표시 저장 실패', e); }
@@ -13799,6 +13801,8 @@ async function poSplitOfferFinal(row){
   await poApplyFinal(row.pn, fin, poChaLabel(row.cha)+' · '+normBadgePN(row.pn)+' 는 '+normBadgePN(fin)+' 로만 공급됐습니다.');
 }
 // 발주현황을 열 때, 이미 적어 둔 공급 내역 중 최종품번으로 아직 안 바꾼 것이 있으면 한 번 묻는다.
+//   한 번 묻고 나면(확인이든 취소든) 그 줄·그 코드는 적어 두고 다시 묻지 않는다.
+//   적어 두는 곳은 수기 표시와 같은 칸(kt_psi_cfg id=94)의 pnSkip·danSkip 이다.
 let _poFinalAsked=false;
 async function poOfferFinalAll(){
   if(_poFinalAsked) return;
@@ -13816,21 +13820,32 @@ async function poOfferFinalAll(){
     want.push({r, fin, rep:info.rep});
   });
   const ru=(lang==='ru');
-  if(want.length && confirm(ru?('Сделать коды поставки актуальными артикулами? '+want.length)
-    :('변경코드(공급)가 한 개뿐인 줄 '+want.length+'개가 아직 최종품번으로 바뀌지 않았습니다.\n\n'
-      +want.slice(0,10).map(w=>'· '+normBadgePN(w.r.pn)+' → '+normBadgePN(w.fin)+'  (대표 '+w.rep+')').join('\n')+(want.length>10?'\n …':'')
-      +'\n\n하나씩 확인하며 최종품번으로 바꿀까요?'))){
-    for(const w of want) await poSplitOfferFinal(w.r);
+  let noted=false;
+  if(want.length){
+    const yes=confirm(ru?('Сделать коды поставки актуальными артикулами? '+want.length)
+      :('변경코드(공급)가 한 개뿐인 줄 '+want.length+'개가 아직 최종품번으로 바뀌지 않았습니다.\n\n'
+        +want.slice(0,10).map(w=>'· '+normBadgePN(w.r.pn)+' → '+normBadgePN(w.fin)+'  (대표 '+w.rep+')').join('\n')+(want.length>10?'\n …':'')
+        +'\n\n하나씩 확인하며 최종품번으로 바꿀까요?\n(확인이든 취소든 이 줄들은 다음부터 다시 묻지 않습니다)'));
+    if(yes){ for(const w of want) await poSplitOfferFinal(w.r); }
+    noted=true;
   }
   // 이미 적어 둔 변경코드(공급) 중 단종 O 로 남아 있는 코드 — 공급된 코드이므로 단종을 풀자고 묻는다
   const finSet=poFinalSet();
-  const dan=[...new Set(poSplitCodesAll().filter(c=>finSet.has(c) && String((pnSpecOf(c)||{}).dan||'').trim()==='O'))];
-  if(dan.length && confirm(ru?('Снять «Снято» с кодов поставки? '+dan.length)
-    :('변경코드(공급)로 적힌 최종품번 '+dan.length+'개가 품번조회에서 단종 O 로 되어 있습니다.\n\n'
-      +dan.slice(0,10).map(c=>'· '+normBadgePN(c)).join('\n')+(dan.length>10?'\n …':'')
-      +'\n\n공급되는 최종품번이므로 단종을 공란으로 바꿀까요?'))){
-    await poUndanCodes(dan);
+  const dan=[...new Set(poSplitCodesAll().filter(c=>finSet.has(c) && !_poDanSkip[c]
+    && String((pnSpecOf(c)||{}).dan||'').trim()==='O'))];
+  if(dan.length){
+    const yes=confirm(ru?('Снять «Снято» с кодов поставки? '+dan.length)
+      :('변경코드(공급)로 적힌 최종품번 '+dan.length+'개가 품번조회에서 단종 O 로 되어 있습니다.\n\n'
+        +dan.slice(0,10).map(c=>'· '+normBadgePN(c)).join('\n')+(dan.length>10?'\n …':'')
+        +'\n\n공급되는 최종품번이므로 단종을 공란으로 바꿀까요?\n(확인이든 취소든 이 코드들은 다음부터 다시 묻지 않습니다)'));
+    if(yes) await poUndanCodes(dan);
+    dan.forEach(c=>{ _poDanSkip[c]=1; });
+    noted=true;
   }
+  // 한 번 물었으면 확인이든 취소든 적어 둔다 — 다음에 열 때 또 뜨지 않게
+  //   (단종 묻기까지 끝낸 뒤에 적는다. 먼저 적으면 그 줄의 코드가 단종 묻기에서 빠진다)
+  want.forEach(w=>{ _poPnSkip[poManKey(w.r.cha, w.r.pn)]=1; });
+  if(noted) savePoMan();
 }
 // 발주현황에 변경코드(공급)로 적힌 코드 전부(자기 발주코드 하나만 적힌 정리표 줄은 뺀다)
 function poSplitCodesAll(){
