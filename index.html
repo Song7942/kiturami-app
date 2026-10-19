@@ -1653,6 +1653,10 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
       <span id="simOpenNote" style="display:none;font-size:10px;color:var(--muted);white-space:nowrap"></span>
       <label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--muted)" title="발주현황의 미공급수량을 '선적계획' 으로 찍을 달입니다.&#10;비워 두면 발주현황을 마지막으로 고친 날의 다음 달로 저절로 잡습니다."><span id="i18n-sim-planlab">미공급 선적달</span>
         <input type="text" id="simPlanYm" list="ktOutYmOpts" placeholder="저절로" onfocus="this.select()" onchange="simPlanYmSet()" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;text-align:center"><button type="button" class="ym-pick" onclick="ktYmPickOpen('simPlanYm',this)">▼</button></label>
+      <button class="dl-btn" id="simPlanFreezeBtn" onclick="simPlanFreeze()" title="지금 발주현황 미공급을 그 달 선적계획으로 굳힙니다.&#10;굳혀 두면 뒤에 인보이스를 올려 미공급이 줄어도 계획 숫자는 그대로입니다." style="display:none">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg>
+        <span id="i18n-sim-freeze">미공급 굳히기</span>
+      </button>
       <button class="dl-btn" id="simPlanShipBtn" onclick="simPlanToShip()" title="수출작업의뢰서로 올린 '선적계획' 은 계획이라 실제선적에는 안 들어갑니다.&#10;인보이스를 아직 안 올렸을 때, 그 달 계획을 실제선적으로 옮깁니다." style="display:none">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M5 12h14"/><polyline points="13 6 19 12 13 18"/></svg>
         <span id="i18n-sim-plan2ship">계획→실제선적</span>
@@ -2666,6 +2670,7 @@ function refreshPsiTexts(){
   set('i18n-sim-confirm','승인','Утвердить');
   set('i18n-sim-needup','발주필요 업로드','Загрузить дозаказ');
   set('i18n-sim-plan2ship','계획→실제선적','План → отгрузка');
+  if(typeof poReqBtns==='function'){ try{ poReqBtns(); }catch(e){} }   // '미공급 굳히기' 글자도 함께
   set('i18n-sim-reset','필터 초기화','Сброс фильтров');
   set('i18n-sim-manual','수기 초기화','Сброс ручных');
   set('i18n-price-manual','수기 초기화','Сброс ручных');
@@ -18496,6 +18501,23 @@ function simPlanUpByRep(){
   _simPlanRepCache=m;
   return m;
 }
+// 발주현황 미공급을 품번마다 상계해 낸다 — { 품번: {q, rep} }
+//   같은 품번이 여러 차수에 걸쳐 있고 취소 줄(수주수량이 음수)도 섞여 있다.
+//   줄마다 따로 보면 음수 줄이 빠져 발주현황 미공급 합계와 어긋나므로, 품번마다 먼저 상계한다.
+function simRestByPn(){
+  const net={};
+  (poData||[]).forEach(r=>{
+    const rest=(Number(r.qty)||0)-(Number(r.supplied)||0); if(!rest) return;
+    const info=poLookup(r.pn)||{};
+    const pn=normPN(info.fin||'')||normPN(r.pn); if(!pn) return;
+    const a=net[pn]||(net[pn]={q:0, rep:info.rep||''});
+    a.q+=rest; if(!a.rep && info.rep) a.rep=info.rep;
+  });
+  Object.keys(net).forEach(k=>{ if(net[k].q<=0) delete net[k]; });
+  return net;
+}
+// 굳혀 둔 선적계획 — { ym, at, net:{품번:{q,rep}} }. 있으면 그 달은 이 숫자만 쓴다.
+let _simPlanSnap=null;
 const _simPlan=new Map();       // 대표품번 → 발주현황 미공급수량(그 달 '선적계획' 열에 얹는다)
 let _simPlanYm='';              // 미공급분을 선적하는 것으로 보는 달
 let _simInfo=null;
@@ -18511,18 +18533,17 @@ function simBuild(){
   _simPlanYm=(typeof shipYmOf==='function')?(shipYmOf(sail)||''):'';   // 선적계획을 찍을 달
   let rows=0, total=0, noRepQ=0; const noRep=[];
   if(ym){
-    // 같은 품번이 여러 차수에 걸쳐 있고, 취소 줄(수주수량이 음수)도 섞여 있다.
-    // 줄마다 따로 보면 음수 줄이 빠져 발주현황 미공급 합계와 어긋난다.
-    // 품번마다 먼저 상계하고, 그러고도 남는 양만 다음 달 선적으로 얹는다.
+    // 굳혀 둔 것이 있으면 그 숫자를 쓴다 — 발주현황을 고쳐도(인보이스를 올려도) 움직이지 않는다.
+    //   없으면 지금 발주현황 미공급을 그대로 본다.
     const net=new Map();                       // 품번 → {rest, rep}
-    (poData||[]).forEach(r=>{
-      const rest=(Number(r.qty)||0)-(Number(r.supplied)||0); if(!rest) return;
-      const info=poLookup(r.pn)||{};
-      const pn=normPN(info.fin||'')||normPN(r.pn); if(!pn) return;
-      const a=net.get(pn)||{rest:0, rep:info.rep||''};
-      a.rest+=rest; if(!a.rep && info.rep) a.rep=info.rep;
-      net.set(pn, a);
-    });
+    const snap=(_simPlanSnap && _simPlanSnap.ym===_simPlanYm && _simPlanSnap.net) ? _simPlanSnap.net : null;
+    if(snap){
+      Object.keys(snap).forEach(pn=>{ const a=snap[pn]||{};
+        const q=Math.round(Number(a.q)||0); if(q>0) net.set(normPN(pn), {rest:q, rep:String(a.rep||'')}); });
+    }else{
+      const by=simRestByPn();
+      Object.keys(by).forEach(pn=>net.set(pn, {rest:by[pn].q, rep:by[pn].rep}));
+    }
     net.forEach((a, pn)=>{
       if(a.rest<=0) return;
       const z=_simZ[pn]||(_simZ[pn]={}); z[ym]=(z[ym]||0)+a.rest;
@@ -18549,9 +18570,12 @@ function renderSIM(){
   const note=document.getElementById('simNote');
   if(note && _simInfo){
     const ru=(lang==='ru');
+    const fz=(_simPlanSnap && _simPlanSnap.ym===_simPlanYm)
+      ? (ru?(' [зафиксировано '+String(_simPlanSnap.at||'').slice(0,10)+']')
+           :(' [굳힘 '+String(_simPlanSnap.at||'').slice(0,10)+' — 발주현황이 바뀌어도 그대로]')) : '';
     note.textContent = _simInfo.ym
-      ? (ru ? ('Недопоставка '+_simInfo.total.toLocaleString()+' → отгрузка '+_simInfo.sail+', приход '+_simInfo.arrive)
-            : ('미공급 '+_simInfo.total.toLocaleString()+'개('+_simInfo.rows+'개 품번)를 '+_simInfo.sail+' 선적 → '+_simInfo.arrive+' 입고('+psiYmLabel(_simInfo.ym)+')로 얹음'))
+      ? ((ru ? ('Недопоставка '+_simInfo.total.toLocaleString()+' → отгрузка '+_simInfo.sail+', приход '+_simInfo.arrive)
+             : ('미공급 '+_simInfo.total.toLocaleString()+'개('+_simInfo.rows+'개 품번)를 '+_simInfo.sail+' 선적 → '+_simInfo.arrive+' 입고('+psiYmLabel(_simInfo.ym)+')로 얹음'))+fz)
       : '';
     // 대표품번을 못 찾은 품번은 선적계획 열에 얹을 자리가 없다 — 몇 개가 빠졌는지 눌러 볼 수 있게 알려 준다
     const gap=document.getElementById('simPlanGap');
@@ -18579,6 +18603,36 @@ function simPlanGapShow(){
              :'품번조회에서 대표품번을 찾지 못한 코드입니다.\n선적계획은 대표품번 줄에 찍히므로, 대표품번이 없으면 얹을 자리가 없습니다.')
     +'\n\n'+body
     +'\n\n'+(ru?'' : '품번조회에서 이 코드들을 대표품번 아래 호환품번으로 넣어 주시면 다음부터 함께 잡힙니다.'));
+}
+// 지금 미공급을 그 달 선적계획으로 '굳힌다'. 굳혀 두면 발주현황을 고쳐도 숫자가 안 움직인다.
+//   인보이스를 달마다 올리면 공급수량이 올라 미공급이 줄어드는데,
+//   그래도 '이 달에 내보내기로 한 양' 은 그대로 두어야 계획 대비 실적을 볼 수 있다.
+//   다시 누르면 풀려서 종전처럼 발주현황 미공급을 그대로 따라간다.
+async function simPlanFreeze(){
+  const ru=(lang==='ru');
+  if(!canEditPsi()){ alert(ru?'Нет прав.':'권한이 없습니다.'); return; }
+  if(_simPlanSnap){
+    const at=String(_simPlanSnap.at||'').slice(0,10);
+    if(!confirm('굳혀 둔 '+psiYmLabel(_simPlanSnap.ym)+' 선적계획('+at+')을 풉니다.\n'
+      +'풀면 다시 발주현황 미공급을 그대로 따라갑니다.\n\n계속할까요?')) return;
+    _simPlanSnap=null; saveSimMan(); simPlanYmFill(); renderSIM(); poReqBtns();
+    return;
+  }
+  if(!poData.length) await loadPO();
+  const net=simRestByPn();
+  const keys=Object.keys(net);
+  let tot=0; keys.forEach(k=>tot+=net[k].q);
+  if(!keys.length){ alert(ru?'Недопоставки нет.':'발주현황에 미공급이 없습니다.'); return; }
+  const ym=_simPlanYm||simPlanYmAuto();
+  if(!confirm(psiYmLabel(ym)+' 선적계획을 지금 미공급으로 굳힙니다.\n\n'
+    +'· 품번 '+keys.length+'개 / '+tot.toLocaleString()+'개\n'
+    +'· 이 뒤로 발주현황을 고치거나 인보이스를 올려도 이 숫자는 그대로입니다\n'
+    +'· 달도 '+psiYmLabel(ym)+' 로 못박습니다\n'
+    +'· 다시 누르면 풀립니다\n\n계속할까요?')) return;
+  _simPlanPin=ym;
+  _simPlanSnap={ ym, at:new Date().toISOString(), net };
+  saveSimMan(); simPlanYmFill(); renderSIM(); poReqBtns();
+  alert('굳혔습니다 — '+psiYmLabel(ym)+' 선적계획 '+tot.toLocaleString()+'개');
 }
 // 그 달 '선적계획' 을 대표품번마다 얼마인지 낸다.
 //   · 수출작업의뢰서를 올린 달이면 올린 값
@@ -18867,6 +18921,13 @@ function poReqBtns(){
   one('simConfirmBtn', poReqCanConfirm(), poReqApproved().length, '승인', 'Утвердить');
   const nu=document.getElementById('simNeedUpBtn'); if(nu) nu.style.display=canEditPsi()?'':'none';
   const p2s=document.getElementById('simPlanShipBtn'); if(p2s) p2s.style.display=canEditPsi()?'':'none';
+  const fz=document.getElementById('simPlanFreezeBtn');
+  if(fz){
+    fz.style.display=canEditPsi()?'':'none';
+    const on=!!_simPlanSnap, t=fz.querySelector('span');
+    if(t) t.textContent=on?(lang==='ru'?'Снять фиксацию':'굳힘 풀기'):(lang==='ru'?'Зафиксировать':'미공급 굳히기');
+    fz.style.background=on?'#0ea5e9':''; fz.style.borderColor=on?'#0ea5e9':''; fz.style.color=on?'#fff':'';
+  }
 }
 // ══════════════════════════════════════════
 // 발주필요 엑셀 올리기
@@ -19064,27 +19125,41 @@ async function handleSimReqUpload(ev){
     simPlanUpClear(); simOrderClear();
     saveSimMan();
     // 발주현황에도 그대로 등록한다. 차수는 Ref.No(RUS 261001), 발주년월은 그 한 달 앞.
-    //   공급수량은 0 으로 두고, 실제로 선적된 만큼만 뒤에 채워진다.
+    //   의뢰서는 '무엇을 얼마나 발주했는가' 이므로 수주수량만 이 파일로 맞춘다.
+    //   '얼마나 나갔는가'(공급수량)와 변경코드(공급)는 인보이스·손으로 적은 값이 임자이므로 건드리지 않는다.
     let poMsg='';
     if(cha){
       try{
         if(!poData.length) await loadPO();
+        await loadPoMan();
         const mon=String(Number(String(poYm).slice(2))||'');
-        await sb.from('kt_po').delete().eq('cha',cha);       // 그 차수를 이 파일 내용으로 새로 세운다
-        // 그 차수의 수기 표시는 옛 줄의 것이므로 걷어낸다
-        Object.keys(_poMan ).forEach(k=>{ if(k.split('|')[0]===cha) delete _poMan[k];  });
-        Object.keys(_poManQ).forEach(k=>{ if(k.split('|')[0]===cha) delete _poManQ[k]; });
-        Object.keys(_poSplit).forEach(k=>{ if(k.split('|')[0]===cha) delete _poSplit[k]; });
-        savePoMan();
-        const put=rows.map(x=>({ cha, pn:pnUpAll(x.code), mon, qty:x.qty, supplied:0,
-                                 updated_at:new Date().toISOString() }));
+        const cur={}; poData.forEach(r=>{ if(String(r.cha)===cha) cur[normPN(r.pn)]=r; });
+        const put=rows.map(x=>{ const pn=pnUpAll(x.code), c=cur[normPN(pn)];
+          return { cha, pn:(c?c.pn:pn), mon, qty:x.qty,
+                   supplied:(c?(Math.round(Number(c.supplied)||0)):0),      // 있던 공급수량은 그대로
+                   updated_at:new Date().toISOString() }; });
+        const keep={}; put.forEach(p=>{ keep[normPN(p.pn)]=1; });
+        const gone=Object.keys(cur).filter(k=>!keep[k]);
+        for(const k of gone){
+          const { error }=await sb.from('kt_po').delete().eq('cha',cha).eq('pn',cur[k].pn);
+          if(error) throw error;
+        }
+        // 수기 표시는 '지운 줄' 것만 걷어낸다. 남는 줄의 공급수량 수기·변경코드는 그대로 둔다.
+        let manCh=false;
+        gone.forEach(k=>{ const mk=poManKey(cha, cur[k].pn);
+          if(_poMan[mk]||_poManQ[mk]||_poSplit[mk]){ delete _poMan[mk]; delete _poManQ[mk]; delete _poSplit[mk]; manCh=true; } });
+        // 수주수량은 이제 의뢰서 값이므로 수주수량에 칠한 바탕색만 걷는다(숫자는 파일 값)
+        put.forEach(p=>{ const mk=poManKey(cha,p.pn); if(_poManQ[mk]){ delete _poManQ[mk]; manCh=true; } });
+        if(manCh) savePoMan();
         for(let i=0;i<put.length;i+=300){
           const { error }=await sb.from('kt_po').upsert(put.slice(i,i+300),{onConflict:'cha,pn'});
           if(error) throw error;
         }
         await loadPO();
         if(typeof poRecalcSupply==='function'){ await poRecalcSupply(); await loadPO(); }
-        poMsg='\n발주현황: 차수 '+cha+' · 발주년월 '+psiYmLabel(poYm)+' 로 '+put.length+'줄 등록';
+        poMsg='\n발주현황: 차수 '+cha+' · 발주년월 '+psiYmLabel(poYm)+' — 수주수량 '+put.length+'줄'
+             +(gone.length?(' / 파일에 없어 지움 '+gone.length+'줄'):'')
+             +'\n(이미 적혀 있던 공급수량·변경코드(공급)는 그대로 둡니다)';
         try{ if(ktPaneOn('pane-po') && typeof renderPO==='function') renderPO(); }catch(e){}
       }catch(e){ poMsg='\n※ 발주현황 등록 실패: '+((e&&e.message)||e); }
     }
@@ -19236,6 +19311,7 @@ async function loadSimMan(){
       if(c.order && typeof c.order==='object'){ _simOrder=c.order; simOrderClear(); }
       if(c.ordReq && typeof c.ordReq==='object') _simOrdReq=c.ordReq;
       if(c.ordCha && typeof c.ordCha==='object') _simOrdCha=c.ordCha;
+      _simPlanSnap=(c.planSnap && typeof c.planSnap==='object' && c.planSnap.net) ? c.planSnap : null;
       _simPlanPin=(/^\d{4}$/.test(String(c.planYm||''))) ? String(c.planYm) : '';
       // 예전에는 의뢰서 주문을 출고월에 적었다. 이제 주문은 발주를 넣은 달(발주년월)에 두고
       //   발주현황 수주수량으로 맞추므로, 출고월에 적힌 의뢰서 주문은 한 번 걷어 낸다.
@@ -19253,7 +19329,7 @@ function saveSimMan(){
   clearTimeout(_simManT);
   _simManT=setTimeout(async()=>{
     try{
-      await sb.from('kt_psi_cfg').upsert({ id:SIM_MAN_ID, cfg:{ ship:_simShip, need:_simNeed, needNew:_simNeedNew, plan:_simPlanUp, order:_simOrder, ordReq:_simOrdReq, ordCha:_simOrdCha, planYm:_simPlanPin },
+      await sb.from('kt_psi_cfg').upsert({ id:SIM_MAN_ID, cfg:{ ship:_simShip, need:_simNeed, needNew:_simNeedNew, plan:_simPlanUp, order:_simOrder, ordReq:_simOrdReq, ordCha:_simOrdCha, planYm:_simPlanPin, planSnap:_simPlanSnap },
         updated_at:new Date().toISOString() },{onConflict:'id'});
     }catch(e){ console.log('sim_man: 저장 실패'); }
   }, 600);
