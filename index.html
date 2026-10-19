@@ -1690,6 +1690,7 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
         <span id="i18n-sim-dl">엑셀 다운로드</span>
       </button>
       <span id="simNote" style="font-size:10px;color:#7c3aed;white-space:nowrap"></span>
+      <span id="simPlanGap" onclick="simPlanGapShow()" style="display:none;font-size:10px;color:#ef4444;white-space:nowrap;cursor:pointer;text-decoration:underline dotted"></span>
     </div>
       <!-- 가로 슬라이드 막대(품번조회와 같은 방식). 가로로 넘칠 때만 보인다 -->
       <div class="tbl-scrollbar" id="simTblScrollbar" style="display:none;margin:4px 0 0">
@@ -18503,7 +18504,7 @@ function simBuild(){
   const arrive=shipAutoArrive(sail);
   const ym=(typeof shipYmOf==='function')?shipYmOf(arrive):'';
   _simPlanYm=(typeof shipYmOf==='function')?(shipYmOf(sail)||''):'';   // 선적계획을 찍을 달
-  let rows=0, total=0;
+  let rows=0, total=0, noRepQ=0; const noRep=[];
   if(ym){
     // 같은 품번이 여러 차수에 걸쳐 있고, 취소 줄(수주수량이 음수)도 섞여 있다.
     // 줄마다 따로 보면 음수 줄이 빠져 발주현황 미공급 합계와 어긋난다.
@@ -18521,11 +18522,15 @@ function simBuild(){
       if(a.rest<=0) return;
       const z=_simZ[pn]||(_simZ[pn]={}); z[ym]=(z[ym]||0)+a.rest;
       const rp=a.rep||((psiData[pn]||{}).rep)||'';
-      if(rp) _simPlan.set(rp, (_simPlan.get(rp)||0)+a.rest);   // 선적계획 열은 대표품번 줄에 찍는다
+      // 선적계획 열은 대표품번 줄에 찍는다. 대표품번을 못 찾은 품번은 얹을 자리가 없어 빠진다
+      //   — 그만큼 미공급 합계와 선적계획 합계가 어긋나므로, 무엇이 빠졌는지 적어 둔다.
+      if(rp) _simPlan.set(rp, (_simPlan.get(rp)||0)+a.rest);
+      else { noRepQ+=a.rest; noRep.push({pn, q:a.rest}); }
       rows++; total+=a.rest;
     });
   }
-  _simInfo={sail, arrive, ym, rows, total};
+  let planSum=0; _simPlan.forEach(v=>{ planSum+=v; });
+  _simInfo={sail, arrive, ym, rows, total, planSum, noRep, noRepQ};
   return _simInfo;
 }
 function renderSIM(){
@@ -18543,7 +18548,32 @@ function renderSIM(){
       ? (ru ? ('Недопоставка '+_simInfo.total.toLocaleString()+' → отгрузка '+_simInfo.sail+', приход '+_simInfo.arrive)
             : ('미공급 '+_simInfo.total.toLocaleString()+'개('+_simInfo.rows+'개 품번)를 '+_simInfo.sail+' 선적 → '+_simInfo.arrive+' 입고('+psiYmLabel(_simInfo.ym)+')로 얹음'))
       : '';
+    // 대표품번을 못 찾은 품번은 선적계획 열에 얹을 자리가 없다 — 몇 개가 빠졌는지 눌러 볼 수 있게 알려 준다
+    const gap=document.getElementById('simPlanGap');
+    if(gap){
+      const q=_simInfo.noRepQ||0;
+      gap.style.display=q?'':'none';
+      gap.textContent=q?(ru?('− '+q.toLocaleString()+' без осн. артикула')
+                           :('− 대표품번 없어 빠짐 '+q.toLocaleString()+'개')):'';
+      gap.title=q?(ru?'Нажмите, чтобы посмотреть список.':'눌러서 어떤 코드인지 봅니다.'):'';
+    }
   }
+}
+// 선적계획에 얹지 못한 미공급 — 품번조회에 대표품번이 없는 코드들을 보여 준다.
+//   품번조회에서 그 코드를 대표품번 아래에 넣어 주면 다음부터 선적계획에 함께 잡힌다.
+function simPlanGapShow(){
+  const ru=(lang==='ru');
+  const list=(_simInfo && _simInfo.noRep) || [];
+  if(!list.length) return;
+  const nm=p=>{ try{ return poName(p)||''; }catch(e){ return ''; } };
+  const body=list.slice().sort((a,b)=>b.q-a.q)
+    .map(x=>'· '+normBadgePN(x.pn)+'  '+x.q.toLocaleString()+(nm(x.pn)?('  '+nm(x.pn)):'')).join('\n');
+  alert((ru?('Не попало в план отгрузки: '+(_simInfo.noRepQ||0).toLocaleString())
+           :('선적계획에 얹지 못한 미공급 '+(_simInfo.noRepQ||0).toLocaleString()+'개 / 코드 '+list.length+'개'))
+    +'\n'+(ru?'Нет основного артикула в справочнике.'
+             :'품번조회에서 대표품번을 찾지 못한 코드입니다.\n선적계획은 대표품번 줄에 찍히므로, 대표품번이 없으면 얹을 자리가 없습니다.')
+    +'\n\n'+body
+    +'\n\n'+(ru?'' : '품번조회에서 이 코드들을 대표품번 아래 호환품번으로 넣어 주시면 다음부터 함께 잡힙니다.'));
 }
 // 손으로 고친 값(실제선적·발주필요)을 셈한 값으로 되돌린다
 function simManualCount(){ return Object.keys(_simNeed).length + Object.keys(_simShip).length + Object.keys(_simPlanUp||{}).length + Object.keys(_simOrder||{}).length; }
