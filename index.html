@@ -381,6 +381,9 @@ td.po-man{background:#ffedd5!important;color:#9a3412!important;font-weight:700;b
 /* 발주현황 변경코드(공급) 칸의 공급 내역 — 칸 안에서 바로 고친다 */
 .po-sp-ed{outline:none;cursor:text;border-radius:3px;padding:0 1px;display:inline-block;min-width:16px;min-height:13px}
 .po-sp-ed:hover,.po-sp-ed:focus{background:var(--surface2);box-shadow:inset 0 -1px 0 var(--accent2)}
+/* 변경코드(공급) 칸 맨 아래 빈 줄 — 비어 있을 때만 '＋ 코드 추가' 가 흐리게 보인다 */
+.po-sp-add:empty:before{content:attr(data-ph);color:var(--muted);opacity:.5;font-size:10px}
+.po-sp-add:focus:before{opacity:.25}
 /* 발주현황·선적입고현황 '묶어 보기' 의 대표품번 줄 */
 tr.kt-grp td{background:var(--tag-bg)!important;font-weight:700}
 /* 가격정보 '묶어 보기' 의 대표품번 줄 */
@@ -13250,8 +13253,8 @@ function renderPO(){
         return '<td style="'+tdS+'"><span style="'+codeS+'">'+((EDPO && i.rep) ? pnEditSpan(i.rep,'final',fv) : escapeHtml(fv))+'</span></td>'; })(),
       // 변경코드(공급) = 적어 둔 공급 내역만 보인다. 최종품번은 저절로 가져오지 않는다(옆 '최종품번' 열에 있다).
       //   비어 있으면 코드를 적는 칸 — 적으면 코드별 공급수량 창이 그 코드로 열린다(수량은 거기서).
-      chg:'<td style="'+tdS+'">'+((!poSplitShown(r.cha,r.pn) && EDPO) ? poChgNewEdit(r.cha, r.pn) : '')
-          + poSplitList(r.cha, r.pn, EDPO)+'</td>',
+      chg:'<td style="'+tdS+'">'+poSplitList(r.cha, r.pn, EDPO)
+          + (EDPO ? poChgNewEdit(r.cha, r.pn, !!poSplitShown(r.cha,r.pn)) : '')+'</td>',
       dan:'<td style="'+tdS+';text-align:center;color:var(--muted)">'+escapeHtml(String((pnSpecOf(r.pn)||pnSpecOf(i.fin)||{}).dan||''))+'</td>',
       exp:'<td style="'+tdS+';text-align:center;color:#ef4444;font-weight:700">'+(isExportRestricted(r.pn||i.fin)?'O':'')+'</td>',
       name:'<td style="'+tdS+';word-break:break-all;font-size:10.5px;line-height:1.25">'+escapeHtml(poName(r.pn))+'</td>',
@@ -13363,6 +13366,7 @@ function poSplitShown(cha,pn){ const s=poSplitOf(cha,pn); return (s && !(s.lengt
 // 변경코드(공급) 칸에 공급 내역을 줄마다 찍는다. 고칠 수 있으면 코드·수량을 칸 안에서 바로 고친다.
 function poSplitList(cha, pn, ed){
   const sp=poSplitShown(cha,pn); if(!sp) return '';
+  // 한 발주코드가 여러 코드로 나간 줄은 코드마다 한 단씩 적는다(아래 빈 칸에 적으면 단이 늘어난다)
   const ce=(i,f,v)=>ed
     ? ('<span contenteditable="true" class="po-sp-ed" data-pocha="'+escapeHtml(String(cha||''))+'" data-popn="'+escapeHtml(String(pn||''))+'"'
        +' data-spi="'+i+'" data-spf="'+f+'" data-pnorig="'+escapeHtml(v)+'"'
@@ -13373,10 +13377,14 @@ function poSplitList(cha, pn, ed){
     '<div><span style="color:#b91c1c;font-weight:600">'+ce(i,'c',normBadgePN(x.c))+'</span>'
     +' <span style="color:var(--muted)">×</span> '+ce(i,'q',(Number(x.q)||0)>0?Number(x.q).toLocaleString():'')+'</div>').join('')+'</div>';
 }
-// 공급 내역이 없는 줄의 변경코드(공급) 칸 — 코드를 적으면 코드별 공급수량 창을 그 코드로 연다
-function poChgNewEdit(cha, pn){
-  return '<span contenteditable="true" class="po-sp-ed" data-pocha="'+escapeHtml(String(cha||''))+'" data-popn="'+escapeHtml(String(pn||''))+'"'
-    + ' title="'+escapeHtml((lang==='ru')?'Код поставки — «код 10»':'실제로 공급된 코드를 적습니다. 수량까지 같이 적어도 됩니다 — 예: S323110027 10')+'"'
+// 변경코드(공급) 칸 맨 아래의 빈 칸 — 여기에 적으면 단이 하나 늘어난다.
+//   한 발주코드가 두 코드로 나갔으면 한 번 적고, 다시 생기는 빈 칸에 두 번째 코드를 적으면 된다.
+function poChgNewEdit(cha, pn, hasList){
+  const ru=(lang==='ru');
+  return '<span contenteditable="true" class="po-sp-ed po-sp-add" data-pocha="'+escapeHtml(String(cha||''))+'" data-popn="'+escapeHtml(String(pn||''))+'"'
+    + ' data-ph="'+escapeHtml(hasList?(ru?'＋ ещё код':'＋ 코드 추가'):(ru?'＋ код':'＋ 코드'))+'"'
+    + ' title="'+escapeHtml(ru?'Код поставки — «код 10». Ещё один код — новой строкой.'
+                              :'실제로 공급된 코드를 적습니다. 수량까지 같이 적어도 됩니다 — 예: S323110027 10\n코드가 둘이면 한 줄씩 적으면 됩니다(적은 수량의 합계가 공급수량이 됩니다).')+'"'
     + ' onclick="event.stopPropagation()" onmousedown="event.stopPropagation()"'
     + ' onblur="onPoChgNewBlur(this)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();this.blur();}"'
     + " style=\"display:inline-block;min-width:60px;min-height:14px;font-size:11px\"></span>";
@@ -13394,7 +13402,7 @@ function poSplitParse(txt){
   const c=pnUpAll(s.replace(/\s+/g,''));
   return c?{ c, q:0 }:null;
 }
-// 적은 코드(와 수량)를 그대로 적어 둔다. 공급수량 열은 건드리지 않는다 — 그쪽은 인보이스로만 셈한다.
+// 적은 코드(와 수량)를 이미 적어 둔 내역 뒤에 한 단 더 붙인다. 같은 코드면 수량을 합친다.
 async function onPoChgNewBlur(el){
   const ru=(lang==='ru');
   const got=poSplitParse(el.textContent);
@@ -13404,7 +13412,10 @@ async function onPoChgNewBlur(el){
   const cha=String(el.getAttribute('data-pocha')||''), pn=String(el.getAttribute('data-popn')||'');
   const row=(poData||[]).find(x=>String(x.cha)===cha && normPN(x.pn)===normPN(pn)); if(!row) return;
   if(!poName(got.c) && !confirm(ru?'Кода нет в справочнике. Сохранить?':(normBadgePN(got.c)+' 는 품번조회에 없는 코드입니다. 그래도 적을까요?'))) return;
-  await poSplitApply(row, [got]);
+  const m={}, order=[];
+  (poSplitOf(cha,pn)||[]).concat([got]).forEach(x=>{ if(!x.c) return; const k=normPN(x.c);
+    if(!(k in m)){ m[k]={c:x.c, q:0}; order.push(k); } m[k].q+=(Number(x.q)||0); });
+  await poSplitApply(row, order.map(k=>m[k]));
 }
 function poSplitOpen(el, preCode){
   const ru=(lang==='ru');
@@ -13413,7 +13424,7 @@ function poSplitOpen(el, preCode){
   const row=(poData||[]).find(x=>String(x.cha)===cha && normPN(x.pn)===normPN(pn)); if(!row) return;
   const old=document.getElementById('poSplitPop'); if(old) old.remove();
   // 칸에 적은 코드가 있으면 그 코드로, 없으면 지금 내역(없으면 발주코드)으로 시작한다.
-  //   수량은 비워 둔다 — 여기 적는 수량은 공급수량 열과 상관없는 기록이다.
+  //   코드마다 적은 수량의 합계가 그 줄의 공급수량이 된다(수량을 비워 두면 공급수량은 그대로).
   const cur=preCode ? [{c:preCode, q:''}]
                     : (poSplitOf(cha,pn) || [{c:pnUpAll(row.pn), q:''}]);
   const box=document.createElement('div'); box.id='poSplitPop';
@@ -13459,7 +13470,7 @@ function poSplitHint(inp){
 function poSplitSum(){
   const s=document.getElementById('poSplitSum'); if(!s) return;
   let t=0; document.querySelectorAll('#poSplitBody .po-sp-q').forEach(i=>t+=Math.round(Number(i.value)||0));
-  s.textContent=((lang==='ru')?'Итого ':'합계 ')+t.toLocaleString();
+  s.textContent=((lang==='ru')?'Итого ':'합계 ')+t.toLocaleString()+(t>0?((lang==='ru')?' → поставлено':' → 공급수량'):'');
 }
 async function poSplitSave(clear){
   const ru=(lang==='ru');
@@ -13483,17 +13494,31 @@ async function poSplitSave(clear){
   if(await poSplitApply(row, clear?null:list)) box.remove();
 }
 // 공급 내역을 저장한다. list 가 비면(null) 나눠 적기를 푼다.
-async function poSplitApply(row, list){
+async function poSplitApply(row, list, noSup){
   const ru=(lang==='ru');
   const cha=row.cha, pn=row.pn, key=poManKey(cha,pn);
   const before=poSplitOf(cha,pn);
   const clear=!(list && list.length);
   // 변경코드(공급)에 적는 코드·수량은 '무엇이 어떤 코드로 나갔는지' 를 적어 두는 기록이다.
-  //   공급수량 열과는 상관없다 — 그쪽은 인보이스로만 셈한다.
+  //   코드마다 수량까지 적으면 그 합계를 공급수량으로 삼고, 수량 없이 코드만 적으면 공급수량은 인보이스로 셈한다.
   if(clear){ delete _poSplit[key]; delete _poMan[key]; }
   else _poSplit[key]=list;
   savePoMan();
   ktHistAdd('po.split', cha+'|'+pn, before?before.map(x=>x.c+'×'+x.q).join(', '):'', clear?'':list.map(x=>x.c+'×'+x.q).join(', '));
+  // 코드마다 수량을 적었으면 그 합계가 곧 공급수량이다(손으로 고친 줄로 담아, 인보이스로 다시 세도 그대로).
+  //   수량 없이 코드만 적어 둔 때(합계 0)는 공급수량을 건드리지 않는다 — 그쪽은 인보이스로 셈한다.
+  if(!clear && !noSup){
+    const sum=list.reduce((a,x)=>a+(Number(x.q)||0),0);
+    const was=Math.round(Number(row.supplied)||0);
+    if(sum>0 && sum!==was){
+      row.supplied=sum; _poMan[key]=1; savePoMan();
+      const { error }=await sb.from('kt_po').upsert(
+        { cha:row.cha, pn:row.pn, mon:row.mon, qty:row.qty, supplied:sum, updated_at:new Date().toISOString() },
+        {onConflict:'cha,pn'});
+      if(error){ row.supplied=was; alert((ru?'Ошибка сохранения':'공급수량 저장 실패')+'\n['+(error.message||error.code)+']'); }
+      else ktHistAdd('po.supplied', cha+'|'+pn, String(was), String(sum));
+    }
+  }
   _poLastEdit=new Date().toISOString();
   renderPO(); poManBtn(); poSimRefresh();
   // 적은 코드가 발주코드와 다르면, 품번조회까지 바꿀지 고르게 한다.
@@ -13599,11 +13624,11 @@ async function onPoNumBlur(el){
     // 코드별로 나눠 적은 줄: 코드가 하나면 그 코드의 수량도 같이 맞춘다(적은 숫자는 아래에서 공급수량에 넣는다).
     //   여러 개면 어느 코드의 수량인지 알 수 없으므로 변경코드(공급) 칸에서 고치게 한다.
     if(sp){
-      if(txt===''){ await poSplitApply(row, sp.map(x=>({c:x.c, q:0}))); }   // 나눠 적은 수량도 0 으로
-      else if(sp.length===1){ await poSplitApply(row, [{c:sp[0].c, q:Math.round(num)}]); }
+      if(txt===''){ await poSplitApply(row, sp.map(x=>({c:x.c, q:0})), true); }   // 나눠 적은 수량도 0 으로
+      else if(sp.length===1){ await poSplitApply(row, [{c:sp[0].c, q:Math.round(num)}], true); }
       else {
-        alert(ru?'Разбито по кодам — правьте количество по каждому коду.'
-                :'여러 코드로 나눠 적은 줄입니다.\n변경코드(공급) 칸에서 코드마다 수량을 고치거나 ⇄ 를 눌러 주세요.');
+        alert(ru?'Разбито по кодам — правьте количество по каждому коду (сумма и есть поставка).'
+                :'여러 코드로 나눠 적은 줄입니다.\n변경코드(공급) 칸에서 코드마다 수량을 고쳐 주세요 — 그 합계가 공급수량이 됩니다.');
         el.textContent=before; return;
       }
     }
