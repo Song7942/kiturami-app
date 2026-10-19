@@ -43,6 +43,8 @@ td.man input.cell{background:#ffedd5;color:#9a3412;font-weight:700}
 .flag.g{background:#fee2e2;color:#991b1b}
 .flag.u{background:#dbeafe;color:#1e40af}
 td.hc{position:relative}
+input.cell.txt{text-align:left}
+input.cell.code{font-family:'Courier New',monospace;font-size:10.5px}
 td.del{text-align:center;color:var(--border);cursor:pointer;font-weight:700;user-select:none}
 td.del:hover{color:#ef4444;background:#fee2e2}
 .hdot{position:absolute;right:1px;top:1px;width:6px;height:6px;border-radius:50%;background:#ef4444;cursor:pointer}
@@ -66,6 +68,7 @@ td.del:hover{color:#ef4444;background:#fee2e2}
     <button id="sync" title="웹의 품번조회에서 품명 · 규격 · 대표품번 · 호환품번 · 최종품번을 가져옵니다.&#10;원가와 공급가는 건드리지 않습니다.">품번정보 웹에서 가져오기</button>
     <button id="exp">파일로 내보내기</button>
     <button id="imp">파일에서 불러오기</button>
+    <button id="addRow" title="빈 줄을 하나 넣습니다. 품번을 적으면 품명·규격이 저절로 들어옵니다.">품목 추가</button>
     <button id="imx">원가 엑셀 올리기</button>
     <button id="fclrAll" style="display:none">거르개 해제</button>
     <button id="vbtn">보기</button>
@@ -217,7 +220,7 @@ function hTime(t){
 }
 function hFmt(v){ const s=String(v==null?'':v); if(s==='') return '(빈칸)';
   const n=Number(s); return isFinite(n)?n.toLocaleString():s; }
-const H_LABEL={ cost:'원가 KRW', sup:'공급가 KRW', '@gp':'기준 GP(%)', '@rub':'환율 RUB', '@usd':'환율 USD', '@del':'품목 지움' };
+const H_LABEL={ cost:'원가 KRW', sup:'공급가 KRW', '@gp':'기준 GP(%)', '@rub':'환율 RUB', '@usd':'환율 USD', '@del':'품목 지움', '@pn':'품번' };
 function hLabel(f){ return H_LABEL[f]||f; }
 // 칸 모서리에 붙이는 표시
 function hDot(f, pn){
@@ -458,6 +461,57 @@ function fixHeadTop(){
 }
 addEventListener('resize', fixHeadTop);
 
+/* ══ 품목 손수 넣기 ════════════════════════════════════════
+ *   [품목 추가] 를 누르면 맨 위에 빈 줄이 하나 생긴다.
+ *   그 줄의 품번 칸에 품번을 적으면 품명·규격·대표품번·최종품번이 저절로 채워진다.
+ *     · 먼저 품번조회에서 찾고(대표품번·최종품번까지 나온다)
+ *     · 거기 없으면 품목 대장(kt_pn_specs, 12만여 건)에서 품명·규격만 가져온다
+ *   품명·규격은 손으로 고쳐 쓸 수도 있다(대장에 없는 품목).
+ */
+let _catMap = null;                 // 품번정보를 가져올 때 만들어 둔 목록(품번 → {rep,fin,nm,sp})
+function costAddRow(){
+  // 새 줄이 바로 보이도록 찾기·거르개를 푼다
+  $('q').value=''; $('onlyNew').checked=false; _fSel={}; _fSort={k:null,dir:'asc'};
+  let n=0; D.rows.forEach(r=>{ const x=Number(r.n); if(isFinite(x)&&x>n) n=x; });
+  D.rows.unshift({ n:n+1, nm:'', sp:'', rep:'', cmp:'', fin:'', cost:null, sup:null, isAdd:1 });
+  save(true); render();
+  const el=$('tb').querySelector('input[data-f="cmp"]');
+  if(el){ el.focus(); el.scrollIntoView({block:'center'}); }
+  msg('품번을 적으면 품명·규격이 저절로 들어옵니다','busy');
+}
+// 품번으로 품명·규격·대표품번·최종품번을 찾아 채운다
+async function pnFillFrom(r){
+  const pn=norm(r.cmp);
+  if(!pn){ r.nm=''; r.sp=''; r.rep=''; r.fin=''; save(true); render(); return; }
+  // 같은 품번이 이미 있으면 알려 준다(지우지는 않는다)
+  const dup=D.rows.filter(x=>x!==r && norm(x.cmp)===pn).length;
+  // ① 품번조회에 있나
+  let c = _catMap ? _catMap.get(pn) : null;
+  if(c){
+    r.nm=c.nm; r.sp=c.sp; r.rep=c.rep; r.fin=c.fin;
+    save(true); render();
+    msg('품번조회에서 찾았습니다 — '+(r.nm||'(품명 없음)')+(dup?('  · 같은 품번이 이미 '+dup+'줄 있습니다'):''), dup?'no':'ok');
+    return;
+  }
+  // ② 품목 대장에서 품명·규격만
+  try{
+    msg('품목 대장에서 찾는 중…','busy');
+    const { data, error }=await sbc().from('kt_pn_specs').select('pn,name,spec').eq('pn', pn).limit(1);
+    if(error) throw new Error(error.message||error.code);
+    const s=(data&&data[0])||null;
+    if(s){
+      r.nm=String(s.name||''); r.sp=String(s.spec||'');
+      if(!r.fin) r.fin=pn;
+      save(true); render();
+      msg('품목 대장에서 찾았습니다 — '+(r.nm||'(품명 없음)')
+          +'  (품번조회에 없는 품번이라 대표품번은 비어 있습니다)'
+          +(dup?('  · 같은 품번이 이미 '+dup+'줄 있습니다'):''), dup?'no':'ok');
+    }else{
+      save(true); render();
+      msg('그런 품번을 찾지 못했습니다 — 품명·규격을 손으로 적어 주세요','no');
+    }
+  }catch(e){ save(true); render(); msg('찾지 못했습니다 — '+e.message,'no'); }
+}
 /* ══ 품목 지우기 ═══════════════════════════════════════════
  *   줄 왼쪽 ✕ 로 한 줄씩, 또는 [보이는 것 지우기] 로 지금 걸러 놓은 줄을 한꺼번에.
  *   지운 품번은 적어 두었다가 [품번정보 웹에서 가져오기] 때 다시 넣지 않는다.
@@ -522,10 +576,14 @@ function render(){
                : r.isNew   ? '<span class="flag n">새</span>'
                : r.costNew ? '<span class="flag u">갱신</span>' : '';
     const td={
-      nm:  '<td>'+esc(r.nm)+flag+'</td>',
-      sp:  '<td style="color:var(--muted)">'+esc(r.sp)+'</td>',
+      // 손으로 넣은 줄은 품번·품명·규격을 그 자리에서 고칠 수 있다
+      nm:  r.isAdd ? ('<td><input class="cell txt" data-f="nm" value="'+esc(r.nm)+'" placeholder="품명">'+flag+'</td>')
+                   : ('<td>'+esc(r.nm)+flag+'</td>'),
+      sp:  r.isAdd ? '<td><input class="cell txt" data-f="sp" value="'+esc(r.sp)+'" placeholder="규격"></td>'
+                   : ('<td style="color:var(--muted)">'+esc(r.sp)+'</td>'),
       rep: '<td class="code">'+esc(r.rep)+'</td>',
-      cmp: '<td class="code">'+esc(r.cmp)+'</td>',
+      cmp: r.isAdd ? '<td><input class="cell txt code" data-f="cmp" value="'+esc(r.cmp)+'" placeholder="품번을 적으세요"></td>'
+                   : ('<td class="code">'+esc(r.cmp)+'</td>'),
       fin: '<td class="code">'+esc(r.fin)+'</td>',
       cost:'<td class="num hc'+((r.cost!=null&&r.cost!=='')?' man':'')+'">'+hDot('cost',pn)+'<input class="cell" data-f="cost" value="'+(c!=null?fmt(c,1):'')+'"></td>',
       cRub:'<td class="num" style="color:var(--muted)">'+cRub+'</td>',
@@ -567,6 +625,14 @@ $('tb').addEventListener('change', e=>{
   const tr=inp.closest('tr'); const r=view[+tr.getAttribute('data-i')];
   const f=inp.getAttribute('data-f');
   const v=inp.value.trim();
+  // 글자 칸(품번·품명·규격) — 손으로 넣은 줄에만 있다
+  if(f==='cmp' || f==='nm' || f==='sp'){
+    const was=r[f]||'';
+    r[f] = (f==='cmp') ? v.toUpperCase().replace(/\s+/g,'') : v;
+    if(f==='cmp'){ hAdd('@pn', r[f], was, r[f], '손으로'); pnFillFrom(r); return; }
+    hAdd(f, hPnOf(r), was, r[f], '손으로');
+    save(true); render(); return;
+  }
   const before=r[f];
   r[f] = (v==='') ? null : num(v);
   hAdd(f, hPnOf(r), before, r[f], '손으로');      // 변경이력에 남긴다
@@ -652,12 +718,14 @@ async function catalogSync(auto){
   const btn=$('sync'); const t0=btn.textContent; btn.disabled=true; btn.textContent='맞추는 중…';
   try{
     const cat=await catalogBuild(s=>msg(s,'busy'));
+    _catMap=cat;                     // 손으로 품목을 넣을 때 이 목록에서 바로 찾는다
     let fixed=0, added=0, gone=0;
     const seen=new Set();
     D.rows.forEach(r=>{
       const k=norm(r.cmp||r.rep);
       const c=cat.get(k);
-      if(!c){ if(!r.gone){ r.gone=1; gone++; } return; }
+      // 손으로 넣은 줄은 품번조회에 없어도 '없어짐' 으로 보지 않는다(일부러 넣은 것이다)
+      if(!c){ if(!r.isAdd && !r.gone){ r.gone=1; gone++; } return; }
       if(r.gone){ delete r.gone; }
       seen.add(k);
       let ch=false;
@@ -728,6 +796,7 @@ $("onlyNew").addEventListener("change", render);
 $("fclrAll").onclick=filterReset;
 $("vbtn").onclick=openViewPanel;
 $("hbtn").onclick=openHistAll;
+$("addRow").onclick=costAddRow;
 $("delShown").onclick=costDeleteShown;
 $("dropClr").onclick=dropClear;
 
