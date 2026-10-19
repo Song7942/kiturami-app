@@ -63,7 +63,7 @@ td.del:hover{color:#ef4444;background:#fee2e2}
     <span class="sep"></span>
     <span class="tag">기준 GP</span><input type="text" id="gp" title="0 ~ 99.9 사이의 퍼센트로 적습니다 (예: 40)" style="width:52px;text-align:right"><span class="tag">%</span>
     <span class="sep"></span>
-    <button id="sync">웹과 맞추기</button>
+    <button id="sync" title="웹의 품번조회에서 품명 · 규격 · 대표품번 · 호환품번 · 최종품번을 가져옵니다.&#10;원가와 공급가는 건드리지 않습니다.">품번정보 웹에서 가져오기</button>
     <button id="exp">파일로 내보내기</button>
     <button id="imp">파일에서 불러오기</button>
     <button id="imx">원가 엑셀 올리기</button>
@@ -95,7 +95,7 @@ td.del:hover{color:#ef4444;background:#fee2e2}
  *   원가 · 환율 · 기준 GP · 계산식은 이 파일에만 있습니다. 서버로 나가지 않습니다.
  *   [웹에 공급가 보내기] 를 누를 때에만 '품번 + 공급가 RUB' 가 웹으로 갑니다.
  *   품명·규격·대표품번·최종품번은 웹의 품번조회가 주인입니다 — 열 때마다
- *   [웹과 맞추기] 가 저절로 한 번 돌아 웹에서 고친 것을 끌어옵니다.
+ *   [품번정보 웹에서 가져오기] 가 저절로 한 번 돌아 웹에서 고친 것을 끌어옵니다.
  *   고친 것은 그때그때 이 브라우저에 저절로 담깁니다(바닥의 '저장됨' 표시).
  *   컴퓨터를 바꾸거나 백업하려면 [파일로 내보내기] 로 .json 을 받아 두세요.
  */
@@ -460,7 +460,7 @@ addEventListener('resize', fixHeadTop);
 
 /* ══ 품목 지우기 ═══════════════════════════════════════════
  *   줄 왼쪽 ✕ 로 한 줄씩, 또는 [보이는 것 지우기] 로 지금 걸러 놓은 줄을 한꺼번에.
- *   지운 품번은 적어 두었다가 [웹과 맞추기] 때 다시 넣지 않는다.
+ *   지운 품번은 적어 두었다가 [품번정보 웹에서 가져오기] 때 다시 넣지 않는다.
  *   (되살리려면 '지워 둔 품번 비우기' 를 누르고 한 번 더 맞춥니다)
  */
 function dropBag(){ if(!D.dropped || typeof D.dropped!=='object') D.dropped={}; return D.dropped; }
@@ -471,7 +471,7 @@ function costDelete(i){
   const pn=rowPn(r);
   const nm=[r.nm, r.sp].filter(Boolean).join(' · ');
   if(!confirm('이 품목을 지웁니다.\n\n'+(r.cmp||r.rep||'')+(nm?('\n'+nm):'')
-    +'\n\n· 원가·공급가도 함께 사라집니다\n· [웹과 맞추기] 를 해도 다시 들어오지 않습니다\n\n계속할까요?')) return;
+    +'\n\n· 원가·공급가도 함께 사라집니다\n· [품번정보 웹에서 가져오기] 를 해도 다시 들어오지 않습니다\n\n계속할까요?')) return;
   const k=D.rows.indexOf(r);
   if(k<0) return;
   D.rows.splice(k,1);
@@ -488,7 +488,7 @@ function costDeleteShown(){
     return;
   }
   if(!confirm('지금 보이는 '+n.toLocaleString()+'개를 모두 지웁니다.\n\n'
-    +'· 원가·공급가도 함께 사라집니다\n· [웹과 맞추기] 를 해도 다시 들어오지 않습니다\n\n계속할까요?')) return;
+    +'· 원가·공급가도 함께 사라집니다\n· [품번정보 웹에서 가져오기] 를 해도 다시 들어오지 않습니다\n\n계속할까요?')) return;
   const kill=new Set(view);
   view.forEach(r=>{ const pn=rowPn(r); if(pn) dropBag()[pn]=1;
     hAdd('@del', pn, (r.nm||r.cmp||r.rep||'있음'), '지웠음', '손으로'); });
@@ -500,9 +500,9 @@ function dropClear(){
   const n=dropCount();
   if(!n){ msg('지워 둔 품번이 없습니다','no'); return; }
   if(!confirm('지워 둔 품번 '+n.toLocaleString()+'개를 다시 받을 수 있게 합니다.\n'
-    +'([웹과 맞추기] 를 누르면 품번조회에 있는 것은 다시 들어옵니다)\n\n계속할까요?')) return;
+    +'([품번정보 웹에서 가져오기] 를 누르면 품번조회에 있는 것은 다시 들어옵니다)\n\n계속할까요?')) return;
   D.dropped={}; save(true); render();
-  msg('지워 둔 품번 표시를 비웠습니다 — [웹과 맞추기] 를 눌러 보세요','ok');
+  msg('지워 둔 품번 표시를 비웠습니다 — [품번정보 웹에서 가져오기] 를 눌러 보세요','ok');
 }
 function render(){
   view = filtered();
@@ -573,7 +573,7 @@ $('tb').addEventListener('change', e=>{
   save(true); render();
 });
 
-/* ══ 웹과 맞추기 ══════════════════════════════════════════
+/* ══ 품번정보 웹에서 가져오기 ══════════════════════════════════════════
  *   품명·규격·대표품번·최종품번의 주인은 웹의 품번조회다.
  *   바탕 자료(PN_BASE) 위에 kt_pn_overrides 를 얹고, 호환품번별 품명·규격은
  *   kt_pn_specs 에서 가져온다 — 웹 화면이 쓰는 규칙 그대로다.
@@ -684,9 +684,9 @@ async function catalogSync(auto){
     if(added) parts.push('새 품번 '+added.toLocaleString()+'개를 넣었습니다');
     if(gone)  parts.push('품번조회에 없는 것 '+gone.toLocaleString()+'개를 표시했습니다');
     if(_syncSkipped) parts.push('지워 둔 품번 '+_syncSkipped.toLocaleString()+'개는 넣지 않았습니다');
-    msg(parts.length?('웹과 맞췄습니다 — '+parts.join(' · ')):'웹과 같습니다 — 고칠 것이 없었습니다', 'ok');
+    msg(parts.length?('품번정보를 가져왔습니다 — '+parts.join(' · ')):'웹과 같습니다 — 고칠 것이 없었습니다', 'ok');
   }catch(e){
-    msg((auto?'웹과 맞추지 못했습니다 — ':'맞추기 실패 — ')+e.message, 'no');
+    msg((auto?'품번정보를 가져오지 못했습니다 — ':'가져오기 실패 — ')+e.message, 'no');
   }finally{ _syncing=false; btn.disabled=false; btn.textContent=t0; }
 }
 $('sync').onclick=()=>catalogSync(false);
@@ -877,7 +877,7 @@ async function costXlApply(aoa, fname){
   if(miss.length){
     alert('이 파일에 없는 품번 '+miss.length+'개는 넘어갔습니다.\n\n'
       + miss.slice(0,15).join('\n') + (miss.length>15?('\n… 그 밖 '+(miss.length-15)+'개'):'')
-      + '\n\n품번조회에 있는 품번이면 [웹과 맞추기] 를 눌러 품목을 받아온 뒤 다시 올려 보세요.');
+      + '\n\n품번조회에 있는 품번이면 [품번정보 웹에서 가져오기] 를 눌러 품목을 받아온 뒤 다시 올려 보세요.');
   }
 }
 async function costXlRead(file){
