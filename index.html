@@ -9691,7 +9691,7 @@ function syncSplitTableColumnWidths(hdrColId, bodyColId, tbodyId, mode){
             // 회사 계정: 앞 + 구매가 | 공급가 | GP
             if(m==='company') return { caps:[...lead, 84, 76, 76, 76, 76], noFill:true, rigid:rigidP };
             // RUSSIA/KAZAK: 앞 + 원가(KRW · 자기통화) | 공급가 | GP
-            if(m==='ru'||m==='kz') return { caps:[...lead, 78, 70, 84, 56], noFill:true, rigid:rigidP };
+            if(m==='ru'||m==='kz'||m==='view') return { caps:[...lead, 78, 70, 84, 56], noFill:true, rigid:rigidP };
             // 계산식(MASTER·KITURAMI): 앞 + 출고 | 원가(KRW·RUB·USD) | 러시아 3  ([임시] 카자흐 3 제거)
             // GP 는 56px. 음수 GP('-1234.5%' 55px)가 40px 에서 잘렸음.
             return { caps:[...lead, 66, 74, 62, 62, 74, 60, 56], noFill:true, rigid:rigidP };
@@ -21347,7 +21347,7 @@ function openPRFilter(i, anchor){
 function debouncedRenderPrice(){ clearTimeout(window._priceT); window._priceT=setTimeout(renderPriceActive, 200); }
 function renderPriceActive(){
   const m=priceMode();
-  if(m==='ru'||m==='kz') return renderPriceRegion(m);
+  if(m==='ru'||m==='kz'||m==='view') return renderPriceRegion(m);
   if(m==='company') return renderPriceCompany();
   // 계산식 화면은 없앴다 — 원가·환율·기준 GP 는 내 컴퓨터의 '원가관리.html' 에만 있다.
   priceView='supply';
@@ -21479,7 +21479,11 @@ function priceMode(){
   if(role.usesMasterView) return 'master';   // MASTER · KITURAMI(본사)
   if(role.isRegion) return role.region;      // 'ru' | 'kz'
   if(role.isCompanyAdmin) return 'company';
-  return null;
+  // 회사 계정(아이디=회사명)이 아닌 일반 회원도 회원관리에서 '가격정보 보기' 를 받으면
+  //   공급가(RUB) 목록을 읽기 전용으로 본다 — RUSSIA·KAZAK 데스크가 보는 것과 같은 화면이다.
+  //   예전에는 여기서 null 이 나와, 탭은 열리는데 화면이 비어 있었다
+  //   (보이는 표에는 아무것도 안 채우고, 채운 표는 숨겨 두었다).
+  return 'view';
 }
 // 회사별 가격 (rep -> {buy_price, supply_price})
 let companyPriceData={};   // 자사
@@ -21590,7 +21594,8 @@ function applyPriceTabChrome(){
   if(tabsEl && tabsEl.parentElement) tabsEl.parentElement.style.display='none';
   // 환율·기준 GP 바, 원가 업로드·초기화 단추는 화면에서 아예 뺐다.
   // 엑셀 업로드: 회사 계정(자사 구매가·공급가 등록)만 남는다.
-  show('priceUploadWrap', m==='company');
+  //   엑셀 업로드는 '가격정보 쓰기' 를 받은 사람에게만(회사 계정은 종전대로).
+  show('priceUploadWrap', m==='company' && permWrite('price')!==false);
   // 수기 초기화: 손으로 고칠 수 있는 화면(회사 계정)에서만
   priceManBtn();
   // MASTER·지역은 공급가 한 가지만 본다. 지역/회사 뷰는 계산식 슬롯을 재사용한다.
@@ -22066,7 +22071,7 @@ function handlePriceCalcUpload(event){
 // ── 엑셀 다운로드 ──
 function downloadPriceActive(){
   const m=priceMode();
-  if(m==='ru'||m==='kz') return downloadPriceRegion(m);
+  if(m==='ru'||m==='kz'||m==='view') return downloadPriceRegion(m);
   if(m==='company') return downloadPriceCompany();
   // MASTER 도 공급가 한 가지만 내려받는다(원가·GP 는 웹에 없다).
   // 화면과 같게 호환품번 단위로, 영문품명 열을 넣어 내보낸다 (대표품번으로 묶지 않는다)
