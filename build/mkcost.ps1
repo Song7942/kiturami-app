@@ -1,9 +1,14 @@
 ﻿param([string]$OutDir = '',
       [string]$HostUrl = "https://kituramiparts.com/api/supply.php")
-# 원가관리 폴더는 D:\원가관리 를 먼저 본다(옮겨 두었으면 그 쪽).
-#   둘 다 있으면 D: 를 쓴다 — 어느 것이 최신인지 헷갈리지 않게 한 군데만 쓴다.
+# 원가관리 폴더. 2026-10-21 부터 팀 공유 폴더(Z:)를 쓴다.
+#   ※ 이 HTML 에는 원가(2,008줄 중 615줄)와 kituramiparts.com 공급가 전송 열쇠가 박혀 있다.
+#     공유 폴더에 두면 그 폴더를 볼 수 있는 사람은 파일을 열어 원가를 그대로 본다 — 사용자가 알고 고른 것이다.
+#   Z: 가 안 붙어 있으면(집·외부) 옛 자리 D:\원가관리 를 쓴다.
 if($OutDir -eq ''){
-  $OutDir = if(Test-Path 'D:\원가관리'){ 'D:\원가관리' } else { "$env:USERPROFILE\Documents\원가관리" }
+  $Z = 'Z:\해외영업1팀\★ 부품정보'
+  $OutDir = if(Test-Path $Z){ $Z }
+            elseif(Test-Path 'D:\원가관리'){ 'D:\원가관리' }
+            else { "$env:USERPROFILE\Documents\원가관리" }
 }
 $ErrorActionPreference='Stop'
 # 원가관리 HTML 을 만든다.
@@ -37,29 +42,42 @@ function Get-All($t){
 }
 
 # ── 씨앗(처음 열 때 쓸 자료) ────────────────────────────────
-#   쓰는 차례:
-#     1) 내보내 둔 .json 이 OutDir 에 있으면 그 중 가장 새 것
-#     2) 이미 만들어 둔 원가관리.html 안의 씨앗  ← 원가는 이제 서버에 없으므로 이쪽이 중요하다
-#     3) 그래도 없으면 클라우드의 kt_price_calc (품번 줄만 — 원가는 비어 있다)
+#   쓰는 차례: '내보낸 .json' 과 '이미 있는 원가관리.html' 중 더 새 것.
+#     둘 다 없으면 클라우드의 kt_price_calc (품번 줄만 — 원가는 비어 있다)
 #   ※ 화면을 열면 자료는 브라우저(localStorage)에 담기고 그것이 먼저다.
 #     이 씨앗은 그 자리가 비어 있을 때만 쓰인다.
 $F = Join-Path $OutDir '원가관리.html'
 $seedJson = ''
 $src = ''
 
+# ① 이미 만들어 둔 원가관리.html 안의 씨앗.
+#    씨앗은 여러 줄로 적혀 있어 줄 단위 정규식('^const SEED = (.*);$')으로는 못 찾는다 —
+#    글자를 세어 잘라낸다.
+$htmlSeed = ''
+$htmlAt = Get-Date '1900-01-01'
+if(Test-Path $F){
+  $old = [IO.File]::ReadAllText($F, $U8)
+  $i = $old.IndexOf('const SEED = ')
+  if($i -ge 0){
+    $rest = $old.Substring($i + 13)
+    $end = $rest.IndexOf(";`r`n")
+    if($end -lt 0){ $end = $rest.IndexOf(";`n") }
+    if($end -gt 0){
+      $v = $rest.Substring(0, $end).Trim()
+      if($v -ne 'null' -and $v -ne ''){ $htmlSeed = $v; $htmlAt = (Get-Item $F).LastWriteTime }
+    }
+  }
+}
+# ② 내보내 둔 .json 중 가장 새 것
 $ex = Get-ChildItem -Path $OutDir -Filter '원가관리_*.json' -ErrorAction SilentlyContinue |
       Sort-Object LastWriteTime -Descending | Select-Object -First 1
-if($ex){
+# 둘 다 있으면 더 새 것을 쓴다 — 오래된 내보내기가 최신 자료를 덮어쓰지 않게
+if($ex -and $ex.LastWriteTime -gt $htmlAt){
   $seedJson = [IO.File]::ReadAllText($ex.FullName, $U8).Trim()
   $src = '내보낸 파일 ' + $ex.Name
-}
-if($seedJson -eq '' -and (Test-Path $F)){
-  $old = [IO.File]::ReadAllText($F, $U8)
-  $om = [regex]::Match($old, "(?m)^const SEED = (.*);$")
-  if($om.Success -and $om.Groups[1].Value -ne 'null'){
-    $seedJson = $om.Groups[1].Value
-    $src = '이미 있는 원가관리.html'
-  }
+}elseif($htmlSeed -ne ''){
+  $seedJson = $htmlSeed
+  $src = '이미 있는 원가관리.html'
 }
 if($seedJson -eq ''){
   Write-Output 'reading price data from cloud ...'
