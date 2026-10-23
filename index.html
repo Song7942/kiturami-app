@@ -1617,7 +1617,7 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
         <span id="i18n-po-reset">필터 초기화</span>
       </button>
-      <button class="dl-btn" id="poUploadBtn" onclick="document.getElementById('poFileInput').click()" title="차수·발주월·발주코드·수주수량 이 있는 엑셀, 수출작업의뢰서(Code·수량)는 수주수량에, 공급수량만 적힌 출고내역은 그 차수의 공급수량에 반영합니다" style="display:none;background:var(--accent2);border-color:var(--accent2);color:#fff">
+      <button class="dl-btn" id="poUploadBtn" onclick="document.getElementById('poFileInput').click()" title="차수·발주월·발주코드·수주수량 이 있는 엑셀, 수출작업의뢰서(Code·수량)는 수주수량에, 공급수량만 적힌 출고내역과 상업송장(CI 시트)은 공급수량에 반영합니다" style="display:none;background:var(--accent2);border-color:var(--accent2);color:#fff">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
         <span id="i18n-po-up">발주 업로드</span>
       </button>
@@ -2726,7 +2726,7 @@ function refreshPsiTexts(){
   ttl('[onclick="poAllPeriod()"]','발주년월을 전체로 돌리기','Показать весь период');
   ttl('[onclick="openShipInvPanel()"]','인보이스 넘버·선적일·입고일을 고칩니다',
       'Изменить инвойс, дату отгрузки и прихода');
-  ttl('#poUploadBtn','발주 엑셀·수출작업의뢰서는 수주수량에, 공급수량만 적힌 출고내역은 그 차수의 공급수량에 반영합니다',
+  ttl('#poUploadBtn','발주 엑셀·수출작업의뢰서는 수주수량에, 출고내역·상업송장(CI 시트)은 공급수량에 반영합니다',
       'Загрузка Excel: партия, месяц заказа, код, количество');
   ttl('#psiUploadBtn','선적·입고·출고·재고 시트가 든 파일을 올리면 시트 이름으로 가려 반영합니다 (재고 시트는 이월재고용)',
       'Загрузка Excel с листами отгрузки, прихода, расхода и остатка');
@@ -13400,6 +13400,7 @@ let _poMan={};          // '차수|발주코드' -> 1  (손으로 고친 공급�
 let _poManQ={};         // '차수|발주코드' -> 1  (손으로 고친 수주수량 — 표시만 한다)
 let _poSplit={};        // '차수|발주코드' -> [{c:공급코드, q:수량}]  (여러 호환품번으로 나눠 나간 줄)
 let _poPnSkip={};       // '차수|발주코드' -> 1  ('발주현황에만' 을 고른 줄 — 품번조회는 그대로 둔다)
+let _poInvDone={};      // 이미 반영한 상업송장 번호 -> {at,n,q}  (두 번 더해지는 것을 막는다)
 let _poDanSkip={};      // 공급코드 -> 1  (단종 풀기를 한 번 물어본 코드 — 다시 묻지 않는다)
 let _poSince='';        // 이 시각 뒤에 올린 인보이스만 공급수량에 센다(비면 전부)
 let _poFromYm='';       // 이 달부터 실제로 선적된 것만 공급수량에 센다(YYMM, 비면 전부)
@@ -13415,7 +13416,8 @@ async function loadPoMan(){
       if(c.man && typeof c.man==='object'){ _poMan=c.man; _poSplit=(c.split && typeof c.split==="object")?c.split:{}; _poSince=String(c.since||''); _poFromYm=String(c.fromYm||'');
         _poManQ=(c.manQ && typeof c.manQ==='object')?c.manQ:{};
         _poPnSkip=(c.pnSkip && typeof c.pnSkip==='object')?c.pnSkip:{};
-        _poDanSkip=(c.danSkip && typeof c.danSkip==='object')?c.danSkip:{}; }
+        _poDanSkip=(c.danSkip && typeof c.danSkip==='object')?c.danSkip:{};
+        _poInvDone=(c.invDone && typeof c.invDone==='object')?c.invDone:{}; }
       else { _poMan=c; _poSince=''; }        // 옛 모양(맵만 있던 것)도 읽는다
     }
   }catch(e){}
@@ -13425,7 +13427,7 @@ function savePoMan(){
   clearTimeout(_poManT);
   _poManT=setTimeout(async function(){
     try{ const { error }=await sb.from('kt_psi_cfg').upsert({ id:PO_MAN_ID,
-      cfg:{ since:_poSince, fromYm:_poFromYm, man:_poMan, manQ:_poManQ, split:_poSplit, pnSkip:_poPnSkip, danSkip:_poDanSkip },
+      cfg:{ since:_poSince, fromYm:_poFromYm, man:_poMan, manQ:_poManQ, split:_poSplit, pnSkip:_poPnSkip, danSkip:_poDanSkip, invDone:_poInvDone },
       updated_at:new Date().toISOString() },{onConflict:'id'});
       if(error) console.error('발주현황 수기 표시 저장 실패', error);
     }catch(e){ console.error('발주현황 수기 표시 저장 실패', e); }
@@ -14574,6 +14576,144 @@ function poReqRows(aoa){
   }
   return { rows:out, hasSup, hasQty };
 }
+// ══ 상업송장(CI) 올리기 → 공급수량 ══════════════════════
+//   선적할 때 쓰는 인보이스 파일에서 'CI' 로 시작하는 시트의 품번·수량을 읽어
+//   발주현황 공급수량에 넣는다.
+//   · 품번은 사이트(품번조회)에 있는 것만 가져온다
+//   · 한 품번이 여러 차수에 걸쳐 있으면 발주년월이 이른 차수부터 미공급분만큼 채운다
+//   · 넣은 값은 손으로 고친 줄로 담아, 인보이스로 다시 세도 그대로 둔다
+//   · 같은 인보이스를 두 번 올리면 두 번 더해지므로, 올린 인보이스 번호를 적어 두고 미리 알려 준다
+function poInvSheetName(wb){
+  for(const sn of (wb.SheetNames||[])){ if(/^\s*CI\b/i.test(String(sn))) return sn; }
+  return '';
+}
+// 인보이스 번호 — 시트 이름(CI RUMOSKRUS261004) 이나 표 윗부분에서 찾는다
+function poInvNoOf(sn, aoa, fname){
+  let m=String(sn||'').match(/([A-Za-z]{4,}\d{6}[A-Za-z0-9_\-]*)/);
+  if(m) return m[1].toUpperCase();
+  for(let r=0;r<Math.min((aoa||[]).length,20);r++){
+    for(const v of (aoa[r]||[])){
+      const s=String(v==null?'':v).trim();
+      const k=s.match(/^([A-Za-z]{4,}\d{6}[A-Za-z0-9_\-]*)$/);
+      if(k) return k[1].toUpperCase();
+    }
+  }
+  m=String(fname||'').match(/([A-Za-z]{4,}\d{6})/);
+  return m?m[1].toUpperCase():'';
+}
+// CI 시트의 품번·수량. 단위(EA·SET) 칸 바로 앞의 숫자를 수량으로 본다.
+function poInvRows(aoa){
+  const out=[];
+  for(let r=0;r<(aoa||[]).length;r++){
+    const row=aoa[r]||[];
+    let pn='';
+    for(let c=0;c<Math.min(3,row.length) && !pn;c++){
+      const cand=pnUpAll(String(row[c]==null?'':row[c]).replace(/\s+/g,''));
+      if(cand.length>=6 && /^[A-Z]/.test(cand) && /\d{4}/.test(cand)) pn=cand;
+    }
+    if(!pn) continue;
+    let q=null;
+    for(let c=1;c<row.length && q==null;c++){
+      const u=String(row[c]==null?'':row[c]).trim().toUpperCase();
+      if(u!=='EA' && u!=='SET' && u!=='PCS' && u!=='PC') continue;
+      for(let k=c-1;k>=1;k--){
+        const raw=String(row[k]==null?'':row[k]).replace(/,/g,'').trim();
+        if(raw==='') continue;
+        const n=Number(raw);
+        if(isFinite(n) && n>0){ q=Math.round(n); }
+        break;
+      }
+    }
+    if(q==null || q<=0) continue;
+    out.push({ pn, q });
+  }
+  return out;
+}
+async function poInvUpload(wb, sn, fname){
+  const ru=(lang==='ru');
+  const aoa=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:'',raw:true});
+  const src=poInvRows(aoa);
+  if(!src.length){ alert(ru?'Не найдены артикулы.':('['+sn+'] 에서 품번·수량을 찾지 못했습니다.')); return; }
+  const inv=poInvNoOf(sn, aoa, fname);
+  await loadPO(); await loadPoMan();
+  // 같은 품번이 여러 줄이면 더한다
+  const agg={}; src.forEach(x=>{ const k=normPN(x.pn); (agg[k]=agg[k]||{pn:x.pn, q:0}).q+=x.q; });
+  const keys=Object.keys(agg);
+  // 사이트(품번조회)에 있는 품번만 가져온다
+  const known=[], unknown=[];
+  keys.forEach(k=>{ const pn=agg[k].pn;
+    (((typeof getPNInfo==='function') && (getPNInfo(pn)||findMasterRep(pn))) ? known : unknown).push(k); });
+  // 발주년월이 이른 차수부터 미공급분만큼 채운다(발주현황이 인보이스를 셈하는 방식과 같다)
+  const byYm=(a,b)=>{ const ya=poYmOf(a)||'9999-99', yb=poYmOf(b)||'9999-99';
+    return (ya===yb) ? String(a.cha).localeCompare(String(b.cha)) : ya.localeCompare(yb); };
+  const dated=r=>!!poYmOf(r);
+  const plan=[], noRow=[], over=[];
+  known.forEach(k=>{
+    let left=agg[k].q;
+    const own=[], chg=[];
+    (poData||[]).forEach(r=>{ const rk=normPN(r.pn);
+      if(rk===k){ own.push(r); return; }
+      const fin=normPN((poLookup(r.pn)||{}).fin||'');
+      if(fin && fin===k) chg.push(r); });
+    if(!own.length && !chg.length){ noRow.push(k); return; }
+    own.sort(byYm); chg.sort(byYm);
+    own.filter(dated).concat(chg.filter(dated), own.filter(r=>!dated(r)), chg.filter(r=>!dated(r))).forEach(r=>{
+      if(left<=0) return;
+      const room=(Number(r.qty)||0)-(Number(r.supplied)||0);
+      if(room<=0) return;
+      const take=Math.min(room, left);
+      plan.push({ r, add:take }); left-=take;
+    });
+    if(left>0) over.push({ k, left });
+  });
+  if(!plan.length){
+    alert('넣을 것이 없습니다.\n\n'+(noRow.length?('· 발주현황에 줄이 없는 품번 '+noRow.length+'개\n'):'')
+      +(over.length?('· 미공급이 남아 있지 않아 더 넣을 수 없는 품번 '+over.length+'개\n'):'')
+      +(unknown.length?('· 품번조회에 없는 품번 '+unknown.length+'개\n'):''));
+    return;
+  }
+  const done=_poInvDone[inv];
+  if(done && !confirm('이미 반영한 인보이스입니다 — '+inv+'\n'
+    +'  '+_ktHistTime(done.at)+' · 품번 '+done.n+'개 · '+Number(done.q||0).toLocaleString()+'개\n\n'
+    +'또 넣으면 수량이 두 번 더해집니다. 그래도 계속할까요?')) return;
+  let tot=0; plan.forEach(x=>tot+=x.add);
+  const rowN=new Set(plan.map(x=>x.r.cha+'|'+normPN(x.r.pn))).size;
+  if(!confirm('상업송장(CI) → 발주현황 공급수량\n\n'
+    +'· 인보이스 '+(inv||'(번호 모름)')+'  · 시트 ['+sn+']\n'
+    +'· 읽은 품번 '+keys.length+'개 중 사이트에 있는 '+known.length+'개\n'
+    +'· 공급수량에 넣을 '+rowN+'줄 / '+tot.toLocaleString()+'개\n'
+    +(unknown.length?('· 품번조회에 없어 건너뜀 '+unknown.length+'개: '+unknown.slice(0,5).map(k=>normBadgePN(agg[k].pn)).join(', ')+(unknown.length>5?' …':'')+'\n'):'')
+    +(noRow.length?('· 발주현황에 줄이 없어 건너뜀 '+noRow.length+'개\n'):'')
+    +(over.length?('· 미공급이 모자라 다 못 넣은 품번 '+over.length+'개(남은 '+over.reduce((s,x)=>s+x.left,0).toLocaleString()+'개)\n'):'')
+    +'\n발주년월이 이른 차수부터 미공급분만큼 채웁니다.\n'
+    +'넣은 값은 손으로 고친 줄로 담습니다(인보이스로 다시 세도 그대로).\n\n'
+    +'등록할까요?')) return;
+  // 줄마다 더한 뒤 한 번에 저장한다
+  const touch={};
+  plan.forEach(x=>{ const key=x.r.cha+'\u0001'+x.r.pn;
+    if(!touch[key]) touch[key]={ r:x.r, was:Math.round(Number(x.r.supplied)||0), add:0 };
+    touch[key].add+=x.add; });
+  const now=new Date().toISOString();
+  const put=Object.keys(touch).map(k=>{ const t=touch[k];
+    t.r.supplied=t.was+t.add;
+    return { cha:t.r.cha, pn:t.r.pn, mon:t.r.mon, qty:t.r.qty, supplied:t.r.supplied, updated_at:now }; });
+  for(let i=0;i<put.length;i+=300){
+    const { error }=await sb.from('kt_po').upsert(put.slice(i,i+300),{onConflict:'cha,pn'});
+    if(error){ alert((ru?'Ошибка загрузки.':'등록 실패')+'\n['+(error.message||error.code)+']'); return; }
+  }
+  Object.keys(touch).forEach(k=>{ const t=touch[k];
+    ktHistAdd('po.supplied', t.r.cha+'|'+t.r.pn, String(t.was), String(t.r.supplied), XL_TAG());
+    _poMan[poManKey(t.r.cha, t.r.pn)]=1; });
+  if(inv) _poInvDone[inv]={ at:now, n:known.length, q:tot };
+  savePoMan();
+  _poLastEdit=now;
+  await loadPO(); renderPO(); poManBtn(); poSimRefresh();
+  alert('등록했습니다 — '+(inv||sn)+'\n'
+    +'공급수량 '+put.length+'줄 / '+tot.toLocaleString()+'개'
+    +(unknown.length?('\n품번조회에 없어 건너뜀 '+unknown.length+'개'):'')
+    +(noRow.length?('\n발주현황에 줄이 없어 건너뜀 '+noRow.length+'개'):'')
+    +(over.length?('\n미공급이 모자라 못 넣은 '+over.reduce((s,x)=>s+x.left,0).toLocaleString()+'개'):''));
+}
 // ── 출고내역(공급수량만 적힌 의뢰서) → 그 차수의 공급수량 ──
 //   · 차수는 Ref. No 로 잡는다(RUMOSKRUS260301_AS → RUS 260301)
 //   · 수주수량·발주월은 건드리지 않는다. 그 차수에 없는 Code 는 건너뛴다.
@@ -14717,6 +14857,9 @@ function handlePOUpload(event, mode){
   reader.onload=async function(e){
     try{
       const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
+      // 상업송장(CI 로 시작하는 시트)이면 품번·수량을 공급수량에 넣는다
+      { const ci=poInvSheetName(wb);
+        if(mode==='order' && ci){ await poInvUpload(wb, ci, file.name); event.target.value=''; return; } }
       // 수출작업의뢰서(출하요청서)면 Code·수량으로 그 차수의 수주수량을 채운다
       if(mode==='order' && poIsReqBook(wb)){ await poReqUpload(wb, file.name); event.target.value=''; return; }
       let hit=null, sheet='';
