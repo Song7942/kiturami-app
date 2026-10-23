@@ -1583,7 +1583,7 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
     <div class="search-bar">
       <div class="search-wrap">
         <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-        <input type="text" id="poInput" placeholder="차수·발주년월·대표코드·발주코드·품명으로 검색…" oninput="debouncedRenderPO()">
+        <input type="text" id="poInput" placeholder="차수·발주년월·대표코드·발주코드·품명·인보이스로 검색…" oninput="debouncedRenderPO()">
       </div>
 
       <select id="poCha" onchange="renderPO()" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px"></select>
@@ -2685,7 +2685,7 @@ function refreshPsiTexts(){
   set('i18n-price-view','보기','Вид');
   set('i18n-sim-dl',DL[0],DL[1]);
   // 발주현황
-  ph('poInput','차수·발주년월·대표코드·발주코드·품명으로 검색…','Поиск: партия, месяц, код, наименование…');
+  ph('poInput','차수·발주년월·대표코드·발주코드·품명·인보이스로 검색…','Поиск: партия, месяц, код, наименование, инвойс…');
   set('i18n-tab-prod','🏷️ 제품목록','🏷️ Изделия');
   set('i18n-prod-up','엑셀 업로드','Загрузить Excel');
   set('i18n-prod-dl',DL[0],DL[1]);
@@ -13358,7 +13358,9 @@ function renderPO(){
     return (!R.from || y>=R.from) && (!R.to || y<=R.to); });
   if(kw) rows=rows.filter(r=>{
     const i=poLookup(r.pn);
-    return [r.cha, poChaLabel(r.cha), poYmOf(r), r.pn, i.rep, i.fin, poName(r.pn), poSpec(r.pn)].some(v=>String(v||'').toLowerCase().includes(kw));
+    // 인보이스 번호·선적일로도 찾는다(RUMOSKRUS261004 · 261004 · 2026-10-25 …)
+    return [r.cha, poChaLabel(r.cha), poYmOf(r), r.pn, i.rep, i.fin, poName(r.pn), poSpec(r.pn),
+            poInvText(r), poSailText(r)].some(v=>String(v||'').toLowerCase().includes(kw));
   });
   _poAllRows=rows;                       // 머리글 거르개 창에 보일 값의 바탕
   rows=poApplyFilters(rows);             // 머리글 거르개(엑셀식: 고른 값만, 여러 열은 AND)
@@ -13383,12 +13385,14 @@ function renderPO(){
   const tbody=document.getElementById('poTbody');
   const empty=document.getElementById('poEmpty');
 
-  let tq=0, ts=0;
+  let tq=0, ts=0, ti=0;       // 수주 · 공급 · 인보이스로 확인된 수량
   const body=rows.map(r=>{
     const i=poLookup(r.pn);
     const chg=(i.fin && i.fin!==normPN(r.pn)) ? i.fin : '';
     const rest=r.qty-r.supplied;
     tq+=r.qty; ts+=r.supplied;
+    // 인보이스 합계 — 상업송장을 올려 적어 둔 몫만 센다(그 품번이 실린 인보이스를 추측해 보여 준 것은 빼고)
+    poInvEntries(r).forEach(x=>{ if(x.exact) ti+=Number(x.q)||0; });
     // 코드 세 열은 바탕색 없이 글자만(변경코드는 눈에 띄게 붉은 글씨)
     const codeS="font-family:'Courier New',monospace;font-size:9.5px;white-space:nowrap";
     // 열 차례를 보기 창에서 바꿀 수 있으므로, 칸을 열 이름으로 만들어 두고 머리글 차례대로 잇는다.
@@ -13438,7 +13442,8 @@ function renderPO(){
 
   // 합계 줄: 수량 세 열이 어디로 가든 그 자리에 숫자를 놓는다(열 차례를 바꿀 수 있다).
   const poSumS=thS+';font-weight:700;background:var(--surface);top:27px;text-align:right';
-  const poTot={ qty:tq.toLocaleString(), sup:ts.toLocaleString(), rest:(tq-ts).toLocaleString() };
+  const poTot={ qty:tq.toLocaleString(), sup:ts.toLocaleString(), rest:(tq-ts).toLocaleString(),
+                inv:(ti?ti.toLocaleString():'') };
   const poLead=Math.max(0, heads.findIndex(h=>poTot[h[0]]!=null));
   const poSumLab=escapeHtml(L('합계 '+rows.length+'건 · '+R.label,'Итого '+rows.length+' · '+R.label));
   const poTailArr=heads.slice(poLead).map(h=>poTot[h[0]]||'');
@@ -15656,9 +15661,10 @@ function downloadPO(){
   // 나머지 열은 첫 줄에만 적은 뒤 세로로 합쳐, 화면과 같은 모양으로 만든다.
   const ALT={alt:1, alt_name:1, alt_qty:1, sup_ok:1};   // 대체품목마다 한 줄씩 적는 열
   const body=[], merges=[];
-  let tq=0, ts=0;
+  let tq=0, ts=0, ti=0;
   (_poFiltered||[]).forEach(r=>{
     tq+=r.qty; ts+=r.supplied;
+    poInvEntries(r).forEach(x=>{ if(x.exact) ti+=Number(x.q)||0; });
     const rep=(poLookup(r.pn)||{}).rep||'';
     const ents=rep?pnAltEntries(rep):[];
     const marks=poSupplyMarks(r);
@@ -15684,7 +15690,7 @@ function downloadPO(){
     }
     if(n>1) xh.forEach((h,c)=>{ if(!ALT[h[0]]) merges.push({ s:{r:at,c}, e:{r:at+n-1,c} }); });
   });
-  const xtot={qty:tq, sup:ts, rest:tq-ts};
+  const xtot={qty:tq, sup:ts, rest:tq-ts, inv:(ti||'')};
   const sum=xh.map((h,i)=> (xtot[h[0]]!=null) ? xtot[h[0]]
     : (i===0 ? ((ru?'Итого ':'합계 ')+(_poFiltered||[]).length+(ru?'':'건')) : ''));
   const aoa=[xh.map(h=>String(h[1]).replace(/<br>/g,' ')), sum].concat(body);
