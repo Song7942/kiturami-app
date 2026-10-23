@@ -13391,8 +13391,14 @@ function renderPO(){
     const chg=(i.fin && i.fin!==normPN(r.pn)) ? i.fin : '';
     const rest=r.qty-r.supplied;
     tq+=r.qty; ts+=r.supplied;
-    // 인보이스 합계 — 상업송장을 올려 적어 둔 몫만 센다(그 품번이 실린 인보이스를 추측해 보여 준 것은 빼고)
-    poInvEntries(r).forEach(x=>{ if(x.exact) ti+=Number(x.q)||0; });
+    // 인보이스 합계 — 공급수량 가운데 인보이스로 뒷받침되는 몫.
+    //   · 상업송장(CI)을 올려 적어 둔 줄은 그 줄이 받은 몫을 센다
+    //   · 선적 자료로 맞춰진 줄(적어 둔 것이 없는 줄)은 그 줄 공급수량을 센다
+    { const es=poInvEntries(r);
+      if(es.length){
+        if(es[0].exact) es.forEach(x=>{ ti+=Number(x.q)||0; });
+        else ti+=Math.round(Number(r.supplied)||0);
+      } }
     // 코드 세 열은 바탕색 없이 글자만(변경코드는 눈에 띄게 붉은 글씨)
     const codeS="font-family:'Courier New',monospace;font-size:9.5px;white-space:nowrap";
     // 열 차례를 보기 창에서 바꿀 수 있으므로, 칸을 열 이름으로 만들어 두고 머리글 차례대로 잇는다.
@@ -13453,7 +13459,14 @@ function renderPO(){
   const poEdCol=EDPO?('<th style="'+thS+';width:44px"></th>'):'';
   if(thead) thead.innerHTML='<tr>'+heads.map(h=>'<th'+danTip(h[0])+' style="'+thS+'">'+h[1]+poFilterIcon(h[0])+'</th>').join('')+poEdCol+'</tr>'
     + '<tr>'+poLeadCell
-    + poTailArr.map((v,i)=>'<th style="'+poSumS+(i===poLabAt?';text-align:left':'')+'">'+v+'</th>').join('')
+    + poTailArr.map((v,i)=>{
+        const hk=heads[poLead+i] ? heads[poLead+i][0] : '';
+        const tip=(hk==='inv' && v) ? (' title="'+escapeHtml(L(
+            '공급수량 가운데 인보이스로 뒷받침되는 수량입니다.\n'
+            +'· 상업송장(CI)을 올려 적어 둔 줄 — 그 줄이 받은 몫\n'
+            +'· 선적 자료로 맞춰진 줄 — 그 줄 공급수량',
+            'Из поставленного — подтверждено инвойсами'))+'"') : '';
+        return '<th'+tip+' style="'+poSumS+(i===poLabAt?';text-align:left':'')+'">'+v+'</th>'; }).join('')
     + poEdCol+'</tr>';
   // 머리글이 두 줄짜리 이름(대체품목 품번 …) 때문에 높아지면, 합계 줄도 그만큼 내려야 한다.
   // 27px 로 못박아 두면 합계 줄이 머리글 둘째 줄을 덮어 '맨 윗줄만' 보인다.
@@ -15664,7 +15677,8 @@ function downloadPO(){
   let tq=0, ts=0, ti=0;
   (_poFiltered||[]).forEach(r=>{
     tq+=r.qty; ts+=r.supplied;
-    poInvEntries(r).forEach(x=>{ if(x.exact) ti+=Number(x.q)||0; });
+    { const es=poInvEntries(r);
+      if(es.length){ if(es[0].exact) es.forEach(x=>{ ti+=Number(x.q)||0; }); else ti+=Math.round(Number(r.supplied)||0); } }
     const rep=(poLookup(r.pn)||{}).rep||'';
     const ents=rep?pnAltEntries(rep):[];
     const marks=poSupplyMarks(r);
