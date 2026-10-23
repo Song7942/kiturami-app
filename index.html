@@ -13122,6 +13122,29 @@ function poInvEntries(r){
   return out.sort((a,b)=>String(a.d).localeCompare(String(b.d)));
 }
 function poInvText(r){ return poInvEntries(r).map(x=>x.i+((x.exact&&x.q)?(' × '+x.q):'')).join(', '); }
+// 그 인보이스가 지금 몇 줄·몇 개로 적혀 있나. '이미 넣었나' 는 적어 둔 표시가 아니라
+//   지금 줄에 남아 있는 기록으로 본다 — 되돌리기로 수량을 물렸으면 기록도 함께 사라지므로
+//   다시 올릴 때 괜히 '이미 반영했다' 고 묻지 않는다.
+function poInvApplied(inv){
+  let n=0, q=0;
+  if(!inv) return { n, q };
+  Object.keys(_poInvOf||{}).forEach(k=>{ (_poInvOf[k]||[]).forEach(x=>{
+    if(String(x.i||'')===inv){ n++; q+=Number(x.q)||0; } }); });
+  return { n, q };
+}
+// 적어 둔 인보이스 기록을 지금 공급수량에 맞춘다.
+//   되돌리기로 공급수량이 줄면 그만큼 기록도 줄이고, 0 이 되면 기록을 지운다.
+function poInvOfPrune(){
+  const sup={}; (poData||[]).forEach(r=>{ sup[poManKey(r.cha,r.pn)]=Math.round(Number(r.supplied)||0); });
+  Object.keys(_poInvOf||{}).forEach(k=>{
+    const have=sup[k];
+    if(have==null || have<=0){ delete _poInvOf[k]; return; }
+    let left=have; const keep=[];
+    (_poInvOf[k]||[]).forEach(x=>{ const q=Number(x.q)||0; if(left<=0 || q<=0) return;
+      const take=Math.min(q, left); keep.push({ i:x.i, d:x.d, q:take }); left-=take; });
+    if(keep.length) _poInvOf[k]=keep; else delete _poInvOf[k];
+  });
+}
 function poSailText(r){ return poInvEntries(r).map(x=>x.d).filter(Boolean).join(', '); }
 // 인보이스·선적일 칸. 여러 장이면 한 장씩 줄을 나눠 적는다.
 function poInvTd(r, tdS, field){
@@ -13791,7 +13814,9 @@ async function poSnapSave(){
     +'\n계속할까요?')) return;
   const cfg={ at:new Date().toISOString(), by:(currentUser&&currentUser.id)||'',
     rows:poData.map(r=>({ c:r.cha, p:r.pn, m:r.mon, q:Math.round(Number(r.qty)||0), s:Math.round(Number(r.supplied)||0) })),
-    man:{ man:_poMan, manQ:_poManQ, split:_poSplit, pnSkip:_poPnSkip, danSkip:_poDanSkip, invOf:_poInvOf, since:_poSince, fromYm:_poFromYm } };
+    // 담을 때 한 벌 떠 둔다 — 뒤에 손댄 것이 저장본까지 따라 바뀌지 않게
+    man:JSON.parse(JSON.stringify({ man:_poMan, manQ:_poManQ, split:_poSplit, pnSkip:_poPnSkip,
+      danSkip:_poDanSkip, invOf:_poInvOf, invDone:_poInvDone, since:_poSince, fromYm:_poFromYm })) };
   const { error }=await sb.from('kt_psi_cfg').upsert({ id:PO_SNAP_ID, cfg, updated_at:new Date().toISOString() },{onConflict:'id'});
   if(error){ alert((ru?'Ошибка':'저장 실패')+'\n['+(error.message||error.code)+']'); return; }
   _poSnap=cfg; _poSnapLoaded=true;
@@ -13830,11 +13855,17 @@ async function poSnapRestore(){
   }
   const m=s.man||{};
   _poMan=m.man||{}; _poManQ=m.manQ||{}; _poSplit=m.split||{};
-  _poPnSkip=m.pnSkip||{}; _poDanSkip=m.danSkip||{}; _poInvOf=m.invOf||{};
+  _poPnSkip=m.pnSkip||{}; _poDanSkip=m.danSkip||{};
+  if(m.invOf && typeof m.invOf==='object') _poInvOf=m.invOf;
+  if(m.invDone && typeof m.invDone==='object') _poInvDone=m.invDone;
   _poSince=String(m.since||''); _poFromYm=String(m.fromYm||'');
-  savePoMan();
   _poLastEdit=now;
-  await loadPO(); renderPO(); poManBtn(); poSimRefresh();
+  await loadPO();
+  // 되돌린 공급수량에 인보이스 기록을 맞춘다 — 물린 몫의 기록은 지운다.
+  //   (옛 저장본에는 인보이스 기록이 안 담겨 있어도 이 손질로 아귀가 맞는다)
+  poInvOfPrune();
+  savePoMan();
+  renderPO(); poManBtn(); poSimRefresh();
   alert('되돌렸습니다.\n\n'+poSnapText(s));
 }
 // [상태 저장] 단추 — 저장할지, 저장해 둔 것으로 되돌릴지 고르게 한다
@@ -14734,9 +14765,10 @@ async function poInvUpload(wb, sn, fname){
       +(unknown.length?('· 품번조회에 없는 품번 '+unknown.length+'개\n'):''));
     return;
   }
-  const done=_poInvDone[inv];
-  if(done && !confirm('이미 반영한 인보이스입니다 — '+inv+'\n'
-    +'  '+_ktHistTime(done.at)+' · 품번 '+done.n+'개 · '+Number(done.q||0).toLocaleString()+'개\n\n'
+  const seen=poInvApplied(inv), done=_poInvDone[inv];
+  if(seen.n && !confirm('이미 반영한 인보이스입니다 — '+inv+'\n'
+    +(done?('  올린 때 '+_ktHistTime(done.at)+'\n'):'')
+    +'  지금 '+seen.n+'줄 / '+seen.q.toLocaleString()+'개가 이 인보이스로 적혀 있습니다.\n\n'
     +'또 넣으면 수량이 두 번 더해집니다. 그래도 계속할까요?')) return;
   let tot=0; plan.forEach(x=>tot+=x.add);
   const rowN=new Set(plan.map(x=>x.r.cha+'|'+normPN(x.r.pn))).size;
