@@ -13121,7 +13121,7 @@ function poInvEntries(r){
   });
   return out.sort((a,b)=>String(a.d).localeCompare(String(b.d)));
 }
-function poInvText(r){ return poInvEntries(r).map(x=>x.i).join(', '); }
+function poInvText(r){ return poInvEntries(r).map(x=>x.i+((x.exact&&x.q)?(' × '+x.q):'')).join(', '); }
 function poSailText(r){ return poInvEntries(r).map(x=>x.d).filter(Boolean).join(', '); }
 // 인보이스·선적일 칸. 여러 장이면 한 장씩 줄을 나눠 적는다.
 function poInvTd(r, tdS, field){
@@ -13129,7 +13129,12 @@ function poInvTd(r, tdS, field){
   if(!list.length) return '<td style="'+tdS+'"></td>';
   const tip=list.map(x=>x.i+(x.d?(' · '+x.d):'')+(x.q?(' · '+x.q.toLocaleString()+'개'):'')).join('\n')
     + (list[0].exact ? '' : '\n(상업송장을 올려 넣은 줄이 아니라, 그 품번이 실린 인보이스입니다)');
-  const body=list.map(x=>escapeHtml(field==='sail'?(x.d||''):x.i)).join('<br>');
+  // 인보이스 칸에는 그 줄이 그 인보이스로 받은 수량까지 함께 적는다.
+  //   한 품번이 여러 차수에 걸쳐 있으면 차수마다 받은 몫이 다르므로(5개·10개 …) 수량이 있어야 뜻이 통한다.
+  const body=list.map(x=>(field==='sail')
+      ? escapeHtml(x.d||'')
+      : (escapeHtml(x.i)+((x.exact && x.q)?('<span style="color:var(--muted)"> × '+x.q.toLocaleString()+'</span>'):''))
+    ).join('<br>');
   return '<td style="'+tdS+';font-size:10px'+(list[0].exact?'':';color:var(--muted)')+'" title="'+escapeHtml(tip)+'">'+body+'</td>';
 }
 // 한 줄에서 그 열의 값(거르개·정렬이 쓰는 기준값). 화면에 찍히는 글자와 같게 맞춘다.
