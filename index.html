@@ -13069,7 +13069,8 @@ function poColDefsBase(){
     // 가격정보에 공급가가 있는지 — 가격정보를 볼 수 있는 사람에게만
     .concat(poCanSeeSupply()?[['sup_ok',L('공급가<br>여부','Цена<br>есть'),58]]:[])
     .concat([['qty',L('수주수량','Заказано'),70],['sup',L('공급수량','Поставлено'),70],
-             ['rest',L('미공급수량','Недопоставка'),78]]);
+             ['rest',L('미공급수량','Недопоставка'),78],
+             ['inv',L('인보이스','Инвойс'),120],['sail',L('선적일','Дата отгрузки'),84]]);
 }
 function poColLabel(key){ const d=poColDefs().find(x=>x[0]===key); return d?String(d[1]).replace(/<br>/g,' '):key; }
 // 공급가 여부 칸 — 대체품목이 있으면 그 줄에 맞춰 품목마다 한 줄씩 쌓는다.
@@ -13100,6 +13101,37 @@ function poAltTd(rep, key, tdS, padIn){
   return '<td style="'+pad+'">'+out+'</td>';
 }
 function poIsNumCol(key){ return key==='qty'||key==='sup'||key==='rest'; }
+// ── 공급수량이 어느 인보이스로 나갔는지 ─────────────────────
+//   ① 상업송장(CI)을 올려 넣은 줄은 그때 적어 둔 것을 그대로 쓴다(정확하다)
+//   ② 적어 둔 것이 없으면, 선적 자료(kt_ship)에서 그 품번이 실린 인보이스를 찾아 보여 준다
+//      — 어느 차수 몫인지까지는 알 수 없어 '그 품번이 실린 인보이스' 라는 뜻이다
+function poInvEntries(r){
+  const rec=_poInvOf[poManKey(r.cha, r.pn)];
+  if(rec && rec.length) return rec.map(x=>({ i:String(x.i||''), d:String(x.d||''), q:Number(x.q)||0, exact:1 }));
+  if(!(Number(r.supplied)||0)) return [];
+  const i=(typeof poLookup==='function')?(poLookup(r.pn)||{}):{};
+  const keys=[normPN(r.pn), normPN(i.fin||'')].filter(Boolean);
+  const seen={}, out=[];
+  (shipData||[]).forEach(s=>{
+    if(typeof poCountShip==='function' && !poCountShip(s)) return;
+    if(keys.indexOf(normPN(s.pn))<0) return;
+    const k=String(s.inv||'');
+    if(!k || seen[k]) return;
+    seen[k]=1; out.push({ i:k, d:String(s.sail||''), q:Number(s.qty)||0, exact:0 });
+  });
+  return out.sort((a,b)=>String(a.d).localeCompare(String(b.d)));
+}
+function poInvText(r){ return poInvEntries(r).map(x=>x.i).join(', '); }
+function poSailText(r){ return poInvEntries(r).map(x=>x.d).filter(Boolean).join(', '); }
+// 인보이스·선적일 칸. 여러 장이면 한 장씩 줄을 나눠 적는다.
+function poInvTd(r, tdS, field){
+  const list=poInvEntries(r);
+  if(!list.length) return '<td style="'+tdS+'"></td>';
+  const tip=list.map(x=>x.i+(x.d?(' · '+x.d):'')+(x.q?(' · '+x.q.toLocaleString()+'개'):'')).join('\n')
+    + (list[0].exact ? '' : '\n(상업송장을 올려 넣은 줄이 아니라, 그 품번이 실린 인보이스입니다)');
+  const body=list.map(x=>escapeHtml(field==='sail'?(x.d||''):x.i)).join('<br>');
+  return '<td style="'+tdS+';font-size:10px'+(list[0].exact?'':';color:var(--muted)')+'" title="'+escapeHtml(tip)+'">'+body+'</td>';
+}
 // 한 줄에서 그 열의 값(거르개·정렬이 쓰는 기준값). 화면에 찍히는 글자와 같게 맞춘다.
 function poCellVal(key, r){
   const i=poLookup(r.pn)||{};
@@ -13125,6 +13157,8 @@ function poCellVal(key, r){
     case 'qty':  return String(Number(r.qty)||0);
     case 'sup':  return String(Number(r.supplied)||0);
     case 'rest': return String((Number(r.qty)||0)-(Number(r.supplied)||0));
+    case 'inv':  return poInvText(r);
+    case 'sail': return poSailText(r);
   }
   return '';
 }
@@ -13347,7 +13381,8 @@ function renderPO(){
         +(EDPO?('<span onclick="event.stopPropagation();poSplitOpen(this)" data-pocha="'+escapeHtml(String(r.cha||''))+'" data-popn="'+escapeHtml(String(r.pn||''))+'"'
           +' title="'+L('코드별 공급수량 나눠 적기','Поставка по кодам')+'"'
           +' style="cursor:pointer;color:var(--accent2);font-size:10px;margin-left:3px">⇄</span>'):'')+'</td>',
-      rest:'<td style="'+numS+';font-weight:600'+(rest>0?';color:#b91c1c':'')+'">'+(rest?rest.toLocaleString():'0')+'</td>'
+      rest:'<td style="'+numS+';font-weight:600'+(rest>0?';color:#b91c1c':'')+'">'+(rest?rest.toLocaleString():'0')+'</td>',
+      inv:poInvTd(r, tdS, 'inv'), sail:poInvTd(r, tdS, 'sail')
     };
     const del=EDPO ? ('<td style="'+tdS+';text-align:center;width:44px;white-space:nowrap">'
       + '<span onclick="event.stopPropagation();poAddRowOpen(this)"'
@@ -13400,6 +13435,7 @@ let _poMan={};          // '차수|발주코드' -> 1  (손으로 고친 공급�
 let _poManQ={};         // '차수|발주코드' -> 1  (손으로 고친 수주수량 — 표시만 한다)
 let _poSplit={};        // '차수|발주코드' -> [{c:공급코드, q:수량}]  (여러 호환품번으로 나눠 나간 줄)
 let _poPnSkip={};       // '차수|발주코드' -> 1  ('발주현황에만' 을 고른 줄 — 품번조회는 그대로 둔다)
+let _poInvOf={};        // '차수|발주코드' -> [{i:인보이스, d:선적일, q:수량}]  (공급수량이 어느 인보이스로 나갔는지)
 let _poInvDone={};      // 이미 반영한 상업송장 번호 -> {at,n,q}  (두 번 더해지는 것을 막는다)
 let _poDanSkip={};      // 공급코드 -> 1  (단종 풀기를 한 번 물어본 코드 — 다시 묻지 않는다)
 let _poSince='';        // 이 시각 뒤에 올린 인보이스만 공급수량에 센다(비면 전부)
@@ -13417,7 +13453,8 @@ async function loadPoMan(){
         _poManQ=(c.manQ && typeof c.manQ==='object')?c.manQ:{};
         _poPnSkip=(c.pnSkip && typeof c.pnSkip==='object')?c.pnSkip:{};
         _poDanSkip=(c.danSkip && typeof c.danSkip==='object')?c.danSkip:{};
-        _poInvDone=(c.invDone && typeof c.invDone==='object')?c.invDone:{}; }
+        _poInvDone=(c.invDone && typeof c.invDone==='object')?c.invDone:{};
+        _poInvOf=(c.invOf && typeof c.invOf==='object')?c.invOf:{}; }
       else { _poMan=c; _poSince=''; }        // 옛 모양(맵만 있던 것)도 읽는다
     }
   }catch(e){}
@@ -13427,7 +13464,7 @@ function savePoMan(){
   clearTimeout(_poManT);
   _poManT=setTimeout(async function(){
     try{ const { error }=await sb.from('kt_psi_cfg').upsert({ id:PO_MAN_ID,
-      cfg:{ since:_poSince, fromYm:_poFromYm, man:_poMan, manQ:_poManQ, split:_poSplit, pnSkip:_poPnSkip, danSkip:_poDanSkip, invDone:_poInvDone },
+      cfg:{ since:_poSince, fromYm:_poFromYm, man:_poMan, manQ:_poManQ, split:_poSplit, pnSkip:_poPnSkip, danSkip:_poDanSkip, invDone:_poInvDone, invOf:_poInvOf },
       updated_at:new Date().toISOString() },{onConflict:'id'});
       if(error) console.error('발주현황 수기 표시 저장 실패', error);
     }catch(e){ console.error('발주현황 수기 표시 저장 실패', e); }
@@ -13749,7 +13786,7 @@ async function poSnapSave(){
     +'\n계속할까요?')) return;
   const cfg={ at:new Date().toISOString(), by:(currentUser&&currentUser.id)||'',
     rows:poData.map(r=>({ c:r.cha, p:r.pn, m:r.mon, q:Math.round(Number(r.qty)||0), s:Math.round(Number(r.supplied)||0) })),
-    man:{ man:_poMan, manQ:_poManQ, split:_poSplit, pnSkip:_poPnSkip, danSkip:_poDanSkip, since:_poSince, fromYm:_poFromYm } };
+    man:{ man:_poMan, manQ:_poManQ, split:_poSplit, pnSkip:_poPnSkip, danSkip:_poDanSkip, invOf:_poInvOf, since:_poSince, fromYm:_poFromYm } };
   const { error }=await sb.from('kt_psi_cfg').upsert({ id:PO_SNAP_ID, cfg, updated_at:new Date().toISOString() },{onConflict:'id'});
   if(error){ alert((ru?'Ошибка':'저장 실패')+'\n['+(error.message||error.code)+']'); return; }
   _poSnap=cfg; _poSnapLoaded=true;
@@ -13788,7 +13825,7 @@ async function poSnapRestore(){
   }
   const m=s.man||{};
   _poMan=m.man||{}; _poManQ=m.manQ||{}; _poSplit=m.split||{};
-  _poPnSkip=m.pnSkip||{}; _poDanSkip=m.danSkip||{};
+  _poPnSkip=m.pnSkip||{}; _poDanSkip=m.danSkip||{}; _poInvOf=m.invOf||{};
   _poSince=String(m.since||''); _poFromYm=String(m.fromYm||'');
   savePoMan();
   _poLastEdit=now;
@@ -14601,6 +14638,26 @@ function poInvNoOf(sn, aoa, fname){
   m=String(fname||'').match(/([A-Za-z]{4,}\d{6})/);
   return m?m[1].toUpperCase():'';
 }
+// 선적일 — '8) Sailing on or about : 2026-10-25' 같은 줄에서 찾는다
+function poInvSailOf(aoa){
+  for(let r=0;r<Math.min((aoa||[]).length,40);r++){
+    const row=aoa[r]||[];
+    let hit=false;
+    for(let c=0;c<row.length;c++){
+      const s=String(row[c]==null?'':row[c]);
+      if(!hit && /sail|선적/i.test(s)) hit=true;
+      if(!hit) continue;
+      const m=s.match(/(20\d{2})[-.\/](\d{1,2})[-.\/](\d{1,2})/);
+      if(m) return m[1]+'-'+String(m[2]).padStart(2,'0')+'-'+String(m[3]).padStart(2,'0');
+      const n=Number(s);                                   // 엑셀 날짜값(숫자)으로 적힌 때
+      if(hit && isFinite(n) && n>20000 && n<80000){
+        const d=new Date(Date.UTC(1899,11,30)+n*86400000), p2=x=>(x<10?'0':'')+x;
+        return d.getUTCFullYear()+'-'+p2(d.getUTCMonth()+1)+'-'+p2(d.getUTCDate());
+      }
+    }
+  }
+  return '';
+}
 // CI 시트의 품번·수량. 단위(EA·SET) 칸 바로 앞의 숫자를 수량으로 본다.
 function poInvRows(aoa){
   const out=[];
@@ -14634,7 +14691,7 @@ async function poInvUpload(wb, sn, fname){
   const aoa=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:'',raw:true});
   const src=poInvRows(aoa);
   if(!src.length){ alert(ru?'Не найдены артикулы.':('['+sn+'] 에서 품번·수량을 찾지 못했습니다.')); return; }
-  const inv=poInvNoOf(sn, aoa, fname);
+  const inv=poInvNoOf(sn, aoa, fname), sail=poInvSailOf(aoa);
   await loadPO(); await loadPoMan();
   // 같은 품번이 여러 줄이면 더한다
   const agg={}; src.forEach(x=>{ const k=normPN(x.pn); (agg[k]=agg[k]||{pn:x.pn, q:0}).q+=x.q; });
@@ -14679,7 +14736,7 @@ async function poInvUpload(wb, sn, fname){
   let tot=0; plan.forEach(x=>tot+=x.add);
   const rowN=new Set(plan.map(x=>x.r.cha+'|'+normPN(x.r.pn))).size;
   if(!confirm('상업송장(CI) → 발주현황 공급수량\n\n'
-    +'· 인보이스 '+(inv||'(번호 모름)')+'  · 시트 ['+sn+']\n'
+    +'· 인보이스 '+(inv||'(번호 모름)')+(sail?('  · 선적일 '+sail):'')+'  · 시트 ['+sn+']\n'
     +'· 읽은 품번 '+keys.length+'개 중 사이트에 있는 '+known.length+'개\n'
     +'· 공급수량에 넣을 '+rowN+'줄 / '+tot.toLocaleString()+'개\n'
     +(unknown.length?('· 품번조회에 없어 건너뜀 '+unknown.length+'개: '+unknown.slice(0,5).map(k=>normBadgePN(agg[k].pn)).join(', ')+(unknown.length>5?' …':'')+'\n'):'')
@@ -14703,7 +14760,12 @@ async function poInvUpload(wb, sn, fname){
   }
   Object.keys(touch).forEach(k=>{ const t=touch[k];
     ktHistAdd('po.supplied', t.r.cha+'|'+t.r.pn, String(t.was), String(t.r.supplied), XL_TAG());
-    _poMan[poManKey(t.r.cha, t.r.pn)]=1; });
+    _poMan[poManKey(t.r.cha, t.r.pn)]=1;
+    // 어느 인보이스로 얼마가 나갔는지 줄마다 적어 둔다(인보이스·선적일 열이 이것을 보여 준다)
+    if(inv){ const mk=poManKey(t.r.cha, t.r.pn);
+      const arr=Array.isArray(_poInvOf[mk])?_poInvOf[mk]:(_poInvOf[mk]=[]);
+      const j=arr.findIndex(x=>String(x.i)===inv);
+      if(j<0) arr.push({ i:inv, d:sail, q:t.add }); else { arr[j].q=(Number(arr[j].q)||0)+t.add; arr[j].d=sail||arr[j].d; } } });
   if(inv) _poInvDone[inv]={ at:now, n:known.length, q:tot };
   savePoMan();
   _poLastEdit=now;
