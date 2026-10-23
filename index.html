@@ -8347,9 +8347,8 @@ function canEditPo(rg){
 //   · PSI 를 보는 사람 — 종전처럼 PSI 도구줄에서 열고 탭 단추는 숨긴다(카자흐만 따로 받았으면 그 단추는 보인다)
 //   · 발주현황만 받은 사람 — 탭줄에 따로 세운다
 function poTabsApply(){
-  const only=poOnlyMember();
   const set=(id,on)=>{ const e=document.getElementById(id); if(e) e.style.display=on?'block':'none'; };
-  set('tab-po',   canSeePo('ru') && (only || !canSeePsi()));
+  set('tab-po',   canSeePo('ru'));
   set('tab-pokz', canSeePo('kz'));
 }
 function poOnlyMember(){
@@ -8424,6 +8423,7 @@ function ensureVisibleTab(){
 // 로그인 직후 권한을 아직 다 읽지 못한 상태에서 부를 때 쓴다 — 그 시점의 판단으로
 // 탭을 옮겨 버리면, 권한이 있는 회원인데도 엉뚱한 탭에 떨어질 수 있다.
 function applyPermTabVisibility(skipSwitch){
+  poTabsApply();                               // 발주현황 탭은 MASTER 에게도 세운다
   if(userRole(currentUser).isMaster) return;   // MASTER 는 항상 전체
   const pobj=_myPermObj();
   if(!pobj){
