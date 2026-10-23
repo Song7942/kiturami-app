@@ -13019,6 +13019,8 @@ function poRegionOf(cha){ return /^\s*KZ/i.test(String(cha||'')) ? 'kz' : 'ru'; 
 let _poRegion='ru';
 function poRegion(){ return _poRegion; }
 function poRegionLabel(rg){ return (rg==='kz') ? (lang==='ru'?'Казахстан':'카자흐스탄') : (lang==='ru'?'Россия':'러시아'); }
+// 화면 위 작은 표에 쓰는 짧은 이름 — 러문에서는 RU · KZ 로 적는다
+function poRegionTagText(rg){ return (lang==='ru') ? (rg==='kz'?'KZ':'RU') : poRegionLabel(rg); }
 function poRowsOf(rg){ return (poData||[]).filter(r=>poRegionOf(r.cha)===rg); }
 function poRows(){ return poRowsOf(_poRegion); }
 function poChaList(){
@@ -13409,6 +13411,9 @@ function openPOFilter(key, anchor){
 function renderPO(){
   const pane=document.getElementById('pane-po'); if(!pane) return;
   _poRepMap=null;
+  // 화면 위 지역 표 — 말을 바꾸거나 탭을 옮길 때마다 다시 적는다
+  { const t=document.getElementById('poRegionTag');
+    if(t){ t.textContent=poRegionTagText(poRegion()); t.style.display=''; } }
   const ru=(lang==='ru'), L=(ko,rr)=>(ru?rr:ko);
   const kw=(document.getElementById('poInput')?document.getElementById('poInput').value:'').trim().toLowerCase();
   const chaSel=document.getElementById('poCha');
@@ -14700,7 +14705,7 @@ async function loadPOTab(){
   const m=canEditPo(poRegion());
   ['poUploadBtn','poRestoreBtn','poBackupBtn'].forEach(id=>{ const b=document.getElementById(id); if(b) b.style.display=m?'':'none'; });
   { const t=document.getElementById('poRegionTag');     // 화면 위에 어느 지역인지 적어 둔다
-    if(t){ t.textContent=poRegionLabel(poRegion()); t.style.display=''; } }
+    if(t){ t.textContent=poRegionTagText(poRegion()); t.style.display=''; } }
   { const b=document.getElementById('poDelChaBtn');
     if(b) b.style.display=((typeof pnEditable==='function') && pnEditable())?'':'none'; }
   await Promise.all([loadPO(), loadPoMan(), (typeof loadPnAlt==='function')?loadPnAlt():Promise.resolve()]);
