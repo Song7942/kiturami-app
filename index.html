@@ -13148,6 +13148,7 @@ function poInvApplied(inv){
 // 적어 둔 인보이스 기록을 지금 공급수량에 맞춘다.
 //   되돌리기로 공급수량이 줄면 그만큼 기록도 줄이고, 0 이 되면 기록을 지운다.
 function poInvOfPrune(){
+  if(!(poData||[]).length) return;      // 발주현황을 아직 못 읽었으면 손대지 않는다(통째로 지워질 수 있다)
   const sup={}; (poData||[]).forEach(r=>{ sup[poManKey(r.cha,r.pn)]=Math.round(Number(r.supplied)||0); });
   Object.keys(_poInvOf||{}).forEach(k=>{
     const have=sup[k];
@@ -13499,7 +13500,7 @@ let _poInvDone={};      // 이미 반영한 상업송장 번호 -> {at,n,q}  (�
 let _poDanSkip={};      // 공급코드 -> 1  (단종 풀기를 한 번 물어본 코드 — 다시 묻지 않는다)
 let _poSince='';        // 이 시각 뒤에 올린 인보이스만 공급수량에 센다(비면 전부)
 let _poFromYm='';       // 이 달부터 실제로 선적된 것만 공급수량에 센다(YYMM, 비면 전부)
-let _poManLoaded=false;
+let _poManLoaded=false, _poManReady=false;
 function poManKey(cha,pn){ return String(cha||'')+'|'+normPN(pn); }
 async function loadPoMan(){
   if(_poManLoaded) return;
@@ -13517,9 +13518,13 @@ async function loadPoMan(){
       else { _poMan=c; _poSince=''; }        // 옛 모양(맵만 있던 것)도 읽는다
     }
   }catch(e){}
+  _poManReady=true;        // 여기까지 와야 저장해도 된다(읽기 전에 빈 상태로 덮어쓰지 않게)
 }
 let _poManT=null;
 function savePoMan(){
+  // 아직 한 번도 읽지 않았으면 쓰지 않는다 — 비어 있는 상태로 덮어쓰면
+  //   손으로 고친 표시·변경코드·인보이스 기록이 통째로 날아간다.
+  if(!_poManReady){ console.warn('발주현황 수기 표시를 아직 읽지 않아 저장을 건너뜀'); return; }
   clearTimeout(_poManT);
   _poManT=setTimeout(async function(){
     try{ const { error }=await sb.from('kt_psi_cfg').upsert({ id:PO_MAN_ID,
