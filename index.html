@@ -4549,6 +4549,8 @@ function pnAltQtyText(pn){ return pnAltEntries(pn).map(e=>e.q).join(', '); }
 // 가져다 쓴다. 어디서 고치든 지금 보고 있는 화면이 바로 따라오게 다시 그린다.
 function ktAfterPnEdit(){
   _pnLookupMap=null; _pnByRepMap=null; _nameRuByRep=null;
+  if(typeof _pnAliasMap!=='undefined') _pnAliasMap=null;
+  if(typeof pnSyncPartsReps==='function') pnSyncPartsReps();   // 부품조회 대표품번도 따라가게
   if(typeof _pnChkMap!=='undefined') _pnChkMap=null;
   if(typeof pnSumClear==='function') pnSumClear();
   if(typeof prodNameClear==='function') prodNameClear();
@@ -4566,6 +4568,7 @@ function ktAfterPnEdit(){
   go('pane-ship',  typeof renderShip==='function'?renderShip:null);
   go('pane-po',    typeof renderPO==='function'?renderPO:null);
   go('pane-price', typeof renderPriceActive==='function'?renderPriceActive:null);
+  go('pane-order', typeof renderOrderTable==='function'?renderOrderTable:null);
 }
 // 호환품번 한 개를 고치는 칸(품번조회 분할 보기와 같은 방식)
 function pnCompatEdit(rep, raw){
@@ -5910,15 +5913,21 @@ async function loadPNOverrides(){
   }
   rows.forEach(row=>{
     // 톰스톤: 삭제된 품목은 기본 목록에서 제거한다.
-    if(row.final===PN_TOMBSTONE){ const i=PN_DATA.findIndex(p=>p.rep===row.rep); if(i>=0) PN_DATA.splice(i,1); return; }
+    if(row.final===PN_TOMBSTONE){ const i=PN_DATA.findIndex(p=>p.rep===row.rep);
+      // 지우기 전에 갖고 있던 호환품번을 적어 둔다 — 부품조회가 그 품목이 간 곳을 찾을 때 쓴다
+      if(i>=0){ _pnGoneCompats[row.rep]=(PN_DATA[i].compats||[]).slice(); PN_DATA.splice(i,1); }
+      return; }
     let compats=row.compats;
     if(typeof compats==='string'){ try{ compats=JSON.parse(compats); }catch(e){ compats=[]; } }
     let history=row.history;
     if(typeof history==='string'){ try{ history=JSON.parse(history); }catch(e){ history=[]; } }
     applyPNOverrideRow({ rep:row.rep, name_ko:row.name_ko, name_ru:row.name_ru, spec:row.spec, final:row.final, compats:compats||[], note:row.note, applied_models:row.applied_models, nw:row.nw, gw:row.gw, cbm:row.cbm, export_ctrl:row.export_ctrl, history:Array.isArray(history)?history:[] });
   });
-  _pnLookupMap=null; _pnByRepMap=null; _nameRuByRep=null;
+  _pnLookupMap=null; _pnByRepMap=null; _nameRuByRep=null; _pnAliasMap=null;
   if(typeof priceCalcSyncRep==='function') priceCalcSyncRep();
+  // 부품조회의 대표품번을 지금 품번조회에 맞춘다(이름 바꾸기·합치기·지우기를 따라간다)
+  if(typeof pnSyncPartsReps==='function'){ const n=pnSyncPartsReps();
+    if(n) console.log('부품조회 대표품번 '+n+'개를 품번조회에 맞췄습니다'); }
 }
 // 엑셀 업로드 헤더를 웹 열에 매핑(라벨로 자동 인식). 품번키 + 값열.
 function pnMapCols(headerRow){
@@ -10097,7 +10106,48 @@ function getPNInfo(rep){
 // 이름의 단일 기준 = 품번조회(PN_DATA). 각 화면은 이 헬퍼로 이름/규격을 가져온다.
 // 품번조회에 값이 있으면 그 값을, 없으면 화면이 원래 갖고 있던 값(fb)을 쓴다.
 // rep 은 대표품번이 아닐 수도 있어(호환/최종품번) findMasterRep 로 대표품번을 찾아 조회한다.
-function _pnResolved(rep){ if(!rep) return null; return getPNInfo(rep) || getPNInfo(findMasterRep(rep)) || null; }
+function _pnResolved(rep){ if(!rep) return null; return getPNInfo(rep) || getPNInfo(findMasterRep(rep)) || getPNInfo(pnRepNow(rep)) || null; }
+// ── 부품조회(PARTS)의 대표품번을 품번조회에 맞춘다 ─────────────
+//   부품조회 목록은 분해도 기준이라 대표품번이 파일에 박혀 있다.
+//   품번조회에서 대표품번을 바꾸거나 묶음을 합치거나 지우면 그 코드가 끊겨,
+//   품명·규격이 옛 값으로 남고 품번 칸도 없는 코드를 가리켰다.
+//   그래서 자료를 읽을 때와 품번조회를 고칠 때마다 지금 코드로 맞춰 준다.
+let _pnGoneCompats={};     // 지워진 묶음 → 지워질 때 갖고 있던 호환품번
+let _pnAliasMap=null;      // 옛 대표품번 → 지금 대표품번 (이름 바꾸기·합치기 자국에서)
+function pnRepAliasMap(){
+  if(_pnAliasMap) return _pnAliasMap;
+  _pnAliasMap=new Map();
+  (PN_DATA||[]).forEach(p=>{ (Array.isArray(p.history)?p.history:[]).forEach(h=>{
+    if(h && (h.f==='rep'||h.f==='merge') && h.o && p.rep) _pnAliasMap.set(String(h.o), p.rep); }); });
+  return _pnAliasMap;
+}
+// 옛 대표품번이 지금 어느 묶음인지 찾는다. 못 찾으면 적힌 코드를 그대로 돌려준다.
+function pnRepNow(rep){
+  if(!rep) return rep;
+  if(getPNInfo(rep)) return rep;                                  // ① 그대로 있다
+  const al=pnRepAliasMap().get(rep);                              // ② 이름을 바꿨거나 다른 묶음에 합쳤다
+  if(al && getPNInfo(al)) return al;
+  const fm=findMasterRep(rep);                                    // ③ 사실은 호환품번이었다
+  if(fm && getPNInfo(fm)) return fm;
+  const gone=_pnGoneCompats[rep]||[];                             // ④ 묶음은 지워지고 호환품번만 다른 묶음으로 갔다
+  for(let i=0;i<gone.length;i++){ const r=findMasterRep(gone[i]); if(r && getPNInfo(r)) return r; }
+  if(/^A/.test(rep)){                                             // ⑤ 대표품번은 호환품번 앞에 A 를 붙인 꼴이다
+    const r=findMasterRep(rep.slice(1)); if(r && getPNInfo(r)) return r;
+  }
+  return rep;
+}
+// 몇 줄이 바뀌었는지 돌려준다. 원래 적혀 있던 코드는 rep0 에 남겨 두고 늘 거기서 다시 찾는다.
+function pnSyncPartsReps(){
+  if(typeof PARTS==='undefined' || !(PN_DATA||[]).length) return 0;
+  let n=0;
+  PARTS.forEach(d=>{
+    if(!d.rep0) d.rep0=d.rep;
+    const now=pnRepNow(d.rep0);
+    if(now && now!==d.rep){ d.rep=now; n++; }
+  });
+  if(n) _partsByRep=null;
+  return n;
+}
 function pnNameKo(rep, fb){ const i=_pnResolved(rep); return (i&&i.name_ko)||fb||''; }
 function pnNameRu(rep, fb){ const i=_pnResolved(rep); return (i&&i.name_ru)||fb||''; }
 function pnSpec(rep, fb){ const i=_pnResolved(rep); return (i&&i.spec!=null&&i.spec!=='')?i.spec:(fb||''); }
