@@ -1601,6 +1601,10 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/></svg>
         <span id="i18n-po-manual">수기 초기화</span>
       </button>
+      <button class="dl-btn" id="poBackupBtn" onclick="poBackupOpen()" title="엑셀을 올리기 전에 지금 상태를 통째로 저장해 둡니다.&#10;잘못되면 그 시점 그대로 되돌릴 수 있습니다." style="display:none;background:#16a34a;border-color:#16a34a;color:#fff">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+        <span id="i18n-po-backup">상태 저장</span>
+      </button>
       <button class="dl-btn" id="poRestoreBtn" onclick="poRestoreNums()" title="변경이력에 남은 '마지막으로 적은' 수주·공급수량으로 되돌립니다.&#10;되돌리기 전에 합계가 얼마로 바뀌는지 먼저 보여 줍니다." style="display:none;background:#0ea5e9;border-color:#0ea5e9;color:#fff">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l3 2"/></svg>
         <span id="i18n-po-restore">수량 되돌리기</span>
@@ -2692,6 +2696,7 @@ function refreshPsiTexts(){
   set('i18n-po-manual','수기 초기화','Сброс ручных');
   set('i18n-po-delcha','차수 삭제','Удалить партию');
   set('i18n-po-restore','수량 되돌리기','Вернуть количества');
+  set('i18n-po-backup','상태 저장','Снимок');
   set('i18n-po-reset','필터 초기화','Сброс фильтров');
   set('i18n-po-up','발주 업로드','Загрузить заказы');
   set('i18n-po-dl',DL[0],DL[1]);
@@ -13708,6 +13713,102 @@ function poManBtn(){
   b.style.opacity=c?'1':'0.45';
   b.style.background=c?'#f97316':''; b.style.borderColor=c?'#f97316':''; b.style.color=c?'#fff':'';
 }
+// ══ 발주현황 통째 저장·되돌리기 ═══════════════════════════
+//   엑셀을 올리기 전에 [상태 저장] 을 눌러 두면, 잘못됐을 때 [저장한 상태로 되돌리기] 로
+//   그 시점 그대로(줄·수주수량·공급수량·수기 표시·변경코드까지) 되돌린다.
+//   담는 곳은 설정 칸(kt_psi_cfg id=111). 한 벌만 담으므로 새로 저장하면 앞의 것은 지워진다.
+const PO_SNAP_ID=111;
+let _poSnap=null, _poSnapLoaded=false;
+async function loadPoSnap(force){
+  if(_poSnapLoaded && !force) return _poSnap;
+  _poSnapLoaded=true;
+  try{
+    const { data }=await sb.from('kt_psi_cfg').select('cfg').eq('id',PO_SNAP_ID).maybeSingle();
+    _poSnap=(data && data.cfg && Array.isArray(data.cfg.rows)) ? data.cfg : null;
+  }catch(e){ _poSnap=null; }
+  return _poSnap;
+}
+function poSnapText(s){
+  if(!s) return '저장해 둔 상태가 없습니다.';
+  let q=0, p=0; (s.rows||[]).forEach(r=>{ q+=Number(r.q)||0; p+=Number(r.s)||0; });
+  return _ktHistTime(s.at)+(s.by?(' · '+s.by):'')+'\n'
+    +'줄 '+(s.rows||[]).length+'개 · 수주 '+q.toLocaleString()+' · 공급 '+p.toLocaleString()+' · 미공급 '+(q-p).toLocaleString();
+}
+async function poSnapSave(){
+  const ru=(lang==='ru');
+  await loadPO(); await loadPoMan();
+  if(!(poData||[]).length){ alert(ru?'Нет данных.':'발주현황에 줄이 없습니다.'); return; }
+  let q=0, p=0; poData.forEach(r=>{ q+=Number(r.qty)||0; p+=Number(r.supplied)||0; });
+  const old=await loadPoSnap(true);
+  if(!confirm('지금 발주현황을 통째로 저장합니다.\n\n'
+    +'· 줄 '+poData.length+'개 · 수주 '+q.toLocaleString()+' · 공급 '+p.toLocaleString()+' · 미공급 '+(q-p).toLocaleString()+'\n'
+    +'· 수기 표시·변경코드(공급)도 함께 담습니다\n'
+    +(old?('\n※ 앞서 저장해 둔 것은 지워집니다 —\n  '+poSnapText(old).replace(/\n/g,'\n  ')+'\n'):'')
+    +'\n계속할까요?')) return;
+  const cfg={ at:new Date().toISOString(), by:(currentUser&&currentUser.id)||'',
+    rows:poData.map(r=>({ c:r.cha, p:r.pn, m:r.mon, q:Math.round(Number(r.qty)||0), s:Math.round(Number(r.supplied)||0) })),
+    man:{ man:_poMan, manQ:_poManQ, split:_poSplit, pnSkip:_poPnSkip, danSkip:_poDanSkip, since:_poSince, fromYm:_poFromYm } };
+  const { error }=await sb.from('kt_psi_cfg').upsert({ id:PO_SNAP_ID, cfg, updated_at:new Date().toISOString() },{onConflict:'id'});
+  if(error){ alert((ru?'Ошибка':'저장 실패')+'\n['+(error.message||error.code)+']'); return; }
+  _poSnap=cfg; _poSnapLoaded=true;
+  poManBtn();
+  alert('저장했습니다.\n\n'+poSnapText(cfg)+'\n\n이제 파일을 올리셔도 됩니다.\n문제가 생기면 [상태 저장] 을 눌러 [되돌리기] 를 고르세요.');
+}
+async function poSnapRestore(){
+  const ru=(lang==='ru');
+  const s=await loadPoSnap(true);
+  if(!s){ alert('저장해 둔 상태가 없습니다.'); return; }
+  await loadPO(); await loadPoMan();
+  const want={}; (s.rows||[]).forEach(r=>{ want[String(r.c)+'|'+normPN(r.p)]=r; });
+  const cur={};  (poData||[]).forEach(r=>{ cur[String(r.cha)+'|'+normPN(r.pn)]=r; });
+  const gone=Object.keys(cur).filter(k=>!want[k]);          // 지금 있는데 저장본에 없는 줄 → 지운다
+  const add=Object.keys(want).filter(k=>!cur[k]);           // 저장본에만 있는 줄 → 되살린다
+  let chg=0; Object.keys(want).forEach(k=>{ const a=want[k], b=cur[k]; if(!b) return;
+    if(Math.round(Number(b.qty)||0)!==Number(a.q) || Math.round(Number(b.supplied)||0)!==Number(a.s)) chg++; });
+  let q=0, p=0; (s.rows||[]).forEach(r=>{ q+=Number(r.q)||0; p+=Number(r.s)||0; });
+  let qn=0, pn2=0; (poData||[]).forEach(r=>{ qn+=Number(r.qty)||0; pn2+=Number(r.supplied)||0; });
+  if(!confirm('저장해 둔 상태로 되돌립니다.\n\n'+poSnapText(s)+'\n\n'
+    +'· 지금 : 줄 '+(poData||[]).length+'개 · 수주 '+qn.toLocaleString()+' · 공급 '+pn2.toLocaleString()+' · 미공급 '+(qn-pn2).toLocaleString()+'\n'
+    +'· 되돌린 뒤 : 줄 '+(s.rows||[]).length+'개 · 수주 '+q.toLocaleString()+' · 공급 '+p.toLocaleString()+' · 미공급 '+(q-p).toLocaleString()+'\n\n'
+    +'· 숫자가 바뀌는 줄 '+chg+'개 / 되살릴 줄 '+add.length+'개 / 지울 줄 '+gone.length+'개\n'
+    +'· 수기 표시·변경코드(공급)도 그때 것으로 돌립니다\n\n'
+    +'되돌리면 그 뒤에 한 일은 모두 없어집니다. 계속할까요?')) return;
+  const now=new Date().toISOString();
+  const put=(s.rows||[]).map(r=>({ cha:r.c, pn:r.p, mon:r.m, qty:Number(r.q)||0, supplied:Number(r.s)||0, updated_at:now }));
+  for(let i=0;i<put.length;i+=300){
+    const { error }=await sb.from('kt_po').upsert(put.slice(i,i+300),{onConflict:'cha,pn'});
+    if(error){ alert((ru?'Ошибка':'되돌리지 못했습니다')+'\n['+(error.message||error.code)+']'); return; }
+  }
+  for(const k of gone){
+    const r=cur[k];
+    const { error }=await sb.from('kt_po').delete().eq('cha',r.cha).eq('pn',r.pn);
+    if(error){ alert((ru?'Ошибка':'지우지 못했습니다')+'\n['+(error.message||error.code)+']'); return; }
+  }
+  const m=s.man||{};
+  _poMan=m.man||{}; _poManQ=m.manQ||{}; _poSplit=m.split||{};
+  _poPnSkip=m.pnSkip||{}; _poDanSkip=m.danSkip||{};
+  _poSince=String(m.since||''); _poFromYm=String(m.fromYm||'');
+  savePoMan();
+  _poLastEdit=now;
+  await loadPO(); renderPO(); poManBtn(); poSimRefresh();
+  alert('되돌렸습니다.\n\n'+poSnapText(s));
+}
+// [상태 저장] 단추 — 저장할지, 저장해 둔 것으로 되돌릴지 고르게 한다
+async function poBackupOpen(){
+  const ru=(lang==='ru');
+  if(!pnEditable() && !canEditPsi()){ alert(ru?'Нет прав.':'권한이 없습니다.'); return; }
+  const s=await loadPoSnap(true);
+  const btns=[{key:'save', label:'지금 상태 저장', primary:true}];
+  if(s) btns.push({key:'back', label:'저장한 상태로 되돌리기'});
+  btns.push({key:null, label:'닫기'});
+  const pick=await pnChoice('발주현황 상태 저장',
+    (s ? ('저장해 둔 상태\n  '+poSnapText(s).replace(/\n/g,'\n  ')+'\n\n')
+       : '아직 저장해 둔 상태가 없습니다.\n\n')
+    +'엑셀을 올리기 전에 [지금 상태 저장] 을 눌러 두면,\n잘못됐을 때 그 시점 그대로 되돌릴 수 있습니다.\n'
+    +'(줄·수주수량·공급수량·수기 표시·변경코드까지 함께 담습니다)', btns);
+  if(pick==='save') return poSnapSave();
+  if(pick==='back') return poSnapRestore();
+}
 // 수주·공급수량 되돌리기 — 변경이력(kt_psi_cfg id=98)에 남은 '마지막으로 적은 값' 으로 돌린다.
 //   손으로 적었거나 엑셀로 올린 값만 이력에 남는다. 인보이스로 저절로 셈한 값은 남지 않는다.
 //   되돌린 공급수량은 손으로 고친 줄로 담아, 인보이스로 다시 세도 그대로 둔다.
@@ -14382,7 +14483,7 @@ async function poDeleteRow(cha, pn){
 }
 async function loadPOTab(){
   const m=canEditPsi();
-  ['poUploadBtn','poRestoreBtn'].forEach(id=>{ const b=document.getElementById(id); if(b) b.style.display=m?'':'none'; });
+  ['poUploadBtn','poRestoreBtn','poBackupBtn'].forEach(id=>{ const b=document.getElementById(id); if(b) b.style.display=m?'':'none'; });
   { const b=document.getElementById('poDelChaBtn');
     if(b) b.style.display=((typeof pnEditable==='function') && pnEditable())?'':'none'; }
   await Promise.all([loadPO(), loadPoMan(), (typeof loadPnAlt==='function')?loadPnAlt():Promise.resolve()]);
