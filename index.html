@@ -12603,6 +12603,29 @@ async function shipSyncMonth(ym, field){
 //   품번 하나가 여러 차수에 걸쳐 있으면 발주년월이 이른 줄부터 미공급분만큼 채우고 남는 것은 다음 줄로 넘긴다.
 //   짝짓기는 발주코드가 먼저, 없거나 모자라면 변경코드(최종품번)를 본다.
 //   shipData(=모든 인보이스) 전체로 다시 계산하므로 같은 인보이스를 두 번 올려도 이중으로 세지 않는다.
+// 인보이스로 나온 수량을 어느 줄부터 채울지 — 그 코드에 걸리는 줄을 차례대로 돌려준다.
+//   · 발주년월이 이른 줄부터. 오래된 발주가 먼저 나가는 것이 실제와 맞다.
+//   · 같은 달이면 발주코드가 바로 그 코드인 줄을 먼저, 그 다음 최종품번이 그 코드인 줄.
+//   · 차수가 이상해 발주년월을 못 잡는 줄은 맨 뒤로 민다.
+//   ※ 종전에는 발주코드가 같은 줄을 달에 상관없이 모두 먼저 채워서,
+//     발주년월이 이른 '최종품번이 같은 줄' 을 건너뛰고 늦은 달로 넘어가는 일이 있었다.
+function poFillOrder(pn){
+  const k0=normPN(pn); if(!k0) return [];
+  const list=[];
+  (poData||[]).forEach(r=>{
+    if(normPN(r.pn)===k0){ list.push({ r, own:0 }); return; }
+    const fin=normPN((poLookup(r.pn)||{}).fin||'');
+    if(fin && fin===k0) list.push({ r, own:1 });
+  });
+  list.sort((a,b)=>{
+    const ya=poYmOf(a.r)||'', yb=poYmOf(b.r)||'';
+    if(!!ya !== !!yb) return ya?-1:1;
+    if(ya!==yb) return ya.localeCompare(yb);
+    if(a.own!==b.own) return a.own-b.own;
+    return String(a.r.cha).localeCompare(String(b.r.cha));
+  });
+  return list.map(x=>x.r);
+}
 async function poRecalcSupply(){
   if(!poData.length) await loadPO();
   if(!poData.length) return {ok:true, rows:0, total:0};
@@ -12614,22 +12637,12 @@ async function poRecalcSupply(){
     const k=normPN(r.pn); if(!k) return; need[k]=(need[k]||0)+(Number(r.qty)||0); });
   // 변경코드(공급)에 적어 둔 코드·수량은 기록일 뿐이라 공급수량 셈에는 넣지 않는다.
   // 손으로 고쳐 둔 줄은 그대로 두고, 나머지만 0 으로 놓고 다시 채운다
+  // 채우는 차례는 poFillOrder — 발주년월이 이른 줄부터다.
   const before={}; poData.forEach(r=>{ before[r.cha+'\u0000'+r.pn]=r.supplied;
     if(!poIsMan(r.cha,r.pn)) r.supplied=0; });
-  const byYm=(a,b)=>{ const ya=poYmOf(a)||'9999-99', yb=poYmOf(b)||'9999-99';
-    return (ya===yb) ? String(a.cha).localeCompare(String(b.cha)) : ya.localeCompare(yb); };
   Object.keys(need).sort().forEach(pn=>{
     let left=need[pn]; if(left<=0) return;
-    const own=[], chg=[];
-    poData.forEach(r=>{ const k=normPN(r.pn);
-      if(k===pn){ own.push(r); return; }
-      const fin=normPN((poLookup(r.pn)||{}).fin||'');
-      if(fin && fin===pn) chg.push(r); });
-    own.sort(byYm); chg.sort(byYm);
-    // 발주년월이 있는 줄을 발주코드 → 변경코드 차례로 먼저 채우고,
-    // 차수가 미상이라 발주년월을 못 잡는 줄에는 남은 것만 마지막에 넣는다.
-    const dated=r=>!!poYmOf(r);
-    own.filter(dated).concat(chg.filter(dated), own.filter(r=>!dated(r)), chg.filter(r=>!dated(r))).forEach(r=>{
+    poFillOrder(pn).forEach(r=>{
       if(left<=0) return;
       if(poIsMan(r.cha,r.pn)) return;                 // 손으로 고친 줄은 그대로 둔다
       const room=(Number(r.qty)||0)-r.supplied; if(room<=0) return;
@@ -14736,21 +14749,13 @@ async function poInvUpload(wb, sn, fname){
   const known=[], unknown=[];
   keys.forEach(k=>{ const pn=agg[k].pn;
     (((typeof getPNInfo==='function') && (getPNInfo(pn)||findMasterRep(pn))) ? known : unknown).push(k); });
-  // 발주년월이 이른 차수부터 미공급분만큼 채운다(발주현황이 인보이스를 셈하는 방식과 같다)
-  const byYm=(a,b)=>{ const ya=poYmOf(a)||'9999-99', yb=poYmOf(b)||'9999-99';
-    return (ya===yb) ? String(a.cha).localeCompare(String(b.cha)) : ya.localeCompare(yb); };
-  const dated=r=>!!poYmOf(r);
+  // 발주년월이 이른 줄부터 미공급분만큼 채운다(발주현황이 인보이스를 셈하는 차례와 같다)
   const plan=[], noRow=[], over=[];
   known.forEach(k=>{
     let left=agg[k].q;
-    const own=[], chg=[];
-    (poData||[]).forEach(r=>{ const rk=normPN(r.pn);
-      if(rk===k){ own.push(r); return; }
-      const fin=normPN((poLookup(r.pn)||{}).fin||'');
-      if(fin && fin===k) chg.push(r); });
-    if(!own.length && !chg.length){ noRow.push(k); return; }
-    own.sort(byYm); chg.sort(byYm);
-    own.filter(dated).concat(chg.filter(dated), own.filter(r=>!dated(r)), chg.filter(r=>!dated(r))).forEach(r=>{
+    const rows=poFillOrder(k);
+    if(!rows.length){ noRow.push(k); return; }
+    rows.forEach(r=>{
       if(left<=0) return;
       const room=(Number(r.qty)||0)-(Number(r.supplied)||0);
       if(room<=0) return;
