@@ -6,6 +6,18 @@
   var API = 'api/db.php';
   var AUTH = 'api/auth.php';
 
+  /* 로그인이 풀렸을 때 — 한 번만 알리고 로그인 화면으로 돌린다.
+     종전에는 '저장 실패 [로그인이 필요합니다]' 라고만 떠서 고장처럼 보였다. */
+  var _authWarned = false;
+  function authLost() {
+    if (_authWarned) return;
+    _authWarned = true;
+    try {
+      alert('로그인이 풀렸습니다.\n다시 로그인해 주세요.\n(적고 계시던 내용은 저장되지 않았습니다)');
+      if (typeof doLogout === 'function') doLogout();
+      else location.reload();
+    } catch (e) { try { location.reload(); } catch (e2) {} }
+  }
   function post(url, body) {
     return fetch(url, {
       method: 'POST',
@@ -13,6 +25,10 @@
       credentials: 'same-origin',
       body: JSON.stringify(body)
     }).then(function (r) { return r.json().catch(function () { return { error: { message: 'bad response' } }; }); })
+      .then(function (j) {
+        if (j && j.error && j.error.code === 'auth' && url !== AUTH) setTimeout(authLost, 0);
+        return j;
+      })
       .catch(function (e) { return { data: null, error: { message: String(e && e.message || e) } }; });
   }
 

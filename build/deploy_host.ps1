@@ -1,6 +1,7 @@
 ﻿param(
   [switch]$BuildOnly,          # 만들기만 하고 올리지는 않는다
   [switch]$NoBuild,            # 이미 만들어 둔 것을 올리기만 한다
+  [string[]]$Api = @(),        # 함께 올릴 api 파일 이름들 (예: -Api _lib.php,db.php)
   [string]$Remote = '/public_html/index.html'
 )
 $ErrorActionPreference = 'Stop'
@@ -89,6 +90,16 @@ try {
     if(-not (Test-Path $ef)){ continue }
     if(Ftp-Same $ef ($dirBase + '/' + $extra)){ Write-Output ('{0,-15} 그대로 (건너뜀)' -f $extra) }
     else { [void](Ftp-Put $ef ($dirBase + '/' + $extra) $true); Write-Output ('{0,-15} 올렸습니다' -f $extra) }
+  }
+  # 서버 쪽 php 는 말할 때만 올린다 (-Api _lib.php 처럼)
+  if($Api.Count){
+    Ftp-MakeDir ($dirBase + '/api')
+    foreach($a in $Api){
+      $af = Join-Path $HOSTDIR ('api/' + $a)
+      if(-not (Test-Path $af)){ Write-Output ('{0,-15} 그런 파일이 없습니다' -f $a); continue }
+      [void](Ftp-Put $af ($dirBase + '/api/' + $a) $true)
+      Write-Output ('api/{0,-11} 올렸습니다 ({1:N0} bytes)' -f $a, (Get-Item $af).Length)
+    }
   }
   # 분해도 그림은 따로 떼어 두었다 — 바뀐 것만 올린다
   $imgLocal = Join-Path $HOSTDIR 'img'
