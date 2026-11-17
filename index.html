@@ -13278,7 +13278,7 @@ function poInvTd(r, tdS, field, ed){
     ? ((list.length?'<br>':'')
        +'<span contenteditable="true" class="po-sp-ed po-sp-add" data-pocha="'+escapeHtml(String(r.cha||''))+'" data-popn="'+escapeHtml(String(r.pn||''))+'"'
        +' data-ph="'+escapeHtml(list.length?'＋ 인보이스 추가':'＋ 인보이스')+'"'
-       +' title="'+escapeHtml('인보이스 번호를 적습니다. 수량·선적일도 같이 적어도 됩니다 —\n예: RUMOSKRUS261004 10 2026-10-25')+'"'
+       +' title="'+escapeHtml('인보이스 번호를 적습니다. 수량·선적일도 같이 적어도 됩니다 —\n예: RUMOSKRUS261004 10 2026-10-25\n전에 적어 둔 번호면 선적일이 저절로 따라옵니다.')+'"'
        +' onclick="event.stopPropagation()" onmousedown="event.stopPropagation()"'
        +' onblur="onPoInvNewBlur(this)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();this.blur();}"'
        +' style="display:inline-block;min-width:60px;min-height:13px"></span>')
@@ -13300,6 +13300,38 @@ function poInvSet(cha, pn, list){
     _poInvNone[k]=1;
   }
   savePoMan();
+}
+// ── 인보이스 ↔ 선적일 짝 ──────────────────────────────────
+//   한 인보이스는 선적일이 하나다. 어느 줄에 한 번 적어 두면 다른 줄에서 번호만 적어도 날짜가 따라온다.
+//   적어 둔 것(_poInvOf)을 먼저 보고, 없으면 선적 자료(kt_ship)에서 찾는다.
+let _poInvDateMap=null;
+function poInvDateClear(){ _poInvDateMap=null; }
+function poInvDateMap(){
+  if(_poInvDateMap) return _poInvDateMap;
+  const m=new Map();
+  (shipData||[]).forEach(s=>{ const i=String(s.inv||'').toUpperCase(), d=String(s.sail||'');
+    if(i && d && !m.has(i)) m.set(i,d); });
+  Object.keys(_poInvOf||{}).forEach(k=>{ (_poInvOf[k]||[]).forEach(x=>{
+    const i=String(x.i||'').toUpperCase(), d=String(x.d||'');
+    if(i && d) m.set(i,d); });                      // 손으로 적은 것이 이긴다
+  });
+  _poInvDateMap=m;
+  return m;
+}
+function poInvDateOf(inv){ return poInvDateMap().get(String(inv||'').toUpperCase())||''; }
+// 그 날짜로 적힌 인보이스가 딱 하나면 그 번호를 돌려준다(여럿이면 빈 글자)
+function poInvByDate(d){
+  const t=String(d||''); if(!t) return '';
+  const hit=[]; poInvDateMap().forEach((v,k)=>{ if(v===t) hit.push(k); });
+  return (hit.length===1) ? hit[0] : '';
+}
+// 같은 인보이스가 적힌 다른 줄들 — [{key, idx}]
+function poInvSameRows(inv, skipKey){
+  const t=String(inv||'').toUpperCase(), out=[];
+  if(!t) return out;
+  Object.keys(_poInvOf||{}).forEach(k=>{ if(k===skipKey) return;
+    (_poInvOf[k]||[]).forEach((x,i)=>{ if(String(x.i||'').toUpperCase()===t) out.push({key:k, idx:i}); }); });
+  return out;
 }
 // 날짜를 2026-10-25 꼴로 다듬는다. 못 알아보면 적은 그대로 둔다.
 function poSailNorm(s){
@@ -13327,11 +13359,26 @@ async function onPoInvBlur(el){
   if(f==='i' && !txt){
     if(!confirm('이 인보이스 줄을 지울까요?\n\n· '+normBadgePN(cur[idx].i)+(cur[idx].d?(' · '+cur[idx].d):''))){ el.textContent=before; return; }
     cur.splice(idx,1);
+  }else if(f==='i'){
+    cur[idx].i=txt.toUpperCase();
+    // 전에 어딘가 적어 둔 그 인보이스의 선적일이 있으면 같이 채운다
+    const d=poInvDateOf(cur[idx].i);
+    if(d) cur[idx].d=d;
   }else{
-    cur[idx][f]= (f==='i') ? txt.toUpperCase() : txt;
+    cur[idx].d=txt;
   }
   poInvSet(cha, pn, cur);
+  poInvDateClear();
   ktHistAdd('po.inv', cha+'|'+pn, before, txt);
+  // 선적일을 고쳤으면, 같은 인보이스가 적힌 다른 줄도 함께 맞출지 묻는다
+  if(f==='d' && cur[idx] && cur[idx].i){
+    const same=poInvSameRows(cur[idx].i, poManKey(cha,pn)).filter(h=>String((_poInvOf[h.key]||[])[h.idx].d||'')!==txt);
+    if(same.length && confirm('같은 인보이스('+normBadgePN(cur[idx].i)+')가 적힌 줄이 '+same.length+'개 더 있습니다.\n'
+      +'선적일을 '+(txt||'(빈 칸)')+' 으로 함께 바꿀까요?')){
+      same.forEach(h=>{ _poInvOf[h.key][h.idx].d=txt; });
+      savePoMan(); poInvDateClear();
+    }
+  }
   renderPO();
 }
 // 빈 줄에 적었을 때 — '번호 수량 날짜' 를 함께 받는다(수량·날짜는 없어도 된다)
@@ -13352,12 +13399,17 @@ async function onPoInvNewBlur(el){
     if(!qty && /^\d{1,6}$/.test(p)){ qty=Number(p); return; }
     if(!inv) inv=p.toUpperCase();
   });
+  // 날짜만 적었는데 그 날짜로 적힌 인보이스가 딱 하나면 그 번호를 가져온다
+  if(!inv && d) inv=poInvByDate(d);
   if(!inv){ return; }
+  // 번호만 적었으면, 전에 어딘가 적어 둔 그 인보이스의 선적일을 가져온다
+  if(!d) d=poInvDateOf(inv);
   const cur=poInvEntries({cha, pn, supplied:1}).map(x=>({i:x.i, d:x.d, q:x.q}));
   const j=cur.findIndex(x=>String(x.i).toUpperCase()===inv);
   if(j>=0){ if(qty) cur[j].q=qty; if(d) cur[j].d=d; }
   else cur.push({ i:inv, d:d, q:qty });
   poInvSet(cha, pn, cur);
+  poInvDateClear();
   ktHistAdd('po.inv', cha+'|'+pn, '', inv+(qty?(' × '+qty):'')+(d?(' · '+d):''));
   renderPO();
 }
@@ -13712,6 +13764,7 @@ async function loadPoMan(){
       else { _poMan=c; _poSince=''; }        // 옛 모양(맵만 있던 것)도 읽는다
     }
   }catch(e){}
+  if(typeof poInvDateClear==='function') poInvDateClear();
   _poManReady=true;        // 여기까지 와야 저장해도 된다(읽기 전에 빈 상태로 덮어쓰지 않게)
 }
 let _poManT=null;
@@ -14108,7 +14161,7 @@ async function poSnapRestore(){
   await loadPO();
   // 되돌린 공급수량에 인보이스 기록을 맞춘다 — 물린 몫의 기록은 지운다.
   //   (옛 저장본에는 인보이스 기록이 안 담겨 있어도 이 손질로 아귀가 맞는다)
-  poInvOfPrune();
+  poInvOfPrune(); poInvDateClear();
   savePoMan();
   renderPO(); poManBtn(); poSimRefresh();
   alert('되돌렸습니다.\n\n'+poSnapText(s));
@@ -15102,6 +15155,7 @@ async function poInvUpload(wb, sn, fname){
       const j=arr.findIndex(x=>String(x.i)===inv);
       if(j<0) arr.push({ i:inv, d:sail, q:t.add }); else { arr[j].q=(Number(arr[j].q)||0)+t.add; arr[j].d=sail||arr[j].d; } } });
   if(inv) _poInvDone[inv]={ at:now, n:known.length, q:tot };
+  poInvDateClear();
   savePoMan();
   _poLastEdit=now;
   await loadPO(); renderPO(); poManBtn(); poSimRefresh();
