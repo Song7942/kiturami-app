@@ -13502,7 +13502,8 @@ function renderPO(){
       cha:'<td style="'+tdS+';white-space:nowrap">'+escapeHtml(poChaLabel(r.cha))+'</td>',
       mon:'<td style="'+tdS+';text-align:center;color:var(--muted);white-space:nowrap">'+escapeHtml(poYmOf(r))+'</td>',
       rep:'<td style="'+tdS+'">'+(i.rep?('<span style="'+codeS+'">'+escapeHtml(i.rep)+'</span>'):'')+'</td>',
-      pn:'<td style="'+tdS+'"><span style="'+codeS+'">'+escapeHtml(normBadgePN(r.pn))+'</span></td>',
+      pn:'<td style="'+tdS+'"><span style="'+codeS+'">'
+        +(EDPO ? poPnEdit(r.cha, r.pn) : escapeHtml(normBadgePN(r.pn)))+'</span></td>',
       // 최종품번 — 품번조회와 같은 값·같은 저장 자리(대표품번의 final). 어느 화면에서 고쳐도 같이 바뀐다.
       final:(()=>{ const fv=pnUpperLead(((getPNInfo(i.rep||'')||{}).final)||'');
         return '<td style="'+tdS+'"><span style="'+codeS+'">'+((EDPO && i.rep) ? pnEditSpan(i.rep,'final',fv) : escapeHtml(fv))+'</span></td>'; })(),
@@ -14103,6 +14104,56 @@ async function poResetManual(){
   await loadPO();
   poManBtn(); renderPO(); poSimRefresh();
   alert(ru?('Готово: '+r.total):('되돌렸습니다. 공급수량 합계 '+r.total.toLocaleString()));
+}
+// 발주코드 칸 — 손으로 고칠 수 있다.
+//   발주코드는 그 줄을 가리키는 열쇠(차수+발주코드)라, 고치면 옛 줄을 지우고 새 줄로 옮겨 담는다.
+//   수주·공급수량과 수기 표시·변경코드(공급)·인보이스 기록도 같이 따라간다.
+function poPnEdit(cha, pn){
+  const v=escapeHtml(normBadgePN(pn)), raw=escapeHtml(String(pn||''));
+  return '<span contenteditable="true" class="pn-edit" data-pocha="'+escapeHtml(String(cha||''))+'" data-popn="'+raw+'" data-pnorig="'+v+'"'
+    + ' onclick="event.stopPropagation()" onmousedown="event.stopPropagation()"'
+    + ' onblur="onPoPnBlur(this)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();this.blur();}"'
+    + ' title="'+escapeHtml((lang==='ru')?'Код заказа — можно исправить':'발주코드를 고칩니다(그 줄이 통째로 옮겨집니다)')+'"'
+    + ' style="display:inline-block;min-width:60px;outline:none;border-bottom:1px dashed var(--accent2);cursor:text;padding:0 2px">'+v+'</span>';
+}
+async function onPoPnBlur(el){
+  const ru=(lang==='ru');
+  const cha=String(el.getAttribute('data-pocha')||'');
+  const oldPn=String(el.getAttribute('data-popn')||'');
+  const before=String(el.getAttribute('data-pnorig')||'');
+  const txt=pnUpAll(String(el.textContent||'').replace(/\s+/g,''));
+  if(!txt || normPN(txt)===normPN(oldPn)){ el.textContent=before; return; }
+  if(!(((typeof pnEditable==='function') && pnEditable()) || canEditPo(poRegion()))){ el.textContent=before; return; }
+  const row=(poData||[]).find(x=>String(x.cha)===cha && normPN(x.pn)===normPN(oldPn));
+  if(!row){ el.textContent=before; return; }
+  // 같은 차수에 그 코드가 이미 있으면 두 줄이 겹친다 — 합치지 않고 막는다
+  if((poData||[]).some(x=>String(x.cha)===cha && normPN(x.pn)===normPN(txt))){
+    alert(ru?'Такой код в этой партии уже есть.'
+            :('그 차수에 '+normBadgePN(txt)+' 줄이 이미 있습니다.\n합치려면 한쪽 수량을 옮기고 그 줄을 지워 주세요.'));
+    el.textContent=before; return;
+  }
+  const info=poLookup(txt)||{};
+  if(!info.rep && !confirm(ru?'Кода нет в справочнике. Сохранить?'
+      :(normBadgePN(txt)+' 는 품번조회에 없는 코드입니다.\n그래도 고칠까요?'))){ el.textContent=before; return; }
+  if(!confirm('발주코드를 고칩니다\n\n'
+    +'· '+poChaLabel(cha)+'\n'
+    +'· '+normBadgePN(oldPn)+'  →  '+normBadgePN(txt)+'\n'
+    +'· 수주 '+(Number(row.qty)||0).toLocaleString()+' · 공급 '+(Number(row.supplied)||0).toLocaleString()+' 은 그대로 따라갑니다\n'
+    +'· 수기 표시·변경코드(공급)·인보이스 기록도 함께 옮깁니다\n\n계속할까요?')){ el.textContent=before; return; }
+  const now=new Date().toISOString();
+  const up=await sb.from('kt_po').upsert(
+    { cha:row.cha, pn:txt, mon:row.mon, qty:row.qty, supplied:row.supplied, updated_at:now },{onConflict:'cha,pn'});
+  if(up.error){ alert((ru?'Ошибка сохранения':'저장 실패')+'\n['+(up.error.message||up.error.code)+']'); el.textContent=before; return; }
+  const del=await sb.from('kt_po').delete().eq('cha',row.cha).eq('pn',row.pn);
+  if(del.error){ alert((ru?'Ошибка':'옛 줄을 지우지 못했습니다')+'\n['+(del.error.message||del.error.code)+']'); }
+  // 열쇠로 매달려 있던 것들을 새 코드로 옮긴다
+  const ok=poManKey(cha,oldPn), nk=poManKey(cha,txt);
+  [[_poMan,'man'],[_poManQ,'manQ'],[_poSplit,'split'],[_poPnSkip,'pnSkip'],[_poInvOf,'invOf']].forEach(([m])=>{
+    if(m && m[ok]!==undefined){ m[nk]=m[ok]; delete m[ok]; } });
+  savePoMan();
+  ktHistAdd('po.pn', cha+'|'+txt, normBadgePN(oldPn), normBadgePN(txt));
+  _poLastEdit=now;
+  await loadPO(); renderPO(); poManBtn(); poSimRefresh();
 }
 // 변경코드(공급) 칸. 여기 적은 코드가 그 묶음의 '최종품번' 이 된다.
 function poChgEdit(pn, cur){

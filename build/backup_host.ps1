@@ -47,29 +47,57 @@ $dir = Join-Path (Join-Path $OutRoot 'kituramiparts') $stamp
 Write-Output ('담는 곳 : ' + $dir)
 Write-Output ''
 
+# 중간에 끊겨도 다시 돌리면 이어받는다 — 이미 받아 둔 표는 건너뛴다.
+#   같은 날 받다 만 자리가 있으면 그 자리에 이어 담는다.
+$prev = Get-ChildItem (Split-Path $dir -Parent) -Directory -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -ne (Split-Path $dir -Leaf) } | Sort-Object Name -Descending | Select-Object -First 1
+if ($prev -and -not (Get-ChildItem $prev.FullName -Filter '_백업정보.json' -ErrorAction SilentlyContinue)) {
+  Remove-Item $dir -Recurse -Force -ErrorAction SilentlyContinue
+  $dir = $prev.FullName
+  Write-Output ('받다 만 자리에 이어 담습니다 : ' + $dir)
+  Write-Output ''
+}
+
 $total = 0; $failed = @()
 foreach ($t in $TABLES) {
+  $out = Join-Path $dir ($t + '.json')
+  if (Test-Path $out) {
+    try { $old = (Get-Content $out -Raw | ConvertFrom-Json); $total += @($old).Count
+          Write-Output ('  {0,-24} {1,8:N0} 줄  (이미 받아 둠)' -f $t, @($old).Count); continue }
+    catch { Remove-Item $out -Force }      # 깨진 파일이면 다시 받는다
+  }
   $rows = New-Object Collections.ArrayList
-  $from = 0; $page = 1000
+  $from = 0; $page = 1000; $try = 0
   try {
     while ($true) {
       $q = @{ t = $t; op = 'select'; cols = '*'; filters = @(); order = @(); limit = $page; offset = $from } | ConvertTo-Json -Depth 5 -Compress
-      $rr = Invoke-RestMethod -Uri ($SITE + '/api/db.php') -Method Post -ContentType 'application/json' `
-              -Body $q -WebSession $sess -TimeoutSec 300
+      try {
+        $rr = Invoke-RestMethod -Uri ($SITE + '/api/db.php') -Method Post -ContentType 'application/json' `
+                -Body $q -WebSession $sess -TimeoutSec 300
+        $try = 0
+      } catch {
+        $try++
+        if ($try -ge 3) { throw }
+        Write-Host ('    (' + $t + ' ' + $from + '줄째에서 걸려 다시 받습니다 ' + $try + '/3)')
+        Start-Sleep -Seconds 5
+        continue
+      }
       if ($rr.error) { throw $rr.error.message }
       $n = 0
       if ($null -ne $rr.data) { foreach ($x in $rr.data) { [void]$rows.Add($x); $n++ } }
       if ($n -lt $page) { break }
       $from += $page
+      if ($from % 10000 -eq 0) { Write-Host ('    ' + $t + ' ' + ('{0:N0}' -f $from) + '줄…') }
     }
     $json = if ($rows.Count -eq 0) { '[]' } else { $rows | ConvertTo-Json -Depth 20 -Compress }
     if ($rows.Count -eq 1 -and -not $json.StartsWith('[')) { $json = '[' + $json + ']' }
-    [IO.File]::WriteAllText((Join-Path $dir ($t + '.json')), $json, $U8)
+    [IO.File]::WriteAllText($out, $json, $U8)
     $total += $rows.Count
     Write-Output ('  {0,-24} {1,8:N0} 줄' -f $t, $rows.Count)
   } catch {
     $failed += $t
     Write-Output ('  {0,-24} 실패 — {1}' -f $t, $_.Exception.Message.Split([char]10)[0])
+    Write-Output ('      (다시 돌리시면 받아 둔 것은 건너뛰고 이것부터 이어받습니다)')
   }
 }
 $note = [ordered]@{ at = (Get-Date).ToString('s'); site = $SITE; rows = $total; failed = $failed }
