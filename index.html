@@ -13210,8 +13210,10 @@ function poIsNumCol(key){ return key==='qty'||key==='sup'||key==='rest'; }
 //   ② 적어 둔 것이 없으면, 선적 자료(kt_ship)에서 그 품번이 실린 인보이스를 찾아 보여 준다
 //      — 어느 차수 몫인지까지는 알 수 없어 '그 품번이 실린 인보이스' 라는 뜻이다
 function poInvEntries(r){
-  const rec=_poInvOf[poManKey(r.cha, r.pn)];
+  const k=poManKey(r.cha, r.pn);
+  const rec=_poInvOf[k];
   if(rec && rec.length) return rec.map(x=>({ i:String(x.i||''), d:String(x.d||''), q:Number(x.q)||0, exact:1 }));
+  if(_poInvNone[k]) return [];              // 손수 비운 줄 — 짐작해서 채우지 않는다
   if(!(Number(r.supplied)||0)) return [];
   const i=(typeof poLookup==='function')?(poLookup(r.pn)||{}):{};
   const keys=[normPN(r.pn), normPN(i.fin||'')].filter(Boolean);
@@ -13243,7 +13245,7 @@ function poInvOfPrune(){
   const sup={}; (poData||[]).forEach(r=>{ sup[poManKey(r.cha,r.pn)]=Math.round(Number(r.supplied)||0); });
   Object.keys(_poInvOf||{}).forEach(k=>{
     const have=sup[k];
-    if(have==null || have<=0){ delete _poInvOf[k]; return; }
+    if(have==null || have<=0){ delete _poInvOf[k]; return; }   // 되돌려 0 이 된 줄은 기록도 지운다
     let left=have; const keep=[];
     (_poInvOf[k]||[]).forEach(x=>{ const q=Number(x.q)||0; if(left<=0 || q<=0) return;
       const take=Math.min(q, left); keep.push({ i:x.i, d:x.d, q:take }); left-=take; });
@@ -13289,8 +13291,14 @@ function poInvTd(r, tdS, field, ed){
 function poInvSet(cha, pn, list){
   const k=poManKey(cha,pn);
   const clean=(list||[]).filter(x=>x && String(x.i||'').trim());
-  if(clean.length) _poInvOf[k]=clean.map(x=>({ i:String(x.i).trim().toUpperCase(), d:String(x.d||''), q:Math.max(0,Math.round(Number(x.q)||0)) }));
-  else delete _poInvOf[k];
+  if(clean.length){
+    _poInvOf[k]=clean.map(x=>({ i:String(x.i).trim().toUpperCase(), d:String(x.d||''), q:Math.max(0,Math.round(Number(x.q)||0)) }));
+    delete _poInvNone[k];
+  }else{
+    // 다 지웠으면 '없음' 으로 적어 둔다 — 안 그러면 선적 자료에서 짐작한 번호가 도로 올라온다
+    delete _poInvOf[k];
+    _poInvNone[k]=1;
+  }
   savePoMan();
 }
 // 날짜를 2026-10-25 꼴로 다듬는다. 못 알아보면 적은 그대로 둔다.
@@ -13679,6 +13687,7 @@ let _poMan={};          // '차수|발주코드' -> 1  (손으로 고친 공급�
 let _poManQ={};         // '차수|발주코드' -> 1  (손으로 고친 수주수량 — 표시만 한다)
 let _poSplit={};        // '차수|발주코드' -> [{c:공급코드, q:수량}]  (여러 호환품번으로 나눠 나간 줄)
 let _poPnSkip={};       // '차수|발주코드' -> 1  ('발주현황에만' 을 고른 줄 — 품번조회는 그대로 둔다)
+let _poInvNone={};      // '차수|발주코드' -> 1  (인보이스 없음으로 손수 비운 줄 — 짐작해서 보여 주지 않는다)
 let _poInvOf={};        // '차수|발주코드' -> [{i:인보이스, d:선적일, q:수량}]  (공급수량이 어느 인보이스로 나갔는지)
 let _poInvDone={};      // 이미 반영한 상업송장 번호 -> {at,n,q}  (두 번 더해지는 것을 막는다)
 let _poDanSkip={};      // 공급코드 -> 1  (단종 풀기를 한 번 물어본 코드 — 다시 묻지 않는다)
@@ -13698,7 +13707,8 @@ async function loadPoMan(){
         _poPnSkip=(c.pnSkip && typeof c.pnSkip==='object')?c.pnSkip:{};
         _poDanSkip=(c.danSkip && typeof c.danSkip==='object')?c.danSkip:{};
         _poInvDone=(c.invDone && typeof c.invDone==='object')?c.invDone:{};
-        _poInvOf=(c.invOf && typeof c.invOf==='object')?c.invOf:{}; }
+        _poInvOf=(c.invOf && typeof c.invOf==='object')?c.invOf:{};
+        _poInvNone=(c.invNone && typeof c.invNone==='object')?c.invNone:{}; }
       else { _poMan=c; _poSince=''; }        // 옛 모양(맵만 있던 것)도 읽는다
     }
   }catch(e){}
@@ -13712,7 +13722,7 @@ function savePoMan(){
   clearTimeout(_poManT);
   _poManT=setTimeout(async function(){
     try{ const { error }=await sb.from('kt_psi_cfg').upsert({ id:PO_MAN_ID,
-      cfg:{ since:_poSince, fromYm:_poFromYm, man:_poMan, manQ:_poManQ, split:_poSplit, pnSkip:_poPnSkip, danSkip:_poDanSkip, invDone:_poInvDone, invOf:_poInvOf },
+      cfg:{ since:_poSince, fromYm:_poFromYm, man:_poMan, manQ:_poManQ, split:_poSplit, pnSkip:_poPnSkip, danSkip:_poDanSkip, invDone:_poInvDone, invOf:_poInvOf, invNone:_poInvNone },
       updated_at:new Date().toISOString() },{onConflict:'id'});
       if(error) console.error('발주현황 수기 표시 저장 실패', error);
     }catch(e){ console.error('발주현황 수기 표시 저장 실패', e); }
@@ -14038,7 +14048,7 @@ async function poSnapSave(){
     rows:mine.map(r=>({ c:r.cha, p:r.pn, m:r.mon, q:Math.round(Number(r.qty)||0), s:Math.round(Number(r.supplied)||0) })),
     // 담을 때 한 벌 떠 둔다 — 뒤에 손댄 것이 저장본까지 따라 바뀌지 않게
     man:JSON.parse(JSON.stringify({ man:_poMan, manQ:_poManQ, split:_poSplit, pnSkip:_poPnSkip,
-      danSkip:_poDanSkip, invOf:_poInvOf, invDone:_poInvDone, since:_poSince, fromYm:_poFromYm })) };
+      danSkip:_poDanSkip, invOf:_poInvOf, invNone:_poInvNone, invDone:_poInvDone, since:_poSince, fromYm:_poFromYm })) };
   const { error }=await sb.from('kt_psi_cfg').upsert({ id:PO_SNAP_ID, cfg, updated_at:new Date().toISOString() },{onConflict:'id'});
   if(error){ alert((ru?'Ошибка':'저장 실패')+'\n['+(error.message||error.code)+']'); return; }
   _poSnap=cfg; _poSnapLoaded=true;
@@ -14089,6 +14099,7 @@ async function poSnapRestore(){
   };
   _poMan=mix(_poMan, m.man); _poManQ=mix(_poManQ, m.manQ); _poSplit=mix(_poSplit, m.split);
   _poPnSkip=mix(_poPnSkip, m.pnSkip);
+  if(m.invNone && typeof m.invNone==='object') _poInvNone=mix(_poInvNone, m.invNone);
   if(m.danSkip && typeof m.danSkip==='object') _poDanSkip=m.danSkip;
   if(m.invOf && typeof m.invOf==='object') _poInvOf=mix(_poInvOf, m.invOf);
   if(m.invDone && typeof m.invDone==='object') _poInvDone=m.invDone;
