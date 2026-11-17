@@ -44,7 +44,8 @@ function Host-Rows($t){
     if($n -lt $page){ break }
     $from += $page
   }
-  return ,$all
+  # ',$all' 로 돌려주면 받는 쪽에서 '한 덩어리' 로 잡혀 줄 수가 1 이 된다 — 풀어서 돌려준다
+  return $all.ToArray()
 }
 function Cloud-Up($t, $rows, $conflict){
   $H = @{ apikey=$KEY; Authorization=('Bearer '+$KEY); 'Content-Type'='application/json';
@@ -60,10 +61,18 @@ function Cloud-Up($t, $rows, $conflict){
 # ── 사이트 발주현황 ──
 $po = @(Host-Rows 'kt_po')
 Write-Output ('사이트 발주현황 : ' + $po.Count + '줄')
-if($po.Count -eq 0){ Write-Output '!! 한 줄도 못 받았습니다 — 그만둡니다'; Read-Host '엔터'; exit 1 }
+if($po.Count -lt 50){
+  Write-Output '!! 사이트에서 제대로 못 받았습니다 — 그만둡니다(잘못 지우지 않게).'
+  Read-Host '엔터를 누르면 닫습니다'; exit 1
+}
+if(-not $po[0].PSObject.Properties['cha']){
+  Write-Output '!! 받은 자료 모양이 이상합니다(차수 칸이 없습니다) — 그만둡니다.'
+  Read-Host '엔터를 누르면 닫습니다'; exit 1
+}
 
 # ── 지금 클라우드 것을 먼저 떠 둔다 ──
-$cl = @(Invoke-RestMethod -Uri ($URL+'/rest/v1/kt_po?select=*&limit=10000') -Headers $CH -TimeoutSec 300)
+$clRaw = Invoke-RestMethod -Uri ($URL+'/rest/v1/kt_po?select=*&limit=10000') -Headers $CH -TimeoutSec 300
+$cl = @($clRaw)                      # 먼저 받아 두고 풀어야 줄 수가 맞는다
 $safe = Join-Path 'D:\kiturami_백업' ('클라우드_발주현황_맞추기전_' + (Get-Date -Format 'yyyy-MM-dd_HHmm') + '.json')
 [IO.File]::WriteAllText($safe, (ConvertTo-Json -InputObject @($cl) -Depth 20 -Compress), $U8)
 Write-Output ('클라우드 발주현황 : ' + $cl.Count + '줄  (되돌릴 사본 : ' + $safe + ')')
@@ -73,6 +82,12 @@ $gone=@($cl | Where-Object { -not $hk.ContainsKey([string]$_.cha + '|' + ([strin
 Write-Output ''
 Write-Output ('덮어쓸 줄 : ' + $po.Count + '   ·   클라우드에만 남아 지울 줄 : ' + $gone.Count)
 if($gone.Count){ $gone | Sort-Object cha,pn | Select-Object -First 20 | ForEach-Object { '    지움  {0,-14} {1}' -f $_.cha,$_.pn } }
+if($cl.Count -gt 0 -and ($gone.Count / $cl.Count) -gt 0.2){
+  Write-Output ''
+  Write-Output ('!! 지울 줄이 너무 많습니다(' + $gone.Count + '/' + $cl.Count + ') — 뭔가 잘못된 것으로 보여 그만둡니다.')
+  Write-Output '   사이트 자료를 제대로 못 받았을 수 있습니다. 그대로 두었습니다.'
+  Read-Host '엔터를 누르면 닫습니다'; exit 1
+}
 Write-Output ''
 if((Read-Host '이대로 맞출까요? (y/n)') -ne 'y'){ Write-Output '그만두었습니다.'; Read-Host '엔터'; exit 0 }
 
@@ -86,12 +101,14 @@ if($gone.Count){ Write-Output ('지웠습니다 : ' + $gone.Count + '줄') }
 
 # ── 발주현황에 매달린 설정(수기 표시·변경코드·인보이스 기록)도 옮긴다 ──
 try{
-  $cfg = @(Host-Rows 'kt_psi_cfg')
+  $cfgRaw = Host-Rows 'kt_psi_cfg'
+  $cfg = @($cfgRaw)
   Cloud-Up 'kt_psi_cfg' $cfg 'id'
   Write-Output ('설정 옮김 : ' + $cfg.Count + '칸')
 }catch{ Write-Output ('※ 설정은 못 옮겼습니다 — ' + $_.Exception.Message.Split([char]10)[0]) }
 
-$chk = @(Invoke-RestMethod -Uri ($URL+'/rest/v1/kt_po?select=cha,qty,supplied&limit=10000') -Headers $CH -TimeoutSec 300)
+$chkRaw = Invoke-RestMethod -Uri ($URL+'/rest/v1/kt_po?select=cha,qty,supplied&limit=10000') -Headers $CH -TimeoutSec 300
+$chk = @($chkRaw)
 $q=($chk|Measure-Object qty -Sum).Sum; $s=($chk|Measure-Object supplied -Sum).Sum
 Write-Output ''
 Write-Output ('끝났습니다 — 클라우드 발주현황 {0}줄 · 수주 {1:N0} · 공급 {2:N0} · 미공급 {3:N0}' -f $chk.Count,$q,$s,($q-$s))
