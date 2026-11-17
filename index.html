@@ -13252,18 +13252,106 @@ function poInvOfPrune(){
 }
 function poSailText(r){ return poInvEntries(r).map(x=>x.d).filter(Boolean).join(', '); }
 // 인보이스·선적일 칸. 여러 장이면 한 장씩 줄을 나눠 적는다.
-function poInvTd(r, tdS, field){
+function poInvTd(r, tdS, field, ed){
   const list=poInvEntries(r);
-  if(!list.length) return '<td style="'+tdS+'"></td>';
-  const tip=list.map(x=>x.i+(x.d?(' · '+x.d):'')+(x.q?(' · '+x.q.toLocaleString()+'개'):'')).join('\n')
-    + (list[0].exact ? '' : '\n(상업송장을 올려 넣은 줄이 아니라, 그 품번이 실린 인보이스입니다)');
+  const dim=(list.length && !list[0].exact);
+  const tip=list.length
+    ? (list.map(x=>x.i+(x.d?(' · '+x.d):'')+(x.q?(' · '+x.q.toLocaleString()+'개'):'')).join('\n')
+       + (dim ? '\n(상업송장을 올려 넣은 줄이 아니라, 그 품번이 실린 인보이스입니다)' : ''))
+    : '';
   // 인보이스 칸에는 그 줄이 그 인보이스로 받은 수량까지 함께 적는다.
   //   한 품번이 여러 차수에 걸쳐 있으면 차수마다 받은 몫이 다르므로(5개·10개 …) 수량이 있어야 뜻이 통한다.
-  const body=list.map(x=>(field==='sail')
-      ? escapeHtml(x.d||'')
-      : (escapeHtml(x.i)+((x.exact && x.q)?('<span style="color:var(--muted)"> × '+x.q.toLocaleString()+'</span>'):''))
+  const cell=(i,f,v)=> ed
+    ? ('<span contenteditable="true" class="po-sp-ed" data-pocha="'+escapeHtml(String(r.cha||''))+'" data-popn="'+escapeHtml(String(r.pn||''))+'"'
+       +' data-ivi="'+i+'" data-ivf="'+f+'" data-pnorig="'+escapeHtml(v)+'"'
+       +' onclick="event.stopPropagation()" onmousedown="event.stopPropagation()"'
+       +' onblur="onPoInvBlur(this)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();this.blur();}">'+escapeHtml(v)+'</span>')
+    : escapeHtml(v);
+  const body=list.map((x,i)=>(field==='sail')
+      ? cell(i,'d',x.d||'')
+      : (cell(i,'i',x.i)+((x.exact && x.q)?('<span style="color:var(--muted)"> × '+x.q.toLocaleString()+'</span>'):''))
     ).join('<br>');
-  return '<td style="'+tdS+';font-size:10px'+(list[0].exact?'':';color:var(--muted)')+'" title="'+escapeHtml(tip)+'">'+body+'</td>';
+  // 인보이스 칸 맨 아래에 빈 줄 — 여기에 적으면 한 장이 더 붙는다
+  const add=(ed && field==='inv')
+    ? ((list.length?'<br>':'')
+       +'<span contenteditable="true" class="po-sp-ed po-sp-add" data-pocha="'+escapeHtml(String(r.cha||''))+'" data-popn="'+escapeHtml(String(r.pn||''))+'"'
+       +' data-ph="'+escapeHtml(list.length?'＋ 인보이스 추가':'＋ 인보이스')+'"'
+       +' title="'+escapeHtml('인보이스 번호를 적습니다. 수량·선적일도 같이 적어도 됩니다 —\n예: RUMOSKRUS261004 10 2026-10-25')+'"'
+       +' onclick="event.stopPropagation()" onmousedown="event.stopPropagation()"'
+       +' onblur="onPoInvNewBlur(this)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();this.blur();}"'
+       +' style="display:inline-block;min-width:60px;min-height:13px"></span>')
+    : '';
+  if(!list.length && !add) return '<td style="'+tdS+'"></td>';
+  return '<td style="'+tdS+';font-size:10px'+(dim?';color:var(--muted)':'')+'"'
+    +(tip?(' title="'+escapeHtml(tip)+'"'):'')+'>'+body+add+'</td>';
+}
+// 적어 둔 인보이스 내역을 그대로 담는다(수량은 기록일 뿐, 공급수량은 건드리지 않는다)
+function poInvSet(cha, pn, list){
+  const k=poManKey(cha,pn);
+  const clean=(list||[]).filter(x=>x && String(x.i||'').trim());
+  if(clean.length) _poInvOf[k]=clean.map(x=>({ i:String(x.i).trim().toUpperCase(), d:String(x.d||''), q:Math.max(0,Math.round(Number(x.q)||0)) }));
+  else delete _poInvOf[k];
+  savePoMan();
+}
+// 날짜를 2026-10-25 꼴로 다듬는다. 못 알아보면 적은 그대로 둔다.
+function poSailNorm(s){
+  const t=String(s==null?'':s).trim();
+  if(!t) return '';
+  let m=t.match(/^(20\d{2})\D?(\d{1,2})\D?(\d{1,2})$/);
+  if(m) return m[1]+'-'+String(m[2]).padStart(2,'0')+'-'+String(m[3]).padStart(2,'0');
+  m=t.match(/^(\d{2})\D?(\d{1,2})\D?(\d{1,2})$/);
+  if(m) return '20'+m[1]+'-'+String(m[2]).padStart(2,'0')+'-'+String(m[3]).padStart(2,'0');
+  return t;
+}
+// 적어 둔 줄 하나를 고쳤을 때. 인보이스 번호를 비우면 그 줄이 빠진다.
+async function onPoInvBlur(el){
+  const ru=(lang==='ru');
+  const cha=String(el.getAttribute('data-pocha')||''), pn=String(el.getAttribute('data-popn')||'');
+  const idx=Number(el.getAttribute('data-ivi')), f=String(el.getAttribute('data-ivf')||'');
+  const before=String(el.getAttribute('data-pnorig')||'');
+  let txt=String(el.textContent||'').trim();
+  if(f==='d') txt=poSailNorm(txt);
+  if(txt===before.trim()) return;
+  if(!(((typeof pnEditable==='function') && pnEditable()) || canEditPo(poRegion()))){ el.textContent=before; return; }
+  // 화면에 보이던 그대로를 바탕으로 고친다(선적 자료에서 짐작해 보여 준 것도 이때 적어 둔다)
+  const cur=poInvEntries({cha, pn, supplied:1}).map(x=>({i:x.i, d:x.d, q:x.q}));
+  if(!cur[idx]){ el.textContent=before; return; }
+  if(f==='i' && !txt){
+    if(!confirm('이 인보이스 줄을 지울까요?\n\n· '+normBadgePN(cur[idx].i)+(cur[idx].d?(' · '+cur[idx].d):''))){ el.textContent=before; return; }
+    cur.splice(idx,1);
+  }else{
+    cur[idx][f]= (f==='i') ? txt.toUpperCase() : txt;
+  }
+  poInvSet(cha, pn, cur);
+  ktHistAdd('po.inv', cha+'|'+pn, before, txt);
+  renderPO();
+}
+// 빈 줄에 적었을 때 — '번호 수량 날짜' 를 함께 받는다(수량·날짜는 없어도 된다)
+async function onPoInvNewBlur(el){
+  const s=String(el.textContent||'').trim();
+  el.textContent='';
+  if(!s) return;
+  if(!(((typeof pnEditable==='function') && pnEditable()) || canEditPo(poRegion()))) return;
+  const cha=String(el.getAttribute('data-pocha')||''), pn=String(el.getAttribute('data-popn')||'');
+  // 날짜처럼 생긴 토막과 숫자만인 토막을 갈라 낸다. 남은 것이 인보이스 번호다.
+  // 날짜는 '2026-10-25' 처럼 가르개가 있거나 숫자 8자리인 토막만 본다.
+  //   (RUMOSKRUS261004 처럼 번호 안에 숫자가 있어도 날짜로 보지 않게)
+  const isDate=p=> /^\d{4}[-.\/]\d{1,2}[-.\/]\d{1,2}$/.test(p) || /^\d{2}[-.\/]\d{1,2}[-.\/]\d{1,2}$/.test(p) || /^\d{8}$/.test(p);
+  const parts=s.split(/[\s,]+/).filter(Boolean);
+  let inv='', qty=0, d='';
+  parts.forEach(p=>{
+    if(!d && isDate(p)){ d=poSailNorm(p); return; }
+    if(!qty && /^\d{1,6}$/.test(p)){ qty=Number(p); return; }
+    if(!inv) inv=p.toUpperCase();
+  });
+  if(!inv){ return; }
+  const cur=poInvEntries({cha, pn, supplied:1}).map(x=>({i:x.i, d:x.d, q:x.q}));
+  const j=cur.findIndex(x=>String(x.i).toUpperCase()===inv);
+  if(j>=0){ if(qty) cur[j].q=qty; if(d) cur[j].d=d; }
+  else cur.push({ i:inv, d:d, q:qty });
+  poInvSet(cha, pn, cur);
+  ktHistAdd('po.inv', cha+'|'+pn, '', inv+(qty?(' × '+qty):'')+(d?(' · '+d):''));
+  renderPO();
 }
 // 한 줄에서 그 열의 값(거르개·정렬이 쓰는 기준값). 화면에 찍히는 글자와 같게 맞춘다.
 function poCellVal(key, r){
@@ -13530,7 +13618,7 @@ function renderPO(){
           +' title="'+L('코드별 공급수량 나눠 적기','Поставка по кодам')+'"'
           +' style="cursor:pointer;color:var(--accent2);font-size:10px;margin-left:3px">⇄</span>'):'')+'</td>',
       rest:'<td style="'+numS+';font-weight:600'+(rest>0?';color:#b91c1c':'')+'">'+(rest?rest.toLocaleString():'0')+'</td>',
-      inv:poInvTd(r, tdS, 'inv'), sail:poInvTd(r, tdS, 'sail')
+      inv:poInvTd(r, tdS, 'inv', EDPO), sail:poInvTd(r, tdS, 'sail', EDPO)
     };
     const del=EDPO ? ('<td style="'+tdS+';text-align:center;width:44px;white-space:nowrap">'
       + '<span onclick="event.stopPropagation();poAddRowOpen(this)"'
