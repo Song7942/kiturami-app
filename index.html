@@ -4459,8 +4459,37 @@ function pnMdlChipCap(){
       });
     });
   }catch(e){}
-  _pnMdlChipCap=Math.max(150, Math.min(300, Math.ceil(w)+10));
+  _pnMdlChipCap=Math.max(112, Math.min(210, Math.ceil(w)+8));
   return _pnMdlChipCap;
+}
+// 3단으로 늘어놓으므로 열 너비는 이름표 너비의 3배(사이 여백 몫을 더한다)
+function pnMdlColCap(){ return Math.max(330, Math.min(560, pnMdlChipCap()*3+14)); }
+// 비슷한 품목끼리 한 단에 모은다 — 묶음 이름의 앞 두 낱말을 한 식구로 본다
+//   (WORLD ALPHA OLD · WORLD ALPHA S OLD · WORLD ALPHA C → 모두 'WORLD ALPHA')
+function pnMdlFamilyOf(g){
+  const w=String(g||'').trim().split(/\s+/);
+  return (w.length>=2 ? (w[0]+' '+w[1]) : (w[0]||''));
+}
+// 묶음을 3단으로 나눈다.
+//   · 같은 식구는 한 단에 붙여 담는다
+//   · 단이 차면 다음 식구부터 다음 단으로 넘어간다
+//   · 한 식구가 한 단을 크게 넘칠 때만 그 식구를 다음 단으로 이어 담는다
+function pnMdlColumns(gs, nCol){
+  const n=nCol||3, cols=[]; for(let i=0;i<n;i++) cols.push([]);
+  if(!gs || !gs.length) return cols;
+  const runs=[];
+  gs.forEach(o=>{ const f=pnMdlFamilyOf(o.g), last=runs[runs.length-1];
+    if(last && last.f===f) last.a.push(o); else runs.push({ f, a:[o] }); });
+  const cap=Math.max(1, Math.ceil(gs.length/n));
+  let c=0;
+  runs.forEach(run=>{
+    if(cols[c].length && cols[c].length+run.a.length>cap && c<n-1) c++;
+    const spill=(run.a.length>cap+2);
+    run.a.forEach(o=>{
+      if(spill && cols[c].length>=cap && c<n-1) c++;
+      cols[c].push(o); });
+  });
+  return cols;
 }
 // [{g, n, idx:[…]}] — 처음 나온 차례대로
 function pnMdlGroups(rep){
@@ -4839,7 +4868,7 @@ function pnBaseCols(isKo, showEng){
     c.push({key:'alt_qty',  cap:74,  group:g, color:'#f59e0b', capLabel:ru?'Кол-во':'필요수량'}); }
   // 적용모델 — 묶음 이름만 적고, 누르면 세부 모델이 창으로 열린다(줄이 한 바닥을 차지하지 않게)
   { const g=ru?'Модели':'적용모델';
-    c.push({key:'mdl', cap:pnMdlChipCap(), group:g, color:'#0ea5e9',
+    c.push({key:'mdl', cap:pnMdlColCap(), group:g, color:'#0ea5e9',
             capLabel:(ru?'Группы — нажмите':'묶음 — 누르면 세부')}); }
   // 적용모델(임시)과 모델 점 찍기 열(A.P · A.N S …)은 '적용모델(신규)' 이 대신하므로 뺐다.
   //   MODEL_DEFS 자체는 주문·부품조회에서 그대로 쓴다.
@@ -4993,17 +5022,22 @@ function pnCellHtml(col, r, ctx){
     const gs=pnMdlGroups(r.rep);
     const repEsc=escapeHtml(String(r.rep).replace(/"/g,''));
     const chip=o=>'<span onclick="event.stopPropagation();pnMdlPop(&quot;'+repEsc+'&quot;,&quot;'+escapeHtml(o.g.replace(/"/g,''))+'&quot;)"'
-      +' title="'+escapeHtml((lang==='ru')?'Нажмите — подробности':'누르면 세부 모델이 열립니다')+'"'
-      +' style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;background:var(--surface);'
-      +'border:1px solid var(--border);border-radius:11px;padding:1px 8px;margin:1px 3px 1px 0;white-space:nowrap">'
-      +'<b style="font-weight:600">'+hlPN(o.g,kw)+'</b>'
-      +'<span style="color:var(--muted);font-size:10px">'+o.n+'</span></span>';
+      +' title="'+escapeHtml(o.g+' — '+((lang==='ru')?'Нажмите, подробности':'누르면 세부 모델'))+'"'
+      +' style="display:flex;align-items:center;gap:4px;cursor:pointer;background:var(--surface);'
+      +'border:1px solid var(--border);border-radius:11px;padding:1px 7px;margin:1px 0;overflow:hidden">'
+      +'<b style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+hlPN(o.g,kw)+'</b>'
+      +'<span style="color:var(--muted);font-size:10px;margin-left:auto">'+o.n+'</span></span>';
     const add=isMaster
       ? ('<span onclick="event.stopPropagation();pnMdlPop(&quot;'+repEsc+'&quot;,&quot;&quot;)"'
          +' title="'+escapeHtml((lang==='ru')?'Добавить':'적용모델 넣기·고치기')+'"'
          +' style="display:inline-block;cursor:pointer;color:var(--accent2);font-weight:700;padding:1px 6px">＋</span>')
       : '';
-    const body='<div style="display:flex;flex-wrap:wrap;align-items:center">'+gs.map(chip).join('')+add+'</div>';
+    // 3단으로 늘어놓는다 — 비슷한 품목끼리 한 단, 넘치면 다음 단으로 이어진다
+    const mcols=pnMdlColumns(gs,3);
+    let mlast=0; mcols.forEach((a,i)=>{ if(a.length) mlast=i; });
+    const body='<div style="display:flex;align-items:flex-start;gap:4px">'
+      +mcols.map((a,i)=>'<div style="flex:1 1 0;min-width:0">'+a.map(chip).join('')
+        +((i===mlast)?add:'')+'</div>').join('')+'</div>';
     const h=pnCellHist(r.rep, 'mdl');
     const badge=h.badge?'<span style="position:absolute;right:1px;top:0;line-height:1">'+h.badge+'</span>':'';
     return _pnTd(col, body+badge, h.cls.trim(), bl+'font-size:11px;position:relative'); }
