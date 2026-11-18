@@ -8169,16 +8169,24 @@ async function saveEditMember(){
 // DB 컬럼을 못 늘리므로 kt_company_prices 에 숨김행으로 저장한다:
 //   company='@PERMS', rep=<회원 아이디>, buy_price=<권한 비트마스크 정수>
 // 카테고리 8개 × (보기 v / 쓰기 w / 삭제 d) = 24비트 + 회원추가(24번 비트).
+// 화면 탭 차례대로 보여 준다. 비트 자리는 PERM_BITS1 에 따로 못박아 두었다 —
+//   여기 차례를 바꿔도 이미 준 권한이 틀어지지 않게.
 const PERM_CATS=[
-  {key:'parts',ko:'부품검색',ru:'Поиск деталей'},
-  {key:'pn',ko:'품번조회',ru:'Артикулы'},
   {key:'order',ko:'주문',ru:'Заказ'},
+  {key:'parts',ko:'부품조회',ru:'Поиск деталей'},
   {key:'adminOrders',ko:'주문관리',ru:'Упр. заказами'},
+  {key:'pn',ko:'품번조회',ru:'Артикулы'},
+  {key:'pnchk',ko:'품번확인',ru:'Проверка артикулов'},
+  {key:'prod',ko:'제품목록',ru:'Изделия'},
   {key:'inventory',ko:'재고관리',ru:'Склад'},
   {key:'shipments',ko:'출고관리',ru:'Отгрузки'},
   {key:'price',ko:'가격정보',ru:'Цены'},
   {key:'memberManagement',ko:'회원관리',ru:'Участники'}
 ];
+// 첫째 비트마스크(kt_company_prices.buy_price)에 담기는 차례 — 바꾸면 안 된다
+const PERM_BITS1=['parts','pn','order','adminOrders','inventory','shipments','price','memberManagement'];
+// 자리가 모자라 둘째 비트마스크(supply_price)에 담는 카테고리
+const PERM_BITS2={ prod:{v:4,w:5,d:6}, pnchk:{v:7,w:8,d:9} };
 const _PA=['v','w','d'];
 const PERM_ADD_BIT=24;
 const PERM_ENGNAME_BIT=25;   // 영문명 보기 권한
@@ -8187,8 +8195,8 @@ const PERM_ADMINMINE_BIT=27; // 주문관리 > '주문' 서브탭 보기
 const PERM_PSI_BIT=28;       // PSI 보기 (PSI·발주시뮬레이션·발주현황·선적/입고현황·미출현황)
 const PERM_PSIW_BIT=29;      // PSI 쓰기 (엑셀 업로드·선적차수 수정 등)
 const PERM_EXPCTRL_BIT=30;   // 수출제한 열 보기 (품번조회·PSI·미출현황·가격정보)
-function encodePerms(p){ let n=0; PERM_CATS.forEach((c,i)=>_PA.forEach((a,j)=>{ if(p&&p[c.key]&&p[c.key][a]) n|=(1<<(i*3+j)); })); if(p&&p.add) n|=(1<<PERM_ADD_BIT); if(p&&p.engName) n|=(1<<PERM_ENGNAME_BIT); if(p&&p.adminRecv) n|=(1<<PERM_ADMINRECV_BIT); if(p&&p.adminMine) n|=(1<<PERM_ADMINMINE_BIT); if(p&&p.psiV) n|=(1<<PERM_PSI_BIT); if(p&&p.psiW) n|=(1<<PERM_PSIW_BIT); if(p&&p.expCtrl) n|=(1<<PERM_EXPCTRL_BIT); return n>>>0; }
-function decodePerms(n){ n=Number(n)||0; const p={add:!!(n&(1<<PERM_ADD_BIT)), engName:!!(n&(1<<PERM_ENGNAME_BIT)), adminRecv:!!(n&(1<<PERM_ADMINRECV_BIT)), adminMine:!!(n&(1<<PERM_ADMINMINE_BIT)), psiV:!!(n&(1<<PERM_PSI_BIT)), psiW:!!(n&(1<<PERM_PSIW_BIT)), expCtrl:!!(n&(1<<PERM_EXPCTRL_BIT))}; PERM_CATS.forEach((c,i)=>{ p[c.key]={}; _PA.forEach((a,j)=>{ p[c.key][a]=!!(n&(1<<(i*3+j))); }); }); return p; }
+function encodePerms(p){ let n=0; PERM_BITS1.forEach((k,i)=>_PA.forEach((a,j)=>{ if(p&&p[k]&&p[k][a]) n|=(1<<(i*3+j)); })); if(p&&p.add) n|=(1<<PERM_ADD_BIT); if(p&&p.engName) n|=(1<<PERM_ENGNAME_BIT); if(p&&p.adminRecv) n|=(1<<PERM_ADMINRECV_BIT); if(p&&p.adminMine) n|=(1<<PERM_ADMINMINE_BIT); if(p&&p.psiV) n|=(1<<PERM_PSI_BIT); if(p&&p.psiW) n|=(1<<PERM_PSIW_BIT); if(p&&p.expCtrl) n|=(1<<PERM_EXPCTRL_BIT); return n>>>0; }
+function decodePerms(n){ n=Number(n)||0; const p={add:!!(n&(1<<PERM_ADD_BIT)), engName:!!(n&(1<<PERM_ENGNAME_BIT)), adminRecv:!!(n&(1<<PERM_ADMINRECV_BIT)), adminMine:!!(n&(1<<PERM_ADMINMINE_BIT)), psiV:!!(n&(1<<PERM_PSI_BIT)), psiW:!!(n&(1<<PERM_PSIW_BIT)), expCtrl:!!(n&(1<<PERM_EXPCTRL_BIT))}; PERM_BITS1.forEach((k,i)=>{ p[k]={}; _PA.forEach((a,j)=>{ p[k][a]=!!(n&(1<<(i*3+j))); }); }); return p; }
 // ── 영문명 (kt_names_en: rep, name_en). MASTER 가 권한 준 회원만 본다 ──
 let engNameByRep={};   // 대표품번(대문자) -> 영문명
 function canViewEngName(){ const r=userRole(currentUser); if(r.isMaster) return true; if(r.company==='KITURAMI') return true; /* KITURAMI 본사·데스크(GLOBAL·RUSSIA 등)는 영문명 노출 */ const p=_myPermObj(); return !!(p&&p.engName); }
@@ -8318,8 +8326,14 @@ async function loadAllMemberPerms(){
 }
 // 둘째 비트마스크 — 발주현황(러시아·카자흐) 보기·고치기
 const PERM2={ poRuV:0, poRuW:1, poKzV:2, poKzW:3, prodV:4, prodW:5 };
-function encodePerms2(p){ let n=0; Object.keys(PERM2).forEach(k=>{ if(p&&p[k]) n|=(1<<PERM2[k]); }); return n>>>0; }
-function decodePerms2(n){ n=Number(n)||0; const p={}; Object.keys(PERM2).forEach(k=>{ p[k]=!!(n&(1<<PERM2[k])); }); return p; }
+function encodePerms2(p){ let n=0;
+  Object.keys(PERM2).forEach(k=>{ if(p&&p[k]) n|=(1<<PERM2[k]); });
+  Object.keys(PERM_BITS2).forEach(c=>{ _PA.forEach(a=>{ if(p&&p[c]&&p[c][a]) n|=(1<<PERM_BITS2[c][a]); }); });
+  return n>>>0; }
+function decodePerms2(n){ n=Number(n)||0; const p={};
+  Object.keys(PERM2).forEach(k=>{ p[k]=!!(n&(1<<PERM2[k])); });
+  Object.keys(PERM_BITS2).forEach(c=>{ p[c]={}; _PA.forEach(a=>{ p[c][a]=!!(n&(1<<PERM_BITS2[c][a])); }); });
+  return p; }
 function _myPerm2(){
   if(!currentUser) return decodePerms2(0);
   const k=String(currentUser.id||'').trim().toUpperCase();
@@ -8345,11 +8359,11 @@ function canEditPo(rg){
 //   MASTER·KITURAMI(본사)는 늘 열려 있고, 그 밖의 회원은 회원관리에서 준 권한을 따른다.
 function canSeeProd(){
   if(userRole(currentUser).usesMasterView) return true;
-  return !!_myPerm2().prodV;
+  const c=permCat('prod'); return !!(c && c.v);
 }
 function canEditProd(){
   if(userRole(currentUser).usesMasterView) return true;
-  return !!_myPerm2().prodW;
+  const c=permCat('prod'); return !!(c && c.w);
 }
 // 발주현황만 받은 회원인가 — PSI 는 못 보고 발주현황만 보는 사람.
 //   이 사람에게는 발주현황이 PSI 밑이 아니라 따로 선 탭으로 보인다.
@@ -8370,7 +8384,22 @@ function poOnlyMember(){
 }
 // 현재 사용자 관점의 권한. MASTER=전부 허용. 권한 미설정 회원은 null → 기존 역할 규칙을 그대로 쓴다.
 // MASTER 는 어떤 권한 기록이 있어도 항상 전체 접근(예외). 기록을 무시한다.
-function _myPermObj(){ if(!currentUser) return null; if(userRole(currentUser).isMaster) return null; const k=String(currentUser.id||'').trim().toUpperCase(); return memberPermsById[k]!==undefined?decodePerms(memberPermsById[k]):null; }
+function _myPermObj(){
+  if(!currentUser) return null;
+  if(userRole(currentUser).isMaster) return null;
+  const k=String(currentUser.id||'').trim().toUpperCase();
+  if(memberPermsById[k]===undefined) return null;
+  const p=decodePerms(memberPermsById[k]);
+  Object.assign(p, decodePerms2(memberPerms2ById[k]||0));   // 둘째 칸에 담은 것(제품목록·품번확인·발주현황)도 함께
+  return p;
+}
+// 그 카테고리의 권한. 품번확인은 따로 정하지 않았으면 품번조회를 따른다(종전과 같게).
+function permCat(cat){
+  const p=_myPermObj(); if(!p) return null;
+  let c=p[cat]||{};
+  if(cat==='pnchk' && !(c.v||c.w||c.d)) c=p.pn||{};
+  return c;
+}
 // '부품검색' 권한 = MASTER 의 '부품조회'(조회 전용) 화면. 주문 탭을 조회전용(master-view)으로 보여준다.
 // 부품검색만 있고 주문 권한이 없는 비-MASTER 회원이 대상. (주문 권한이 있으면 주문 화면이 우선)
 function _partsLookupOnly(){
@@ -8466,8 +8495,10 @@ function applyPermTabVisibility(skipSwitch){
   const moqEl=document.getElementById('tab-moq'); if(moqEl) moqEl.style.display='none';
   const ssEl=document.getElementById('tab-ss'); if(ssEl) ssEl.style.display='none';
   const simEl=document.getElementById('tab-sim'); if(simEl) simEl.style.display='none';
-  const map={ 'tab-pn':'pn','tab-pnchk':'pn','tab-inventory':'inventory','tab-shipments':'shipments','tab-price':'price','tab-memberManagement':'memberManagement' };
-  Object.keys(map).forEach(tabId=>{ const el=document.getElementById(tabId); if(el) el.style.display = pobj[map[tabId]].v ? '' : 'none'; });
+  const map={ 'tab-pn':'pn','tab-pnchk':'pnchk','tab-inventory':'inventory','tab-shipments':'shipments','tab-price':'price','tab-memberManagement':'memberManagement' };
+  Object.keys(map).forEach(tabId=>{ const el=document.getElementById(tabId); if(!el) return;
+    const c=permCat(map[tabId])||{};
+    el.style.display = c.v ? '' : 'none'; });
   // 주문관리 탭: '주문접수' 또는 '주문' 서브탭 권한이 있으면 노출. 서브탭 버튼도 권한대로.
   const aoEl=document.getElementById('tab-adminOrders');
   if(aoEl) aoEl.style.display = canSeeAdminOrdersTab() ? 'flex' : 'none';
@@ -8553,12 +8584,6 @@ function openPermModal(id){
       <label style="display:flex;align-items:center;gap:8px;margin-top:8px;color:var(--text);font-size:13px;cursor:pointer">
         <input type="checkbox" class="_pmPoKzW" ${p.poKzW?'checked':''} style="width:16px;height:16px"> ${ru?'Заказы (Казахстан) — изменение':'발주현황(카자흐) 고치기'}
       </label>
-      <label style="display:flex;align-items:center;gap:8px;margin-top:12px;color:var(--text);font-size:13px;cursor:pointer">
-        <input type="checkbox" class="_pmProdV" ${p.prodV?'checked':''} style="width:16px;height:16px"> ${ru?'Изделия — просмотр':'제품목록 보기'}
-      </label>
-      <label style="display:flex;align-items:center;gap:8px;margin-top:8px;color:var(--text);font-size:13px;cursor:pointer">
-        <input type="checkbox" class="_pmProdW" ${p.prodW?'checked':''} style="width:16px;height:16px"> ${ru?'Изделия — изменение':'제품목록 고치기 (엑셀 올리기·줄 고치기)'}
-      </label>
       <div style="font-size:11px;color:var(--muted);margin-top:8px">${ru?'Ничего не отмечено = стандартные права по роли.':'아무것도 체크 안 하면 역할 기본값으로 동작합니다.'}</div>
       <button class="_pmSave news-btn-primary" style="width:100%;padding:11px;margin-top:16px">${ru?'Сохранить':'저장'}</button>
     </div>
@@ -8581,7 +8606,6 @@ function openPermModal(id){
     // 발주현황 권한은 자리가 모자라 둘째 칸(supply_price)에 따로 담는다
     np.poRuV=ov.querySelector('._pmPoRuV').checked; np.poRuW=ov.querySelector('._pmPoRuW').checked;
     np.poKzV=ov.querySelector('._pmPoKzV').checked; np.poKzW=ov.querySelector('._pmPoKzW').checked;
-    np.prodV=ov.querySelector('._pmProdV').checked; np.prodW=ov.querySelector('._pmProdW').checked;
     const n=encodePerms(np), n2=encodePerms2(np);
     const { error } = await sb.from('kt_company_prices').upsert({ company:'@PERMS', rep:String(id).trim(), buy_price:n, supply_price:n2, updated_at:new Date().toISOString() },{onConflict:'company,rep'});
     if(error){ alert((lang==='ru'?'Ошибка сохранения':'저장 실패')+'\n['+(error.message||error.code)+']'); return; }
