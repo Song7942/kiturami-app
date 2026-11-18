@@ -8317,7 +8317,7 @@ async function loadAllMemberPerms(){
       memberPerms2ById[k]=Number(r.supply_price)||0; }); }catch(e){}
 }
 // 둘째 비트마스크 — 발주현황(러시아·카자흐) 보기·고치기
-const PERM2={ poRuV:0, poRuW:1, poKzV:2, poKzW:3 };
+const PERM2={ poRuV:0, poRuW:1, poKzV:2, poKzW:3, prodV:4, prodW:5 };
 function encodePerms2(p){ let n=0; Object.keys(PERM2).forEach(k=>{ if(p&&p[k]) n|=(1<<PERM2[k]); }); return n>>>0; }
 function decodePerms2(n){ n=Number(n)||0; const p={}; Object.keys(PERM2).forEach(k=>{ p[k]=!!(n&(1<<PERM2[k])); }); return p; }
 function _myPerm2(){
@@ -8341,6 +8341,16 @@ function canEditPo(rg){
   if(rg==='kz') return !!p2.poKzW;
   return !!p2.poRuW || canEditPsi();
 }
+// 제품목록 — 볼 수 있나 / 고칠 수 있나.
+//   MASTER·KITURAMI(본사)는 늘 열려 있고, 그 밖의 회원은 회원관리에서 준 권한을 따른다.
+function canSeeProd(){
+  if(userRole(currentUser).usesMasterView) return true;
+  return !!_myPerm2().prodV;
+}
+function canEditProd(){
+  if(userRole(currentUser).usesMasterView) return true;
+  return !!_myPerm2().prodW;
+}
 // 발주현황만 받은 회원인가 — PSI 는 못 보고 발주현황만 보는 사람.
 //   이 사람에게는 발주현황이 PSI 밑이 아니라 따로 선 탭으로 보인다.
 // 발주현황 탭 보이기.
@@ -8350,6 +8360,7 @@ function poTabsApply(){
   const set=(id,on)=>{ const e=document.getElementById(id); if(e) e.style.display=on?'block':'none'; };
   set('tab-po',   canSeePo('ru'));
   set('tab-pokz', canSeePo('kz'));
+  set('tab-prod', canSeeProd());          // 제품목록도 회원관리에서 준 권한대로
 }
 function poOnlyMember(){
   if(userRole(currentUser).usesMasterView) return false;
@@ -8528,7 +8539,7 @@ function openPermModal(id){
         <input type="checkbox" class="_pmExp" ${p.expCtrl?'checked':''} style="width:16px;height:16px"> ${ru?'Видеть «Эксп. контроль»':'수출제한 열 보기 (품번조회·PSI·미출현황·가격정보)'}
       </label>
       <div style="margin-top:14px;padding-top:10px;border-top:1px solid var(--border);font-size:12px;color:var(--muted)">
-        ${ru?'Заказы — отдельно от PSI':'발주현황만 따로 주기 — PSI 권한이 없어도 발주현황 탭이 따로 열립니다'}
+        ${ru?'Отдельные права':'따로 주는 권한 — PSI 권한이 없어도 그 탭만 열립니다'}
       </div>
       <label style="display:flex;align-items:center;gap:8px;margin-top:8px;color:var(--text);font-size:13px;cursor:pointer">
         <input type="checkbox" class="_pmPoRuV" ${p.poRuV?'checked':''} style="width:16px;height:16px"> ${ru?'Заказы (Россия) — просмотр':'발주현황(러시아) 보기'}
@@ -8541,6 +8552,12 @@ function openPermModal(id){
       </label>
       <label style="display:flex;align-items:center;gap:8px;margin-top:8px;color:var(--text);font-size:13px;cursor:pointer">
         <input type="checkbox" class="_pmPoKzW" ${p.poKzW?'checked':''} style="width:16px;height:16px"> ${ru?'Заказы (Казахстан) — изменение':'발주현황(카자흐) 고치기'}
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;margin-top:12px;color:var(--text);font-size:13px;cursor:pointer">
+        <input type="checkbox" class="_pmProdV" ${p.prodV?'checked':''} style="width:16px;height:16px"> ${ru?'Изделия — просмотр':'제품목록 보기'}
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;margin-top:8px;color:var(--text);font-size:13px;cursor:pointer">
+        <input type="checkbox" class="_pmProdW" ${p.prodW?'checked':''} style="width:16px;height:16px"> ${ru?'Изделия — изменение':'제품목록 고치기 (엑셀 올리기·줄 고치기)'}
       </label>
       <div style="font-size:11px;color:var(--muted);margin-top:8px">${ru?'Ничего не отмечено = стандартные права по роли.':'아무것도 체크 안 하면 역할 기본값으로 동작합니다.'}</div>
       <button class="_pmSave news-btn-primary" style="width:100%;padding:11px;margin-top:16px">${ru?'Сохранить':'저장'}</button>
@@ -8564,6 +8581,7 @@ function openPermModal(id){
     // 발주현황 권한은 자리가 모자라 둘째 칸(supply_price)에 따로 담는다
     np.poRuV=ov.querySelector('._pmPoRuV').checked; np.poRuW=ov.querySelector('._pmPoRuW').checked;
     np.poKzV=ov.querySelector('._pmPoKzV').checked; np.poKzW=ov.querySelector('._pmPoKzW').checked;
+    np.prodV=ov.querySelector('._pmProdV').checked; np.prodW=ov.querySelector('._pmProdW').checked;
     const n=encodePerms(np), n2=encodePerms2(np);
     const { error } = await sb.from('kt_company_prices').upsert({ company:'@PERMS', rep:String(id).trim(), buy_price:n, supply_price:n2, updated_at:new Date().toISOString() },{onConflict:'company,rep'});
     if(error){ alert((lang==='ru'?'Ошибка сохранения':'저장 실패')+'\n['+(error.message||error.code)+']'); return; }
@@ -14631,7 +14649,7 @@ async function saveProd(){
   return error?(error.message||error.code):'';
 }
 async function loadProdTab(){
-  const m=userRole(currentUser).isMaster;
+  const m=canEditProd();
   const b=document.getElementById('prodUploadBtn'); if(b) b.style.display=m?'':'none';
   if(!_prodLoaded) await loadProd();
   renderProd();
@@ -14643,7 +14661,7 @@ function renderProd(){
   const kw=(document.getElementById('prodInput')?document.getElementById('prodInput').value:'').trim().toLowerCase();
   let rows=prodData.slice();
   if(kw) rows=rows.filter(r=>(r.pn+' '+r.name).toLowerCase().includes(kw));
-  const ED=userRole(currentUser).isMaster;      // 고치기·지우기는 MASTER 만
+  const ED=canEditProd();                      // 고치기·지우기 — MASTER 거나 권한을 받은 회원
   const heads=[['No.',56],[L('품번','Артикул'),150],[L('품명','Наименование'),420]];
   if(ED) heads.push(['',44]);
   const cols=heads.map(h=>'<col style="width:'+h[1]+'px">').join('');
@@ -14690,7 +14708,7 @@ async function onProdCellBlur(el){
   const before=String(el.getAttribute('data-pnorig')||'');
   const v=String(el.textContent||'').replace(/\s+/g,' ').trim();
   if(v===before) { el.textContent=before; return; }
-  if(!userRole(currentUser).isMaster){ el.textContent=before; return; }
+  if(!canEditProd()){ el.textContent=before; return; }
   const find=k=>prodData.findIndex(r=>String(r.pn||'').trim().toUpperCase()===String(k||'').trim().toUpperCase());
   const old=prodData.map(r=>({pn:r.pn, name:r.name}));
   if(fld==='newpn'||fld==='newname'){
@@ -14713,7 +14731,7 @@ async function onProdCellBlur(el){
 }
 async function prodDeleteRow(pn){
   const ru=(lang==='ru');
-  if(!userRole(currentUser).isMaster) return;
+  if(!canEditProd()) return;
   const i=prodData.findIndex(r=>String(r.pn||'').trim().toUpperCase()===String(pn||'').trim().toUpperCase());
   if(i<0) return;
   const r=prodData[i];
@@ -14740,7 +14758,7 @@ function downloadProd(){
 //   같은 품번이 이미 있으면 품명만 새 값으로 바꾸고, 없던 품번은 뒤에 붙인다.
 function handleProdUpload(event){
   const ru=(lang==='ru');
-  if(!userRole(currentUser).isMaster){ event.target.value=''; return; }
+  if(!canEditProd()){ event.target.value=''; return; }
   const file=event.target.files[0]; if(!file){ event.target.value=''; return; }
   const reader=new FileReader();
   reader.onload=async function(e){
