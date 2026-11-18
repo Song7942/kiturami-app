@@ -4394,7 +4394,7 @@ function pnMdlFromProd(e){ return !!prodNameOf(e&&e.p); }
 // 제품명 열은 가장 긴 이름이 한 줄에 다 보이도록 폭을 잡는다(잘라 쓰지 않는다).
 //   한글은 폭이 넓어 글자마다 다르게 센다. 너무 길어지면 적당한 선에서 멈춘다.
 let _pnMdlCap=0, _pnMdlN=0;
-function pnMdlCapClear(){ _pnMdlCap=0; _pnMdlN=0; }
+function pnMdlCapClear(){ _pnMdlCap=0; _pnMdlN=0; if(typeof _pnMdlChipCap!=='undefined') _pnMdlChipCap=0; }
 // 적용모델을 몇 단으로 나눠 담을지.
 //   한 품목에 모델이 수십 개 붙으면 한 줄씩 쌓을 때 그 줄만 화면 한 바닥을 차지한다.
 //   칸 안을 여러 단으로 나눠 높이를 줄인다(32개 → 3단이면 11줄).
@@ -4428,6 +4428,90 @@ function pnMdlNameCap(){
   }catch(err){}
   _pnMdlCap=Math.max(160, Math.min(460, Math.ceil(w)+22));
   return _pnMdlCap;
+}
+// ── 적용모델 묶음 ────────────────────────────────────────
+//   한 품목에 모델이 수십 개 붙으면 칸이 화면 한 바닥을 차지한다.
+//   세부 제품명은 끝에 크기가 붙는다(WORLD ALPHA-15) — '-' 앞 글자를 묶음 이름으로 쓴다.
+//   칸에는 묶음 이름만 적고, 누르면 그 묶음의 품번·제품명이 창으로 열린다.
+function pnMdlGroupOf(e){
+  const nm=String(pnMdlName(e)||'').trim();
+  const src=nm || String((e&&e.p)||'');
+  let g=src;
+  const i=src.indexOf('-');
+  if(i>0) g=src.slice(0,i);
+  else{
+    const m=src.match(/^(.*?)\s+\d/);        // '-' 가 없으면 숫자 앞에서 끊는다(ALPHA PLUS 13DN)
+    if(m && m[1]) g=m[1];
+  }
+  return g.replace(/\s+/g,' ').trim().toUpperCase() || '(이름 없음)';
+}
+// 묶음 이름표가 들어갈 만한 열 너비. 가장 긴 이름 기준으로 한 번만 잰다.
+let _pnMdlChipCap=0;
+function pnMdlChipCap(){
+  if(_pnMdlChipCap) return _pnMdlChipCap;
+  let w=0;
+  try{
+    Object.keys(pnMdl||{}).forEach(k=>{
+      pnMdlGroups(k).forEach(o=>{
+        let n=0; for(const ch of o.g) n+=(ch.charCodeAt(0)>0x2000?11.5:6.3);
+        n+=34;                                     // 개수 뱃지·테두리 몫
+        if(n>w) w=n;
+      });
+    });
+  }catch(e){}
+  _pnMdlChipCap=Math.max(150, Math.min(300, Math.ceil(w)+10));
+  return _pnMdlChipCap;
+}
+// [{g, n, idx:[…]}] — 처음 나온 차례대로
+function pnMdlGroups(rep){
+  const ents=pnMdlEntries(rep), map=new Map();
+  ents.forEach((e,i)=>{ const g=pnMdlGroupOf(e);
+    if(!map.has(g)) map.set(g, { g, n:0, idx:[] });
+    const o=map.get(g); o.n++; o.idx.push(i); });
+  return [...map.values()];
+}
+// 묶음을 누르면 그 묶음의 세부 모델을 창으로 보여 준다.
+//   묶음 이름을 비워 부르면(＋) 전부 보여 준다 — 넣고 고치는 자리다.
+function pnMdlPop(rep, g){
+  const ru=(lang==='ru'), isMaster=userRole(currentUser).isMaster;
+  const old=document.getElementById('pnMdlPop'); if(old) old.remove();
+  const ents=pnMdlEntries(rep);
+  const pick=g ? pnMdlGroups(rep).filter(o=>o.g===g).reduce((a,o)=>a.concat(o.idx),[]) : ents.map((e,i)=>i);
+  const repEsc=escapeHtml(String(rep).replace(/"/g,''));
+  const row=(i)=>{
+    const e=ents[i];
+    const code=isMaster?pnMdlEdit(rep,i,e?e.p:'','mdl',!e):escapeHtml(e?e.p:'');
+    const nm=e?pnMdlName(e):'';
+    const fromProd=e?pnMdlFromProd(e):false;
+    const name=(isMaster && e && !fromProd) ? pnMdlEdit(rep,i,nm,'mdln',false)
+      : '<span title="'+escapeHtml(fromProd?(ru?'Из списка изделий':'제품목록에서 가져온 이름입니다'):nm)+'">'+escapeHtml(nm)+'</span>';
+    const del=(isMaster && e)
+      ? ('<span onclick="event.stopPropagation();pnMdlDelete(&quot;'+repEsc+'&quot;,'+i+');pnMdlPop(&quot;'+repEsc+'&quot;,&quot;'+escapeHtml(String(g||'').replace(/"/g,''))+'&quot;)"'
+         +' title="'+escapeHtml(ru?'Удалить':'이 모델 지우기')+'" style="cursor:pointer;color:#ef4444;font-weight:700">✕</span>')
+      : '<span></span>';
+    return '<tr><td style="padding:4px 6px;font-family:\'Courier New\',monospace;font-size:11px;white-space:nowrap">'+code+'</td>'
+         + '<td style="padding:4px 6px;font-size:11.5px;color:var(--text)">'+name+'</td>'
+         + '<td style="padding:4px 6px;text-align:center;width:24px">'+del+'</td></tr>';
+  };
+  const body=pick.map(row).join('') + (isMaster?row(ents.length):'');
+  const box=document.createElement('div'); box.id='pnMdlPop';
+  box.style.cssText='position:fixed;inset:0;z-index:10001;background:#0008;display:flex;align-items:center;justify-content:center;padding:16px';
+  box.onmousedown=e=>{ if(e.target===box){ box.remove(); if(typeof renderPN==='function') renderPN(); } };
+  box.innerHTML='<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;width:520px;max-width:100%;'
+    +'max-height:84vh;display:flex;flex-direction:column;box-shadow:0 16px 44px #000a;font-size:12px;color:var(--text)">'
+    +'<div style="padding:12px 14px;border-bottom:1px solid var(--border)">'
+      +'<div style="font-weight:700;font-size:13px">'+escapeHtml(g||(ru?'Все модели':'적용모델 전체'))+'</div>'
+      +'<div style="color:var(--muted);margin-top:3px">'+escapeHtml(normBadgePN(rep))+' · '+pick.length+(ru?' шт.':'개')
+      +(g?('  ('+(ru?'всего ':'전체 ')+ents.length+')'):'')+'</div></div>'
+    +'<div style="padding:6px 8px;overflow:auto"><table style="width:100%;border-collapse:collapse">'
+      +'<thead><tr style="color:var(--muted);font-size:11px">'
+      +'<th style="text-align:left;padding:3px 6px">'+(ru?'Артикул':'제품품번')+'</th>'
+      +'<th style="text-align:left;padding:3px 6px">'+(ru?'Название':'제품명')+'</th><th></th></tr></thead>'
+      +'<tbody>'+body+'</tbody></table></div>'
+    +'<div style="padding:10px 14px;border-top:1px solid var(--border);display:flex;justify-content:flex-end">'
+      +'<button class="dl-btn" onclick="document.getElementById(\'pnMdlPop\').remove();if(typeof renderPN===\'function\')renderPN()">'+(ru?'Закрыть':'닫기')+'</button>'
+    +'</div></div>';
+  document.body.appendChild(box);
 }
 function pnMdlText(pn){ return pnMdlEntries(pn).map(e=>e.p).filter(Boolean).join(', '); }
 function pnMdlNameText(pn){ return pnMdlEntries(pn).map(e=>pnMdlName(e)).filter(Boolean).join(', '); }
@@ -4753,11 +4837,10 @@ function pnBaseCols(isKo, showEng){
     c.push({key:'alt',      cap:112, group:g, color:'#f59e0b', capLabel:ru?'Артикул':'품번'});
     c.push({key:'alt_name', cap:150, group:g, color:'#f59e0b', capLabel:ru?'Наименование':'품명'});
     c.push({key:'alt_qty',  cap:74,  group:g, color:'#f59e0b', capLabel:ru?'Кол-во':'필요수량'}); }
-  // 적용모델 — 품번·제품명을 한 칸에 짝지어 담고, 많으면 여러 단으로 나눈다
+  // 적용모델 — 묶음 이름만 적고, 누르면 세부 모델이 창으로 열린다(줄이 한 바닥을 차지하지 않게)
   { const g=ru?'Модели':'적용모델';
-    const n=pnMdlColCount(), w=pnMdlPairW();
-    c.push({key:'mdl', cap:n*w.pair+8, group:g, color:'#0ea5e9', mdlN:n,
-            capLabel:(ru?'Артикул · Наименование':'품번 · 제품명')+(n>1?(' ('+n+'단)'):'')}); }
+    c.push({key:'mdl', cap:pnMdlChipCap(), group:g, color:'#0ea5e9',
+            capLabel:(ru?'Группы — нажмите':'묶음 — 누르면 세부')}); }
   // 적용모델(임시)과 모델 점 찍기 열(A.P · A.N S …)은 '적용모델(신규)' 이 대신하므로 뺐다.
   //   MODEL_DEFS 자체는 주문·부품조회에서 그대로 쓴다.
   return c;
@@ -4907,42 +4990,23 @@ function pnCellHtml(col, r, ctx){
   // 적용모델 — 품번·제품명을 한 짝으로, 많으면 여러 단으로 나눠 담는다(줄 높이를 줄인다)
   if(col.key==='mdl'){
     const bl=col.groupStart?'border-left:1px solid var(--border);':'';
-    const ents=pnMdlEntries(r.rep);
-    const N=pnMdlColCount(), w=pnMdlPairW();
-    const total=ents.length+(isMaster?1:0);        // MASTER 에게는 새로 적을 빈 짝 하나를 더
-    const lines=Math.max(1, Math.ceil(total/N));
+    const gs=pnMdlGroups(r.rep);
     const repEsc=escapeHtml(String(r.rep).replace(/"/g,''));
-    const pair=(i)=>{
-      if(i>=total) return '<span></span><span></span>';
-      const e=ents[i];
-      const del=(isMaster && e)
-        ? ('<span onclick="event.stopPropagation();pnMdlDelete(&quot;'+repEsc+'&quot;,'+i+')"'
-           +' title="'+escapeHtml((lang==='ru')?'Удалить':'이 모델 지우기')+'"'
-           +' style="cursor:pointer;color:#ef4444;font-weight:700;font-size:11px;flex:none;margin-left:2px">✕</span>')
-        : '';
-      const code=(isMaster?pnMdlEdit(r.rep,i,e?e.p:'','mdl',!e):hlPN(e?e.p:'',kw));
-      const nm=e?pnMdlName(e):'';
-      // 제품목록에서 온 이름은 고치지 못하게 둔다 — 고쳐도 목록 값으로 다시 덮인다
-      const fromProd=e?pnMdlFromProd(e):false;
-      const tip=fromProd?((lang==='ru')?'Из списка изделий':'제품목록에서 가져온 이름입니다'):nm;
-      const name=(isMaster && e && !fromProd)
-        ? pnMdlEdit(r.rep,i,nm,'mdln',false)
-        : '<span title="'+escapeHtml(tip)+'" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escapeHtml(nm)+'</span>';
-      return '<span style="display:flex;align-items:center;min-width:0">'+code+del+'</span>'
-           + '<span style="display:flex;align-items:center;min-width:0;color:var(--muted)">'+name+'</span>';
-    };
-    const out=[];
-    for(let L=0; L<lines; L++){
-      const cells=[];
-      for(let k=0;k<N;k++) cells.push(pair(k*lines+L));     // 단마다 위에서 아래로 차례대로
-      out.push('<div style="box-sizing:border-box;height:'+PN_ALT_LH+'px;display:grid;'
-        +'grid-template-columns:repeat('+N+', '+w.code+'px minmax(0,'+w.name+'px));'
-        +'align-items:center;column-gap:6px;margin:0 -10px;padding:0 10px;'
-        +(L===lines-1?'':'border-bottom:1px solid var(--border);')+'">'+cells.join('')+'</div>');
-    }
+    const chip=o=>'<span onclick="event.stopPropagation();pnMdlPop(&quot;'+repEsc+'&quot;,&quot;'+escapeHtml(o.g.replace(/"/g,''))+'&quot;)"'
+      +' title="'+escapeHtml((lang==='ru')?'Нажмите — подробности':'누르면 세부 모델이 열립니다')+'"'
+      +' style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;background:var(--surface);'
+      +'border:1px solid var(--border);border-radius:11px;padding:1px 8px;margin:1px 3px 1px 0;white-space:nowrap">'
+      +'<b style="font-weight:600">'+hlPN(o.g,kw)+'</b>'
+      +'<span style="color:var(--muted);font-size:10px">'+o.n+'</span></span>';
+    const add=isMaster
+      ? ('<span onclick="event.stopPropagation();pnMdlPop(&quot;'+repEsc+'&quot;,&quot;&quot;)"'
+         +' title="'+escapeHtml((lang==='ru')?'Добавить':'적용모델 넣기·고치기')+'"'
+         +' style="display:inline-block;cursor:pointer;color:var(--accent2);font-weight:700;padding:1px 6px">＋</span>')
+      : '';
+    const body='<div style="display:flex;flex-wrap:wrap;align-items:center">'+gs.map(chip).join('')+add+'</div>';
     const h=pnCellHist(r.rep, 'mdl');
     const badge=h.badge?'<span style="position:absolute;right:1px;top:0;line-height:1">'+h.badge+'</span>':'';
-    return _pnTd(col, out.join('')+badge, h.cls.trim(), bl+'font-size:11px;position:relative'); }
+    return _pnTd(col, body+badge, h.cls.trim(), bl+'font-size:11px;position:relative'); }
   // 대체품목 묶음(품번·품명·필요수량) — 대표품번마다 같은 내용을 보여 준다
   if(col.key==='alt'||col.key==='alt_name'||col.key==='alt_qty'){
     const bl=col.groupStart?'border-left:1px solid var(--border);':'';
