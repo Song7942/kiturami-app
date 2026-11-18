@@ -20,6 +20,9 @@ if(-not (Test-Path $DIR)){ [void](New-Item -ItemType Directory -Path $DIR) }
 if(-not (Test-Path (Join-Path $DIR 'api'))){ [void](New-Item -ItemType Directory -Path (Join-Path $DIR 'api')) }
 
 $html=[IO.File]::ReadAllText($SRC,$U8)
+# 줄끝을 LF 로 맞춘다. CRLF 가 섞이면 아래 '^…$' 로 찾는 것들(품번 자료·엑셀 판)이 안 걸려
+#   그 자료가 index.html 안에 그대로 남아 파일이 280 KB 쯤 커진다.
+$html=$html.Replace("`r`n","`n")
 
 # 1) the cloud client is replaced by our own connector (api/db.php), and the price shim rides along
 $stag='<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>'
