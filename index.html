@@ -8393,12 +8393,11 @@ function _myPermObj(){
   Object.assign(p, decodePerms2(memberPerms2ById[k]||0));   // 둘째 칸에 담은 것(제품목록·품번확인·발주현황)도 함께
   return p;
 }
-// 그 카테고리의 권한. 품번확인은 따로 정하지 않았으면 품번조회를 따른다(종전과 같게).
+// 그 카테고리의 권한. 체크한 대로만 본다 — 안 주면 안 보인다.
+//   (품번확인을 품번조회에 딸려 보이게 했더니, 안 준 사람에게도 떠서 뺐다)
 function permCat(cat){
   const p=_myPermObj(); if(!p) return null;
-  let c=p[cat]||{};
-  if(cat==='pnchk' && !(c.v||c.w||c.d)) c=p.pn||{};
-  return c;
+  return p[cat]||{};
 }
 // '부품검색' 권한 = MASTER 의 '부품조회'(조회 전용) 화면. 주문 탭을 조회전용(master-view)으로 보여준다.
 // 부품검색만 있고 주문 권한이 없는 비-MASTER 회원이 대상. (주문 권한이 있으면 주문 화면이 우선)
