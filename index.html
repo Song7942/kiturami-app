@@ -14759,13 +14759,25 @@ function openPoViewPanel(){
 //   완제품(보일러) 품번과 이름 목록. 부품이 아니라 제품이라 품번조회와는 따로 둔다.
 //   줄 수가 몇백이라 표를 새로 만들지 않고 설정 보관소(kt_psi_cfg id=93)에 담는다.
 const PROD_CFG_ID=93;
-let prodData=[];            // [{pn, name}]
+let prodData=[];            // [{pn, cmp:[…], fin, name, memo}]
+// 한 줄 사본 — 되돌릴 때 쓰므로 호환품번 목록까지 따로 떠 둔다
+function prodRowCopy(r){
+  return { pn:r.pn, name:r.name, memo:r.memo||'', fin:r.fin||'', cmp:(r.cmp||[]).slice() };
+}
+// 호환품번 적기 — 쉼표·빈칸·줄바꿈 아무렇게나 적어도 하나씩 끊어 담는다
+function prodCmpParse(s){
+  return String(s==null?'':s).split(/[\s,;、，]+/).map(x=>pnUpAll(x)).filter(Boolean)
+    .filter((x,i,a)=>a.indexOf(x)===i);
+}
+function prodCmpText(r){ return ((r&&r.cmp)||[]).join(', '); }
 let _prodLoaded=false;
 async function loadProd(){
   try{
     const { data }=await sb.from('kt_psi_cfg').select('cfg').eq('id',PROD_CFG_ID).maybeSingle();
     const rows=(data && data.cfg && Array.isArray(data.cfg.rows))?data.cfg.rows:[];
-    prodData=rows.map(r=>({ pn:String(r.pn||'').trim(), name:String(r.name||'').trim(), memo:String(r.memo||'').trim() })).filter(r=>r.pn||r.name||r.memo);
+    prodData=rows.map(r=>({ pn:String(r.pn||'').trim(), name:String(r.name||'').trim(), memo:String(r.memo||'').trim(),
+                            cmp:Array.isArray(r.cmp)?prodCmpParse(r.cmp.join(' ')):prodCmpParse(r.cmp),
+                            fin:pnUpAll(r.fin||'') })).filter(r=>r.pn||r.name||r.memo);
   }catch(e){ prodData=[]; }
   _prodLoaded=true;
   if(typeof prodNameClear==='function') prodNameClear();   // 품번조회의 적용모델 제품명이 이 목록을 본다
@@ -14793,9 +14805,10 @@ function renderProd(){
   const ru=(lang==='ru'), L=(ko,rr)=>(ru?rr:ko);
   const kw=(document.getElementById('prodInput')?document.getElementById('prodInput').value:'').trim().toLowerCase();
   let rows=prodData.slice();
-  if(kw) rows=rows.filter(r=>(r.pn+' '+r.name+' '+(r.memo||'')).toLowerCase().includes(kw));
+  if(kw) rows=rows.filter(r=>(r.pn+' '+r.name+' '+(r.memo||'')+' '+prodCmpText(r)+' '+(r.fin||'')).toLowerCase().includes(kw));
   const ED=canEditProd();                      // 고치기·지우기 — MASTER 거나 권한을 받은 회원
-  const heads=[['No.',56],[L('품번','Артикул'),150],[L('품명','Наименование'),360],[L('비고','Примечание'),300]];
+  const heads=[['No.',56],[L('품번','Артикул'),150],[L('호환품번','Артикулы замены'),210],[L('최종품번','Актуальный'),150],
+               [L('품명','Наименование'),300],[L('비고','Примечание'),240]];
   if(ED) heads.push(['',44]);
   const cols=heads.map(h=>'<col style="width:'+h[1]+'px">').join('');
   const cg=document.getElementById('prodColgroup'); if(cg) cg.innerHTML=cols;
@@ -14819,6 +14832,10 @@ function renderProd(){
   if(tbody) tbody.innerHTML=rows.map((r,i)=>'<tr>'
     + '<td style="'+tdS+';text-align:center;color:var(--muted);font-size:11px">'+(i+1)+'</td>'
     + '<td style="'+tdS+'">'+(ED?ed(r.pn,'pn',r.pn,1):('<span style="'+codeS+'">'+escapeHtml(r.pn)+'</span>'))+'</td>'
+    + '<td style="'+tdS+';word-break:break-all">'+(ED?ed(r.pn,'cmp',prodCmpText(r),1)
+        :('<span style="'+codeS+';white-space:normal">'+escapeHtml(prodCmpText(r))+'</span>'))+'</td>'
+    + '<td style="'+tdS+'">'+(ED?ed(r.pn,'fin',r.fin||'',1)
+        :('<span style="'+codeS+'">'+escapeHtml(r.fin||'')+'</span>'))+'</td>'
     + '<td style="'+tdS+';word-break:break-all">'+(ED?ed(r.pn,'name',r.name,0):escapeHtml(r.name))+'</td>'
     + '<td style="'+tdS+';word-break:break-all;color:var(--muted)">'+(ED?ed(r.pn,'memo',r.memo||'',0):escapeHtml(r.memo||''))+'</td>'
     + (ED?('<td style="'+tdS+';text-align:center"><span onclick="prodDeleteRow(&quot;'+escapeHtml(String(r.pn).replace(/"/g,''))+'&quot;)"'
@@ -14827,6 +14844,8 @@ function renderProd(){
     + (ED?('<tr title="'+escapeHtml(L('품번을 적고 칸을 나오면 새 줄이 생깁니다','Введите артикул — появится новая строка'))+'">'
         + '<td style="'+tdS+';text-align:center;color:var(--accent2);font-size:13px;font-weight:700">＋</td>'
         + '<td style="'+tdS+'">'+ed('','newpn','',1)+'</td>'
+        + '<td style="'+tdS+'">'+ed('','newcmp','',1)+'</td>'
+        + '<td style="'+tdS+'">'+ed('','newfin','',1)+'</td>'
         + '<td style="'+tdS+'">'+ed('','newname','',0)+'</td>'
         + '<td style="'+tdS+'">'+ed('','newmemo','',0)+'</td><td style="'+tdS+'"></td></tr>'):'');
   const empty=document.getElementById('prodEmpty');
@@ -14847,18 +14866,19 @@ async function onProdCellBlur(el){
   if(v===before) { el.textContent=before; return; }
   if(!canEditProd()){ el.textContent=before; return; }
   const find=k=>prodData.findIndex(r=>String(r.pn||'').trim().toUpperCase()===String(k||'').trim().toUpperCase());
-  const old=prodData.map(r=>({pn:r.pn, name:r.name, memo:r.memo||''}));
+  const old=prodData.map(prodRowCopy);
   let goName='';                                  // 새 줄을 만들었으면 그 줄 품명 칸으로 옮겨 준다
-  if(fld==='newpn'||fld==='newname'||fld==='newmemo'){
-    // 맨 아랫줄(＋)은 품번 칸에서 줄이 생긴다 — 같은 줄에 적어 둔 품명·비고를 함께 담는다.
-    //   품명·비고만 적고 품번을 비워 두면 아직 만들지 않는다(적던 글은 그대로 둔다).
+  if(fld.indexOf('new')===0){
+    // 맨 아랫줄(＋)은 품번 칸에서 줄이 생긴다 — 같은 줄에 적어 둔 나머지 칸도 함께 담는다.
+    //   품번을 비워 두면 아직 만들지 않는다(적던 글은 그대로 둔다).
     const tr=el.closest('tr');
     const cell=f=>{ const s=tr?tr.querySelector('[data-prodfld="'+f+'"]'):null;
                     return s?String(s.textContent||'').replace(/\s+/g,' ').trim():''; };
     if(fld!=='newpn') return;
     if(!v){ el.textContent=''; return; }
     if(find(v)>=0){ alert(ru?'Уже есть.':normBadgePN(v)+' 는 이미 목록에 있습니다.'); el.textContent=''; return; }
-    prodData.push({ pn:v, name:cell('newname'), memo:cell('newmemo') });
+    prodData.push({ pn:v, name:cell('newname'), memo:cell('newmemo'),
+                    cmp:prodCmpParse(cell('newcmp')), fin:pnUpAll(cell('newfin')) });
     goName=v;
   }else{
     const i=find(key); if(i<0){ el.textContent=before; return; }
@@ -14867,6 +14887,8 @@ async function onProdCellBlur(el){
       const j=find(v); if(j>=0 && j!==i){ alert(ru?'Уже есть.':normBadgePN(v)+' 는 이미 목록에 있습니다.'); el.textContent=before; return; }
       prodData[i].pn=v;
     }else if(fld==='memo') prodData[i].memo=v;
+    else if(fld==='cmp') prodData[i].cmp=prodCmpParse(v);     // 쉼표·빈칸으로 여러 개
+    else if(fld==='fin') prodData[i].fin=pnUpAll(v);
     else prodData[i].name=v;
   }
   const msg=await saveProd();
@@ -14882,7 +14904,7 @@ async function prodDeleteRow(pn){
   if(i<0) return;
   const r=prodData[i];
   if(!confirm(ru?('Удалить '+r.pn+'?'):(normBadgePN(r.pn)+(r.name?(' · '+r.name):'')+' 를 제품목록에서 지웁니다.\n\n계속할까요?'))) return;
-  const old=prodData.map(x=>({pn:x.pn, name:x.name, memo:x.memo||''}));
+  const old=prodData.map(prodRowCopy);
   prodData.splice(i,1);
   const msg=await saveProd();
   if(msg){ prodData=old; alert((ru?'Ошибка':'저장 실패')+'\n['+msg+']'); return; }
@@ -14927,6 +14949,8 @@ function prodAddOpen(){
       +L('제품목록 — 품목 추가','Список изделий — добавить')+'</div>'
     +'<div style="padding:12px 14px;overflow:auto">'
       +fld('pdPn',   L('품번','Артикул'), 'A11E100114')
+      +fld('pdCmp',  L('호환품번 (여러 개면 쉼표로 나눠 적습니다)','Артикулы замены (через запятую)'), 'A11E100115, A11E100116')
+      +fld('pdFin',  L('최종품번 (비워 두어도 됩니다)','Актуальный артикул (необязательно)'), 'A11E100116')
       +fld('pdName', L('품명','Наименование'), 'TURBO-15')
       +fld('pdMemo', L('비고 (비워 두어도 됩니다)','Примечание (необязательно)'), '')
       +'<div id="pdMsg" style="font-size:11px;min-height:16px;margin:2px 2px 0"></div>'
@@ -14952,14 +14976,16 @@ async function prodAddSave(){
   const pn=String(g('pdPn').value||'').replace(/\s+/g,' ').trim();
   const nm=String(g('pdName').value||'').replace(/\s+/g,' ').trim();
   const mo=String(g('pdMemo').value||'').replace(/\s+/g,' ').trim();
+  const cp=prodCmpParse(g('pdCmp').value);
+  const fi=pnUpAll(g('pdFin').value);
   const msgEl=g('pdMsg');
   const say=(t,c)=>{ msgEl.style.color=c; msgEl.textContent=t; };
   if(!pn){ say(L('품번을 적어 주세요.','Введите артикул.'),'#ef4444'); g('pdPn').focus(); return; }
   const k=pn.toUpperCase();
   if(prodData.some(r=>String(r.pn||'').trim().toUpperCase()===k)){
     say(L(normBadgePN(pn)+' 는 이미 목록에 있습니다.','Такой артикул уже есть.'),'#f59e0b'); g('pdPn').select(); return; }
-  const old=prodData.map(r=>({pn:r.pn, name:r.name, memo:r.memo||''}));
-  prodData.push({ pn, name:nm, memo:mo });
+  const old=prodData.map(prodRowCopy);
+  prodData.push({ pn, name:nm, memo:mo, cmp:cp, fin:fi });
   g('pdSave').disabled=true;
   const err=await saveProd();
   g('pdSave').disabled=false;
@@ -14968,7 +14994,8 @@ async function prodAddSave(){
   if(typeof ktAfterPnEdit==='function') ktAfterPnEdit();
   say(L('더했습니다 — '+normBadgePN(pn)+(nm?(' · '+nm):'')+'   (모두 '+prodData.length+'개)',
         'Добавлено — '+pn+'  (всего '+prodData.length+')'),'#22c55e');
-  g('pdPn').value=''; g('pdName').value=''; g('pdMemo').value=''; g('pdPn').focus();
+  ['pdPn','pdCmp','pdFin','pdName','pdMemo'].forEach(id=>{ g(id).value=''; });
+  g('pdPn').focus();
 }
 // ── 품명 일괄변경 ───────────────────────────────────────
 //   품명 안에 든 글자를 찾아 한꺼번에 바꾼다(정규식이 아니라 글자 그대로 찾는다).
@@ -15070,7 +15097,7 @@ async function prodRepRun(){
   if(!confirm(L(hits.length+'개 줄의 품명을 바꿉니다.\n\n  “'+find+'” → '+(to?('“'+to+'”'):'(지움)')
                  +'\n\n계속할까요? (바꾼 뒤에도 되돌리기 단추로 한 번 되돌릴 수 있습니다)',
                 'Изменить названий: '+hits.length+'?\n\n  «'+find+'» → '+(to?('«'+to+'»'):'(удалить)')))) return;
-  const back=prodData.map(r=>({pn:r.pn, name:r.name, memo:r.memo||''}));
+  const back=prodData.map(prodRowCopy);
   hits.forEach(x=>{ prodData[x.i].name=x.after; });
   g('prGo').disabled=true;
   const err=await saveProd();
@@ -15090,7 +15117,7 @@ async function prodRepUndo(){
   if(!_prodRepBack || !canEditProd()) return;
   if(!confirm(L('방금 바꾼 품명을 모두 되돌립니다.\n\n계속할까요?','Вернуть названия как было?'))) return;
   const now=prodData;
-  prodData=_prodRepBack.map(r=>({pn:r.pn, name:r.name, memo:r.memo||''}));
+  prodData=_prodRepBack.map(prodRowCopy);
   const err=await saveProd();
   if(err){ prodData=now; alert((ru?'Ошибка':'되돌리기 실패')+'\n['+err+']'); return; }
   _prodRepBack=null;
@@ -15103,11 +15130,12 @@ function downloadProd(){
   const ru=(lang==='ru');
   const kw=(document.getElementById('prodInput')?document.getElementById('prodInput').value:'').trim().toLowerCase();
   let rows=prodData.slice();
-  if(kw) rows=rows.filter(r=>(r.pn+' '+r.name).toLowerCase().includes(kw));
-  const aoa=[[ru?'Артикул':'품번', ru?'Наименование':'품명', ru?'Примечание':'비고']]
-    .concat(rows.map(r=>[r.pn, r.name, r.memo||'']));
+  if(kw) rows=rows.filter(r=>(r.pn+' '+r.name+' '+(r.memo||'')+' '+prodCmpText(r)+' '+(r.fin||'')).toLowerCase().includes(kw));
+  const aoa=[[ru?'Артикул':'품번', ru?'Артикулы замены':'호환품번', ru?'Актуальный':'최종품번',
+              ru?'Наименование':'품명', ru?'Примечание':'비고']]
+    .concat(rows.map(r=>[r.pn, prodCmpText(r), r.fin||'', r.name, r.memo||'']));
   const ws=XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols']=[{wch:18},{wch:44},{wch:30}];
+  ws['!cols']=[{wch:18},{wch:30},{wch:18},{wch:44},{wch:30}];
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'PRODUCTS');
   XLSX.writeFile(wb, xlsxName('제품목록','Список изделий'));
 }
@@ -15123,39 +15151,49 @@ function handleProdUpload(event){
       const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
       const a=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:''});
       // 머리글 줄('품번'·'품명')을 찾고, 없으면 첫 줄부터 두 열을 그대로 읽는다
-      let h=-1, cPn=0, cNm=1, cMo=-1;
+      let h=-1, cPn=0, cNm=1, cMo=-1, cCp=-1, cFi=-1, fNm=false;
       for(let r=0;r<Math.min(10,a.length) && h<0;r++){
         const w=a[r]||[];
         for(let c=0;c<w.length;c++){
           const t=String(w[c]==null?'':w[c]).replace(/\s/g,'');
           if(t==='품번'||/^артикул$/i.test(t)||t==='품목코드'){ cPn=c; h=r; }
-          if(t==='품명'||/^наименование$/i.test(t)||t==='제품명'){ cNm=c; if(h<0) h=r; }
+          if(t==='품명'||/^наименование$/i.test(t)||t==='제품명'){ cNm=c; fNm=true; if(h<0) h=r; }
           if(t==='비고'||/^примечание$/i.test(t)||t==='메모'){ cMo=c; if(h<0) h=r; }
+          if(t==='호환품번'||/^артикулызамены$/i.test(t)||t==='대체품번'){ cCp=c; if(h<0) h=r; }
+          if(t==='최종품번'||/^актуальный(артикул)?$/i.test(t)){ cFi=c; if(h<0) h=r; }
         }
       }
+      // '품명' 머리글이 없는데 둘째 열이 호환품번·최종품번·비고 자리면 품명으로 읽지 않는다
+      if(h>=0 && !fNm && (cNm===cCp || cNm===cFi || cNm===cMo)) cNm=-1;
       const out=[]; const seen={};
       for(let r=(h<0?0:h+1);r<a.length;r++){
         const w=a[r]||[];
         const pn=String(w[cPn]==null?'':w[cPn]).trim();
-        const nm=String(w[cNm]==null?'':w[cNm]).trim();
+        const nm=(cNm>=0)?String(w[cNm]==null?'':w[cNm]).trim():'';
         const mo=(cMo>=0)?String(w[cMo]==null?'':w[cMo]).trim():'';
+        const cp=(cCp>=0)?prodCmpParse(w[cCp]):[];
+        const fi=(cFi>=0)?pnUpAll(w[cFi]):'';
         if(!pn && !nm) continue;
         const k=pn.toUpperCase(); if(k && seen[k]) continue; if(k) seen[k]=1;
-        out.push({pn, name:nm, memo:mo});
+        out.push({pn, name:nm, memo:mo, cmp:cp, fin:fi});
       }
       if(!out.length){ alert(ru?'Не найдено строк.':'읽을 줄이 없습니다. 품번·품명 두 열이 있는지 확인해 주세요.'); event.target.value=''; return; }
       // 지금 목록에 더한다 — 있던 품번은 품명만 새로, 없던 품번은 뒤에 붙인다
       const idx={}; prodData.forEach((r,i)=>{ const k=String(r.pn||'').trim().toUpperCase(); if(k) idx[k]=i; });
-      const merged=prodData.map(r=>({pn:r.pn, name:r.name, memo:r.memo||''}));
+      const merged=prodData.map(prodRowCopy);
       let add=0, upd=0;
       out.forEach(r=>{
         const k=String(r.pn||'').trim().toUpperCase();
         if(k && idx[k]!=null){
           let ch=0;
-          if(r.name && merged[idx[k]].name!==r.name){ merged[idx[k]].name=r.name; ch=1; }
-          if(r.memo && (merged[idx[k]].memo||'')!==r.memo){ merged[idx[k]].memo=r.memo; ch=1; }   // 비고는 적혀 있을 때만 바꾼다
+          const m0=merged[idx[k]];
+          if(r.name && m0.name!==r.name){ m0.name=r.name; ch=1; }
+          if(r.memo && (m0.memo||'')!==r.memo){ m0.memo=r.memo; ch=1; }        // 비고는 적혀 있을 때만 바꾼다
+          if(r.cmp && r.cmp.length && (m0.cmp||[]).join(',')!==r.cmp.join(',')){ m0.cmp=r.cmp.slice(); ch=1; }
+          if(r.fin && (m0.fin||'')!==r.fin){ m0.fin=r.fin; ch=1; }
           if(ch) upd++;
-        }else{ merged.push({pn:r.pn, name:r.name, memo:r.memo||''}); if(k) idx[k]=merged.length-1; add++; }
+        }else{ merged.push({pn:r.pn, name:r.name, memo:r.memo||'', cmp:(r.cmp||[]).slice(), fin:r.fin||''});
+               if(k) idx[k]=merged.length-1; add++; }
       });
       if(!add && !upd){ alert(ru?'Нечего добавлять.':'새로 더할 것이 없습니다. 모두 이미 있는 제품입니다.'); event.target.value=''; return; }
       if(!confirm((ru?'Добавить в список изделий?':'제품목록에 더합니다.')+'\n\n'
