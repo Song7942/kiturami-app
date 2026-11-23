@@ -14807,7 +14807,12 @@ function renderProd(){
   let rows=prodData.slice();
   if(kw) rows=rows.filter(r=>(r.pn+' '+r.name+' '+(r.memo||'')+' '+prodCmpText(r)+' '+(r.fin||'')).toLowerCase().includes(kw));
   const ED=canEditProd();                      // 고치기·지우기 — MASTER 거나 권한을 받은 회원
-  const heads=[['No.',56],[L('품번','Артикул'),150],[L('호환품번','Артикулы замены'),210],[L('최종품번','Актуальный'),150],
+  // 품번 칸 너비는 품번 길이에 맞춘다 — 가장 긴 품번 하나가 들어갈 만큼만(세 칸 모두 같은 너비)
+  let cwN=0;
+  prodData.forEach(r=>{ const f=x=>{ const n=String(x||'').trim().length; if(n>cwN) cwN=n; };
+                        f(r.pn); f(r.fin); (r.cmp||[]).forEach(f); });
+  const codeW=Math.max(72, Math.min(150, Math.round(cwN*6.65)+18));
+  const heads=[['No.',46],[L('품번','Артикул'),codeW],[L('호환품번','Артикулы замены'),codeW],[L('최종품번','Актуальный'),codeW],
                [L('품명','Наименование'),300],[L('비고','Примечание'),240]];
   if(ED) heads.push(['',44]);
   const cols=heads.map(h=>'<col style="width:'+h[1]+'px">').join('');
@@ -14817,6 +14822,8 @@ function renderProd(){
     + 'white-space:nowrap;border-bottom:1px solid var(--border);color:var(--muted)';
   const tdS='padding:6px 8px;font-size:12px;border-bottom:1px solid var(--border)';
   const codeS="font-family:'Courier New',monospace;font-size:11px;white-space:nowrap";
+  // 호환품번은 여러 개라 칸 안에서 줄을 바꿔 쌓는다
+  const codeWS="font-family:'Courier New',monospace;font-size:11px;white-space:normal;word-break:break-all";
   const thead=document.getElementById('prodThead');
   if(thead) thead.innerHTML='<tr>'+heads.map(h=>'<th style="'+thS+'">'+escapeHtml(h[0])+'</th>').join('')+'</tr>'
     + '<tr><th colspan="'+heads.length+'" style="'+thS+';font-weight:700;background:var(--surface);text-align:right">'
@@ -14827,13 +14834,14 @@ function renderProd(){
   const ed=(key,fld,v,mono)=>'<span contenteditable="true" class="pn-edit" data-prodkey="'+escapeHtml(key)+'" data-prodfld="'+fld+'"'
     + ' data-pnorig="'+escapeHtml(v)+'" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()"'
     + ' onblur="onProdCellBlur(this)" onkeydown="if(event.key===\'Enter\'||event.key===\'Escape\'){event.preventDefault();this.blur();}"'
-    + ' style="display:inline-block;min-width:60px;outline:none;border-bottom:1px dashed var(--border);cursor:text;padding:0 2px;'
-    + (mono?codeS:'')+'">'+escapeHtml(v)+'</span>';
+    + ' style="display:inline-block;min-width:40px;max-width:100%;box-sizing:border-box;outline:none;'
+    + 'border-bottom:1px dashed var(--border);cursor:text;padding:0 2px;'
+    + (mono===2?codeWS:(mono?codeS:''))+'">'+escapeHtml(v)+'</span>';
   if(tbody) tbody.innerHTML=rows.map((r,i)=>'<tr>'
     + '<td style="'+tdS+';text-align:center;color:var(--muted);font-size:11px">'+(i+1)+'</td>'
     + '<td style="'+tdS+'">'+(ED?ed(r.pn,'pn',r.pn,1):('<span style="'+codeS+'">'+escapeHtml(r.pn)+'</span>'))+'</td>'
-    + '<td style="'+tdS+';word-break:break-all">'+(ED?ed(r.pn,'cmp',prodCmpText(r),1)
-        :('<span style="'+codeS+';white-space:normal">'+escapeHtml(prodCmpText(r))+'</span>'))+'</td>'
+    + '<td style="'+tdS+';word-break:break-all">'+(ED?ed(r.pn,'cmp',prodCmpText(r),2)
+        :('<span style="'+codeWS+'">'+escapeHtml(prodCmpText(r))+'</span>'))+'</td>'
     + '<td style="'+tdS+'">'+(ED?ed(r.pn,'fin',r.fin||'',1)
         :('<span style="'+codeS+'">'+escapeHtml(r.fin||'')+'</span>'))+'</td>'
     + '<td style="'+tdS+';word-break:break-all">'+(ED?ed(r.pn,'name',r.name,0):escapeHtml(r.name))+'</td>'
@@ -14844,7 +14852,7 @@ function renderProd(){
     + (ED?('<tr title="'+escapeHtml(L('품번을 적고 칸을 나오면 새 줄이 생깁니다','Введите артикул — появится новая строка'))+'">'
         + '<td style="'+tdS+';text-align:center;color:var(--accent2);font-size:13px;font-weight:700">＋</td>'
         + '<td style="'+tdS+'">'+ed('','newpn','',1)+'</td>'
-        + '<td style="'+tdS+'">'+ed('','newcmp','',1)+'</td>'
+        + '<td style="'+tdS+'">'+ed('','newcmp','',2)+'</td>'
         + '<td style="'+tdS+'">'+ed('','newfin','',1)+'</td>'
         + '<td style="'+tdS+'">'+ed('','newname','',0)+'</td>'
         + '<td style="'+tdS+'">'+ed('','newmemo','',0)+'</td><td style="'+tdS+'"></td></tr>'):'');
