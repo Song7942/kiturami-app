@@ -873,6 +873,10 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
           <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
           <input type="text" id="prodInput" placeholder="품번·품명·비고로 검색…" oninput="debouncedRenderProd()">
         </div>
+        <button class="dl-btn" id="prodRepBtn" onclick="prodRepOpen()" title="품명에 든 글자를 찾아 한꺼번에 바꿉니다" style="display:none">
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 014-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg>
+          <span id="i18n-prod-rep">품명 일괄변경</span>
+        </button>
         <button class="dl-btn" id="prodAddBtn" onclick="prodAddOpen()" title="품번·품명·비고를 직접 적어 제품을 더합니다" style="display:none;background:var(--accent);border-color:var(--accent);color:#fff">
           <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           <span id="i18n-prod-add">품목 추가</span>
@@ -2700,6 +2704,7 @@ function refreshPsiTexts(){
   // 발주현황
   ph('poInput','차수·발주년월·대표코드·발주코드·품명·인보이스로 검색…','Поиск: партия, месяц, код, наименование, инвойс…');
   set('i18n-tab-prod','🏷️ 제품목록','🏷️ Изделия');
+  set('i18n-prod-rep','품명 일괄변경','Замена в названиях');
   set('i18n-prod-add','품목 추가','Добавить изделие');
   set('i18n-prod-up','엑셀 업로드','Загрузить Excel');
   set('i18n-prod-dl',DL[0],DL[1]);
@@ -14778,6 +14783,7 @@ async function loadProdTab(){
   const m=canEditProd();
   const b=document.getElementById('prodUploadBtn'); if(b) b.style.display=m?'':'none';
   const b2=document.getElementById('prodAddBtn');   if(b2) b2.style.display=m?'':'none';
+  const b3=document.getElementById('prodRepBtn');   if(b3) b3.style.display=m?'':'none';
   if(!_prodLoaded) await loadProd();
   renderProd();
 }
@@ -14963,6 +14969,135 @@ async function prodAddSave(){
   say(L('더했습니다 — '+normBadgePN(pn)+(nm?(' · '+nm):'')+'   (모두 '+prodData.length+'개)',
         'Добавлено — '+pn+'  (всего '+prodData.length+')'),'#22c55e');
   g('pdPn').value=''; g('pdName').value=''; g('pdMemo').value=''; g('pdPn').focus();
+}
+// ── 품명 일괄변경 ───────────────────────────────────────
+//   품명 안에 든 글자를 찾아 한꺼번에 바꾼다(정규식이 아니라 글자 그대로 찾는다).
+//   바꾸기 전에 몇 줄이 어떻게 바뀌는지 먼저 보여 주고, 바꾼 뒤에는 한 번 되돌릴 수 있다.
+let _prodRepBack=null;                 // 바꾸기 직전 품명 사본
+function prodRepStr(s, find, to, cs){
+  s=String(s||''); find=String(find||''); to=String(to==null?'':to);
+  if(!find) return s;
+  if(cs) return s.split(find).join(to);
+  const low=s.toLowerCase(), f=find.toLowerCase();
+  let out='', i=0;
+  while(true){ const j=low.indexOf(f,i); if(j<0){ out+=s.slice(i); break; } out+=s.slice(i,j)+to; i=j+f.length; }
+  return out;
+}
+// 바뀔 줄 모으기 — 지금 검색어로 걸러 놓은 줄만 할 수도 있다
+function prodRepHits(find, to, cs, onlyFound){
+  const kw=(document.getElementById('prodInput')?document.getElementById('prodInput').value:'').trim().toLowerCase();
+  const hits=[];
+  if(!find) return hits;
+  prodData.forEach((r,i)=>{
+    if(onlyFound && kw && !((r.pn+' '+r.name+' '+(r.memo||'')).toLowerCase().includes(kw))) return;
+    const after=prodRepStr(r.name, find, to, cs);
+    if(after!==String(r.name||'')) hits.push({ i, pn:r.pn, before:r.name, after });
+  });
+  return hits;
+}
+function prodRepClose(){ const b=document.getElementById('prodRepPop'); if(b) b.remove(); }
+function prodRepOpen(){
+  if(!canEditProd()){ alert(lang==='ru'?'Нет прав.':'제품목록을 고칠 권한이 없습니다.'); return; }
+  prodRepClose();
+  const ru=(lang==='ru'), L=(ko,rr)=>(ru?rr:ko);
+  const kw=(document.getElementById('prodInput')?document.getElementById('prodInput').value:'').trim();
+  const fld=(id,lab,ph)=>
+     '<div style="margin:0 0 9px">'
+    +'<div style="font-size:11px;color:var(--muted);margin:0 2px 3px">'+escapeHtml(lab)+'</div>'
+    +'<input id="'+id+'" type="text" placeholder="'+escapeHtml(ph)+'" style="width:100%;box-sizing:border-box;padding:6px 8px;'
+    +'border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:12px">'
+    +'</div>';
+  const chk=(id,lab,on)=>'<label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin:0 0 6px;font-size:11px;color:var(--muted)">'
+    +'<input type="checkbox" id="'+id+'"'+(on?' checked':'')+' style="cursor:pointer">'+escapeHtml(lab)+'</label>';
+  const box=document.createElement('div'); box.id='prodRepPop';
+  box.style.cssText='position:fixed;inset:0;z-index:10000;background:#0008;display:flex;align-items:center;justify-content:center;padding:16px';
+  box.innerHTML=
+    '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;width:470px;max-width:100%;'
+      +'max-height:88vh;display:flex;flex-direction:column;box-shadow:0 16px 44px #000a;font-size:12px;color:var(--text)">'
+    +'<div style="padding:12px 14px;border-bottom:1px solid var(--border);font-weight:700;font-size:13px">'
+      +L('품명 일괄변경','Замена в названиях')+'</div>'
+    +'<div style="padding:12px 14px;overflow:auto">'
+      +fld('prFind', L('찾을 글자','Найти'), 'TURBO')
+      +fld('prTo',   L('바꿀 글자 (비우면 지웁니다)','Заменить на (пусто — удалить)'), 'TURBO PLUS')
+      +chk('prCase', L('대문자·소문자를 가립니다','Учитывать регистр'), false)
+      +(kw?chk('prOnly', L('지금 검색한 줄(“'+kw+'”)만 바꿉니다','Только найденные («'+kw+'»)'), true):'')
+      +'<div id="prMsg" style="font-size:11px;min-height:16px;margin:4px 2px 6px;font-weight:700"></div>'
+      +'<div id="prList" style="max-height:230px;overflow:auto;border:1px solid var(--border);border-radius:8px;background:var(--bg);display:none"></div>'
+    +'</div>'
+    +'<div style="display:flex;gap:7px;padding:11px 14px;border-top:1px solid var(--border)">'
+      +'<button id="prUndo" style="display:none;flex:none;padding:7px 10px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:#f59e0b;cursor:pointer;font-size:12px;font-weight:700">'+L('되돌리기','Вернуть')+'</button>'
+      +'<button id="prClose" style="flex:none;padding:7px 10px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);cursor:pointer;font-size:12px">'+L('닫기','Закрыть')+'</button>'
+      +'<button id="prGo" style="flex:1;padding:7px;border:none;border-radius:7px;background:var(--accent2);color:#fff;cursor:pointer;font-size:12px;font-weight:700">'+L('바꾸기','Заменить')+'</button>'
+    +'</div></div>';
+  document.body.appendChild(box);
+  const g=id=>box.querySelector('#'+id);
+  const look=()=>{
+    const find=g('prFind').value, to=g('prTo').value, cs=g('prCase').checked, only=(g('prOnly')?g('prOnly').checked:false);
+    const hits=prodRepHits(find, to, cs, only), m=g('prMsg'), li=g('prList');
+    if(!find){ m.style.color='var(--muted)'; m.textContent=L('찾을 글자를 적어 주세요.','Введите, что искать.'); li.style.display='none'; return; }
+    if(!hits.length){ m.style.color='#f59e0b'; m.textContent=L('바뀌는 줄이 없습니다.','Ничего не найдено.'); li.style.display='none'; return; }
+    m.style.color='#22c55e';
+    m.textContent=L(hits.length+'개 줄이 바뀝니다 — 아래에서 보세요.','Изменится строк: '+hits.length);
+    const tdS='padding:4px 7px;font-size:11px;border-bottom:1px solid var(--border);vertical-align:top';
+    const mono="font-family:'Courier New',monospace";
+    li.innerHTML='<table style="width:100%;border-collapse:collapse">'
+      +hits.slice(0,120).map(x=>'<tr>'
+        +'<td style="'+tdS+';white-space:nowrap;'+mono+';color:var(--muted)">'+escapeHtml(x.pn)+'</td>'
+        +'<td style="'+tdS+';color:var(--muted);text-decoration:line-through">'+escapeHtml(x.before)+'</td>'
+        +'<td style="'+tdS+';white-space:nowrap;color:var(--muted)">→</td>'
+        +'<td style="'+tdS+';font-weight:600">'+escapeHtml(x.after)+'</td></tr>').join('')
+      +'</table>'
+      +(hits.length>120?('<div style="padding:5px 7px;font-size:11px;color:var(--muted)">'+escapeHtml(L('… 그 밖에 '+(hits.length-120)+'줄','… ещё '+(hits.length-120)))+'</div>'):'');
+    li.style.display='block';
+  };
+  ['prFind','prTo'].forEach(id=>g(id).addEventListener('input', look));
+  ['prCase','prOnly'].forEach(id=>{ if(g(id)) g(id).addEventListener('change', look); });
+  g('prClose').onclick=prodRepClose;
+  g('prGo').onclick=prodRepRun;
+  g('prUndo').onclick=prodRepUndo;
+  box.addEventListener('keydown', e=>{ if(e.key==='Escape') prodRepClose();
+                                       if(e.key==='Enter'){ e.preventDefault(); prodRepRun(); } });
+  look(); g('prFind').focus();
+}
+async function prodRepRun(){
+  const box=document.getElementById('prodRepPop'); if(!box) return;
+  const ru=(lang==='ru'), L=(ko,rr)=>(ru?rr:ko), g=id=>box.querySelector('#'+id);
+  if(!canEditProd()) return;
+  const find=g('prFind').value, to=g('prTo').value, cs=g('prCase').checked, only=(g('prOnly')?g('prOnly').checked:false);
+  const m=g('prMsg');
+  const hits=prodRepHits(find, to, cs, only);
+  if(!find || !hits.length){ m.style.color='#f59e0b'; m.textContent=L('바뀌는 줄이 없습니다.','Нечего менять.'); return; }
+  if(!confirm(L(hits.length+'개 줄의 품명을 바꿉니다.\n\n  “'+find+'” → '+(to?('“'+to+'”'):'(지움)')
+                 +'\n\n계속할까요? (바꾼 뒤에도 되돌리기 단추로 한 번 되돌릴 수 있습니다)',
+                'Изменить названий: '+hits.length+'?\n\n  «'+find+'» → '+(to?('«'+to+'»'):'(удалить)')))) return;
+  const back=prodData.map(r=>({pn:r.pn, name:r.name, memo:r.memo||''}));
+  hits.forEach(x=>{ prodData[x.i].name=x.after; });
+  g('prGo').disabled=true;
+  const err=await saveProd();
+  g('prGo').disabled=false;
+  if(err){ prodData=back; m.style.color='#ef4444'; m.textContent=(ru?'Ошибка сохранения':'저장 실패')+' ['+err+']'; return; }
+  _prodRepBack=back;
+  renderProd();
+  if(typeof ktAfterPnEdit==='function') ktAfterPnEdit();
+  m.style.color='#22c55e';
+  m.textContent=L('바꿨습니다 — '+hits.length+'개 줄','Готово — строк: '+hits.length);
+  g('prList').style.display='none';
+  g('prUndo').style.display='';
+}
+async function prodRepUndo(){
+  const box=document.getElementById('prodRepPop');
+  const ru=(lang==='ru'), L=(ko,rr)=>(ru?rr:ko);
+  if(!_prodRepBack || !canEditProd()) return;
+  if(!confirm(L('방금 바꾼 품명을 모두 되돌립니다.\n\n계속할까요?','Вернуть названия как было?'))) return;
+  const now=prodData;
+  prodData=_prodRepBack.map(r=>({pn:r.pn, name:r.name, memo:r.memo||''}));
+  const err=await saveProd();
+  if(err){ prodData=now; alert((ru?'Ошибка':'되돌리기 실패')+'\n['+err+']'); return; }
+  _prodRepBack=null;
+  renderProd();
+  if(typeof ktAfterPnEdit==='function') ktAfterPnEdit();
+  if(box){ const m=box.querySelector('#prMsg'); if(m){ m.style.color='#22c55e'; m.textContent=L('되돌렸습니다.','Возвращено.'); }
+           const u=box.querySelector('#prUndo'); if(u) u.style.display='none'; }
 }
 function downloadProd(){
   const ru=(lang==='ru');
