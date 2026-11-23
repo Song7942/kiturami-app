@@ -871,8 +871,12 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
       <div class="search-bar">
         <div class="search-wrap">
           <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-          <input type="text" id="prodInput" placeholder="품번·품명으로 검색…" oninput="debouncedRenderProd()">
+          <input type="text" id="prodInput" placeholder="품번·품명·비고로 검색…" oninput="debouncedRenderProd()">
         </div>
+        <button class="dl-btn" id="prodAddBtn" onclick="prodAddOpen()" title="품번·품명·비고를 직접 적어 제품을 더합니다" style="display:none;background:var(--accent);border-color:var(--accent);color:#fff">
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          <span id="i18n-prod-add">품목 추가</span>
+        </button>
         <button class="dl-btn" id="prodUploadBtn" onclick="document.getElementById('prodFileInput').click()" title="품번·품명 두 열이 있는 엑셀을 올리면 지금 목록에 더합니다(기존 제품은 안 지웁니다)" style="display:none;background:var(--accent2);border-color:var(--accent2);color:#fff">
           <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
           <span id="i18n-prod-up">엑셀 업로드</span>
@@ -2696,9 +2700,10 @@ function refreshPsiTexts(){
   // 발주현황
   ph('poInput','차수·발주년월·대표코드·발주코드·품명·인보이스로 검색…','Поиск: партия, месяц, код, наименование, инвойс…');
   set('i18n-tab-prod','🏷️ 제품목록','🏷️ Изделия');
+  set('i18n-prod-add','품목 추가','Добавить изделие');
   set('i18n-prod-up','엑셀 업로드','Загрузить Excel');
   set('i18n-prod-dl',DL[0],DL[1]);
-  ph('prodInput','품번·품명으로 검색…','Поиск: артикул, наименование…');
+  ph('prodInput','품번·품명·비고로 검색…','Поиск: артикул, наименование, примечание…');
   if(document.getElementById('pane-prod') && ktPaneOn('pane-prod')) renderProd();
   set('i18n-po-all',ALL[0],ALL[1]);
   set('i18n-po-view','보기','Вид');
@@ -14755,7 +14760,7 @@ async function loadProd(){
   try{
     const { data }=await sb.from('kt_psi_cfg').select('cfg').eq('id',PROD_CFG_ID).maybeSingle();
     const rows=(data && data.cfg && Array.isArray(data.cfg.rows))?data.cfg.rows:[];
-    prodData=rows.map(r=>({ pn:String(r.pn||'').trim(), name:String(r.name||'').trim() })).filter(r=>r.pn||r.name);
+    prodData=rows.map(r=>({ pn:String(r.pn||'').trim(), name:String(r.name||'').trim(), memo:String(r.memo||'').trim() })).filter(r=>r.pn||r.name||r.memo);
   }catch(e){ prodData=[]; }
   _prodLoaded=true;
   if(typeof prodNameClear==='function') prodNameClear();   // 품번조회의 적용모델 제품명이 이 목록을 본다
@@ -14772,6 +14777,7 @@ async function saveProd(){
 async function loadProdTab(){
   const m=canEditProd();
   const b=document.getElementById('prodUploadBtn'); if(b) b.style.display=m?'':'none';
+  const b2=document.getElementById('prodAddBtn');   if(b2) b2.style.display=m?'':'none';
   if(!_prodLoaded) await loadProd();
   renderProd();
 }
@@ -14781,9 +14787,9 @@ function renderProd(){
   const ru=(lang==='ru'), L=(ko,rr)=>(ru?rr:ko);
   const kw=(document.getElementById('prodInput')?document.getElementById('prodInput').value:'').trim().toLowerCase();
   let rows=prodData.slice();
-  if(kw) rows=rows.filter(r=>(r.pn+' '+r.name).toLowerCase().includes(kw));
+  if(kw) rows=rows.filter(r=>(r.pn+' '+r.name+' '+(r.memo||'')).toLowerCase().includes(kw));
   const ED=canEditProd();                      // 고치기·지우기 — MASTER 거나 권한을 받은 회원
-  const heads=[['No.',56],[L('품번','Артикул'),150],[L('품명','Наименование'),420]];
+  const heads=[['No.',56],[L('품번','Артикул'),150],[L('품명','Наименование'),360],[L('비고','Примечание'),300]];
   if(ED) heads.push(['',44]);
   const cols=heads.map(h=>'<col style="width:'+h[1]+'px">').join('');
   const cg=document.getElementById('prodColgroup'); if(cg) cg.innerHTML=cols;
@@ -14795,7 +14801,8 @@ function renderProd(){
   const thead=document.getElementById('prodThead');
   if(thead) thead.innerHTML='<tr>'+heads.map(h=>'<th style="'+thS+'">'+escapeHtml(h[0])+'</th>').join('')+'</tr>'
     + '<tr><th colspan="'+heads.length+'" style="'+thS+';font-weight:700;background:var(--surface);text-align:right">'
-    + escapeHtml(L('합계 '+rows.length+'개 제품','Итого '+rows.length))+'</th></tr>';
+    + escapeHtml(L('합계 '+rows.length+'개 제품'+(ED?'   ·   칸을 눌러 바로 고칩니다':''),
+                   'Итого '+rows.length+(ED?'   ·   нажмите на ячейку, чтобы изменить':'')))+'</th></tr>';
   const tbody=document.getElementById('prodTbody');
   // 칸 안에서 바로 고친다. 열쇠는 '지금 적혀 있는 품번' 이라, 품번을 고쳐도 그 줄을 찾아간다.
   const ed=(key,fld,v,mono)=>'<span contenteditable="true" class="pn-edit" data-prodkey="'+escapeHtml(key)+'" data-prodfld="'+fld+'"'
@@ -14807,12 +14814,15 @@ function renderProd(){
     + '<td style="'+tdS+';text-align:center;color:var(--muted);font-size:11px">'+(i+1)+'</td>'
     + '<td style="'+tdS+'">'+(ED?ed(r.pn,'pn',r.pn,1):('<span style="'+codeS+'">'+escapeHtml(r.pn)+'</span>'))+'</td>'
     + '<td style="'+tdS+';word-break:break-all">'+(ED?ed(r.pn,'name',r.name,0):escapeHtml(r.name))+'</td>'
+    + '<td style="'+tdS+';word-break:break-all;color:var(--muted)">'+(ED?ed(r.pn,'memo',r.memo||'',0):escapeHtml(r.memo||''))+'</td>'
     + (ED?('<td style="'+tdS+';text-align:center"><span onclick="prodDeleteRow(&quot;'+escapeHtml(String(r.pn).replace(/"/g,''))+'&quot;)"'
         + ' title="'+L('이 줄 지우기','Удалить')+'" style="cursor:pointer;color:#ef4444;font-weight:700">✕</span></td>'):'')
     + '</tr>').join('')
-    + (ED?('<tr><td style="'+tdS+';text-align:center;color:var(--muted);font-size:11px">+</td>'
+    + (ED?('<tr title="'+escapeHtml(L('품번을 적고 칸을 나오면 새 줄이 생깁니다','Введите артикул — появится новая строка'))+'">'
+        + '<td style="'+tdS+';text-align:center;color:var(--accent2);font-size:13px;font-weight:700">＋</td>'
         + '<td style="'+tdS+'">'+ed('','newpn','',1)+'</td>'
-        + '<td style="'+tdS+'">'+ed('','newname','',0)+'</td><td style="'+tdS+'"></td></tr>'):'');
+        + '<td style="'+tdS+'">'+ed('','newname','',0)+'</td>'
+        + '<td style="'+tdS+'">'+ed('','newmemo','',0)+'</td><td style="'+tdS+'"></td></tr>'):'');
   const empty=document.getElementById('prodEmpty');
   if(empty){
     empty.textContent=prodData.length
@@ -14831,23 +14841,32 @@ async function onProdCellBlur(el){
   if(v===before) { el.textContent=before; return; }
   if(!canEditProd()){ el.textContent=before; return; }
   const find=k=>prodData.findIndex(r=>String(r.pn||'').trim().toUpperCase()===String(k||'').trim().toUpperCase());
-  const old=prodData.map(r=>({pn:r.pn, name:r.name}));
-  if(fld==='newpn'||fld==='newname'){
+  const old=prodData.map(r=>({pn:r.pn, name:r.name, memo:r.memo||''}));
+  let goName='';                                  // 새 줄을 만들었으면 그 줄 품명 칸으로 옮겨 준다
+  if(fld==='newpn'||fld==='newname'||fld==='newmemo'){
+    // 맨 아랫줄(＋)은 품번 칸에서 줄이 생긴다 — 같은 줄에 적어 둔 품명·비고를 함께 담는다.
+    //   품명·비고만 적고 품번을 비워 두면 아직 만들지 않는다(적던 글은 그대로 둔다).
+    const tr=el.closest('tr');
+    const cell=f=>{ const s=tr?tr.querySelector('[data-prodfld="'+f+'"]'):null;
+                    return s?String(s.textContent||'').replace(/\s+/g,' ').trim():''; };
+    if(fld!=='newpn') return;
     if(!v){ el.textContent=''; return; }
-    const pn=(fld==='newpn')?v:'', nm=(fld==='newname')?v:'';
-    if(pn && find(pn)>=0){ alert(ru?'Уже есть.':normBadgePN(pn)+' 는 이미 목록에 있습니다.'); el.textContent=''; return; }
-    prodData.push({pn, name:nm});
+    if(find(v)>=0){ alert(ru?'Уже есть.':normBadgePN(v)+' 는 이미 목록에 있습니다.'); el.textContent=''; return; }
+    prodData.push({ pn:v, name:cell('newname'), memo:cell('newmemo') });
+    goName=v;
   }else{
     const i=find(key); if(i<0){ el.textContent=before; return; }
     if(fld==='pn'){
       if(!v){ alert(ru?'Артикул пуст.':'품번은 비울 수 없습니다. 줄을 지우려면 ✕ 를 누르세요.'); el.textContent=before; return; }
       const j=find(v); if(j>=0 && j!==i){ alert(ru?'Уже есть.':normBadgePN(v)+' 는 이미 목록에 있습니다.'); el.textContent=before; return; }
       prodData[i].pn=v;
-    }else prodData[i].name=v;
+    }else if(fld==='memo') prodData[i].memo=v;
+    else prodData[i].name=v;
   }
   const msg=await saveProd();
   if(msg){ prodData=old; alert((ru?'Ошибка сохранения':'저장 실패')+'\n['+msg+']'); renderProd(); return; }
   renderProd();
+  if(goName) prodFocusCell(goName,'name');
   if(typeof ktAfterPnEdit==='function') ktAfterPnEdit();   // 품번조회의 적용모델 제품명도 따라가게
 }
 async function prodDeleteRow(pn){
@@ -14857,21 +14876,103 @@ async function prodDeleteRow(pn){
   if(i<0) return;
   const r=prodData[i];
   if(!confirm(ru?('Удалить '+r.pn+'?'):(normBadgePN(r.pn)+(r.name?(' · '+r.name):'')+' 를 제품목록에서 지웁니다.\n\n계속할까요?'))) return;
-  const old=prodData.map(x=>({pn:x.pn, name:x.name}));
+  const old=prodData.map(x=>({pn:x.pn, name:x.name, memo:x.memo||''}));
   prodData.splice(i,1);
   const msg=await saveProd();
   if(msg){ prodData=old; alert((ru?'Ошибка':'저장 실패')+'\n['+msg+']'); return; }
   renderProd();
   if(typeof ktAfterPnEdit==='function') ktAfterPnEdit();
 }
+// 방금 만든 줄의 칸으로 커서를 옮긴다(품번을 적고 나오면 이어서 품명을 적게)
+function prodFocusCell(pn, fld){
+  setTimeout(()=>{
+    const k=String(pn||'').trim().toUpperCase();
+    const all=document.querySelectorAll('#prodTbody [data-prodfld="'+fld+'"]');
+    for(const s of all){
+      if(String(s.getAttribute('data-prodkey')||'').trim().toUpperCase()===k){
+        s.focus();
+        try{ const r=document.createRange(); r.selectNodeContents(s); r.collapse(false);
+             const sel=window.getSelection(); sel.removeAllRanges(); sel.addRange(r); }catch(e){}
+        s.scrollIntoView({block:'center'});
+        return;
+      }
+    }
+  }, 30);
+}
+// ── 품목 추가 창 — 품번·품명·비고를 손으로 적어 더한다 ──
+//   저장해도 창은 열어 둔다. 여러 개를 이어서 적을 수 있게.
+function prodAddClose(){ const b=document.getElementById('prodAddPop'); if(b) b.remove(); }
+function prodAddOpen(){
+  if(!canEditProd()){ alert(lang==='ru'?'Нет прав.':'제품목록을 고칠 권한이 없습니다.'); return; }
+  prodAddClose();
+  const ru=(lang==='ru'), L=(ko,rr)=>(ru?rr:ko);
+  const fld=(id,lab,ph)=>
+     '<div style="margin:0 0 9px">'
+    +'<div style="font-size:11px;color:var(--muted);margin:0 2px 3px">'+escapeHtml(lab)+'</div>'
+    +'<input id="'+id+'" type="text" placeholder="'+escapeHtml(ph)+'" style="width:100%;box-sizing:border-box;padding:6px 8px;'
+    +'border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:12px">'
+    +'</div>';
+  const box=document.createElement('div'); box.id='prodAddPop';
+  box.style.cssText='position:fixed;inset:0;z-index:10000;background:#0008;display:flex;align-items:center;justify-content:center;padding:16px';
+  box.innerHTML=
+    '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;width:360px;max-width:100%;'
+      +'max-height:88vh;display:flex;flex-direction:column;box-shadow:0 16px 44px #000a;font-size:12px;color:var(--text)">'
+    +'<div style="padding:12px 14px;border-bottom:1px solid var(--border);font-weight:700;font-size:13px">'
+      +L('제품목록 — 품목 추가','Список изделий — добавить')+'</div>'
+    +'<div style="padding:12px 14px;overflow:auto">'
+      +fld('pdPn',   L('품번','Артикул'), 'A11E100114')
+      +fld('pdName', L('품명','Наименование'), 'TURBO-15')
+      +fld('pdMemo', L('비고 (비워 두어도 됩니다)','Примечание (необязательно)'), '')
+      +'<div id="pdMsg" style="font-size:11px;min-height:16px;margin:2px 2px 0"></div>'
+    +'</div>'
+    +'<div style="display:flex;gap:7px;padding:11px 14px;border-top:1px solid var(--border)">'
+      +'<button id="pdClose" style="flex:none;padding:7px 10px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);cursor:pointer;font-size:12px">'+L('닫기','Закрыть')+'</button>'
+      +'<button id="pdSave" style="flex:1;padding:7px;border:none;border-radius:7px;background:var(--accent2);color:#fff;cursor:pointer;font-size:12px;font-weight:700">'+L('더하기','Добавить')+'</button>'
+    +'</div></div>';
+  document.body.appendChild(box);
+  const g=id=>box.querySelector('#'+id);
+  g('pdClose').onclick=prodAddClose;
+  g('pdSave').onclick=prodAddSave;
+  box.addEventListener('keydown', e=>{
+    if(e.key==='Escape'){ prodAddClose(); return; }
+    if(e.key==='Enter'){ e.preventDefault(); prodAddSave(); }
+  });
+  g('pdPn').focus();
+}
+async function prodAddSave(){
+  const box=document.getElementById('prodAddPop'); if(!box) return;
+  const ru=(lang==='ru'), L=(ko,rr)=>(ru?rr:ko), g=id=>box.querySelector('#'+id);
+  if(!canEditProd()) return;
+  const pn=String(g('pdPn').value||'').replace(/\s+/g,' ').trim();
+  const nm=String(g('pdName').value||'').replace(/\s+/g,' ').trim();
+  const mo=String(g('pdMemo').value||'').replace(/\s+/g,' ').trim();
+  const msgEl=g('pdMsg');
+  const say=(t,c)=>{ msgEl.style.color=c; msgEl.textContent=t; };
+  if(!pn){ say(L('품번을 적어 주세요.','Введите артикул.'),'#ef4444'); g('pdPn').focus(); return; }
+  const k=pn.toUpperCase();
+  if(prodData.some(r=>String(r.pn||'').trim().toUpperCase()===k)){
+    say(L(normBadgePN(pn)+' 는 이미 목록에 있습니다.','Такой артикул уже есть.'),'#f59e0b'); g('pdPn').select(); return; }
+  const old=prodData.map(r=>({pn:r.pn, name:r.name, memo:r.memo||''}));
+  prodData.push({ pn, name:nm, memo:mo });
+  g('pdSave').disabled=true;
+  const err=await saveProd();
+  g('pdSave').disabled=false;
+  if(err){ prodData=old; say((ru?'Ошибка сохранения':'저장 실패')+' ['+err+']','#ef4444'); return; }
+  renderProd();
+  if(typeof ktAfterPnEdit==='function') ktAfterPnEdit();
+  say(L('더했습니다 — '+normBadgePN(pn)+(nm?(' · '+nm):'')+'   (모두 '+prodData.length+'개)',
+        'Добавлено — '+pn+'  (всего '+prodData.length+')'),'#22c55e');
+  g('pdPn').value=''; g('pdName').value=''; g('pdMemo').value=''; g('pdPn').focus();
+}
 function downloadProd(){
   const ru=(lang==='ru');
   const kw=(document.getElementById('prodInput')?document.getElementById('prodInput').value:'').trim().toLowerCase();
   let rows=prodData.slice();
   if(kw) rows=rows.filter(r=>(r.pn+' '+r.name).toLowerCase().includes(kw));
-  const aoa=[[ru?'Артикул':'품번', ru?'Наименование':'품명']].concat(rows.map(r=>[r.pn, r.name]));
+  const aoa=[[ru?'Артикул':'품번', ru?'Наименование':'품명', ru?'Примечание':'비고']]
+    .concat(rows.map(r=>[r.pn, r.name, r.memo||'']));
   const ws=XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols']=[{wch:18},{wch:44}];
+  ws['!cols']=[{wch:18},{wch:44},{wch:30}];
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'PRODUCTS');
   XLSX.writeFile(wb, xlsxName('제품목록','Список изделий'));
 }
@@ -14887,13 +14988,14 @@ function handleProdUpload(event){
       const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
       const a=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:''});
       // 머리글 줄('품번'·'품명')을 찾고, 없으면 첫 줄부터 두 열을 그대로 읽는다
-      let h=-1, cPn=0, cNm=1;
+      let h=-1, cPn=0, cNm=1, cMo=-1;
       for(let r=0;r<Math.min(10,a.length) && h<0;r++){
         const w=a[r]||[];
         for(let c=0;c<w.length;c++){
           const t=String(w[c]==null?'':w[c]).replace(/\s/g,'');
           if(t==='품번'||/^артикул$/i.test(t)||t==='품목코드'){ cPn=c; h=r; }
           if(t==='품명'||/^наименование$/i.test(t)||t==='제품명'){ cNm=c; if(h<0) h=r; }
+          if(t==='비고'||/^примечание$/i.test(t)||t==='메모'){ cMo=c; if(h<0) h=r; }
         }
       }
       const out=[]; const seen={};
@@ -14901,25 +15003,29 @@ function handleProdUpload(event){
         const w=a[r]||[];
         const pn=String(w[cPn]==null?'':w[cPn]).trim();
         const nm=String(w[cNm]==null?'':w[cNm]).trim();
+        const mo=(cMo>=0)?String(w[cMo]==null?'':w[cMo]).trim():'';
         if(!pn && !nm) continue;
         const k=pn.toUpperCase(); if(k && seen[k]) continue; if(k) seen[k]=1;
-        out.push({pn, name:nm});
+        out.push({pn, name:nm, memo:mo});
       }
       if(!out.length){ alert(ru?'Не найдено строк.':'읽을 줄이 없습니다. 품번·품명 두 열이 있는지 확인해 주세요.'); event.target.value=''; return; }
       // 지금 목록에 더한다 — 있던 품번은 품명만 새로, 없던 품번은 뒤에 붙인다
       const idx={}; prodData.forEach((r,i)=>{ const k=String(r.pn||'').trim().toUpperCase(); if(k) idx[k]=i; });
-      const merged=prodData.map(r=>({pn:r.pn, name:r.name}));
+      const merged=prodData.map(r=>({pn:r.pn, name:r.name, memo:r.memo||''}));
       let add=0, upd=0;
       out.forEach(r=>{
         const k=String(r.pn||'').trim().toUpperCase();
         if(k && idx[k]!=null){
-          if(r.name && merged[idx[k]].name!==r.name){ merged[idx[k]].name=r.name; upd++; }
-        }else{ merged.push({pn:r.pn, name:r.name}); if(k) idx[k]=merged.length-1; add++; }
+          let ch=0;
+          if(r.name && merged[idx[k]].name!==r.name){ merged[idx[k]].name=r.name; ch=1; }
+          if(r.memo && (merged[idx[k]].memo||'')!==r.memo){ merged[idx[k]].memo=r.memo; ch=1; }   // 비고는 적혀 있을 때만 바꾼다
+          if(ch) upd++;
+        }else{ merged.push({pn:r.pn, name:r.name, memo:r.memo||''}); if(k) idx[k]=merged.length-1; add++; }
       });
       if(!add && !upd){ alert(ru?'Нечего добавлять.':'새로 더할 것이 없습니다. 모두 이미 있는 제품입니다.'); event.target.value=''; return; }
       if(!confirm((ru?'Добавить в список изделий?':'제품목록에 더합니다.')+'\n\n'
         +(ru?'Новые: ':'새로 더할 제품 ')+add+(ru?'':'개')
-        +'\n'+(ru?'Обновить название: ':'품명이 바뀌는 제품 ')+upd+(ru?'':'개')
+        +'\n'+(ru?'Обновить название/примечание: ':'품명·비고가 바뀌는 제품 ')+upd+(ru?'':'개')
         +'\n'+(ru?'Итого: ':'다 하면 ')+prodData.length+' → '+merged.length+(ru?'':'개')
         +'\n\n'+(ru?'Продолжить?':'계속할까요? (지금 있는 제품은 지우지 않습니다)'))){ event.target.value=''; return; }
       const old=prodData;
