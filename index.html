@@ -14940,6 +14940,173 @@ async function loadProdTab(){
   }
 }
 function debouncedRenderProd(){ clearTimeout(window._prodT); window._prodT=setTimeout(renderProd,180); }
+// ── 제품목록 머리글 필터·정렬 ──────────────────────────────
+//   품번조회와 같은 모양으로 쓴다. 머리글의 ▾ 를 누르면 그 열에 있는 값이 죽 나오고,
+//   고른 값만 남긴다. 호환품번·적용모델은 한 칸에 여럿이라 그중 하나만 맞아도 남긴다.
+let _prodFilters={};                      // {열이름: [고른 값들]}
+let _prodSort={ key:null, dir:'asc' };
+function prodCellVals(key, r){
+  switch(key){
+    case 'pn':     return [String(r.pn||'')];
+    case 'cmp':    return (r.cmp && r.cmp.length)?r.cmp.map(String):[''];
+    case 'fin':    return [String(r.fin||'')];
+    case 'name':   return [String(r.name||'')];
+    case 'ername': return [String(prodErpName(r)||'')];
+    case 'erspec': return [String(prodErpSpec(r)||'')];
+    case 'exp':    return [String(r.exp||'')];
+    case 'use':    return [String(r.use||'')];
+    case 'thermo': return [String(r.thermo||'')];
+    case 'ctrl':   return [String(r.ctrl||'')];
+    case 'burner': return [String(r.burner||'')];
+    case 'memo':   return [String(r.memo||'')];
+    case 'mdl':  { const g=(typeof pnMdlGroups==='function')?pnMdlGroups(r.pn):[];
+                   return (g && g.length)?g.map(o=>String(o.g||'')):['']; }
+  }
+  return [''];
+}
+function prodSortText(key, r){ const v=prodCellVals(key,r); return v.length?String(v[0]):''; }
+function prodDistinctValues(key){
+  const set=new Set();
+  prodData.forEach(r=> prodCellVals(key,r).forEach(v=> set.add(String(v))));
+  return [...set].sort((a,b)=>{
+    if(a==='') return -1;
+    if(b==='') return 1;
+    return a.localeCompare(b,'ko',{numeric:true});
+  });
+}
+function prodApplyFilters(rows){
+  const keys=Object.keys(_prodFilters);
+  if(!keys.length) return rows;
+  const sets=keys.map(k=>({ k, set:new Set((_prodFilters[k]||[]).map(String)) }));
+  return rows.filter(r=> sets.every(s=> prodCellVals(s.k, r).some(v=> s.set.has(String(v)))));
+}
+function prodApplySort(rows){
+  const k=_prodSort.key;
+  if(!k) return rows;
+  const dir=(_prodSort.dir==='desc')?-1:1;
+  return rows.slice().sort((a,b)=>
+    dir*String(prodSortText(k,a)).localeCompare(String(prodSortText(k,b)),'ko',{numeric:true}));
+}
+function prodFilterCount(){ return Object.keys(_prodFilters).length; }
+// 머리글에 붙는 ▾ 단추 (필터가 걸렸거나 정렬 중이면 색이 찬다)
+function prodFilterIcon(key){
+  if(key==='no' || key==='del') return '';
+  const on=(_prodFilters[key]!=null) || (_prodSort.key===key);
+  const glyph=(_prodSort.key===key)?(_prodSort.dir==='desc'?'▼':'▲'):'▾';
+  return '<span onclick="event.stopPropagation();openProdFilter(&quot;'+key+'&quot;,this)"'
+    +' title="'+(lang==='ru'?'Фильтр и сортировка':'필터·정렬')+'"'
+    +' style="display:inline-flex;align-items:center;justify-content:center;min-width:17px;height:16px;'
+    +'margin-left:4px;padding:0 3px;border-radius:4px;border:1px solid '+(on?'var(--accent2)':'var(--border)')+';'
+    +'background:'+(on?'var(--accent2)':'var(--bg)')+';color:'+(on?'#fff':'var(--muted)')+';'
+    +'font-size:10px;line-height:1;cursor:pointer;vertical-align:middle">'+glyph+'</span>';
+}
+function prodFilterLabel(key){
+  const c=prodColList().find(x=>x.k===key);
+  return c?c.t:key;
+}
+function _prodFilterEsc(e){ if(e.key==='Escape') closeProdFilter(); }
+function _prodFilterOutside(e){
+  const b=document.getElementById('prodFilterPop');
+  if(b && !b.contains(e.target)) closeProdFilter();
+}
+function closeProdFilter(){
+  const b=document.getElementById('prodFilterPop'); if(b) b.remove();
+  document.removeEventListener('mousedown', _prodFilterOutside);
+  document.removeEventListener('keydown', _prodFilterEsc);
+}
+function openProdFilter(key, anchor){
+  closeProdFilter();
+  const ru=(lang==='ru'), L=(ko,rr)=>(ru?rr:ko);
+  const rect=anchor.getBoundingClientRect();
+  const vals=prodDistinctValues(key);
+  const cur=_prodFilters[key]?new Set(_prodFilters[key]):null;      // null = 모두 보기
+  const blank=L('(비어 있음)','(пусто)');
+  const W=258;
+  const box=document.createElement('div'); box.id='prodFilterPop';
+  box.style.cssText='position:fixed;top:'+(rect.bottom+4)+'px;left:'
+    +Math.max(6, Math.min(rect.left, window.innerWidth-W-6))+'px;z-index:9999;background:var(--surface2);'
+    +'border:1px solid var(--border);border-radius:10px;box-shadow:0 10px 30px #0009;width:'+W+'px;'
+    +'font-size:12px;color:var(--text);overflow:hidden';
+  const itemsHtml=vals.map(v=>{
+    const checked=(!cur||cur.has(v))?'checked':'';
+    const label=(v==='')?escapeHtml(blank):escapeHtml(v);
+    return '<label class="pdf-item" data-v="'+escapeHtml(v)+'" style="display:flex;align-items:center;gap:6px;'
+      +'padding:4px 8px;cursor:pointer;line-height:1.3">'
+      +'<input type="checkbox" class="pdf-chk" '+checked+' style="cursor:pointer;flex:none">'
+      +'<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+label+'</span></label>';
+  }).join('');
+  const sortBtn=(dir,txt)=>{
+    const on=(_prodSort.key===key && _prodSort.dir===dir);
+    return '<button class="pdf-sort" data-dir="'+dir+'" style="width:100%;text-align:left;padding:6px 8px;border:none;'
+      +'background:'+(on?'var(--accent2)':'none')+';color:'+(on?'#fff':'var(--text)')+';cursor:pointer;'
+      +'border-radius:6px;font-size:12px;display:flex;align-items:center;gap:6px">'+txt+'</button>';
+  };
+  box.innerHTML=
+     '<div style="padding:8px 8px 6px;border-bottom:1px solid var(--border)">'
+    +'<div style="font-size:11px;color:var(--muted);margin:0 2px 5px">'+escapeHtml(prodFilterLabel(key))+'</div>'
+    +sortBtn('asc','▲ '+L('오름차순 정렬','Сортировка А→Я'))
+    +sortBtn('desc','▼ '+L('내림차순 정렬','Сортировка Я→А'))
+    +'</div>'
+    +'<div style="padding:8px">'
+    +'<input id="pdfSearch" type="text" placeholder="'+L('값 검색…','Поиск значений…')+'"'
+      +' style="width:100%;box-sizing:border-box;padding:5px 8px;border:1px solid var(--border);border-radius:7px;'
+      +'background:var(--bg);color:var(--text);font-size:12px">'
+    +'<label style="display:flex;align-items:center;gap:6px;padding:5px 4px 4px;cursor:pointer;font-weight:600;'
+      +'border-bottom:1px solid var(--border);margin-top:4px">'
+      +'<input type="checkbox" id="pdfAll" checked style="cursor:pointer;flex:none">'
+      +'<span>'+L('(모두 선택)','(Выбрать все)')+'</span></label>'
+    +'<div id="pdfList" style="max-height:230px;overflow:auto;margin-top:2px">'+itemsHtml+'</div>'
+    +'</div>'
+    +'<div style="display:flex;gap:6px;padding:8px;border-top:1px solid var(--border)">'
+    +'<button id="pdfApply" style="flex:1;padding:6px;border:none;border-radius:7px;background:var(--accent2);'
+      +'color:#fff;cursor:pointer;font-size:12px;font-weight:600">'+L('적용','ОК')+'</button>'
+    +'<button id="pdfClear" style="flex:1;padding:6px;border:1px solid var(--border);border-radius:7px;'
+      +'background:var(--bg);color:var(--text);cursor:pointer;font-size:12px">'+L('해제','Сброс')+'</button>'
+    +'<button id="pdfCancel" style="flex:none;padding:6px 10px;border:1px solid var(--border);border-radius:7px;'
+      +'background:var(--bg);color:var(--text);cursor:pointer;font-size:12px">'+L('취소','✕')+'</button>'
+    +'</div>';
+  document.body.appendChild(box);
+  const listEl=box.querySelector('#pdfList');
+  const allChk=box.querySelector('#pdfAll');
+  const search=box.querySelector('#pdfSearch');
+  const items=()=>[...listEl.querySelectorAll('.pdf-item')];
+  const visItems=()=>items().filter(it=>it.style.display!=='none');
+  function syncAll(){
+    const vis=visItems(), chk=vis.filter(it=>it.querySelector('.pdf-chk').checked);
+    allChk.checked=(vis.length>0 && chk.length===vis.length);
+    allChk.indeterminate=(chk.length>0 && chk.length<vis.length);
+  }
+  box.querySelectorAll('.pdf-sort').forEach(b=> b.onclick=()=>{
+    _prodSort={ key, dir:b.getAttribute('data-dir') }; closeProdFilter(); renderProd(); });
+  search.oninput=()=>{
+    const q=search.value.trim().toLowerCase();
+    items().forEach(it=>{ const v=(it.getAttribute('data-v')||'').toLowerCase();
+                          it.style.display=(!q||v.includes(q))?'':'none'; });
+    syncAll();
+  };
+  allChk.onchange=()=>{ visItems().forEach(it=> it.querySelector('.pdf-chk').checked=allChk.checked); };
+  listEl.addEventListener('change', syncAll);
+  syncAll(); search.focus();
+  box.querySelector('#pdfApply').onclick=()=>{
+    const checked=items().filter(it=>it.querySelector('.pdf-chk').checked).map(it=>it.getAttribute('data-v'));
+    if(checked.length===vals.length) delete _prodFilters[key];      // 다 고르면 필터 없는 셈
+    else _prodFilters[key]=checked;
+    closeProdFilter(); renderProd();
+  };
+  box.querySelector('#pdfClear').onclick=()=>{
+    delete _prodFilters[key];
+    if(_prodSort.key===key) _prodSort={ key:null, dir:'asc' };
+    closeProdFilter(); renderProd();
+  };
+  box.querySelector('#pdfCancel').onclick=()=> closeProdFilter();
+  document.addEventListener('keydown', _prodFilterEsc);
+  setTimeout(()=> document.addEventListener('mousedown', _prodFilterOutside), 0);
+}
+// 걸어 둔 필터·정렬을 한꺼번에 푼다
+function prodFilterReset(){
+  _prodFilters={}; _prodSort={ key:null, dir:'asc' };
+  closeProdFilter(); renderProd();
+}
 // 제품목록 열 차림표 — '보기' 창과 표가 같은 목록을 쓴다
 function prodColList(){
   const ru=(lang==='ru'), L=(ko,rr)=>(ru?rr:ko);
@@ -14981,6 +15148,7 @@ function renderProd(){
                               +' '+(r.use||'')+' '+(r.thermo||'')+' '+(r.ctrl||'')+' '+(r.burner||'')
                               +' '+prodErpName(r)+' '+prodErpSpec(r)
                               +' '+prodMdlText(r.pn)).toLowerCase().includes(kw));
+  rows=prodApplySort(prodApplyFilters(rows));
   const ED=canEditProd();                      // 고치기·지우기 — MASTER 거나 권한을 받은 회원
   const m=prodColsMap();
   const use=prodColList().filter(c=>c.fix || m[c.k]!==false);
@@ -15013,10 +15181,18 @@ function renderProd(){
   // 호환품번은 여러 개라 칸 안에서 줄을 바꿔 쌓는다
   const codeWS="font-family:'Courier New',monospace;font-size:11px;white-space:normal;word-break:break-all";
   const thead=document.getElementById('prodThead');
-  if(thead) thead.innerHTML='<tr>'+use.map(c=>'<th style="'+thS+'">'+escapeHtml(c.t)+'</th>').join('')+'</tr>'
+  const nFlt=prodFilterCount(), sorted=!!_prodSort.key;
+  const sumTxt=L('합계 '+rows.length+'개 제품'+(ED?'   ·   칸을 눌러 바로 고칩니다':''),
+                 'Итого '+rows.length+(ED?'   ·   нажмите на ячейку, чтобы изменить':''));
+  const fltTxt=(nFlt||sorted)
+    ? ('<span onclick="prodFilterReset()" title="'+escapeHtml(L('걸어 둔 필터와 정렬을 모두 풉니다','Сбросить всё'))+'"'
+       +' style="cursor:pointer;color:var(--accent2);font-weight:700;margin-left:12px">'
+       +escapeHtml(L((nFlt?('필터 '+nFlt+'개'):'정렬')+' 걸림 · 모두 해제',
+                     (nFlt?('Фильтров: '+nFlt):'Сортировка')+' · сбросить'))+'</span>')
+    : '';
+  if(thead) thead.innerHTML='<tr>'+use.map(c=>'<th style="'+thS+'">'+escapeHtml(c.t)+prodFilterIcon(c.k)+'</th>').join('')+'</tr>'
     + '<tr><th colspan="'+use.length+'" style="'+thS+';font-weight:700;background:var(--surface);text-align:right">'
-    + escapeHtml(L('합계 '+rows.length+'개 제품'+(ED?'   ·   칸을 눌러 바로 고칩니다':''),
-                   'Итого '+rows.length+(ED?'   ·   нажмите на ячейку, чтобы изменить':'')))+'</th></tr>';
+    + escapeHtml(sumTxt)+fltTxt+'</th></tr>';
   const tbody=document.getElementById('prodTbody');
   // 칸 안에서 바로 고친다. 열쇠는 '지금 적혀 있는 품번' 이라, 품번을 고쳐도 그 줄을 찾아간다.
   const ed=(key,fld,v,mono)=>'<span contenteditable="true" class="pn-edit" data-prodkey="'+escapeHtml(key)+'" data-prodfld="'+fld+'"'
@@ -15602,6 +15778,7 @@ function downloadProd(){
   if(kw) rows=rows.filter(r=>(r.pn+' '+r.name+' '+(r.memo||'')+' '+prodCmpText(r)+' '+(r.fin||'')
                               +' '+(r.use||'')+' '+(r.thermo||'')+' '+(r.ctrl||'')+' '+(r.burner||'')
                               +' '+prodErpName(r)+' '+prodErpSpec(r)).toLowerCase().includes(kw));
+  rows=prodApplySort(prodApplyFilters(rows));
   const aoa=[[ru?'Артикул':'품번', ru?'Артикулы замены':'호환품번', ru?'Актуальный':'최종품번',
               ru?'Наименование (станд.)':'품명(표준화)', ru?'Наименование (ERP)':'품명(ERP)',
               ru?'Характеристика (ERP)':'규격(ERP)', ru?'Экспорт':'수출여부',
