@@ -14884,7 +14884,7 @@ let prodData=[];            // [{pn, cmp:[…], fin, name, memo}]
 // 한 줄 사본 — 되돌릴 때 쓰므로 호환품번 목록까지 따로 떠 둔다
 function prodRowCopy(r){
   return { pn:r.pn, name:r.name, memo:r.memo||'', fin:r.fin||'', cmp:(r.cmp||[]).slice(),
-           use:r.use||'', thermo:r.thermo||'', ctrl:r.ctrl||'',
+           use:r.use||'', thermo:r.thermo||'', ctrl:r.ctrl||'', burner:r.burner||'',
            ername:r.ername||'', erspec:r.erspec||'' };
 }
 // 호환품번 적기 — 쉼표·빈칸·줄바꿈 아무렇게나 적어도 하나씩 끊어 담는다
@@ -14901,7 +14901,8 @@ async function loadProd(){
     prodData=rows.map(r=>({ pn:String(r.pn||'').trim(), name:String(r.name||'').trim(), memo:String(r.memo||'').trim(),
                             cmp:Array.isArray(r.cmp)?prodCmpParse(r.cmp.join(' ')):prodCmpParse(r.cmp),
                             fin:pnUpAll(r.fin||''),
-                            use:String(r.use||'').trim(), thermo:String(r.thermo||'').trim(), ctrl:String(r.ctrl||'').trim(),
+                            use:String(r.use||'').trim(), thermo:String(r.thermo||'').trim(),
+                            ctrl:String(r.ctrl||'').trim(), burner:String(r.burner||'').trim(),
                             ername:String(r.ername||'').trim(), erspec:String(r.erspec||'').trim()
                           })).filter(r=>r.pn||r.name||r.memo);
   }catch(e){ prodData=[]; }
@@ -14950,6 +14951,7 @@ function prodColList(){
     { k:'use',    t:L('사용','Исп.'),                          w:84  },
     { k:'thermo', t:L('실내온도조절기','Термостат'),            w:146 },
     { k:'ctrl',   t:L('콘트롤러','Блок управления'),            w:146 },
+    { k:'burner', t:L('버너','Горелка'),                        w:146 },
     { k:'memo',   t:L('비고','Примечание'),                    w:190 },
     { k:'mdl',    t:L('적용모델','Модели'),
       w:(typeof pnMdlChipCap==='function'?Math.min(340, pnMdlChipCap()*2+16):300) }
@@ -14968,7 +14970,7 @@ function renderProd(){
   const kw=(document.getElementById('prodInput')?document.getElementById('prodInput').value:'').trim().toLowerCase();
   let rows=prodData.slice();
   if(kw) rows=rows.filter(r=>(r.pn+' '+r.name+' '+(r.memo||'')+' '+prodCmpText(r)+' '+(r.fin||'')
-                              +' '+(r.use||'')+' '+(r.thermo||'')+' '+(r.ctrl||'')
+                              +' '+(r.use||'')+' '+(r.thermo||'')+' '+(r.ctrl||'')+' '+(r.burner||'')
                               +' '+prodErpName(r)+' '+prodErpSpec(r)
                               +' '+prodMdlText(r.pn)).toLowerCase().includes(kw));
   const ED=canEditProd();                      // 고치기·지우기 — MASTER 거나 권한을 받은 회원
@@ -15022,6 +15024,7 @@ function renderProd(){
       case 'use':    return '<td style="'+tdS+';text-align:center">'+prodUseCell(r, ED)+'</td>';
       case 'thermo': return '<td style="'+tdS+'">'+prodCodeCell(r,'thermo', ED, ed)+'</td>';
       case 'ctrl':   return '<td style="'+tdS+'">'+prodCodeCell(r,'ctrl', ED, ed)+'</td>';
+      case 'burner': return '<td style="'+tdS+'">'+prodCodeCell(r,'burner', ED, ed)+'</td>';
       case 'memo':   return '<td style="'+tdS+';word-break:break-all;color:var(--muted)">'
                               +(ED?ed(r.pn,'memo',r.memo||'',0):escapeHtml(r.memo||''))+'</td>';
       case 'mdl':    return '<td style="'+tdS+';font-size:11px">'+prodMdlCell(r)+'</td>';
@@ -15043,6 +15046,7 @@ function renderProd(){
       case 'erspec': return '<td style="'+tdS+'">'+ed('','newerspec','',0)+'</td>';
       case 'thermo': return '<td style="'+tdS+'">'+ed('','newthermo','',1)+'</td>';
       case 'ctrl':   return '<td style="'+tdS+'">'+ed('','newctrl','',1)+'</td>';
+      case 'burner': return '<td style="'+tdS+'">'+ed('','newburner','',1)+'</td>';
       case 'memo':   return '<td style="'+tdS+'">'+ed('','newmemo','',0)+'</td>';
     }
     return '<td style="'+tdS+'"></td>';
@@ -15127,6 +15131,7 @@ async function onProdCellBlur(el){
     prodData.push({ pn:v, name:cell('newname'), memo:cell('newmemo'),
                     cmp:prodCmpParse(cell('newcmp')), fin:pnUpAll(cell('newfin')),
                     use:'', thermo:pnUpAll(cell('newthermo')), ctrl:pnUpAll(cell('newctrl')),
+                    burner:pnUpAll(cell('newburner')),
                     ername:cell('newername'), erspec:cell('newerspec') });
     goName=v;
   }else{
@@ -15140,6 +15145,7 @@ async function onProdCellBlur(el){
     else if(fld==='erspec') prodData[i].erspec=v;
     else if(fld==='thermo') prodData[i].thermo=pnUpAll(v);
     else if(fld==='ctrl') prodData[i].ctrl=pnUpAll(v);
+    else if(fld==='burner') prodData[i].burner=pnUpAll(v);
     else if(fld==='cmp') prodData[i].cmp=prodCmpParse(v);     // 쉼표·빈칸으로 여러 개
     else if(fld==='fin') prodData[i].fin=pnUpAll(v);
     else prodData[i].name=v;
@@ -15217,6 +15223,8 @@ function prodAddOpen(){
       +'<div id="pdThMsg" style="margin:-6px 2px 8px"></div>'
       +fld('pdCt',   L('콘트롤러 — 품번을 적으면 품명·규격이 따라 나옵니다','Блок управления — артикул'), 'S114110079')
       +'<div id="pdCtMsg" style="margin:-6px 2px 8px"></div>'
+      +fld('pdBn',   L('버너 — 품번을 적으면 품명·규격이 따라 나옵니다','Горелка — артикул'), '')
+      +'<div id="pdBnMsg" style="margin:-6px 2px 8px"></div>'
       +fld('pdMemo', L('비고 (비워 두어도 됩니다)','Примечание (необязательно)'), '')
       +'<div id="pdMsg" style="font-size:11px;min-height:16px;margin:2px 2px 0"></div>'
     +'</div>'
@@ -15229,7 +15237,7 @@ function prodAddOpen(){
   g('pdClose').onclick=prodAddClose;
   g('pdSave').onclick=prodAddSave;
   // 품번을 적는 대로 품명·규격을 찾아 보여 준다
-  ['pdTh','pdCt'].forEach(id=>{
+  ['pdTh','pdCt','pdBn'].forEach(id=>{
     const inp=g(id), m=g(id+'Msg');
     if(!inp || !m) return;
     const tell=()=>{ m.innerHTML=prodPnInfoLine(inp.value); };
@@ -15254,6 +15262,7 @@ async function prodAddSave(){
   const us=String(g('pdUse').value||'');
   const th=pnUpAll(g('pdTh').value);
   const ct=pnUpAll(g('pdCt').value);
+  const bn=pnUpAll(g('pdBn').value);
   const en=String(g('pdEn').value||'').replace(/\s+/g,' ').trim();
   const es=String(g('pdEs').value||'').replace(/\s+/g,' ').trim();
   const msgEl=g('pdMsg');
@@ -15263,7 +15272,7 @@ async function prodAddSave(){
   if(prodData.some(r=>String(r.pn||'').trim().toUpperCase()===k)){
     say(L(normBadgePN(pn)+' 는 이미 목록에 있습니다.','Такой артикул уже есть.'),'#f59e0b'); g('pdPn').select(); return; }
   const old=prodData.map(prodRowCopy);
-  prodData.push({ pn, name:nm, memo:mo, cmp:cp, fin:fi, use:us, thermo:th, ctrl:ct, ername:en, erspec:es });
+  prodData.push({ pn, name:nm, memo:mo, cmp:cp, fin:fi, use:us, thermo:th, ctrl:ct, burner:bn, ername:en, erspec:es });
   g('pdSave').disabled=true;
   const err=await saveProd();
   g('pdSave').disabled=false;
@@ -15272,9 +15281,9 @@ async function prodAddSave(){
   if(typeof ktAfterPnEdit==='function') ktAfterPnEdit();
   say(L('더했습니다 — '+normBadgePN(pn)+(nm?(' · '+nm):'')+'   (모두 '+prodData.length+'개)',
         'Добавлено — '+pn+'  (всего '+prodData.length+')'),'#22c55e');
-  ['pdPn','pdCmp','pdFin','pdName','pdEn','pdEs','pdTh','pdCt','pdMemo'].forEach(id=>{ g(id).value=''; });
+  ['pdPn','pdCmp','pdFin','pdName','pdEn','pdEs','pdTh','pdCt','pdBn','pdMemo'].forEach(id=>{ g(id).value=''; });
   if(g('pdUse')) g('pdUse').value='';
-  ['pdThMsg','pdCtMsg'].forEach(id=>{ if(g(id)) g(id).innerHTML=''; });
+  ['pdThMsg','pdCtMsg','pdBnMsg'].forEach(id=>{ if(g(id)) g(id).innerHTML=''; });
   g('pdPn').focus();
 }
 // ── 품명 일괄변경 ───────────────────────────────────────
@@ -15521,17 +15530,18 @@ function downloadProd(){
   const kw=(document.getElementById('prodInput')?document.getElementById('prodInput').value:'').trim().toLowerCase();
   let rows=prodData.slice();
   if(kw) rows=rows.filter(r=>(r.pn+' '+r.name+' '+(r.memo||'')+' '+prodCmpText(r)+' '+(r.fin||'')
-                              +' '+(r.use||'')+' '+(r.thermo||'')+' '+(r.ctrl||'')
+                              +' '+(r.use||'')+' '+(r.thermo||'')+' '+(r.ctrl||'')+' '+(r.burner||'')
                               +' '+prodErpName(r)+' '+prodErpSpec(r)).toLowerCase().includes(kw));
   const aoa=[[ru?'Артикул':'품번', ru?'Артикулы замены':'호환품번', ru?'Актуальный':'최종품번',
               ru?'Наименование (станд.)':'품명(표준화)', ru?'Наименование (ERP)':'품명(ERP)',
               ru?'Характеристика (ERP)':'규격(ERP)', ru?'Исп.':'사용', ru?'Термостат':'실내온도조절기',
-              ru?'Блок управления':'콘트롤러', ru?'Примечание':'비고', ru?'Модели':'적용모델']]
+              ru?'Блок управления':'콘트롤러', ru?'Горелка':'버너',
+              ru?'Примечание':'비고', ru?'Модели':'적용모델']]
     .concat(rows.map(r=>[r.pn, prodCmpText(r), r.fin||'', r.name, prodErpName(r), prodErpSpec(r),
-                         r.use||'', r.thermo||'', r.ctrl||'', r.memo||'',
+                         r.use||'', r.thermo||'', r.ctrl||'', r.burner||'', r.memo||'',
                          pnMdlEntries(r.pn).map(e=>(pnMdlName(e)||e.p)).join(', ')]));
   const ws=XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols']=[{wch:18},{wch:30},{wch:18},{wch:40},{wch:34},{wch:30},{wch:8},{wch:18},{wch:18},{wch:30},{wch:40}];
+  ws['!cols']=[{wch:18},{wch:30},{wch:18},{wch:40},{wch:34},{wch:30},{wch:8},{wch:18},{wch:18},{wch:18},{wch:30},{wch:40}];
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'PRODUCTS');
   XLSX.writeFile(wb, xlsxName('제품목록','Список изделий'));
 }
@@ -15547,7 +15557,7 @@ function handleProdUpload(event){
       const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
       const a=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:''});
       // 머리글 줄('품번'·'품명')을 찾고, 없으면 첫 줄부터 두 열을 그대로 읽는다
-      let h=-1, cPn=0, cNm=1, cMo=-1, cCp=-1, cFi=-1, cUs=-1, cTh=-1, cCt=-1, cEn=-1, cEs=-1, fNm=false;
+      let h=-1, cPn=0, cNm=1, cMo=-1, cCp=-1, cFi=-1, cUs=-1, cTh=-1, cCt=-1, cBn=-1, cEn=-1, cEs=-1, fNm=false;
       for(let r=0;r<Math.min(10,a.length) && h<0;r++){
         const w=a[r]||[];
         for(let c=0;c<w.length;c++){
@@ -15562,6 +15572,7 @@ function handleProdUpload(event){
           if(t==='사용'||/^исп\.?$/i.test(t)){ cUs=c; if(h<0) h=r; }
           if(t==='실내온도조절기'||t==='온도조절기'||/^термостат$/i.test(t)){ cTh=c; if(h<0) h=r; }
           if(t==='콘트롤러'||t==='컨트롤러'||t==='콘트롤'||/^блокуправления$/i.test(t)){ cCt=c; if(h<0) h=r; }
+          if(t==='버너'||t==='버너품번'||/^горелка$/i.test(t)){ cBn=c; if(h<0) h=r; }
         }
       }
       // '품명' 머리글이 없는데 둘째 열이 호환품번·최종품번·비고 자리면 품명으로 읽지 않는다
@@ -15579,9 +15590,10 @@ function handleProdUpload(event){
         else if(us) us=(/^as$/i.test(us)?'AS':'완제품');
         const th=(cTh>=0)?String(w[cTh]==null?'':w[cTh]).trim():'';
         const ct=(cCt>=0)?String(w[cCt]==null?'':w[cCt]).trim():'';
+        const bn=(cBn>=0)?String(w[cBn]==null?'':w[cBn]).trim():'';
         if(!pn && !nm) continue;
         const k=pn.toUpperCase(); if(k && seen[k]) continue; if(k) seen[k]=1;
-        out.push({pn, name:nm, memo:mo, cmp:cp, fin:fi, use:us, thermo:th, ctrl:ct,
+        out.push({pn, name:nm, memo:mo, cmp:cp, fin:fi, use:us, thermo:th, ctrl:ct, burner:bn,
                   ername:(cEn>=0)?String(w[cEn]==null?'':w[cEn]).trim():'',
                   erspec:(cEs>=0)?String(w[cEs]==null?'':w[cEs]).trim():''});
       }
@@ -15602,11 +15614,12 @@ function handleProdUpload(event){
           if(r.use && (m0.use||'')!==r.use){ m0.use=r.use; ch=1; }
           if(r.thermo && (m0.thermo||'')!==r.thermo){ m0.thermo=r.thermo; ch=1; }
           if(r.ctrl && (m0.ctrl||'')!==r.ctrl){ m0.ctrl=r.ctrl; ch=1; }
+          if(r.burner && (m0.burner||'')!==r.burner){ m0.burner=r.burner; ch=1; }
           if(r.ername && (m0.ername||'')!==r.ername){ m0.ername=r.ername; ch=1; }
           if(r.erspec && (m0.erspec||'')!==r.erspec){ m0.erspec=r.erspec; ch=1; }
           if(ch) upd++;
         }else{ merged.push({pn:r.pn, name:r.name, memo:r.memo||'', cmp:(r.cmp||[]).slice(), fin:r.fin||'',
-                            use:r.use||'', thermo:r.thermo||'', ctrl:r.ctrl||'',
+                            use:r.use||'', thermo:r.thermo||'', ctrl:r.ctrl||'', burner:r.burner||'',
                             ername:r.ername||'', erspec:r.erspec||''});
                if(k) idx[k]=merged.length-1; add++; }
       });
