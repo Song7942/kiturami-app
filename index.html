@@ -14763,7 +14763,8 @@ let prodData=[];            // [{pn, cmp:[…], fin, name, memo}]
 // 한 줄 사본 — 되돌릴 때 쓰므로 호환품번 목록까지 따로 떠 둔다
 function prodRowCopy(r){
   return { pn:r.pn, name:r.name, memo:r.memo||'', fin:r.fin||'', cmp:(r.cmp||[]).slice(),
-           use:r.use||'', thermo:r.thermo||'', ctrl:r.ctrl||'' };
+           use:r.use||'', thermo:r.thermo||'', ctrl:r.ctrl||'',
+           ername:r.ername||'', erspec:r.erspec||'' };
 }
 // 호환품번 적기 — 쉼표·빈칸·줄바꿈 아무렇게나 적어도 하나씩 끊어 담는다
 function prodCmpParse(s){
@@ -14779,7 +14780,8 @@ async function loadProd(){
     prodData=rows.map(r=>({ pn:String(r.pn||'').trim(), name:String(r.name||'').trim(), memo:String(r.memo||'').trim(),
                             cmp:Array.isArray(r.cmp)?prodCmpParse(r.cmp.join(' ')):prodCmpParse(r.cmp),
                             fin:pnUpAll(r.fin||''),
-                            use:String(r.use||'').trim(), thermo:String(r.thermo||'').trim(), ctrl:String(r.ctrl||'').trim()
+                            use:String(r.use||'').trim(), thermo:String(r.thermo||'').trim(), ctrl:String(r.ctrl||'').trim(),
+                            ername:String(r.ername||'').trim(), erspec:String(r.erspec||'').trim()
                           })).filter(r=>r.pn||r.name||r.memo);
   }catch(e){ prodData=[]; }
   _prodLoaded=true;
@@ -14811,6 +14813,7 @@ function renderProd(){
   let rows=prodData.slice();
   if(kw) rows=rows.filter(r=>(r.pn+' '+r.name+' '+(r.memo||'')+' '+prodCmpText(r)+' '+(r.fin||'')
                               +' '+(r.use||'')+' '+(r.thermo||'')+' '+(r.ctrl||'')
+                              +' '+(r.ername||'')+' '+(r.erspec||'')
                               +' '+prodMdlText(r.pn)).toLowerCase().includes(kw));
   const ED=canEditProd();                      // 고치기·지우기 — MASTER 거나 권한을 받은 회원
   // 품번 칸 너비는 품번 길이에 맞춘다 — 가장 긴 품번 하나가 들어갈 만큼만(세 칸 모두 같은 너비)
@@ -14819,7 +14822,8 @@ function renderProd(){
                         f(r.pn); f(r.fin); (r.cmp||[]).forEach(f); });
   const codeW=Math.max(72, Math.min(150, Math.round(cwN*6.65)+18));
   const heads=[['No.',46],[L('품번','Артикул'),codeW],[L('호환품번','Артикулы замены'),codeW],[L('최종품번','Актуальный'),codeW],
-               [L('품명(표준화)','Наименование (станд.)'),250],
+               [L('품명(표준화)','Наименование (станд.)'),230],
+               [L('품명','Наименование (ERP)'),200],[L('규격','Характеристика (ERP)'),180],
                [L('사용','Исп.'),84],
                [L('실내온도조절기','Термостат'),146],[L('콘트롤러','Блок управления'),146],
                [L('비고','Примечание'),190],
@@ -14855,6 +14859,8 @@ function renderProd(){
     + '<td style="'+tdS+'">'+(ED?ed(r.pn,'fin',r.fin||'',1)
         :('<span style="'+codeS+'">'+escapeHtml(r.fin||'')+'</span>'))+'</td>'
     + '<td style="'+tdS+';word-break:break-all">'+(ED?ed(r.pn,'name',r.name,0):escapeHtml(r.name))+'</td>'
+    + '<td style="'+tdS+';word-break:break-all">'+(ED?ed(r.pn,'ername',r.ername||'',0):escapeHtml(r.ername||''))+'</td>'
+    + '<td style="'+tdS+';word-break:break-all">'+(ED?ed(r.pn,'erspec',r.erspec||'',0):escapeHtml(r.erspec||''))+'</td>'
     + '<td style="'+tdS+';text-align:center">'+prodUseCell(r, ED)+'</td>'
     + '<td style="'+tdS+'">'+prodCodeCell(r,'thermo', ED, ed)+'</td>'
     + '<td style="'+tdS+'">'+prodCodeCell(r,'ctrl', ED, ed)+'</td>'
@@ -14869,6 +14875,8 @@ function renderProd(){
         + '<td style="'+tdS+'">'+ed('','newcmp','',2)+'</td>'
         + '<td style="'+tdS+'">'+ed('','newfin','',1)+'</td>'
         + '<td style="'+tdS+'">'+ed('','newname','',0)+'</td>'
+        + '<td style="'+tdS+'">'+ed('','newername','',0)+'</td>'
+        + '<td style="'+tdS+'">'+ed('','newerspec','',0)+'</td>'
         + '<td style="'+tdS+'"></td>'
         + '<td style="'+tdS+'">'+ed('','newthermo','',1)+'</td>'
         + '<td style="'+tdS+'">'+ed('','newctrl','',1)+'</td>'
@@ -14905,7 +14913,8 @@ async function onProdCellBlur(el){
     if(find(v)>=0){ alert(ru?'Уже есть.':normBadgePN(v)+' 는 이미 목록에 있습니다.'); el.textContent=''; return; }
     prodData.push({ pn:v, name:cell('newname'), memo:cell('newmemo'),
                     cmp:prodCmpParse(cell('newcmp')), fin:pnUpAll(cell('newfin')),
-                    use:'', thermo:pnUpAll(cell('newthermo')), ctrl:pnUpAll(cell('newctrl')) });
+                    use:'', thermo:pnUpAll(cell('newthermo')), ctrl:pnUpAll(cell('newctrl')),
+                    ername:cell('newername'), erspec:cell('newerspec') });
     goName=v;
   }else{
     const i=find(key); if(i<0){ el.textContent=before; return; }
@@ -14914,6 +14923,8 @@ async function onProdCellBlur(el){
       const j=find(v); if(j>=0 && j!==i){ alert(ru?'Уже есть.':normBadgePN(v)+' 는 이미 목록에 있습니다.'); el.textContent=before; return; }
       prodData[i].pn=v;
     }else if(fld==='memo') prodData[i].memo=v;
+    else if(fld==='ername') prodData[i].ername=v;
+    else if(fld==='erspec') prodData[i].erspec=v;
     else if(fld==='thermo') prodData[i].thermo=pnUpAll(v);
     else if(fld==='ctrl') prodData[i].ctrl=pnUpAll(v);
     else if(fld==='cmp') prodData[i].cmp=prodCmpParse(v);     // 쉼표·빈칸으로 여러 개
@@ -14981,6 +14992,8 @@ function prodAddOpen(){
       +fld('pdCmp',  L('호환품번 (여러 개면 쉼표로 나눠 적습니다)','Артикулы замены (через запятую)'), 'A11E100115, A11E100116')
       +fld('pdFin',  L('최종품번 (비워 두어도 됩니다)','Актуальный артикул (необязательно)'), 'A11E100116')
       +fld('pdName', L('품명(표준화)','Наименование (станд.)'), 'TURBO-15')
+      +fld('pdEn',   L('품명 (ERP · 비워 두어도 됩니다)','Наименование ERP (необязательно)'), '')
+      +fld('pdEs',   L('규격 (ERP · 비워 두어도 됩니다)','Характеристика ERP (необязательно)'), '')
       +'<div style="margin:0 0 9px"><div style="font-size:11px;color:var(--muted);margin:0 2px 3px">'+L('사용','Исп.')+'</div>'
         +'<select id="pdUse" style="width:100%;box-sizing:border-box;padding:6px 8px;border:1px solid var(--border);'
         +'border-radius:7px;background:var(--bg);color:var(--text);font-size:12px">'
@@ -15028,6 +15041,8 @@ async function prodAddSave(){
   const us=String(g('pdUse').value||'');
   const th=pnUpAll(g('pdTh').value);
   const ct=pnUpAll(g('pdCt').value);
+  const en=String(g('pdEn').value||'').replace(/\s+/g,' ').trim();
+  const es=String(g('pdEs').value||'').replace(/\s+/g,' ').trim();
   const msgEl=g('pdMsg');
   const say=(t,c)=>{ msgEl.style.color=c; msgEl.textContent=t; };
   if(!pn){ say(L('품번을 적어 주세요.','Введите артикул.'),'#ef4444'); g('pdPn').focus(); return; }
@@ -15035,7 +15050,7 @@ async function prodAddSave(){
   if(prodData.some(r=>String(r.pn||'').trim().toUpperCase()===k)){
     say(L(normBadgePN(pn)+' 는 이미 목록에 있습니다.','Такой артикул уже есть.'),'#f59e0b'); g('pdPn').select(); return; }
   const old=prodData.map(prodRowCopy);
-  prodData.push({ pn, name:nm, memo:mo, cmp:cp, fin:fi, use:us, thermo:th, ctrl:ct });
+  prodData.push({ pn, name:nm, memo:mo, cmp:cp, fin:fi, use:us, thermo:th, ctrl:ct, ername:en, erspec:es });
   g('pdSave').disabled=true;
   const err=await saveProd();
   g('pdSave').disabled=false;
@@ -15044,7 +15059,9 @@ async function prodAddSave(){
   if(typeof ktAfterPnEdit==='function') ktAfterPnEdit();
   say(L('더했습니다 — '+normBadgePN(pn)+(nm?(' · '+nm):'')+'   (모두 '+prodData.length+'개)',
         'Добавлено — '+pn+'  (всего '+prodData.length+')'),'#22c55e');
-  ['pdPn','pdCmp','pdFin','pdName','pdTh','pdCt','pdMemo'].forEach(id=>{ g(id).value=''; });
+  ['pdPn','pdCmp','pdFin','pdName','pdEn','pdEs','pdTh','pdCt','pdMemo'].forEach(id=>{ g(id).value=''; });
+  if(g('pdUse')) g('pdUse').value='';
+  ['pdThMsg','pdCtMsg'].forEach(id=>{ if(g(id)) g(id).innerHTML=''; });
   g('pdPn').focus();
 }
 // ── 품명 일괄변경 ───────────────────────────────────────
@@ -15287,12 +15304,14 @@ function downloadProd(){
   let rows=prodData.slice();
   if(kw) rows=rows.filter(r=>(r.pn+' '+r.name+' '+(r.memo||'')+' '+prodCmpText(r)+' '+(r.fin||'')).toLowerCase().includes(kw));
   const aoa=[[ru?'Артикул':'품번', ru?'Артикулы замены':'호환품번', ru?'Актуальный':'최종품번',
-              ru?'Наименование (станд.)':'품명(표준화)', ru?'Исп.':'사용', ru?'Термостат':'실내온도조절기',
+              ru?'Наименование (станд.)':'품명(표준화)', ru?'Наименование (ERP)':'품명(ERP)',
+              ru?'Характеристика (ERP)':'규격(ERP)', ru?'Исп.':'사용', ru?'Термостат':'실내온도조절기',
               ru?'Блок управления':'콘트롤러', ru?'Примечание':'비고', ru?'Модели':'적용모델']]
-    .concat(rows.map(r=>[r.pn, prodCmpText(r), r.fin||'', r.name, r.use||'', r.thermo||'', r.ctrl||'', r.memo||'',
+    .concat(rows.map(r=>[r.pn, prodCmpText(r), r.fin||'', r.name, r.ername||'', r.erspec||'',
+                         r.use||'', r.thermo||'', r.ctrl||'', r.memo||'',
                          pnMdlEntries(r.pn).map(e=>(pnMdlName(e)||e.p)).join(', ')]));
   const ws=XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols']=[{wch:18},{wch:30},{wch:18},{wch:44},{wch:8},{wch:18},{wch:18},{wch:30},{wch:40}];
+  ws['!cols']=[{wch:18},{wch:30},{wch:18},{wch:40},{wch:34},{wch:30},{wch:8},{wch:18},{wch:18},{wch:30},{wch:40}];
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'PRODUCTS');
   XLSX.writeFile(wb, xlsxName('제품목록','Список изделий'));
 }
@@ -15308,13 +15327,15 @@ function handleProdUpload(event){
       const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
       const a=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:''});
       // 머리글 줄('품번'·'품명')을 찾고, 없으면 첫 줄부터 두 열을 그대로 읽는다
-      let h=-1, cPn=0, cNm=1, cMo=-1, cCp=-1, cFi=-1, cUs=-1, cTh=-1, cCt=-1, fNm=false;
+      let h=-1, cPn=0, cNm=1, cMo=-1, cCp=-1, cFi=-1, cUs=-1, cTh=-1, cCt=-1, cEn=-1, cEs=-1, fNm=false;
       for(let r=0;r<Math.min(10,a.length) && h<0;r++){
         const w=a[r]||[];
         for(let c=0;c<w.length;c++){
           const t=String(w[c]==null?'':w[c]).replace(/\s/g,'');
           if(t==='품번'||/^артикул$/i.test(t)||t==='품목코드'){ cPn=c; h=r; }
-          if(t.indexOf('품명')===0||/^наименование/i.test(t)||t==='제품명'){ cNm=c; fNm=true; if(h<0) h=r; }
+          if(t==='품명'||t==='품명(표준화)'||t==='제품명'||/^наименование\(станд\.?\)$/i.test(t)||/^наименование$/i.test(t)){ cNm=c; fNm=true; if(h<0) h=r; }
+          if(t==='품명(ERP)'||t==='ERP품명'||/^наименование\(erp\)$/i.test(t)){ cEn=c; if(h<0) h=r; }
+          if(t==='규격'||t==='규격(ERP)'||t==='ERP규격'||/^характеристика(\(erp\))?$/i.test(t)){ cEs=c; if(h<0) h=r; }
           if(t==='비고'||/^примечание$/i.test(t)||t==='메모'){ cMo=c; if(h<0) h=r; }
           if(t==='호환품번'||/^артикулызамены$/i.test(t)||t==='대체품번'){ cCp=c; if(h<0) h=r; }
           if(t==='최종품번'||/^актуальный(артикул)?$/i.test(t)){ cFi=c; if(h<0) h=r; }
@@ -15340,7 +15361,9 @@ function handleProdUpload(event){
         const ct=(cCt>=0)?String(w[cCt]==null?'':w[cCt]).trim():'';
         if(!pn && !nm) continue;
         const k=pn.toUpperCase(); if(k && seen[k]) continue; if(k) seen[k]=1;
-        out.push({pn, name:nm, memo:mo, cmp:cp, fin:fi, use:us, thermo:th, ctrl:ct});
+        out.push({pn, name:nm, memo:mo, cmp:cp, fin:fi, use:us, thermo:th, ctrl:ct,
+                  ername:(cEn>=0)?String(w[cEn]==null?'':w[cEn]).trim():'',
+                  erspec:(cEs>=0)?String(w[cEs]==null?'':w[cEs]).trim():''});
       }
       if(!out.length){ alert(ru?'Не найдено строк.':'읽을 줄이 없습니다. 품번·품명 두 열이 있는지 확인해 주세요.'); event.target.value=''; return; }
       // 지금 목록에 더한다 — 있던 품번은 품명만 새로, 없던 품번은 뒤에 붙인다
@@ -15359,9 +15382,12 @@ function handleProdUpload(event){
           if(r.use && (m0.use||'')!==r.use){ m0.use=r.use; ch=1; }
           if(r.thermo && (m0.thermo||'')!==r.thermo){ m0.thermo=r.thermo; ch=1; }
           if(r.ctrl && (m0.ctrl||'')!==r.ctrl){ m0.ctrl=r.ctrl; ch=1; }
+          if(r.ername && (m0.ername||'')!==r.ername){ m0.ername=r.ername; ch=1; }
+          if(r.erspec && (m0.erspec||'')!==r.erspec){ m0.erspec=r.erspec; ch=1; }
           if(ch) upd++;
         }else{ merged.push({pn:r.pn, name:r.name, memo:r.memo||'', cmp:(r.cmp||[]).slice(), fin:r.fin||'',
-                            use:r.use||'', thermo:r.thermo||'', ctrl:r.ctrl||''});
+                            use:r.use||'', thermo:r.thermo||'', ctrl:r.ctrl||'',
+                            ername:r.ername||'', erspec:r.erspec||''});
                if(k) idx[k]=merged.length-1; add++; }
       });
       if(!add && !upd){ alert(ru?'Нечего добавлять.':'새로 더할 것이 없습니다. 모두 이미 있는 제품입니다.'); event.target.value=''; return; }
