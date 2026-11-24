@@ -12435,14 +12435,18 @@ function srchAdd(id, v){
 }
 function srchDel(id, v){ srchStore(id, srchList(id).filter(x=>x!==v)); }
 function srchClearAll(id){ try{ localStorage.removeItem(srchKey(id)); }catch(e){} }
-let _srchOut=null, _srchScroll=null;
+let _srchOut=null, _srchScroll=null, _srchBlur=null;
 function srchClose(){
   const b=document.getElementById('srchPop'); if(b) b.remove();
   if(_srchOut){ document.removeEventListener('mousedown', _srchOut, true); _srchOut=null; }
   if(_srchScroll){ window.removeEventListener('scroll', _srchScroll, true); window.removeEventListener('resize', _srchScroll); _srchScroll=null; }
+  if(_srchBlur){ window.removeEventListener('blur', _srchBlur); _srchBlur=null; }
 }
 function srchOpen(inp){
   srchClose();
+  // 검색창에 적어 둔 글이 있으면 띄우지 않는다 —
+  //   찾은 결과 위를 덮고 있다가, 빈 곳인 줄 알고 누르면 엉뚱한 품번이 골라졌다.
+  if(String(inp.value||'').trim()) return;
   const list=srchList(inp.id); if(!list.length) return;
   const ru=(lang==='ru');
   const r=inp.getBoundingClientRect();
@@ -12483,6 +12487,9 @@ function srchOpen(inp){
   _srchScroll=()=>srchClose();
   window.addEventListener('scroll', _srchScroll, true);
   window.addEventListener('resize', _srchScroll);
+  // 다른 창(엑셀 등)을 다녀오는 사이에는 닫아 둔다 — 돌아와 누른 자리가 목록이면 엉뚱한 것이 골라진다
+  _srchBlur=()=>srchClose();
+  window.addEventListener('blur', _srchBlur);
 }
 function srchWire(id){
   const inp=document.getElementById(id);
