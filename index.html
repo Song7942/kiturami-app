@@ -896,7 +896,11 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
         </button>
       </div>
       <div id="prodNote" style="display:none;margin:0 12px 7px;padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);font-size:11px;color:var(--muted);line-height:1.9"></div>
-      <div class="tbl-header-wrap">
+      <!-- 가로 스크롤바 (설명줄과 헤더 사이). 열이 많아 가로로 넘칠 때만 보인다. -->
+      <div class="tbl-scrollbar" id="prodTblScrollbar" style="display:none;margin:2px 0 6px">
+        <div class="tbl-scrollbar-thumb" id="prodTblScrollbarThumb"></div>
+      </div>
+      <div class="tbl-header-wrap" id="prodHdrWrap">
         <table><colgroup id="prodColgroup"></colgroup><thead id="prodThead"></thead></table>
       </div>
     </div>
@@ -3717,6 +3721,7 @@ function ktPaneTitle(tab){
 let updatePartsTableScrollbar=function(){};
 let updateOrderTableScrollbar=function(){};
 let updatePNTableScrollbar=function(){};
+let updateProdTableScrollbar=function(){};
 
 function initDiagScrollbar(){
   const ds=document.getElementById('diagScroll');
@@ -15083,6 +15088,10 @@ function renderProd(){
       : L('제품목록이 비어 있습니다. 엑셀 업로드로 올려주세요.','Список пуст. Загрузите Excel.');
     empty.style.display=rows.length?'none':'block';
   }
+  // 열을 켜고 끄면 너비가 달라진다 — 가로 막대를 다시 재고 머리글 자리도 맞춘다
+  if(typeof updateProdTableScrollbar==='function') updateProdTableScrollbar();
+  const _ph=document.getElementById('prodHdrWrap'), _pb=document.getElementById('scrollBodyProd');
+  if(_ph && _pb) _ph.scrollLeft=_pb.scrollLeft;
 }
 // 품명(ERP)·규격(ERP) 은 품번조회가 먼저다 — 검색·엑셀도 같은 값을 쓴다
 function prodErpName(r){ const o=prodPnInfo(r.pn); return (o?o.name:'') || String(r.ername||''); }
@@ -23812,6 +23821,8 @@ setupSimpleHeaderScrollSync('scrollBodyInventory','invHdrWrap');
 setupSimpleHeaderScrollSync('scrollBodyShipments','shipHdrWrap');
 // 품번조회는 열이 많아 가로 스크롤이 필요하므로, 검색창과 헤더 사이의 커스텀 스크롤바로 제어(헤더 동기화 포함).
 updatePNTableScrollbar=setupHTableScroll('scrollBodyPN','pnHdrWrap','pnTblScrollbar','pnTblScrollbarThumb');
+// 제품목록도 열이 늘어 가로로 넘친다 — 머리글이 본문을 따라 움직이도록 같은 막대를 단다.
+updateProdTableScrollbar=setupHTableScroll('scrollBodyProd','prodHdrWrap','prodTblScrollbar','prodTblScrollbarThumb');
 // PSI 계열 화면(PSI·발주시뮬레이션·발주현황·선적/입고현황·미출현황)도 같은 가로 슬라이드 막대를 쓴다.
 // 이 화면들은 머리글이 표 안에 있어서 따로 맞출 헤더가 없다 — 스크롤 칸을 헤더 자리에 그대로 넘긴다.
 [['psi','scrollBodyPSI'],['sim','scrollBodySIM'],['po','scrollBodyPO'],
