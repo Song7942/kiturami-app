@@ -4381,6 +4381,7 @@ function pnMdlSetEntries(pn, arr){
     out.push({ p, n });
   });
   if(out.length) pnMdl[k]=out; else delete pnMdl[k];
+  if(typeof prodPartIdxClear==='function') prodPartIdxClear();   // 제품목록의 '적용부품' 열이 다시 세게
 }
 // 제품목록에서 그 품번의 이름을 찾는다
 let _prodNameMap=null;
@@ -14797,6 +14798,7 @@ async function loadProdTab(){
   const b2=document.getElementById('prodAddBtn');   if(b2) b2.style.display=m?'':'none';
   const b3=document.getElementById('prodRepBtn');   if(b3) b3.style.display=m?'':'none';
   if(!_prodLoaded) await loadProd();
+  if(typeof loadPnMdl==='function'){ try{ await loadPnMdl(); prodPartIdxClear(); }catch(e){} }   // 적용부품 열이 볼 자료
   renderProd();
 }
 function debouncedRenderProd(){ clearTimeout(window._prodT); window._prodT=setTimeout(renderProd,180); }
@@ -14805,7 +14807,8 @@ function renderProd(){
   const ru=(lang==='ru'), L=(ko,rr)=>(ru?rr:ko);
   const kw=(document.getElementById('prodInput')?document.getElementById('prodInput').value:'').trim().toLowerCase();
   let rows=prodData.slice();
-  if(kw) rows=rows.filter(r=>(r.pn+' '+r.name+' '+(r.memo||'')+' '+prodCmpText(r)+' '+(r.fin||'')).toLowerCase().includes(kw));
+  if(kw) rows=rows.filter(r=>(r.pn+' '+r.name+' '+(r.memo||'')+' '+prodCmpText(r)+' '+(r.fin||'')
+                              +' '+prodPartsOf(r.pn).join(' ')).toLowerCase().includes(kw));
   const ED=canEditProd();                      // 고치기·지우기 — MASTER 거나 권한을 받은 회원
   // 품번 칸 너비는 품번 길이에 맞춘다 — 가장 긴 품번 하나가 들어갈 만큼만(세 칸 모두 같은 너비)
   let cwN=0;
@@ -14813,7 +14816,8 @@ function renderProd(){
                         f(r.pn); f(r.fin); (r.cmp||[]).forEach(f); });
   const codeW=Math.max(72, Math.min(150, Math.round(cwN*6.65)+18));
   const heads=[['No.',46],[L('품번','Артикул'),codeW],[L('호환품번','Артикулы замены'),codeW],[L('최종품번','Актуальный'),codeW],
-               [L('품명','Наименование'),300],[L('비고','Примечание'),240]];
+               [L('품명','Наименование'),300],[L('비고','Примечание'),240],
+               [L('적용부품','Детали'),Math.min(250, codeW*2+26)]];
   if(ED) heads.push(['',44]);
   const cols=heads.map(h=>'<col style="width:'+h[1]+'px">').join('');
   const cg=document.getElementById('prodColgroup'); if(cg) cg.innerHTML=cols;
@@ -14846,6 +14850,7 @@ function renderProd(){
         :('<span style="'+codeS+'">'+escapeHtml(r.fin||'')+'</span>'))+'</td>'
     + '<td style="'+tdS+';word-break:break-all">'+(ED?ed(r.pn,'name',r.name,0):escapeHtml(r.name))+'</td>'
     + '<td style="'+tdS+';word-break:break-all;color:var(--muted)">'+(ED?ed(r.pn,'memo',r.memo||'',0):escapeHtml(r.memo||''))+'</td>'
+    + '<td style="'+tdS+'">'+prodPartsCell(r)+'</td>'
     + (ED?('<td style="'+tdS+';text-align:center"><span onclick="prodDeleteRow(&quot;'+escapeHtml(String(r.pn).replace(/"/g,''))+'&quot;)"'
         + ' title="'+L('이 줄 지우기','Удалить')+'" style="cursor:pointer;color:#ef4444;font-weight:700">✕</span></td>'):'')
     + '</tr>').join('')
@@ -14855,7 +14860,8 @@ function renderProd(){
         + '<td style="'+tdS+'">'+ed('','newcmp','',2)+'</td>'
         + '<td style="'+tdS+'">'+ed('','newfin','',1)+'</td>'
         + '<td style="'+tdS+'">'+ed('','newname','',0)+'</td>'
-        + '<td style="'+tdS+'">'+ed('','newmemo','',0)+'</td><td style="'+tdS+'"></td></tr>'):'');
+        + '<td style="'+tdS+'">'+ed('','newmemo','',0)+'</td>'
+        + '<td style="'+tdS+'"></td><td style="'+tdS+'"></td></tr>'):'');
   const empty=document.getElementById('prodEmpty');
   if(empty){
     empty.textContent=prodData.length
@@ -15134,16 +15140,102 @@ async function prodRepUndo(){
   if(box){ const m=box.querySelector('#prMsg'); if(m){ m.style.color='#22c55e'; m.textContent=L('되돌렸습니다.','Возвращено.'); }
            const u=box.querySelector('#prUndo'); if(u) u.style.display='none'; }
 }
+// ── 적용부품 — 그 제품에 들어가는 부품 품번 ────────────────
+//   품번조회의 '적용모델'(부품 → 제품)을 뒤집어 제품 → 부품으로 모은다.
+//   품번조회에서 적용모델을 고치면 그 자국이 바로 여기에도 비치도록 셈한 것을 지운다.
+let _prodPartIdx=null;
+function prodPartIdxClear(){ _prodPartIdx=null; }
+function prodPartIdx(){
+  if(_prodPartIdx) return _prodPartIdx;
+  const m=new Map();
+  Object.keys((typeof pnMdl!=='undefined'&&pnMdl)||{}).forEach(rep=>{
+    pnMdlEntries(rep).forEach(e=>{
+      const k=normPN(e.p); if(!k) return;
+      if(!m.has(k)) m.set(k, []);
+      const a=m.get(k); if(a.indexOf(rep)<0) a.push(rep);
+    });
+  });
+  m.forEach(a=>a.sort());
+  _prodPartIdx=m;
+  return m;
+}
+function prodPartsOf(pn){ return prodPartIdx().get(normPN(pn))||[]; }
+// 그 부품의 품명(품번조회 자료를 그대로 쓴다 — 고친 이름도 얹혀 있다)
+function prodPartName(rep){
+  const k=normPN(rep);
+  const r=(typeof PN_DATA!=='undefined'?PN_DATA:[]).find(p=>normPN(p.rep)===k);
+  if(!r) return '';
+  try{ return String(pnColText('name', r)||''); }catch(e){ return String(r.name_ko||''); }
+}
+// 칸에는 품번 몇 개만 적고, 누르면 다 보여 준다
+function prodPartsCell(r){
+  const ru=(lang==='ru');
+  const list=prodPartsOf(r.pn);
+  const pnEsc=escapeHtml(String(r.pn).replace(/"/g,''));
+  if(!list.length) return '<span style="color:var(--muted);opacity:.5">—</span>';
+  const open='onclick="event.stopPropagation();prodPartsPop(&quot;'+pnEsc+'&quot;)"'
+    +' title="'+escapeHtml(ru?'Нажмите — все детали':'누르면 부품을 다 보여 줍니다')+'"';
+  const chipS='display:inline-block;cursor:pointer;background:var(--surface);border:1px solid var(--border);'
+    +'border-radius:10px;padding:0 6px;margin:1px 3px 1px 0;white-space:nowrap;'
+    +"font-family:'Courier New',monospace;font-size:10px";
+  const SHOW=3;
+  let h=list.slice(0,SHOW).map(p=>'<span '+open+' style="'+chipS+'">'+escapeHtml(p)+'</span>').join('');
+  if(list.length>SHOW)
+    h+='<span '+open+' style="'+chipS+';font-family:inherit;color:var(--accent2);font-weight:700">+'
+      +(list.length-SHOW)+'</span>';
+  return h;
+}
+// 적용부품 창 — 품번·품명. 줄을 누르면 품번조회에서 그 품번을 찾아 준다.
+function prodPartsPop(pn){
+  const ru=(lang==='ru'), L=(ko,rr)=>(ru?rr:ko);
+  const old=document.getElementById('prodPartsPop'); if(old) old.remove();
+  const list=prodPartsOf(pn), nm=prodNameOf(pn);
+  const tdS='padding:5px 8px;font-size:11px;border-bottom:1px solid var(--border)';
+  const codeS="font-family:'Courier New',monospace;font-size:11px;white-space:nowrap";
+  const box=document.createElement('div'); box.id='prodPartsPop';
+  box.style.cssText='position:fixed;inset:0;z-index:10000;background:#0008;display:flex;align-items:center;justify-content:center;padding:16px';
+  box.innerHTML=
+    '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;width:430px;max-width:100%;'
+      +'max-height:84vh;display:flex;flex-direction:column;box-shadow:0 16px 44px #000a;font-size:12px;color:var(--text)">'
+    +'<div style="padding:11px 14px;border-bottom:1px solid var(--border)">'
+      +'<div style="font-weight:700;font-size:13px">'+escapeHtml(normBadgePN(pn))+(nm?(' · '+escapeHtml(nm)):'')+'</div>'
+      +'<div style="font-size:11px;color:var(--muted);margin-top:2px">'
+        +escapeHtml(L('이 제품에 들어가는 부품 '+list.length+'개 — 줄을 누르면 품번조회에서 찾아 줍니다',
+                      'Деталей: '+list.length+' — нажмите строку, чтобы найти в «Артикулы»'))+'</div>'
+    +'</div>'
+    +'<div style="overflow:auto"><table style="width:100%;border-collapse:collapse">'
+      +(list.length?list.map(p=>'<tr onclick="prodPartsGo(&quot;'+escapeHtml(p.replace(/"/g,''))+'&quot;)"'
+          +' style="cursor:pointer" onmouseover="this.style.background=\'var(--row-hover)\'" onmouseout="this.style.background=\'\'">'
+          +'<td style="'+tdS+';'+codeS+'">'+escapeHtml(normBadgePN(p))+'</td>'
+          +'<td style="'+tdS+';word-break:break-all">'+escapeHtml(prodPartName(p))+'</td></tr>').join('')
+         :('<tr><td style="'+tdS+';color:var(--muted)">'+escapeHtml(L('붙은 부품이 없습니다.','Нет деталей.'))+'</td></tr>'))
+    +'</table></div>'
+    +'<div style="padding:10px 14px;border-top:1px solid var(--border);text-align:right">'
+      +'<button onclick="document.getElementById(\'prodPartsPop\').remove()" style="padding:7px 12px;border:1px solid var(--border);'
+      +'border-radius:7px;background:var(--bg);color:var(--text);cursor:pointer;font-size:12px">'+L('닫기','Закрыть')+'</button>'
+    +'</div></div>';
+  box.addEventListener('click', e=>{ if(e.target===box) box.remove(); });
+  document.body.appendChild(box);
+}
+// 품번조회로 건너가 그 부품을 찾아 준다
+function prodPartsGo(rep){
+  const b=document.getElementById('prodPartsPop'); if(b) b.remove();
+  try{
+    if(typeof switchTab==='function') switchTab('pn');
+    const i=document.getElementById('pnInput');
+    if(i){ i.value=normBadgePN(rep); if(typeof renderPN==='function') renderPN(); }
+  }catch(e){}
+}
 function downloadProd(){
   const ru=(lang==='ru');
   const kw=(document.getElementById('prodInput')?document.getElementById('prodInput').value:'').trim().toLowerCase();
   let rows=prodData.slice();
   if(kw) rows=rows.filter(r=>(r.pn+' '+r.name+' '+(r.memo||'')+' '+prodCmpText(r)+' '+(r.fin||'')).toLowerCase().includes(kw));
   const aoa=[[ru?'Артикул':'품번', ru?'Артикулы замены':'호환품번', ru?'Актуальный':'최종품번',
-              ru?'Наименование':'품명', ru?'Примечание':'비고']]
-    .concat(rows.map(r=>[r.pn, prodCmpText(r), r.fin||'', r.name, r.memo||'']));
+              ru?'Наименование':'품명', ru?'Примечание':'비고', ru?'Детали':'적용부품']]
+    .concat(rows.map(r=>[r.pn, prodCmpText(r), r.fin||'', r.name, r.memo||'', prodPartsOf(r.pn).join(', ')]));
   const ws=XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols']=[{wch:18},{wch:30},{wch:18},{wch:44},{wch:30}];
+  ws['!cols']=[{wch:18},{wch:30},{wch:18},{wch:44},{wch:30},{wch:40}];
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'PRODUCTS');
   XLSX.writeFile(wb, xlsxName('제품목록','Список изделий'));
 }
