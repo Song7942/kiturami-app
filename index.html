@@ -895,6 +895,7 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
           <span id="i18n-prod-dl">엑셀 다운로드</span>
         </button>
       </div>
+      <div id="prodNote" style="display:none;margin:0 12px 7px;padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);font-size:11px;color:var(--muted);line-height:1.9"></div>
       <div class="tbl-header-wrap">
         <table><colgroup id="prodColgroup"></colgroup><thead id="prodThead"></thead></table>
       </div>
@@ -14949,7 +14950,7 @@ function prodColList(){
     { k:'name',   t:L('품명(표준화)','Наименование (станд.)'), w:230 },
     { k:'ername', t:L('품명','Наименование (ERP)'),            w:200 },
     { k:'erspec', t:L('규격','Характеристика (ERP)'),          w:180 },
-    { k:'exp',    t:L('수출여부','Экспорт'),                    w:88  },
+    { k:'exp',    t:L('수출여부','Экспорт'),                    w:108 },
     { k:'use',    t:L('사용','Исп.'),                          w:84  },
     { k:'thermo', t:L('실내온도조절기','Термостат'),            w:146 },
     { k:'ctrl',   t:L('콘트롤러','Блок управления'),            w:146 },
@@ -14979,6 +14980,24 @@ function renderProd(){
   const m=prodColsMap();
   const use=prodColList().filter(c=>c.fix || m[c.k]!==false);
   if(ED) use.push({ k:'del', t:'', w:44, fix:1 });
+  // 맨 위 설명 — 수출여부의 표시가 무슨 뜻인지 알려 준다(수출여부 열을 꺼 두면 같이 숨는다)
+  const note=document.getElementById('prodNote');
+  if(note){
+    const noteOn=use.some(c=>c.k==='exp');
+    note.style.display=noteOn?'':'none';
+    if(noteOn){
+      const mk=(v,col,t)=>'<span style="display:inline-block;border-radius:9px;padding:0 8px;margin:0 5px 0 0;'
+        +'font-size:11px;font-weight:700;background:'+col+';color:#fff">'+v+'</span>'
+        +'<span style="margin-right:14px;color:var(--text)">'+escapeHtml(t)+'</span>';
+      note.innerHTML='<b style="color:var(--text);margin-right:4px">'+escapeHtml(L('수출여부','Экспорт'))+'</b>'
+        +'<span style="margin-right:10px;opacity:.5">|</span>'
+        +mk('O','#22c55e',L('수출합니다','Экспортируется'))
+        +mk('△','#f59e0b',L('향후 변경예정','Планируется изменение'))
+        +mk('X','#ef4444',L('수출하지 않습니다','Не экспортируется'))
+        +'<span style="opacity:.85">'+escapeHtml(L('칸의 표시를 눌러 고릅니다 — 고른 것을 다시 누르면 비워집니다.',
+                                                   'Нажмите значок в ячейке; повторное нажатие очищает.'))+'</span>';
+    }
+  }
   const cols=use.map(c=>'<col style="width:'+c.w+'px">').join('');
   const cg=document.getElementById('prodColgroup'); if(cg) cg.innerHTML=cols;
   const cg2=document.getElementById('prodColgroup2'); if(cg2) cg2.innerHTML=cols;
@@ -15221,6 +15240,7 @@ function prodAddOpen(){
         +'border-radius:7px;background:var(--bg);color:var(--text);font-size:12px">'
         +'<option value="">'+L('고르지 않음','Не выбрано')+'</option>'
         +'<option value="O">O</option>'
+        +'<option value="△">△ '+L('(향후 변경예정)','(планируется изменение)')+'</option>'
         +'<option value="X">X</option></select></div>'
       +'<div style="margin:0 0 9px"><div style="font-size:11px;color:var(--muted);margin:0 2px 3px">'+L('사용','Исп.')+'</div>'
         +'<select id="pdUse" style="width:100%;box-sizing:border-box;padding:6px 8px;border:1px solid var(--border);'
@@ -15502,19 +15522,21 @@ function prodPnInfoLine(code){
     +'</div>';
 }
 // 수출여부 — O / X (누르면 골라진다. 고른 것을 다시 누르면 비운다)
-const PROD_EXP=['O','X'];
+const PROD_EXP=['O','△','X'];
 function prodExpCell(r, ED){
   const ru=(lang==='ru'), L=(ko,rr)=>(ru?rr:ko);
   const pnEsc=escapeHtml(String(r.pn).replace(/"/g,''));
   const chip=v=>{
     const on=(String(r.exp||'')===v);
-    const col=(v==='O')?'#22c55e':'#ef4444';
+    const col=(v==='O')?'#22c55e':((v==='△')?'#f59e0b':'#ef4444');
+    const tip=(v==='O')?L('수출합니다','Экспортируется')
+             :((v==='△')?L('향후 변경예정','Планируется изменение'):L('수출하지 않습니다','Не экспортируется'));
     const st='display:inline-block;border-radius:9px;padding:0 8px;margin:1px;font-size:11px;font-weight:700;'
       +(on?('background:'+col+';color:#fff;border:1px solid '+col)
           :'background:var(--surface);color:var(--muted);border:1px solid var(--border)');
-    if(!ED) return on?('<span style="'+st+'">'+v+'</span>'):'';
+    if(!ED) return on?('<span title="'+escapeHtml(tip)+'" style="'+st+'">'+v+'</span>'):'';
     return '<span onclick="event.stopPropagation();prodExpSet(&quot;'+pnEsc+'&quot;,&quot;'+v+'&quot;)"'
-      +' title="'+escapeHtml(L('눌러서 고릅니다 (다시 누르면 비웁니다)','Нажмите, чтобы выбрать'))+'"'
+      +' title="'+escapeHtml(tip+L(' — 눌러서 고릅니다 (다시 누르면 비웁니다)',' — нажмите, чтобы выбрать'))+'"'
       +' style="cursor:pointer;'+st+'">'+v+'</span>';
   };
   return PROD_EXP.map(chip).join('') || '<span style="color:var(--muted);opacity:.5">—</span>';
@@ -15627,7 +15649,9 @@ function handleProdUpload(event){
         const cp=(cCp>=0)?prodCmpParse(w[cCp]):[];
         const fi=(cFi>=0)?pnUpAll(w[cFi]):'';
         let ex=(cEx>=0)?String(w[cEx]==null?'':w[cEx]).trim().toUpperCase():'';
-        if(ex) ex=(/^(O|0|Y|YES|예|수출|ДА)$/.test(ex)?'O':(/^(X|N|NO|아니오|НЕТ)$/.test(ex)?'X':''));
+        if(ex) ex=(/^(O|0|Y|YES|예|수출|ДА)$/.test(ex)?'O'
+                  :(/^(△|▲|세모|예정|변경예정|향후변경예정)$/.test(ex)?'△'
+                  :(/^(X|N|NO|아니오|НЕТ)$/.test(ex)?'X':'')));
         let us=(cUs>=0)?String(w[cUs]==null?'':w[cUs]).trim():'';
         if(us && !/^(AS|완제품)$/i.test(us)) us=(/изд/i.test(us)?'완제품':(/as/i.test(us)?'AS':''));
         else if(us) us=(/^as$/i.test(us)?'AS':'완제품');
