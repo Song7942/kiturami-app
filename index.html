@@ -14762,7 +14762,8 @@ const PROD_CFG_ID=93;
 let prodData=[];            // [{pn, cmp:[…], fin, name, memo}]
 // 한 줄 사본 — 되돌릴 때 쓰므로 호환품번 목록까지 따로 떠 둔다
 function prodRowCopy(r){
-  return { pn:r.pn, name:r.name, memo:r.memo||'', fin:r.fin||'', cmp:(r.cmp||[]).slice() };
+  return { pn:r.pn, name:r.name, memo:r.memo||'', fin:r.fin||'', cmp:(r.cmp||[]).slice(),
+           use:r.use||'', thermo:r.thermo||'', ctrl:r.ctrl||'' };
 }
 // 호환품번 적기 — 쉼표·빈칸·줄바꿈 아무렇게나 적어도 하나씩 끊어 담는다
 function prodCmpParse(s){
@@ -14777,7 +14778,9 @@ async function loadProd(){
     const rows=(data && data.cfg && Array.isArray(data.cfg.rows))?data.cfg.rows:[];
     prodData=rows.map(r=>({ pn:String(r.pn||'').trim(), name:String(r.name||'').trim(), memo:String(r.memo||'').trim(),
                             cmp:Array.isArray(r.cmp)?prodCmpParse(r.cmp.join(' ')):prodCmpParse(r.cmp),
-                            fin:pnUpAll(r.fin||'') })).filter(r=>r.pn||r.name||r.memo);
+                            fin:pnUpAll(r.fin||''),
+                            use:String(r.use||'').trim(), thermo:String(r.thermo||'').trim(), ctrl:String(r.ctrl||'').trim()
+                          })).filter(r=>r.pn||r.name||r.memo);
   }catch(e){ prodData=[]; }
   _prodLoaded=true;
   if(typeof prodNameClear==='function') prodNameClear();   // 품번조회의 적용모델 제품명이 이 목록을 본다
@@ -14807,6 +14810,7 @@ function renderProd(){
   const kw=(document.getElementById('prodInput')?document.getElementById('prodInput').value:'').trim().toLowerCase();
   let rows=prodData.slice();
   if(kw) rows=rows.filter(r=>(r.pn+' '+r.name+' '+(r.memo||'')+' '+prodCmpText(r)+' '+(r.fin||'')
+                              +' '+(r.use||'')+' '+(r.thermo||'')+' '+(r.ctrl||'')
                               +' '+prodMdlText(r.pn)).toLowerCase().includes(kw));
   const ED=canEditProd();                      // 고치기·지우기 — MASTER 거나 권한을 받은 회원
   // 품번 칸 너비는 품번 길이에 맞춘다 — 가장 긴 품번 하나가 들어갈 만큼만(세 칸 모두 같은 너비)
@@ -14815,7 +14819,10 @@ function renderProd(){
                         f(r.pn); f(r.fin); (r.cmp||[]).forEach(f); });
   const codeW=Math.max(72, Math.min(150, Math.round(cwN*6.65)+18));
   const heads=[['No.',46],[L('품번','Артикул'),codeW],[L('호환품번','Артикулы замены'),codeW],[L('최종품번','Актуальный'),codeW],
-               [L('품명','Наименование'),300],[L('비고','Примечание'),240],
+               [L('품명(표준화)','Наименование (станд.)'),250],
+               [L('사용','Исп.'),84],
+               [L('실내온도조절기','Термостат'),146],[L('콘트롤러','Блок управления'),146],
+               [L('비고','Примечание'),190],
                [L('적용모델','Модели'),(typeof pnMdlChipCap==='function'?Math.min(340, pnMdlChipCap()*2+16):300)]];
   if(ED) heads.push(['',44]);
   const cols=heads.map(h=>'<col style="width:'+h[1]+'px">').join('');
@@ -14848,6 +14855,9 @@ function renderProd(){
     + '<td style="'+tdS+'">'+(ED?ed(r.pn,'fin',r.fin||'',1)
         :('<span style="'+codeS+'">'+escapeHtml(r.fin||'')+'</span>'))+'</td>'
     + '<td style="'+tdS+';word-break:break-all">'+(ED?ed(r.pn,'name',r.name,0):escapeHtml(r.name))+'</td>'
+    + '<td style="'+tdS+';text-align:center">'+prodUseCell(r, ED)+'</td>'
+    + '<td style="'+tdS+'">'+prodCodeCell(r,'thermo', ED, ed)+'</td>'
+    + '<td style="'+tdS+'">'+prodCodeCell(r,'ctrl', ED, ed)+'</td>'
     + '<td style="'+tdS+';word-break:break-all;color:var(--muted)">'+(ED?ed(r.pn,'memo',r.memo||'',0):escapeHtml(r.memo||''))+'</td>'
     + '<td style="'+tdS+';font-size:11px">'+prodMdlCell(r)+'</td>'
     + (ED?('<td style="'+tdS+';text-align:center"><span onclick="prodDeleteRow(&quot;'+escapeHtml(String(r.pn).replace(/"/g,''))+'&quot;)"'
@@ -14859,6 +14869,9 @@ function renderProd(){
         + '<td style="'+tdS+'">'+ed('','newcmp','',2)+'</td>'
         + '<td style="'+tdS+'">'+ed('','newfin','',1)+'</td>'
         + '<td style="'+tdS+'">'+ed('','newname','',0)+'</td>'
+        + '<td style="'+tdS+'"></td>'
+        + '<td style="'+tdS+'">'+ed('','newthermo','',1)+'</td>'
+        + '<td style="'+tdS+'">'+ed('','newctrl','',1)+'</td>'
         + '<td style="'+tdS+'">'+ed('','newmemo','',0)+'</td>'
         + '<td style="'+tdS+'"></td><td style="'+tdS+'"></td></tr>'):'');
   const empty=document.getElementById('prodEmpty');
@@ -14891,7 +14904,8 @@ async function onProdCellBlur(el){
     if(!v){ el.textContent=''; return; }
     if(find(v)>=0){ alert(ru?'Уже есть.':normBadgePN(v)+' 는 이미 목록에 있습니다.'); el.textContent=''; return; }
     prodData.push({ pn:v, name:cell('newname'), memo:cell('newmemo'),
-                    cmp:prodCmpParse(cell('newcmp')), fin:pnUpAll(cell('newfin')) });
+                    cmp:prodCmpParse(cell('newcmp')), fin:pnUpAll(cell('newfin')),
+                    use:'', thermo:pnUpAll(cell('newthermo')), ctrl:pnUpAll(cell('newctrl')) });
     goName=v;
   }else{
     const i=find(key); if(i<0){ el.textContent=before; return; }
@@ -14900,6 +14914,8 @@ async function onProdCellBlur(el){
       const j=find(v); if(j>=0 && j!==i){ alert(ru?'Уже есть.':normBadgePN(v)+' 는 이미 목록에 있습니다.'); el.textContent=before; return; }
       prodData[i].pn=v;
     }else if(fld==='memo') prodData[i].memo=v;
+    else if(fld==='thermo') prodData[i].thermo=pnUpAll(v);
+    else if(fld==='ctrl') prodData[i].ctrl=pnUpAll(v);
     else if(fld==='cmp') prodData[i].cmp=prodCmpParse(v);     // 쉼표·빈칸으로 여러 개
     else if(fld==='fin') prodData[i].fin=pnUpAll(v);
     else prodData[i].name=v;
@@ -14964,7 +14980,17 @@ function prodAddOpen(){
       +fld('pdPn',   L('품번','Артикул'), 'A11E100114')
       +fld('pdCmp',  L('호환품번 (여러 개면 쉼표로 나눠 적습니다)','Артикулы замены (через запятую)'), 'A11E100115, A11E100116')
       +fld('pdFin',  L('최종품번 (비워 두어도 됩니다)','Актуальный артикул (необязательно)'), 'A11E100116')
-      +fld('pdName', L('품명','Наименование'), 'TURBO-15')
+      +fld('pdName', L('품명(표준화)','Наименование (станд.)'), 'TURBO-15')
+      +'<div style="margin:0 0 9px"><div style="font-size:11px;color:var(--muted);margin:0 2px 3px">'+L('사용','Исп.')+'</div>'
+        +'<select id="pdUse" style="width:100%;box-sizing:border-box;padding:6px 8px;border:1px solid var(--border);'
+        +'border-radius:7px;background:var(--bg);color:var(--text);font-size:12px">'
+        +'<option value="">'+L('고르지 않음','Не выбрано')+'</option>'
+        +'<option value="AS">AS</option>'
+        +'<option value="완제품">'+L('완제품','Изделие')+'</option></select></div>'
+      +fld('pdTh',   L('실내온도조절기 — 품번을 적으면 품명·규격이 따라 나옵니다','Термостат — артикул'), 'S121110070')
+      +'<div id="pdThMsg" style="margin:-6px 2px 8px"></div>'
+      +fld('pdCt',   L('콘트롤러 — 품번을 적으면 품명·규격이 따라 나옵니다','Блок управления — артикул'), 'S114110079')
+      +'<div id="pdCtMsg" style="margin:-6px 2px 8px"></div>'
       +fld('pdMemo', L('비고 (비워 두어도 됩니다)','Примечание (необязательно)'), '')
       +'<div id="pdMsg" style="font-size:11px;min-height:16px;margin:2px 2px 0"></div>'
     +'</div>'
@@ -14976,6 +15002,14 @@ function prodAddOpen(){
   const g=id=>box.querySelector('#'+id);
   g('pdClose').onclick=prodAddClose;
   g('pdSave').onclick=prodAddSave;
+  // 품번을 적는 대로 품명·규격을 찾아 보여 준다
+  ['pdTh','pdCt'].forEach(id=>{
+    const inp=g(id), m=g(id+'Msg');
+    if(!inp || !m) return;
+    const tell=()=>{ m.innerHTML=prodPnInfoLine(inp.value); };
+    inp.addEventListener('input', tell);
+    inp.addEventListener('blur', ()=>{ inp.value=pnUpAll(inp.value); tell(); });
+  });
   box.addEventListener('keydown', e=>{
     if(e.key==='Escape'){ prodAddClose(); return; }
     if(e.key==='Enter'){ e.preventDefault(); prodAddSave(); }
@@ -14991,6 +15025,9 @@ async function prodAddSave(){
   const mo=String(g('pdMemo').value||'').replace(/\s+/g,' ').trim();
   const cp=prodCmpParse(g('pdCmp').value);
   const fi=pnUpAll(g('pdFin').value);
+  const us=String(g('pdUse').value||'');
+  const th=pnUpAll(g('pdTh').value);
+  const ct=pnUpAll(g('pdCt').value);
   const msgEl=g('pdMsg');
   const say=(t,c)=>{ msgEl.style.color=c; msgEl.textContent=t; };
   if(!pn){ say(L('품번을 적어 주세요.','Введите артикул.'),'#ef4444'); g('pdPn').focus(); return; }
@@ -14998,7 +15035,7 @@ async function prodAddSave(){
   if(prodData.some(r=>String(r.pn||'').trim().toUpperCase()===k)){
     say(L(normBadgePN(pn)+' 는 이미 목록에 있습니다.','Такой артикул уже есть.'),'#f59e0b'); g('pdPn').select(); return; }
   const old=prodData.map(prodRowCopy);
-  prodData.push({ pn, name:nm, memo:mo, cmp:cp, fin:fi });
+  prodData.push({ pn, name:nm, memo:mo, cmp:cp, fin:fi, use:us, thermo:th, ctrl:ct });
   g('pdSave').disabled=true;
   const err=await saveProd();
   g('pdSave').disabled=false;
@@ -15007,7 +15044,7 @@ async function prodAddSave(){
   if(typeof ktAfterPnEdit==='function') ktAfterPnEdit();
   say(L('더했습니다 — '+normBadgePN(pn)+(nm?(' · '+nm):'')+'   (모두 '+prodData.length+'개)',
         'Добавлено — '+pn+'  (всего '+prodData.length+')'),'#22c55e');
-  ['pdPn','pdCmp','pdFin','pdName','pdMemo'].forEach(id=>{ g(id).value=''; });
+  ['pdPn','pdCmp','pdFin','pdName','pdTh','pdCt','pdMemo'].forEach(id=>{ g(id).value=''; });
   g('pdPn').focus();
 }
 // ── 품명 일괄변경 ───────────────────────────────────────
@@ -15178,17 +15215,84 @@ function prodMdlText(pn){
   if(typeof pnMdlEntries!=='function') return '';
   return pnMdlEntries(pn).map(e=>(e.p||'')+' '+(typeof pnMdlName==='function'?pnMdlName(e):(e.n||''))).join(' ');
 }
+// ── 사용 · 실내온도조절기 · 콘트롤러 열 ───────────────────
+//   사용은 눌러서 고른다(고른 것을 다시 누르면 비운다).
+//   실내온도조절기·콘트롤러는 품번을 적으면 품번조회에서 품명·규격을 찾아 밑에 적어 준다.
+const PROD_USE=['AS','완제품'];
+function prodUseLabel(v, ru){ return ru?(v==='AS'?'AS':'Изделие'):v; }
+// 품번 하나로 품번조회 자료를 찾는다 — 대표품번·최종품번·호환품번 어느 것으로 적어도 찾는다
+function prodPnInfo(code){
+  const k=normPN(code); if(!k) return null;
+  const list=(typeof PN_DATA!=='undefined' && PN_DATA)?PN_DATA:[];
+  let r=list.find(p=>normPN(p.rep)===k);
+  if(!r) r=list.find(p=>normPN(p.final)===k);
+  if(!r) r=list.find(p=>(p.compats||[]).some(c=>normPN(c)===k));
+  if(!r) return null;
+  let nm='', sp='';
+  try{ nm=String(pnColText('name',r)||''); sp=String(pnColText('spec',r)||''); }
+  catch(e){ nm=String(r.name_ko||''); sp=String(r.spec||''); }
+  return { rep:String(r.rep||''), name:nm, spec:sp };
+}
+// 적어 둔 품번 밑에 품명·규격을 적는다(품번조회에 없으면 그렇다고 알려 준다)
+function prodPnInfoLine(code){
+  const ru=(lang==='ru'), c=String(code||'').trim();
+  if(!c) return '';
+  const o=prodPnInfo(c);
+  if(!o) return '<div style="font-size:10px;color:#f59e0b;margin-top:1px">'
+    +escapeHtml(ru?'Нет в «Артикулы»':'품번조회에 없는 품번')+'</div>';
+  return '<div style="font-size:10px;color:var(--muted);margin-top:1px;line-height:1.35;word-break:break-all">'
+    +(o.name?('<span style="font-weight:600">'+escapeHtml(o.name)+'</span>'):'')
+    +(o.spec?('<br>'+escapeHtml(o.spec)):'')
+    +((!o.name&&!o.spec)?escapeHtml(ru?'(без названия)':'(이름 없음)'):'')
+    +'</div>';
+}
+// 사용 — AS / 완제품 (누르면 골라진다)
+function prodUseCell(r, ED){
+  const ru=(lang==='ru'), L=(ko,rr)=>(ru?rr:ko);
+  const pnEsc=escapeHtml(String(r.pn).replace(/"/g,''));
+  const chip=v=>{
+    const on=(String(r.use||'')===v);
+    const st='display:inline-block;border-radius:9px;padding:0 7px;margin:1px;font-size:10px;font-weight:700;'
+      +(on?'background:var(--accent2);color:#fff;border:1px solid var(--accent2)'
+          :'background:var(--surface);color:var(--muted);border:1px solid var(--border)');
+    if(!ED) return on?('<span style="'+st+'">'+escapeHtml(prodUseLabel(v,ru))+'</span>'):'';
+    return '<span onclick="event.stopPropagation();prodUseSet(&quot;'+pnEsc+'&quot;,&quot;'+v+'&quot;)"'
+      +' title="'+escapeHtml(L('눌러서 고릅니다 (다시 누르면 비웁니다)','Нажмите, чтобы выбрать'))+'"'
+      +' style="cursor:pointer;'+st+'">'+escapeHtml(prodUseLabel(v,ru))+'</span>';
+  };
+  return PROD_USE.map(chip).join('') || '<span style="color:var(--muted);opacity:.5">—</span>';
+}
+// 실내온도조절기·콘트롤러 — 품번 한 줄, 그 밑에 품명·규격
+function prodCodeCell(r, fld, ED, ed){
+  const v=String(r[fld]||'').trim();
+  const codeS="font-family:'Courier New',monospace;font-size:11px;white-space:nowrap";
+  const dash='<span style="color:var(--muted);opacity:.5">—</span>';
+  const head=ED?ed(r.pn,fld,v,1):(v?('<span style="'+codeS+'">'+escapeHtml(v)+'</span>'):dash);
+  return head+prodPnInfoLine(v);
+}
+// 사용 고르기 — 고른 것을 다시 누르면 비운다
+async function prodUseSet(pn, v){
+  const ru=(lang==='ru');
+  if(!canEditProd()) return;
+  const i=prodData.findIndex(r=>normPN(r.pn)===normPN(pn)); if(i<0) return;
+  const old=prodData.map(prodRowCopy);
+  prodData[i].use=(String(prodData[i].use||'')===v)?'':v;
+  const msg=await saveProd();
+  if(msg){ prodData=old; alert((ru?'Ошибка сохранения':'저장 실패')+'\n['+msg+']'); return; }
+  renderProd();
+}
 function downloadProd(){
   const ru=(lang==='ru');
   const kw=(document.getElementById('prodInput')?document.getElementById('prodInput').value:'').trim().toLowerCase();
   let rows=prodData.slice();
   if(kw) rows=rows.filter(r=>(r.pn+' '+r.name+' '+(r.memo||'')+' '+prodCmpText(r)+' '+(r.fin||'')).toLowerCase().includes(kw));
   const aoa=[[ru?'Артикул':'품번', ru?'Артикулы замены':'호환품번', ru?'Актуальный':'최종품번',
-              ru?'Наименование':'품명', ru?'Примечание':'비고', ru?'Модели':'적용모델']]
-    .concat(rows.map(r=>[r.pn, prodCmpText(r), r.fin||'', r.name, r.memo||'',
+              ru?'Наименование (станд.)':'품명(표준화)', ru?'Исп.':'사용', ru?'Термостат':'실내온도조절기',
+              ru?'Блок управления':'콘트롤러', ru?'Примечание':'비고', ru?'Модели':'적용모델']]
+    .concat(rows.map(r=>[r.pn, prodCmpText(r), r.fin||'', r.name, r.use||'', r.thermo||'', r.ctrl||'', r.memo||'',
                          pnMdlEntries(r.pn).map(e=>(pnMdlName(e)||e.p)).join(', ')]));
   const ws=XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols']=[{wch:18},{wch:30},{wch:18},{wch:44},{wch:30},{wch:40}];
+  ws['!cols']=[{wch:18},{wch:30},{wch:18},{wch:44},{wch:8},{wch:18},{wch:18},{wch:30},{wch:40}];
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'PRODUCTS');
   XLSX.writeFile(wb, xlsxName('제품목록','Список изделий'));
 }
@@ -15204,16 +15308,19 @@ function handleProdUpload(event){
       const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
       const a=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:''});
       // 머리글 줄('품번'·'품명')을 찾고, 없으면 첫 줄부터 두 열을 그대로 읽는다
-      let h=-1, cPn=0, cNm=1, cMo=-1, cCp=-1, cFi=-1, fNm=false;
+      let h=-1, cPn=0, cNm=1, cMo=-1, cCp=-1, cFi=-1, cUs=-1, cTh=-1, cCt=-1, fNm=false;
       for(let r=0;r<Math.min(10,a.length) && h<0;r++){
         const w=a[r]||[];
         for(let c=0;c<w.length;c++){
           const t=String(w[c]==null?'':w[c]).replace(/\s/g,'');
           if(t==='품번'||/^артикул$/i.test(t)||t==='품목코드'){ cPn=c; h=r; }
-          if(t==='품명'||/^наименование$/i.test(t)||t==='제품명'){ cNm=c; fNm=true; if(h<0) h=r; }
+          if(t.indexOf('품명')===0||/^наименование/i.test(t)||t==='제품명'){ cNm=c; fNm=true; if(h<0) h=r; }
           if(t==='비고'||/^примечание$/i.test(t)||t==='메모'){ cMo=c; if(h<0) h=r; }
           if(t==='호환품번'||/^артикулызамены$/i.test(t)||t==='대체품번'){ cCp=c; if(h<0) h=r; }
           if(t==='최종품번'||/^актуальный(артикул)?$/i.test(t)){ cFi=c; if(h<0) h=r; }
+          if(t==='사용'||/^исп\.?$/i.test(t)){ cUs=c; if(h<0) h=r; }
+          if(t==='실내온도조절기'||t==='온도조절기'||/^термостат$/i.test(t)){ cTh=c; if(h<0) h=r; }
+          if(t==='콘트롤러'||t==='컨트롤러'||t==='콘트롤'||/^блокуправления$/i.test(t)){ cCt=c; if(h<0) h=r; }
         }
       }
       // '품명' 머리글이 없는데 둘째 열이 호환품번·최종품번·비고 자리면 품명으로 읽지 않는다
@@ -15226,9 +15333,14 @@ function handleProdUpload(event){
         const mo=(cMo>=0)?String(w[cMo]==null?'':w[cMo]).trim():'';
         const cp=(cCp>=0)?prodCmpParse(w[cCp]):[];
         const fi=(cFi>=0)?pnUpAll(w[cFi]):'';
+        let us=(cUs>=0)?String(w[cUs]==null?'':w[cUs]).trim():'';
+        if(us && !/^(AS|완제품)$/i.test(us)) us=(/изд/i.test(us)?'완제품':(/as/i.test(us)?'AS':''));
+        else if(us) us=(/^as$/i.test(us)?'AS':'완제품');
+        const th=(cTh>=0)?String(w[cTh]==null?'':w[cTh]).trim():'';
+        const ct=(cCt>=0)?String(w[cCt]==null?'':w[cCt]).trim():'';
         if(!pn && !nm) continue;
         const k=pn.toUpperCase(); if(k && seen[k]) continue; if(k) seen[k]=1;
-        out.push({pn, name:nm, memo:mo, cmp:cp, fin:fi});
+        out.push({pn, name:nm, memo:mo, cmp:cp, fin:fi, use:us, thermo:th, ctrl:ct});
       }
       if(!out.length){ alert(ru?'Не найдено строк.':'읽을 줄이 없습니다. 품번·품명 두 열이 있는지 확인해 주세요.'); event.target.value=''; return; }
       // 지금 목록에 더한다 — 있던 품번은 품명만 새로, 없던 품번은 뒤에 붙인다
@@ -15244,8 +15356,12 @@ function handleProdUpload(event){
           if(r.memo && (m0.memo||'')!==r.memo){ m0.memo=r.memo; ch=1; }        // 비고는 적혀 있을 때만 바꾼다
           if(r.cmp && r.cmp.length && (m0.cmp||[]).join(',')!==r.cmp.join(',')){ m0.cmp=r.cmp.slice(); ch=1; }
           if(r.fin && (m0.fin||'')!==r.fin){ m0.fin=r.fin; ch=1; }
+          if(r.use && (m0.use||'')!==r.use){ m0.use=r.use; ch=1; }
+          if(r.thermo && (m0.thermo||'')!==r.thermo){ m0.thermo=r.thermo; ch=1; }
+          if(r.ctrl && (m0.ctrl||'')!==r.ctrl){ m0.ctrl=r.ctrl; ch=1; }
           if(ch) upd++;
-        }else{ merged.push({pn:r.pn, name:r.name, memo:r.memo||'', cmp:(r.cmp||[]).slice(), fin:r.fin||''});
+        }else{ merged.push({pn:r.pn, name:r.name, memo:r.memo||'', cmp:(r.cmp||[]).slice(), fin:r.fin||'',
+                            use:r.use||'', thermo:r.thermo||'', ctrl:r.ctrl||''});
                if(k) idx[k]=merged.length-1; add++; }
       });
       if(!add && !upd){ alert(ru?'Нечего добавлять.':'새로 더할 것이 없습니다. 모두 이미 있는 제품입니다.'); event.target.value=''; return; }
