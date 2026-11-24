@@ -14818,13 +14818,10 @@ function prodColList(){
   prodData.forEach(r=>{ const f=x=>{ const n=String(x||'').trim().length; if(n>cwN) cwN=n; };
                         f(r.pn); f(r.fin); (r.cmp||[]).forEach(f); });
   const codeW=Math.max(84, Math.min(170, Math.round(cwN*6.85)+26));
-  // 호환품번은 한 줄에 여러 개라 가장 많이 붙은 줄에 맞춰 넓힌다(최대 3단)
-  let cwC=1; prodData.forEach(r=>{ const n=((r.cmp||[]).length)||0; if(n>cwC) cwC=n; });
-  cwC=Math.max(2, Math.min(3, cwC));
   return [
     { k:'no',     t:'No.',                                   w:46,  fix:1 },
     { k:'pn',     t:L('품번','Артикул'),                      w:codeW, fix:1 },
-    { k:'cmp',    t:L('호환품번','Артикулы замены'),           w:Math.min(340, Math.max(codeW*2+20, cwC*(codeW+6))) },
+    { k:'cmp',    t:L('호환품번','Артикулы замены'),           w:codeW },
     { k:'fin',    t:L('최종품번','Актуальный'),                w:codeW },
     { k:'name',   t:L('품명(표준화)','Наименование (станд.)'), w:230 },
     { k:'ername', t:L('품명','Наименование (ERP)'),            w:200 },
