@@ -934,6 +934,10 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
           <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           <span id="i18n-pndl">엑셀 다운로드</span>
         </button>
+        <button class="dl-btn" id="pnItemBtn" onclick="downloadItemInfo()" title="올려 둔 품목코드정보(품목코드·품목명·규격)를 그대로 내려받습니다 — 품번조회에 없는 품번까지 모두">
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span id="i18n-pnitem">품목정보</span>
+        </button>
         <button class="dl-btn" id="pnOfflineBtn" onclick="downloadOfflineHtml()" title="부품조회·품번조회·가격정보 3개 화면을 인터넷 없이 쓰는 오프라인 앱(HTML)으로 저장. 내부 공유용" style="background:#7c3aed;border-color:#7c3aed;color:#fff">
           <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
           <span id="i18n-pnoffline">오프라인 앱</span>
@@ -2834,6 +2838,7 @@ function refreshPsiTexts(){
   document.getElementById('searchInput').placeholder=t.ph;
   document.getElementById('i18n-dl').textContent=t.dl;
   document.getElementById('i18n-pndl').textContent=t.pndl;
+  { const e=document.getElementById('i18n-pnitem'); if(e) e.textContent=(lang==='ru')?'Номенклатура':'품목정보'; }
   document.getElementById('tab-parts').textContent=t.tabParts;
   document.getElementById('tab-pn').textContent=t.tabPN;
   applyOrderTabLabel();
@@ -6278,9 +6283,15 @@ async function handleSpecialPNUpload(wb){
     PN_DATA.forEach(p=>{ const add=k=>{ const n=normPN(k); if(n) wantPn.add(n); };
       add(p.rep); add(p.final); (p.compats||[]).forEach(add); });
     const specMap={}, repAgg={}, seen={};
+    const allItems=new Map();      // 품번조회에 없는 품번까지 모두 — '품목정보' 로 기억해 둔다
     let fileRows=0;
     for(let r=hdr.row+1;r<aoa.length;r++){ const row=aoa[r]||[]; const raw=String(row[C.pn]==null?'':row[C.pn]).trim(); if(!raw)continue; const pn=normPN(raw);
       fileRows++;
+      if(C.name!=null || C.spec!=null){             // 품명·규격이 있는 파일이면 모두 기억해 둔다
+        const nm=(C.name!=null)?String(V(row,C.name)||'').trim():'';
+        const sp=(C.spec!=null)?String(V(row,C.spec)||'').trim():'';
+        if(nm||sp) allItems.set(pn, { name:nm.toUpperCase(), spec:sp.toUpperCase() });
+      }
       if(!wantPn.has(pn)) continue;                 // 품번조회에 없는 품번은 건너뛴다
       const o=specMap[pn]||(specMap[pn]={});
       if(C.name!=null){ const v=V(row,C.name); if(v){o.name=String(v).toUpperCase(); seen.name=1;} }   // 품명·규격은 늘 대문자
@@ -6320,16 +6331,114 @@ async function handleSpecialPNUpload(wb){
     if(seen.en){ const ep=reps.filter(rep=>repAgg[rep].en).map(rep=>({rep, name_en:repAgg[rep].en})); enN=ep.length;
       for(let i=0;i<ep.length;i+=400){ const {error}=await sb.from('kt_names_en').upsert(ep.slice(i,i+400),{onConflict:'rep'}); if(error) return (ru?'Ошибка kt_names_en.':'업로드 실패(영문명).')+'\n['+(error.message||error.code)+']'; }
       if(typeof loadEngNames==='function') await loadEngNames(); }
-    if(!scols.length && !ocols.length && !seen.en) return ru?'Совпадающих данных нет.':'반영할 내용을 찾지 못했습니다.';
+    let memTail='';
+    if(allItems.size){
+      try{
+        const mem=await saveItemInfo(allItems);
+        memTail=ru?('\nНоменклатура сохранена: +'+mem.add+' (всего '+mem.all+').')
+                  :('\n품목정보로 기억해 둔 품목 '+allItems.size.toLocaleString()+'개'
+                    +' (새로 '+mem.add.toLocaleString()+'개 · 모두 '+mem.all.toLocaleString()+'개)'
+                    +'\n품번조회에 없는 품번도 제품목록 같은 곳에서 품명·규격이 바로 나옵니다.');
+      }catch(e){ memTail=ru?('\n※ Номенклатуру сохранить не удалось.'):('\n※ 품목정보는 담지 못했습니다 — '+(e.message||e)); }
+    }
+    if(!scols.length && !ocols.length && !seen.en)
+      return (ru?'Совпадающих данных нет.':'품번조회에 반영할 내용은 없었습니다.')+memTail;
     await loadPnSpecs(); _pnLookupMap=null; _pnByRepMap=null; renderPN();
     const parts=[]; if(seen.name||seen.spec)parts.push('품명·규격'); if(seen.nw||seen.gw||seen.cbm)parts.push('N/W·G/W·CBM'); if(seen.dan)parts.push('단종'); if(seen.ru)parts.push('러품'); if(seen.en)parts.push('영문명('+enN+')'); if(seen.appl)parts.push('적용모델');
     const skipped=fileRows-specPns.length;
     return (ru?'Обновлено: ':'반영: ')+parts.join(', ')+' — 호환품번 '+specPns.length+'개 / 대표품번 '+reps.length+'개.'
       + (skipped>0 ? (ru?('\nВ файле '+fileRows+' строк; не найдено в справочнике: '+skipped+' (пропущено).')
                         :('\n파일에는 '+fileRows.toLocaleString()+'줄이 있고, 그중 품번조회에 있는 '+specPns.length.toLocaleString()+'개만 반영했습니다.'
-                          +'\n(나머지 '+skipped.toLocaleString()+'개는 품번조회에 없는 품번이라 건너뛰었습니다)')) : '');
+                          +'\n(나머지 '+skipped.toLocaleString()+'개는 품번조회에 없는 품번이라 건너뛰었습니다)')) : '')
+      + memTail;
   }
   return null;   // 표준 품번 양식 → 기존 로직
+}
+// ══ 품목정보 — ERP 품목코드·품목명·규격을 그대로 기억해 둔다 ══════════
+//   품번조회에 엑셀을 올리면 품번조회에 있는 품번만 반영된다(종전 그대로).
+//   여기서는 파일에 있던 품목을 '모두' 담아 둔다 — 품번조회에 아직 없는 품번도.
+//   그래서 제품목록 같은 다른 화면이 그 품번을 쓰면 품명·규격을 바로 꺼내 쓸 수 있다.
+//   담는 곳 : kt_psi_cfg 300(목차) · 301부터 한 칸에 만 줄씩(글 한 덩이로 눌러 담는다)
+const ITEM_IDX_ID=300, ITEM_CHUNK_ID0=301, ITEM_CHUNK=10000;
+let itemInfo=null;              // Map(품번 -> {name, spec})
+let _itemInfoLoading=null;
+function itemInfoOf(code){
+  const k=normPN(code);
+  if(!k || !itemInfo) return null;
+  return itemInfo.get(k)||null;
+}
+function itemInfoCount(){ return itemInfo?itemInfo.size:0; }
+async function loadItemInfo(force){
+  if(itemInfo && !force) return itemInfo;
+  if(_itemInfoLoading) return _itemInfoLoading;
+  _itemInfoLoading=(async()=>{
+    const m=new Map();
+    try{
+      const { data }=await sb.from('kt_psi_cfg').select('cfg').eq('id',ITEM_IDX_ID).maybeSingle();
+      const idx=(data && data.cfg && typeof data.cfg==='object')?data.cfg:null;
+      const n=(idx && idx.chunks)?Number(idx.chunks):0;
+      for(let i=0;i<n;i++){
+        const { data:d2 }=await sb.from('kt_psi_cfg').select('cfg').eq('id',ITEM_CHUNK_ID0+i).maybeSingle();
+        const s=(d2 && d2.cfg && typeof d2.cfg.s==='string')?d2.cfg.s:'';
+        if(!s) continue;
+        s.split('\n').forEach(line=>{
+          if(!line) return;
+          const p=line.split('\t');
+          const k=normPN(p[0]); if(!k) return;
+          m.set(k, { name:p[1]||'', spec:p[2]||'' });
+        });
+      }
+    }catch(e){ console.error('품목정보 읽기 실패', e); }
+    itemInfo=m; _itemInfoLoading=null;
+    return m;
+  })();
+  return _itemInfoLoading;
+}
+// 올린 것을 지금 기억해 둔 것과 합쳐 담는다. 돌려주는 값은 {add, all}.
+async function saveItemInfo(map){
+  if(!map || !map.size) return { add:0, all:itemInfoCount() };
+  await loadItemInfo();
+  const before=itemInfo.size;
+  map.forEach((v,k)=>{ if(k) itemInfo.set(k, { name:v.name||'', spec:v.spec||'' }); });
+  const keys=[...itemInfo.keys()].sort();
+  const chunks=Math.max(1, Math.ceil(keys.length/ITEM_CHUNK));
+  const now=new Date().toISOString();
+  for(let c=0;c<chunks;c++){
+    const part=keys.slice(c*ITEM_CHUNK, (c+1)*ITEM_CHUNK)
+      .map(k=>{ const o=itemInfo.get(k)||{};
+                return k+'\t'+String(o.name||'').replace(/[\t\n]/g,' ')+'\t'+String(o.spec||'').replace(/[\t\n]/g,' '); })
+      .join('\n');
+    const { error }=await sb.from('kt_psi_cfg').upsert(
+      { id:ITEM_CHUNK_ID0+c, cfg:{ s:part }, updated_at:now }, { onConflict:'id' });
+    if(error) throw new Error(error.message||error.code);
+  }
+  // 전보다 칸이 줄었으면 남은 칸을 비운다
+  let old=0;
+  try{ const { data }=await sb.from('kt_psi_cfg').select('cfg').eq('id',ITEM_IDX_ID).maybeSingle();
+       old=(data && data.cfg && data.cfg.chunks)?Number(data.cfg.chunks):0; }catch(e){}
+  for(let c=chunks;c<old;c++){
+    try{ await sb.from('kt_psi_cfg').upsert({ id:ITEM_CHUNK_ID0+c, cfg:{ s:'' }, updated_at:now }, { onConflict:'id' }); }catch(e){}
+  }
+  const { error:eI }=await sb.from('kt_psi_cfg').upsert(
+    { id:ITEM_IDX_ID, cfg:{ chunks, total:keys.length, at:now }, updated_at:now }, { onConflict:'id' });
+  if(eI) throw new Error(eI.message||eI.code);
+  return { add:itemInfo.size-before, all:itemInfo.size };
+}
+// 기억해 둔 품목정보를 엑셀로 내려받는다
+async function downloadItemInfo(){
+  const ru=(lang==='ru');
+  const m=await loadItemInfo();
+  if(!m || !m.size){
+    alert(ru?'Сохранённой номенклатуры нет. Сначала загрузите файл в «Артикулы».'
+            :'기억해 둔 품목정보가 없습니다.\n품번조회에 품목코드정보 엑셀을 한 번 올려 주세요.');
+    return;
+  }
+  const aoa=[[ru?'Код':'품목코드', ru?'Наименование':'품목명', ru?'Характеристика':'규격']];
+  [...m.keys()].sort().forEach(k=>{ const o=m.get(k)||{}; aoa.push([k, o.name||'', o.spec||'']); });
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols']=[{wch:16},{wch:42},{wch:32}];
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'ITEMS');
+  XLSX.writeFile(wb, xlsxName('품목정보','Номенклатура'));
 }
 async function handlePNUpload(event){
   const t=T[lang];
@@ -14816,6 +14925,11 @@ async function loadProdTab(){
   if(!_prodLoaded) await loadProd();
   if(typeof loadPnMdl==='function'){ try{ await loadPnMdl(); }catch(e){} }      // 적용모델 열이 볼 자료
   renderProd();
+  // 품목정보(ERP 품목코드정보)는 덩치가 커서 화면을 먼저 그린 뒤 뒤에서 받는다.
+  //   다 받으면 품명·규격이 채워지도록 한 번 더 그린다.
+  if(typeof loadItemInfo==='function' && !itemInfo){
+    loadItemInfo().then(m=>{ if(m && m.size && ktPaneOn('pane-prod')) renderProd(); }).catch(()=>{});
+  }
 }
 function debouncedRenderProd(){ clearTimeout(window._prodT); window._prodT=setTimeout(renderProd,180); }
 // 제품목록 열 차림표 — '보기' 창과 표가 같은 목록을 쓴다
@@ -15343,7 +15457,12 @@ function prodPnInfo(code){
   let r=list.find(p=>normPN(p.rep)===k);
   if(!r) r=list.find(p=>normPN(p.final)===k);
   if(!r) r=list.find(p=>(p.compats||[]).some(c=>normPN(c)===k));
-  if(!r) return null;
+  if(!r){
+    // 품번조회에 없으면 올려 둔 품목정보(ERP 품목코드정보)에서 찾는다
+    const it=(typeof itemInfoOf==='function')?itemInfoOf(k):null;
+    if(it) return { rep:k, name:it.name||'', spec:it.spec||'', fromItem:1 };
+    return null;
+  }
   let nm='', sp='';
   try{ nm=String(pnColText('name',r)||''); sp=String(pnColText('spec',r)||''); }
   catch(e){ nm=String(r.name_ko||''); sp=String(r.spec||''); }
@@ -24413,7 +24532,7 @@ function ktLoadPnData(){
     'downloadInventoryData','downloadInventoryTemplate','downloadShipmentsData',
     'downloadPSI','downloadPO','downloadShip','downloadMS','downloadMOQ','downloadSS',
     'downloadBLK','downloadPPSI','downloadASR','downloadReport',
-    'downloadPriceActive','downloadPriceRegion','downloadPriceCompany',
+    'downloadPriceActive','downloadPriceRegion','downloadPriceCompany','downloadItemInfo',
     'handlePNUpload','handlePOUpload','handleOrderUpload','handleInventoryUpload',
     'handleShipmentsUpload','handleProdUpload','handlePnChkUpload','handleEngNameUpload',
     'handleSpecialPNUpload','handleMoqUpload','handleBlockedUpload','handleBomRevUpload',
