@@ -873,6 +873,10 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
           <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
           <input type="text" id="prodInput" placeholder="품번·품명·비고로 검색…" oninput="debouncedRenderProd()">
         </div>
+        <button class="dl-btn" id="prodViewBtn" onclick="openProdViewPanel()" title="표에 보일 열을 고릅니다">
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
+          <span id="i18n-prod-view">보기</span>
+        </button>
         <button class="dl-btn" id="prodRepBtn" onclick="prodRepOpen()" title="품명에 든 글자를 찾아 한꺼번에 바꿉니다" style="display:none">
           <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 014-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg>
           <span id="i18n-prod-rep">품명 일괄변경</span>
@@ -2704,6 +2708,7 @@ function refreshPsiTexts(){
   // 발주현황
   ph('poInput','차수·발주년월·대표코드·발주코드·품명·인보이스로 검색…','Поиск: партия, месяц, код, наименование, инвойс…');
   set('i18n-tab-prod','🏷️ 제품목록','🏷️ Изделия');
+  set('i18n-prod-view','보기','Вид');
   set('i18n-prod-rep','품명 일괄변경','Замена в названиях');
   set('i18n-prod-add','품목 추가','Добавить изделие');
   set('i18n-prod-up','엑셀 업로드','Загрузить Excel');
@@ -14806,6 +14811,36 @@ async function loadProdTab(){
   renderProd();
 }
 function debouncedRenderProd(){ clearTimeout(window._prodT); window._prodT=setTimeout(renderProd,180); }
+// 제품목록 열 차림표 — '보기' 창과 표가 같은 목록을 쓴다
+function prodColList(){
+  const ru=(lang==='ru'), L=(ko,rr)=>(ru?rr:ko);
+  let cwN=0;
+  prodData.forEach(r=>{ const f=x=>{ const n=String(x||'').trim().length; if(n>cwN) cwN=n; };
+                        f(r.pn); f(r.fin); (r.cmp||[]).forEach(f); });
+  const codeW=Math.max(72, Math.min(150, Math.round(cwN*6.65)+18));
+  return [
+    { k:'no',     t:'No.',                                   w:46,  fix:1 },
+    { k:'pn',     t:L('품번','Артикул'),                      w:codeW, fix:1 },
+    { k:'cmp',    t:L('호환품번','Артикулы замены'),           w:codeW },
+    { k:'fin',    t:L('최종품번','Актуальный'),                w:codeW },
+    { k:'name',   t:L('품명(표준화)','Наименование (станд.)'), w:230 },
+    { k:'ername', t:L('품명','Наименование (ERP)'),            w:200 },
+    { k:'erspec', t:L('규격','Характеристика (ERP)'),          w:180 },
+    { k:'use',    t:L('사용','Исп.'),                          w:84  },
+    { k:'thermo', t:L('실내온도조절기','Термостат'),            w:146 },
+    { k:'ctrl',   t:L('콘트롤러','Блок управления'),            w:146 },
+    { k:'memo',   t:L('비고','Примечание'),                    w:190 },
+    { k:'mdl',    t:L('적용모델','Модели'),
+      w:(typeof pnMdlChipCap==='function'?Math.min(340, pnMdlChipCap()*2+16):300) }
+  ];
+}
+// '보기' 에서 꺼 둔 열 (아이디별로 담긴다 — 품번조회·PSI 와 같은 칸을 쓴다)
+function prodColsMap(){
+  const src=(typeof psiCols!=='undefined' && psiCols && psiCols.__prod && typeof psiCols.__prod==='object')?psiCols.__prod:null;
+  const m={};
+  if(src) Object.keys(src).forEach(k=>{ if(typeof src[k]==='boolean') m[k]=src[k]; });
+  return m;
+}
 function renderProd(){
   const pane=document.getElementById('pane-prod'); if(!pane) return;
   const ru=(lang==='ru'), L=(ko,rr)=>(ru?rr:ko);
@@ -14813,23 +14848,13 @@ function renderProd(){
   let rows=prodData.slice();
   if(kw) rows=rows.filter(r=>(r.pn+' '+r.name+' '+(r.memo||'')+' '+prodCmpText(r)+' '+(r.fin||'')
                               +' '+(r.use||'')+' '+(r.thermo||'')+' '+(r.ctrl||'')
-                              +' '+(r.ername||'')+' '+(r.erspec||'')
+                              +' '+prodErpName(r)+' '+prodErpSpec(r)
                               +' '+prodMdlText(r.pn)).toLowerCase().includes(kw));
   const ED=canEditProd();                      // 고치기·지우기 — MASTER 거나 권한을 받은 회원
-  // 품번 칸 너비는 품번 길이에 맞춘다 — 가장 긴 품번 하나가 들어갈 만큼만(세 칸 모두 같은 너비)
-  let cwN=0;
-  prodData.forEach(r=>{ const f=x=>{ const n=String(x||'').trim().length; if(n>cwN) cwN=n; };
-                        f(r.pn); f(r.fin); (r.cmp||[]).forEach(f); });
-  const codeW=Math.max(72, Math.min(150, Math.round(cwN*6.65)+18));
-  const heads=[['No.',46],[L('품번','Артикул'),codeW],[L('호환품번','Артикулы замены'),codeW],[L('최종품번','Актуальный'),codeW],
-               [L('품명(표준화)','Наименование (станд.)'),230],
-               [L('품명','Наименование (ERP)'),200],[L('규격','Характеристика (ERP)'),180],
-               [L('사용','Исп.'),84],
-               [L('실내온도조절기','Термостат'),146],[L('콘트롤러','Блок управления'),146],
-               [L('비고','Примечание'),190],
-               [L('적용모델','Модели'),(typeof pnMdlChipCap==='function'?Math.min(340, pnMdlChipCap()*2+16):300)]];
-  if(ED) heads.push(['',44]);
-  const cols=heads.map(h=>'<col style="width:'+h[1]+'px">').join('');
+  const m=prodColsMap();
+  const use=prodColList().filter(c=>c.fix || m[c.k]!==false);
+  if(ED) use.push({ k:'del', t:'', w:44, fix:1 });
+  const cols=use.map(c=>'<col style="width:'+c.w+'px">').join('');
   const cg=document.getElementById('prodColgroup'); if(cg) cg.innerHTML=cols;
   const cg2=document.getElementById('prodColgroup2'); if(cg2) cg2.innerHTML=cols;
   const thS='padding:7px 6px;text-align:center;vertical-align:middle;background:var(--surface2);font-size:11px;'
@@ -14839,8 +14864,8 @@ function renderProd(){
   // 호환품번은 여러 개라 칸 안에서 줄을 바꿔 쌓는다
   const codeWS="font-family:'Courier New',monospace;font-size:11px;white-space:normal;word-break:break-all";
   const thead=document.getElementById('prodThead');
-  if(thead) thead.innerHTML='<tr>'+heads.map(h=>'<th style="'+thS+'">'+escapeHtml(h[0])+'</th>').join('')+'</tr>'
-    + '<tr><th colspan="'+heads.length+'" style="'+thS+';font-weight:700;background:var(--surface);text-align:right">'
+  if(thead) thead.innerHTML='<tr>'+use.map(c=>'<th style="'+thS+'">'+escapeHtml(c.t)+'</th>').join('')+'</tr>'
+    + '<tr><th colspan="'+use.length+'" style="'+thS+';font-weight:700;background:var(--surface);text-align:right">'
     + escapeHtml(L('합계 '+rows.length+'개 제품'+(ED?'   ·   칸을 눌러 바로 고칩니다':''),
                    'Итого '+rows.length+(ED?'   ·   нажмите на ячейку, чтобы изменить':'')))+'</th></tr>';
   const tbody=document.getElementById('prodTbody');
@@ -14851,37 +14876,59 @@ function renderProd(){
     + ' style="display:inline-block;min-width:40px;max-width:100%;box-sizing:border-box;outline:none;'
     + 'border-bottom:1px dashed var(--border);cursor:text;padding:0 2px;'
     + (mono===2?codeWS:(mono?codeS:''))+'">'+escapeHtml(v)+'</span>';
-  if(tbody) tbody.innerHTML=rows.map((r,i)=>'<tr>'
-    + '<td style="'+tdS+';text-align:center;color:var(--muted);font-size:11px">'+(i+1)+'</td>'
-    + '<td style="'+tdS+'">'+(ED?ed(r.pn,'pn',r.pn,1):('<span style="'+codeS+'">'+escapeHtml(r.pn)+'</span>'))+'</td>'
-    + '<td style="'+tdS+';word-break:break-all">'+(ED?ed(r.pn,'cmp',prodCmpText(r),2)
-        :('<span style="'+codeWS+'">'+escapeHtml(prodCmpText(r))+'</span>'))+'</td>'
-    + '<td style="'+tdS+'">'+(ED?ed(r.pn,'fin',r.fin||'',1)
-        :('<span style="'+codeS+'">'+escapeHtml(r.fin||'')+'</span>'))+'</td>'
-    + '<td style="'+tdS+';word-break:break-all">'+(ED?ed(r.pn,'name',r.name,0):escapeHtml(r.name))+'</td>'
-    + '<td style="'+tdS+';word-break:break-all">'+(ED?ed(r.pn,'ername',r.ername||'',0):escapeHtml(r.ername||''))+'</td>'
-    + '<td style="'+tdS+';word-break:break-all">'+(ED?ed(r.pn,'erspec',r.erspec||'',0):escapeHtml(r.erspec||''))+'</td>'
-    + '<td style="'+tdS+';text-align:center">'+prodUseCell(r, ED)+'</td>'
-    + '<td style="'+tdS+'">'+prodCodeCell(r,'thermo', ED, ed)+'</td>'
-    + '<td style="'+tdS+'">'+prodCodeCell(r,'ctrl', ED, ed)+'</td>'
-    + '<td style="'+tdS+';word-break:break-all;color:var(--muted)">'+(ED?ed(r.pn,'memo',r.memo||'',0):escapeHtml(r.memo||''))+'</td>'
-    + '<td style="'+tdS+';font-size:11px">'+prodMdlCell(r)+'</td>'
-    + (ED?('<td style="'+tdS+';text-align:center"><span onclick="prodDeleteRow(&quot;'+escapeHtml(String(r.pn).replace(/"/g,''))+'&quot;)"'
-        + ' title="'+L('이 줄 지우기','Удалить')+'" style="cursor:pointer;color:#ef4444;font-weight:700">✕</span></td>'):'')
-    + '</tr>').join('')
+  // 품명(ERP)·규격(ERP)은 품번조회에서 가져온다. 거기에 없는 품번이면 여기에 적어 둔 값을 쓴다.
+  const erpCell=(r,fld)=>{
+    const o=prodPnInfo(r.pn);
+    if(o){
+      const v=(fld==='ername')?o.name:o.spec;
+      return '<span title="'+escapeHtml(L('품번조회에서 가져온 값입니다','Из «Артикулы»'))+'">'
+        + (v?escapeHtml(v):'<span style="color:var(--muted);opacity:.5">—</span>')+'</span>';
+    }
+    const v=String(r[fld]||'');
+    return ED?ed(r.pn,fld,v,0):(v?escapeHtml(v):'<span style="color:var(--muted);opacity:.5">—</span>');
+  };
+  const cell=(c,r,i)=>{
+    switch(c.k){
+      case 'no':     return '<td style="'+tdS+';text-align:center;color:var(--muted);font-size:11px">'+(i+1)+'</td>';
+      case 'pn':     return '<td style="'+tdS+'">'+(ED?ed(r.pn,'pn',r.pn,1):('<span style="'+codeS+'">'+escapeHtml(r.pn)+'</span>'))+'</td>';
+      case 'cmp':    return '<td style="'+tdS+';word-break:break-all">'+(ED?ed(r.pn,'cmp',prodCmpText(r),2)
+                              :('<span style="'+codeWS+'">'+escapeHtml(prodCmpText(r))+'</span>'))+'</td>';
+      case 'fin':    return '<td style="'+tdS+'">'+(ED?ed(r.pn,'fin',r.fin||'',1)
+                              :('<span style="'+codeS+'">'+escapeHtml(r.fin||'')+'</span>'))+'</td>';
+      case 'name':   return '<td style="'+tdS+';word-break:break-all">'+(ED?ed(r.pn,'name',r.name,0):escapeHtml(r.name))+'</td>';
+      case 'ername': return '<td style="'+tdS+';word-break:break-all">'+erpCell(r,'ername')+'</td>';
+      case 'erspec': return '<td style="'+tdS+';word-break:break-all">'+erpCell(r,'erspec')+'</td>';
+      case 'use':    return '<td style="'+tdS+';text-align:center">'+prodUseCell(r, ED)+'</td>';
+      case 'thermo': return '<td style="'+tdS+'">'+prodCodeCell(r,'thermo', ED, ed)+'</td>';
+      case 'ctrl':   return '<td style="'+tdS+'">'+prodCodeCell(r,'ctrl', ED, ed)+'</td>';
+      case 'memo':   return '<td style="'+tdS+';word-break:break-all;color:var(--muted)">'
+                              +(ED?ed(r.pn,'memo',r.memo||'',0):escapeHtml(r.memo||''))+'</td>';
+      case 'mdl':    return '<td style="'+tdS+';font-size:11px">'+prodMdlCell(r)+'</td>';
+      case 'del':    return '<td style="'+tdS+';text-align:center"><span onclick="prodDeleteRow(&quot;'
+                              +escapeHtml(String(r.pn).replace(/"/g,''))+'&quot;)"'
+                              +' title="'+L('이 줄 지우기','Удалить')+'" style="cursor:pointer;color:#ef4444;font-weight:700">✕</span></td>';
+    }
+    return '<td style="'+tdS+'"></td>';
+  };
+  // 맨 아랫줄(＋) — 품번 칸을 나오면 그 줄이 생긴다
+  const addCell=(c)=>{
+    switch(c.k){
+      case 'no':     return '<td style="'+tdS+';text-align:center;color:var(--accent2);font-size:13px;font-weight:700">＋</td>';
+      case 'pn':     return '<td style="'+tdS+'">'+ed('','newpn','',1)+'</td>';
+      case 'cmp':    return '<td style="'+tdS+'">'+ed('','newcmp','',2)+'</td>';
+      case 'fin':    return '<td style="'+tdS+'">'+ed('','newfin','',1)+'</td>';
+      case 'name':   return '<td style="'+tdS+'">'+ed('','newname','',0)+'</td>';
+      case 'ername': return '<td style="'+tdS+'">'+ed('','newername','',0)+'</td>';
+      case 'erspec': return '<td style="'+tdS+'">'+ed('','newerspec','',0)+'</td>';
+      case 'thermo': return '<td style="'+tdS+'">'+ed('','newthermo','',1)+'</td>';
+      case 'ctrl':   return '<td style="'+tdS+'">'+ed('','newctrl','',1)+'</td>';
+      case 'memo':   return '<td style="'+tdS+'">'+ed('','newmemo','',0)+'</td>';
+    }
+    return '<td style="'+tdS+'"></td>';
+  };
+  if(tbody) tbody.innerHTML=rows.map((r,i)=>'<tr>'+use.map(c=>cell(c,r,i)).join('')+'</tr>').join('')
     + (ED?('<tr title="'+escapeHtml(L('품번을 적고 칸을 나오면 새 줄이 생깁니다','Введите артикул — появится новая строка'))+'">'
-        + '<td style="'+tdS+';text-align:center;color:var(--accent2);font-size:13px;font-weight:700">＋</td>'
-        + '<td style="'+tdS+'">'+ed('','newpn','',1)+'</td>'
-        + '<td style="'+tdS+'">'+ed('','newcmp','',2)+'</td>'
-        + '<td style="'+tdS+'">'+ed('','newfin','',1)+'</td>'
-        + '<td style="'+tdS+'">'+ed('','newname','',0)+'</td>'
-        + '<td style="'+tdS+'">'+ed('','newername','',0)+'</td>'
-        + '<td style="'+tdS+'">'+ed('','newerspec','',0)+'</td>'
-        + '<td style="'+tdS+'"></td>'
-        + '<td style="'+tdS+'">'+ed('','newthermo','',1)+'</td>'
-        + '<td style="'+tdS+'">'+ed('','newctrl','',1)+'</td>'
-        + '<td style="'+tdS+'">'+ed('','newmemo','',0)+'</td>'
-        + '<td style="'+tdS+'"></td><td style="'+tdS+'"></td></tr>'):'');
+        + use.map(addCell).join('')+'</tr>'):'');
   const empty=document.getElementById('prodEmpty');
   if(empty){
     empty.textContent=prodData.length
@@ -14889,6 +14936,51 @@ function renderProd(){
       : L('제품목록이 비어 있습니다. 엑셀 업로드로 올려주세요.','Список пуст. Загрузите Excel.');
     empty.style.display=rows.length?'none':'block';
   }
+}
+// 품명(ERP)·규격(ERP) 은 품번조회가 먼저다 — 검색·엑셀도 같은 값을 쓴다
+function prodErpName(r){ const o=prodPnInfo(r.pn); return (o?o.name:'') || String(r.ername||''); }
+function prodErpSpec(r){ const o=prodPnInfo(r.pn); return (o?o.spec:'') || String(r.erspec||''); }
+// ── 보기 — 표에 보일 열 고르기 ──────────────────────────
+function closeProdViewPanel(){ const b=document.getElementById('prodViewPop'); if(b) b.remove(); }
+function openProdViewPanel(){
+  closeProdViewPanel();
+  const ru=(lang==='ru'), L=(ko,rr)=>(ru?rr:ko);
+  const list=prodColList().filter(c=>!c.fix);
+  const m=prodColsMap();
+  const box=document.createElement('div'); box.id='prodViewPop';
+  box.style.cssText='position:fixed;inset:0;z-index:10000;background:#0008;display:flex;align-items:center;justify-content:center;padding:16px';
+  box.innerHTML=
+    '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;width:300px;max-width:100%;'
+      +'max-height:86vh;display:flex;flex-direction:column;box-shadow:0 16px 44px #000a;font-size:12px;color:var(--text)">'
+    +'<div style="padding:12px 14px;border-bottom:1px solid var(--border);font-weight:700;font-size:13px">'
+      +L('보기 — 열 선택','Вид — столбцы')+'</div>'
+    +'<div style="padding:10px 14px;overflow:auto"><div style="border:1px solid var(--border);border-radius:8px;padding:4px 6px">'
+      +list.map(c=>'<label style="display:flex;align-items:center;gap:7px;padding:4px 3px;cursor:pointer">'
+        +'<input type="checkbox" class="_prodChk" data-k="'+c.k+'"'+((m[c.k]!==false)?' checked':'')
+        +' style="width:15px;height:15px;cursor:pointer">'+escapeHtml(c.t)+'</label>').join('')
+      +'</div><div style="font-size:11px;color:var(--muted);margin-top:7px">'
+      +L('No.·품번 은 늘 보입니다.','«No.» и «Артикул» всегда видны.')+'</div></div>'
+    +'<div style="display:flex;gap:7px;padding:11px 14px;border-top:1px solid var(--border)">'
+      +'<button id="pvAllP" style="flex:none;padding:7px 10px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);cursor:pointer;font-size:12px">'+L('전체 선택','Все')+'</button>'
+      +'<button id="pvNoneP" style="flex:none;padding:7px 10px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--muted);cursor:pointer;font-size:12px">'+L('모두 끄기','Снять')+'</button>'
+      +'<button id="pvCloseP" style="flex:1;padding:7px;border:none;border-radius:7px;background:var(--accent2);color:#fff;cursor:pointer;font-size:12px;font-weight:700">'+L('닫기','Закрыть')+'</button>'
+    +'</div></div>';
+  document.body.appendChild(box);
+  const chks=()=>box.querySelectorAll('._prodChk');
+  let done=false;
+  const commit=async()=>{
+    if(done) return; done=true;
+    const v={}; chks().forEach(c=>{ v[c.getAttribute('data-k')]=c.checked; });
+    if(!psiCols || typeof psiCols!=='object') psiCols={};
+    psiCols.__prod=v;
+    closeProdViewPanel();
+    renderProd();
+    try{ await savePsiCols(); }catch(e){}
+  };
+  box.querySelector('#pvAllP').onclick=()=>chks().forEach(c=>c.checked=true);
+  box.querySelector('#pvNoneP').onclick=()=>chks().forEach(c=>c.checked=false);
+  box.querySelector('#pvCloseP').onclick=commit;
+  box.onmousedown=(e)=>{ if(e.target===box) commit(); };
 }
 // 제품목록 한 칸 고치기 — 품번·품명 둘 다, 맨 아랫줄은 새로 더하는 줄
 async function onProdCellBlur(el){
@@ -15302,12 +15394,14 @@ function downloadProd(){
   const ru=(lang==='ru');
   const kw=(document.getElementById('prodInput')?document.getElementById('prodInput').value:'').trim().toLowerCase();
   let rows=prodData.slice();
-  if(kw) rows=rows.filter(r=>(r.pn+' '+r.name+' '+(r.memo||'')+' '+prodCmpText(r)+' '+(r.fin||'')).toLowerCase().includes(kw));
+  if(kw) rows=rows.filter(r=>(r.pn+' '+r.name+' '+(r.memo||'')+' '+prodCmpText(r)+' '+(r.fin||'')
+                              +' '+(r.use||'')+' '+(r.thermo||'')+' '+(r.ctrl||'')
+                              +' '+prodErpName(r)+' '+prodErpSpec(r)).toLowerCase().includes(kw));
   const aoa=[[ru?'Артикул':'품번', ru?'Артикулы замены':'호환품번', ru?'Актуальный':'최종품번',
               ru?'Наименование (станд.)':'품명(표준화)', ru?'Наименование (ERP)':'품명(ERP)',
               ru?'Характеристика (ERP)':'규격(ERP)', ru?'Исп.':'사용', ru?'Термостат':'실내온도조절기',
               ru?'Блок управления':'콘트롤러', ru?'Примечание':'비고', ru?'Модели':'적용모델']]
-    .concat(rows.map(r=>[r.pn, prodCmpText(r), r.fin||'', r.name, r.ername||'', r.erspec||'',
+    .concat(rows.map(r=>[r.pn, prodCmpText(r), r.fin||'', r.name, prodErpName(r), prodErpSpec(r),
                          r.use||'', r.thermo||'', r.ctrl||'', r.memo||'',
                          pnMdlEntries(r.pn).map(e=>(pnMdlName(e)||e.p)).join(', ')]));
   const ws=XLSX.utils.aoa_to_sheet(aoa);
