@@ -540,6 +540,70 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
 }
 /* [임시] 카자흐스탄 관련 요소를 어떤 타이밍(전환/언어변경)에도 숨김 — 깜빡임 방지. 원복 시 이 블록 삭제 */
 #prmUsdWrap,#prmKzGpWrap{display:none!important}
+/* ── 품질이슈 ── */
+.qi{max-width:1100px;margin:0 auto;padding:4px 12px 40px;display:flex;flex-direction:column;gap:12px;font-size:13px;color:var(--text)}
+.qi-panel{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;min-width:0}
+.qi-top{border-top:4px solid var(--accent2)}
+.qi-h1{margin:0;font-size:19px;color:var(--accent2)}
+.qi-h2{margin:0 0 10px;font-size:15px;color:var(--accent2);display:flex;align-items:center;gap:8px}
+.qi-meta{display:flex;flex-wrap:wrap;gap:2px 16px;color:var(--muted);font-size:12px;margin-top:4px}
+.qi-note{background:#fef9c3;border:1px solid #fde047;color:#713f12;border-radius:8px;padding:8px 12px;font-size:12px}
+.qi-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.qi-kpi{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 14px}
+.qi-kpi b{display:block;font-size:24px;line-height:1.2;font-variant-numeric:tabular-nums}
+.qi-kpi span{color:var(--muted);font-size:12px}
+.qi-kpi.need b{color:#b91c1c}.qi-kpi.prog b{color:#b45309}.qi-kpi.done b{color:#15803d}
+.qi-scroll{overflow-x:auto}
+.qi-tbl{width:100%;border-collapse:collapse;font-size:12.5px}
+.qi-tbl th,.qi-tbl td{border-bottom:1px solid var(--border);padding:7px 9px;text-align:left;vertical-align:top}
+.qi-tbl th{background:var(--surface2);color:var(--accent2);white-space:nowrap}
+.qi-tbl .c{text-align:center}
+.qi-go{cursor:pointer}.qi-go:hover td{background:var(--row-hover)}
+.qi-tag{display:inline-block;padding:1px 8px;border-radius:20px;font-size:11.5px;font-weight:700;white-space:nowrap}
+.qi-tag.need{color:#b91c1c;background:#fee2e2}.qi-tag.prog{color:#b45309;background:#fef3c7}.qi-tag.done{color:#15803d;background:#dcfce7}
+.qi-sub{color:var(--muted);font-size:12px}
+.qi-empty{color:var(--muted);padding:10px 0}
+.qi-filters{display:flex;flex-wrap:wrap;gap:6px}
+.qi-btn{font:inherit;font-size:12.5px;font-weight:600;border:1px solid var(--border);background:var(--surface);color:var(--text);border-radius:7px;padding:5px 12px;cursor:pointer;white-space:nowrap}
+.qi-btn:hover{border-color:var(--accent)}
+.qi-btn.sm{padding:3px 9px;font-size:11.5px}
+.qi-btn.on,.qi-btn.primary{background:var(--accent2);border-color:var(--accent2);color:#fff}
+.qi-btn.danger{color:#b91c1c;border-color:#b91c1c}
+.qi-issue{border:1px solid var(--border);border-radius:10px;margin-top:12px;overflow:hidden;scroll-margin-top:8px}
+.qi-issue-h{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:8px 12px;background:var(--surface2);border-bottom:1px solid var(--border)}
+.qi-issue-h h4{margin:0;font-size:14.5px;flex:1;min-width:180px}
+.qi-no{font-weight:700;color:#fff;background:var(--accent2);border-radius:6px;padding:0 7px;font-size:12px}
+.qi-issue-b{display:grid;grid-template-columns:220px minmax(0,1fr);gap:16px;padding:14px}
+.qi-issue-b.noimg{grid-template-columns:minmax(0,1fr)}
+.qi-photos{display:flex;flex-direction:column;gap:8px}
+.qi-photos figure{margin:0}
+.qi-photos img{width:100%;border:1px solid var(--border);border-radius:6px;display:block;cursor:zoom-in;background:#fff}
+.qi-photos figcaption{font-size:11.5px;color:var(--muted);text-align:center;margin-top:3px}
+.qi-dl{margin:0;display:grid;grid-template-columns:76px minmax(0,1fr);gap:5px 12px}
+.qi-dl dt{font-weight:700;color:var(--accent2);font-size:12.5px}
+.qi-dl dd{margin:0}.qi-dl dd p{margin:0}.qi-dl dd ul{margin:0;padding-left:18px}
+.qi-next{margin-top:10px;padding:8px 12px;border-radius:8px;font-size:12.5px}
+.qi-next.need{background:#fee2e2;border-left:4px solid #b91c1c}
+.qi-next.prog{background:#fef3c7;border-left:4px solid #b45309}
+.qi-next.done{background:#dcfce7;border-left:4px solid #15803d}
+.qi-todo{margin:0;padding-left:20px}.qi-todo li{margin:3px 0}
+.qi-form{padding:14px;display:flex;flex-direction:column;gap:10px}
+.qi-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px 12px}
+.qi-grid .qi-wide{grid-column:span 2}
+.qi-f{display:flex;flex-direction:column;gap:3px;font-size:12px;font-weight:700;color:var(--accent2);min-width:0}
+.qi-f input,.qi-f textarea,.qi-f select,.qi-ph-ed input{font:inherit;font-size:13px;font-weight:400;color:var(--text);background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:5px 8px;width:100%;box-sizing:border-box}
+.qi-f textarea{resize:vertical;min-height:56px;line-height:1.5}
+.qi-row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.qi-ph-list{display:flex;flex-wrap:wrap;gap:10px}
+.qi-ph-ed{display:flex;flex-direction:column;gap:4px;width:150px}
+.qi-ph-ed img{width:150px;height:110px;object-fit:cover;border:1px solid var(--border);border-radius:6px;background:#fff}
+@media (max-width:720px){
+  .qi-kpis{grid-template-columns:repeat(2,1fr)}
+  .qi-issue-b{grid-template-columns:minmax(0,1fr)}
+  .qi-photos{max-width:300px}
+  .qi-dl{grid-template-columns:minmax(0,1fr)}
+  .qi-grid{grid-template-columns:minmax(0,1fr)}.qi-grid .qi-wide{grid-column:auto}
+}
 </style>
 </head>
 <body>
@@ -678,6 +742,7 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
   <button class="tab-btn"        onclick="switchTab('pn')"    id="tab-pn">🔄 품번 조회</button>
   <button class="tab-btn"        onclick="switchTab('pnchk')" id="tab-pnchk"><span id="i18n-tab-pnchk">🧾 품번확인</span></button>
   <button class="tab-btn"        onclick="switchTab('prod')"  id="tab-prod"><span id="i18n-tab-prod">🏷️ 제품목록</span></button>
+  <button class="tab-btn" style="display:none" onclick="switchTab('qi')" id="tab-qi"><span id="i18n-tab-qi">🧪 품질이슈</span></button>
   <button class="tab-btn" style="display:none" onclick="switchTab('inventory')" id="tab-inventory">📊 재고관리</button>
   <button class="tab-btn" style="display:none" onclick="switchTab('shipments')" id="tab-shipments"><span id="i18n-tab-shipments">🚚 출고관리</span></button>
   <button class="tab-btn" style="display:none" onclick="switchTab('price')"     id="tab-price">💲 가격정보</button>
@@ -909,6 +974,38 @@ td.price-man input{border-color:#f97316!important;color:#9a3412!important;font-w
         <table><colgroup id="prodColgroup2"></colgroup><tbody id="prodTbody"></tbody></table>
       </div>
       <div class="no-result" id="prodEmpty" style="display:none"></div>
+    </div>
+  </div>
+
+  <!-- ══ 품질이슈 ══ -->
+  <div class="tab-pane" id="pane-qi">
+    <div class="fixed-top">
+      <div class="search-bar">
+        <div class="search-wrap">
+          <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+          <input type="text" id="qiInput" placeholder="모델·부위·내용으로 검색…" oninput="debouncedRenderQi()">
+        </div>
+        <button class="dl-btn" id="qiMetaBtn" onclick="qiMetaOpen()" title="보고서 제목·원본 자료·기준일을 고칩니다" style="display:none">
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg>
+          <span id="i18n-qi-meta">보고서 정보</span>
+        </button>
+        <button class="dl-btn" id="qiAddBtn" onclick="qiAddOpen()" title="품질이슈를 하나 더합니다" style="display:none;background:var(--accent);border-color:var(--accent);color:#fff">
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          <span id="i18n-qi-add">이슈 추가</span>
+        </button>
+        <button class="dl-btn" id="qiImportBtn" onclick="document.getElementById('qiFileInput').click()" title="정리해 둔 품질이슈 자료 파일(.json)을 올려 지금 내용을 바꿉니다" style="display:none;background:var(--accent2);border-color:var(--accent2);color:#fff">
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <span id="i18n-qi-imp">파일 불러오기</span>
+        </button>
+        <input type="file" id="qiFileInput" accept=".json,application/json" style="display:none" onchange="qiImport(event)">
+        <button class="dl-btn" onclick="downloadQi()">
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span id="i18n-qi-dl">엑셀 다운로드</span>
+        </button>
+      </div>
+    </div>
+    <div class="scroll-body" id="scrollBodyQi">
+      <div class="qi" id="qiBody"></div>
     </div>
   </div>
 
@@ -2458,7 +2555,7 @@ let orderSearchKw='',orderQty={};
 
 // ── 스크롤 & 맨위로 ──
 // 모든 탭의 스크롤 컨테이너. 맨위로 버튼을 전 탭에 적용한다.
-const SCROLL_BODIES=['scrollBodyParts','scrollBodyPN','scrollBodyOrder','scrollBodyInventory','scrollBodyShipments','scrollBodyPrice','scrollBodyAdminOrders','scrollBodyMemberManagement','scrollBodyReset'];
+const SCROLL_BODIES=['scrollBodyParts','scrollBodyPN','scrollBodyOrder','scrollBodyInventory','scrollBodyShipments','scrollBodyPrice','scrollBodyAdminOrders','scrollBodyMemberManagement','scrollBodyReset','scrollBodyQi'];
 function getScrollBody(){
   // 현재 활성 탭의 스크롤 컨테이너를 찾는다
   for(const id of SCROLL_BODIES){
@@ -2527,6 +2624,7 @@ function switchTab(tab){
     Promise.all([loadPnAlt(), loadPnMdl(), loadProd(), loadPsiCols(), needPsi?loadPSI():Promise.resolve()])
       .then(()=>{ pnSumClear(); if(ktPaneOn('pane-pn')) renderPN(); }); }
   if(tab==='prod') loadProdTab();
+  if(tab==='qi') loadQiTab();
   // KAZAK 은 주문탭 공급가로 카자흐스탄 USD 를 쓰므로 계산식 데이터도 함께 읽는다.
   if(tab==='order'){ mountModelDiag('order'); syncDiagram();
     loadDiagEdits().then(()=>{ if(ktPaneOn('pane-order')){ partsAfterEdit(); } });
@@ -2668,6 +2766,13 @@ function refreshPsiTexts(){
   try{ paintDanLegend(); }catch(e){}      // 단종 표기 안내(O·△·□)
   // 품번확인
   set('i18n-tab-pnchk','🧾 품번확인','🧾 Проверка артикулов');
+  set('i18n-tab-qi','🧪 품질이슈','🧪 Качество');
+  set('i18n-qi-meta','보고서 정보','Отчёт');
+  set('i18n-qi-add','이슈 추가','Добавить');
+  set('i18n-qi-imp','파일 불러오기','Загрузить файл');
+  set('i18n-qi-dl',DL[0],DL[1]);
+  ph('qiInput','모델·부위·내용으로 검색…','Поиск: модель, узел, текст…');
+  if(ktPaneOn('pane-qi') && typeof qiRender==='function') qiRender();
   set('i18n-pnchk-up','엑셀 업로드','Загрузить Excel');
   set('i18n-pnchk-dl',DL[0],DL[1]);
   set('i18n-pnchk-clr','지우기','Очистить');
@@ -3696,7 +3801,7 @@ function updatePaneHBar(key){ const f=_hbars[key]; if(f) f(); }
 // ── 지금 보고 있는 화면 이름표 ────────────────────────────
 //   PSI 와 발주시뮬레이션처럼 생김새가 닮은 화면이 많아, 도구줄 맨 앞에 이름을 붙인다.
 const KT_PANE_TITLE={
-  pn:['품번 조회','Артикулы'], parts:['부품 조회','Поиск деталей'], prod:['제품목록','Изделия'],
+  pn:['품번 조회','Артикулы'], parts:['부품 조회','Поиск деталей'], prod:['제품목록','Изделия'], qi:['품질이슈','Качество'],
   psi:['PSI','PSI'], ppsi:['제품 출고','Отгрузка изделий'], asr:['A/S부품 소요율','Расход запчастей'], sim:['발주시뮬레이션','Симуляция заказа'], po:['발주현황','Заказы'],
   ship:['선적/입고현황','Отгрузка/Приход'], ms:['미출현황','Невыполненные'],
   moq:['MOQ','MOQ'], blk:['사용불가','Заблокировано'], price:['가격정보','Цены'],
@@ -8406,6 +8511,7 @@ const PERM_CATS=[
   {key:'pn',ko:'품번조회',ru:'Артикулы'},
   {key:'pnchk',ko:'품번확인',ru:'Проверка артикулов'},
   {key:'prod',ko:'제품목록',ru:'Изделия'},
+  {key:'qi',ko:'품질이슈',ru:'Качество'},
   {key:'inventory',ko:'재고관리',ru:'Склад'},
   {key:'shipments',ko:'출고관리',ru:'Отгрузки'},
   {key:'price',ko:'가격정보',ru:'Цены'},
@@ -8414,7 +8520,7 @@ const PERM_CATS=[
 // 첫째 비트마스크(kt_company_prices.buy_price)에 담기는 차례 — 바꾸면 안 된다
 const PERM_BITS1=['parts','pn','order','adminOrders','inventory','shipments','price','memberManagement'];
 // 자리가 모자라 둘째 비트마스크(supply_price)에 담는 카테고리
-const PERM_BITS2={ prod:{v:4,w:5,d:6}, pnchk:{v:7,w:8,d:9} };
+const PERM_BITS2={ prod:{v:4,w:5,d:6}, pnchk:{v:7,w:8,d:9}, qi:{v:10,w:11,d:12} };
 const _PA=['v','w','d'];
 const PERM_ADD_BIT=24;
 const PERM_ENGNAME_BIT=25;   // 영문명 보기 권한
@@ -8603,6 +8709,7 @@ function poTabsApply(){
   set('tab-po',   canSeePo('ru'));
   set('tab-pokz', canSeePo('kz'));
   set('tab-prod', canSeeProd());          // 제품목록도 회원관리에서 준 권한대로
+  set('tab-qi', canSeeQi());              // 품질이슈도 회원관리에서 준 권한대로
 }
 function poOnlyMember(){
   if(userRole(currentUser).usesMasterView) return false;
@@ -14881,6 +14988,325 @@ function openPoViewPanel(){
     alert((ru2?'Готово. Поставлено: ':'반영했습니다. 공급수량 합계 ')+((r&&r.ok)?r.total.toLocaleString():'?'));
   };
   box.onmousedown=e=>{ if(e.target===box) done(); };
+}
+// ══ 품질이슈 ═══════════════════════════════════════════════
+//   법인 품질 개선 요청 안건을 이슈 카드로 모아 둔다. 줄 수가 적어 표를 새로 만들지 않고
+//   설정 보관소(kt_psi_cfg id=112)에 통째로 담는다(사진은 줄인 JPEG 로 함께).
+//   이 파일은 로그인 없이도 내려받을 수 있어 품질 자료를 코드에 넣지 않는다. 처음 자료는 '파일 불러오기'로 올린다.
+const QI_CFG_ID=112;
+const QI_ST={ need:['결정 필요','Нужно решение'], prog:['진행 중','В работе'], done:['개선 적용','Внедрено'] };
+const QI_TXT=['title','model','part','owner','due','problem','history','cause','action','next'];
+const QI_SHOW=[['problem','문제·현황','Проблема'],['history','진행 경과','Ход работ'],['cause','원인','Причина'],['action','조치','Меры']];
+const QI_MAX_PHOTOS=6;
+let qiData=null, qiSaved=false, qiEdit=null, qiIsNew=false, qiDraft=null, qiFilter='all',
+    qiMetaEdit=false, qiRefEdit=false, qiDelArm=false, qiBusy=false, _qiBound=false;
+function canSeeQi(){ if(userRole(currentUser).usesMasterView) return true; const c=permCat('qi'); return !!(c&&c.v); }
+function canEditQi(){ if(userRole(currentUser).usesMasterView) return true; const c=permCat('qi'); return !!(c&&c.w); }
+function canDelQi(){ if(userRole(currentUser).usesMasterView) return true; const c=permCat('qi'); return !!(c&&c.d); }
+function qiL(ko,ru){ return lang==='ru'?ru:ko; }
+function qiOkImg(s){ return typeof s==='string' && /^data:image\/(jpeg|png|webp|gif);base64,[A-Za-z0-9+\/=]+$/.test(s); }
+function qiNewId(){ return 'q'+Date.now().toString(36)+Math.floor(Math.random()*1e4).toString(36); }
+function qiNorm(d){
+  d=(d&&typeof d==='object')?d:{};
+  const out={ meta:Object.assign({title:'',source:'',basis:'',updated:'',by:''}, d.meta||{}), issues:[],
+              ref:Object.assign({title:'참고',rows:[],notes:''}, d.ref||{}) };
+  (Array.isArray(d.issues)?d.issues:[]).forEach(i=>{
+    if(!i||typeof i!=='object') return;
+    const o={ id:String(i.id||qiNewId()) };
+    QI_TXT.forEach(k=>{ o[k]=String(i[k]==null?'':i[k]); });
+    o.status=QI_ST[i.status]?i.status:'prog';
+    let ph=Array.isArray(i.photos)?i.photos:[];
+    if(!ph.length && i.photo) ph=[{src:i.photo,cap:i.photoCap||''}];
+    o.photos=ph.filter(p=>p&&qiOkImg(p.src)).map(p=>({src:p.src,cap:String(p.cap||'')}));
+    out.issues.push(o);
+  });
+  if(!Array.isArray(out.ref.rows)) out.ref.rows=[];
+  out.ref.rows=out.ref.rows.filter(r=>Array.isArray(r)).map(r=>r.map(c=>String(c==null?'':c)));
+  return out;
+}
+function qiCopy(i){ return JSON.parse(JSON.stringify(i)); }
+async function loadQi(){
+  try{
+    const { data, error }=await sb.from('kt_psi_cfg').select('cfg').eq('id',QI_CFG_ID).maybeSingle();
+    if(error) throw error;
+    if(data && data.cfg){ qiData=qiNorm(data.cfg); qiSaved=true; }
+    else { qiData=qiNorm({ meta:{ title:'품질이슈' } }); qiSaved=false; }
+    return true;
+  }catch(e){ if(!qiData){ qiData=qiNorm({ meta:{ title:'품질이슈' } }); qiSaved=false; } return false; }
+}
+// 저장 — 그 사이 다른 사람이 고친 것을 덮지 않도록 저장 직전에 최신본을 받아 이번 변경만 얹는다.
+async function qiCommit(mut){
+  if(!canEditQi()){ alert(qiL('품질이슈를 고칠 권한이 없습니다.','Нет прав на изменение.')); return false; }
+  if(qiBusy) return false;
+  qiBusy=true;
+  try{
+    const { data, error }=await sb.from('kt_psi_cfg').select('cfg').eq('id',QI_CFG_ID).maybeSingle();
+    if(error) throw error;
+    const base=(data&&data.cfg) ? qiNorm(data.cfg) : qiNorm(qiCopy(qiData||{}));
+    mut(base);
+    base.meta.updated=new Date().toISOString().slice(0,10);
+    base.meta.by=String((currentUser&&currentUser.id)||'');
+    const { error:e2 }=await sb.from('kt_psi_cfg').upsert({ id:QI_CFG_ID, cfg:base, updated_at:new Date().toISOString() },{onConflict:'id'});
+    if(e2) throw e2;
+    qiData=base; qiSaved=true;
+    return true;
+  }catch(e){
+    alert(qiL('저장하지 못했습니다.','Не удалось сохранить.')+'\n['+((e&&(e.message||e.code))||e)+']');
+    return false;
+  }finally{ qiBusy=false; }
+}
+function qiApplyChrome(){
+  const m=canEditQi();
+  ['qiAddBtn','qiMetaBtn','qiImportBtn'].forEach(id=>{ const b=document.getElementById(id); if(b) b.style.display=m?'':'none'; });
+}
+async function loadQiTab(){
+  qiBind(); qiApplyChrome();
+  if(qiData) qiRender();
+  else { const b=document.getElementById('qiBody'); if(b) b.innerHTML='<div class="no-result" style="display:block">'+qiL('불러오는 중…','Загрузка…')+'</div>'; }
+  if(qiEdit||qiMetaEdit||qiRefEdit) return;          // 고치는 중이면 다시 받아 덮지 않는다
+  await loadQi();
+  if(ktPaneOn('pane-qi') && !qiEdit && !qiMetaEdit && !qiRefEdit) qiRender();
+}
+function debouncedRenderQi(){ clearTimeout(window._qiT); window._qiT=setTimeout(()=>{ qiCapture(); qiRender(); },180); }
+function qiLines(t){
+  const a=String(t||'').split('\n').map(x=>x.replace(/^\s*[-•·▶*]\s*/,'').trim()).filter(Boolean);
+  if(!a.length) return '';
+  if(a.length===1) return '<p>'+escapeHtml(a[0])+'</p>';
+  return '<ul>'+a.map(x=>'<li>'+escapeHtml(x)+'</li>').join('')+'</ul>';
+}
+function qiMatch(i,kw){
+  if(!kw) return true;
+  kw=kw.toLowerCase();
+  return QI_TXT.some(k=>String(i[k]||'').toLowerCase().includes(kw));
+}
+function qiRender(){
+  const body=document.getElementById('qiBody'); if(!body||!qiData) return;
+  const ru=lang==='ru', ed=canEditQi();
+  const kwEl=document.getElementById('qiInput'), kw=kwEl?kwEl.value.trim():'';
+  const iss=qiData.issues, cnt={need:0,prog:0,done:0};
+  iss.forEach(i=>{ cnt[i.status]=(cnt[i.status]||0)+1; });
+  const m=qiData.meta;
+  let h='';
+  if(!qiSaved){
+    h+='<div class="qi-note">'+qiL('아직 저장된 품질이슈가 없습니다. 「이슈 추가」로 적거나, 정리해 둔 자료 파일(.json)을 「파일 불러오기」로 올리세요.',
+       'Пока нет сохранённых записей. Добавьте запись или загрузите файл (.json).')+'</div>';
+  }
+  // 머리말
+  if(qiMetaEdit){
+    h+='<section class="qi-panel qi-top"><form class="qi-form" data-qf="meta"><div class="qi-grid">'
+      +'<label class="qi-f qi-wide">'+qiL('보고서 제목','Заголовок')+'<input type="text" id="qm-title" value="'+escapeHtml(m.title)+'"></label>'
+      +'<label class="qi-f">'+qiL('자료 기준일','Дата данных')+'<input type="text" id="qm-basis" value="'+escapeHtml(m.basis)+'"></label>'
+      +'<label class="qi-f qi-wide">'+qiL('원본 자료','Источник')+'<input type="text" id="qm-source" value="'+escapeHtml(m.source)+'"></label></div>'
+      +'<div class="qi-row"><button class="qi-btn primary" type="submit">'+qiL('저장','Сохранить')+'</button><button class="qi-btn" type="button" data-qa="meta-cancel">'+qiL('취소','Отмена')+'</button></div></form></section>';
+  }else{
+    h+='<section class="qi-panel qi-top"><h2 class="qi-h1">'+escapeHtml(m.title||qiL('품질이슈','Проблемы качества'))+'</h2><div class="qi-meta">'
+      +(m.source?'<span>'+qiL('원본 자료','Источник')+': '+escapeHtml(m.source)+'</span>':'')
+      +(m.basis?'<span>'+qiL('자료 기준일','Дата данных')+': '+escapeHtml(m.basis)+'</span>':'')
+      +(m.updated?'<span>'+qiL('최종 수정','Изменено')+': '+escapeHtml(m.updated)+(m.by?' ('+escapeHtml(m.by)+')':'')+'</span>':'')+'</div></section>';
+  }
+  // 상태 숫자
+  h+='<div class="qi-kpis"><div class="qi-kpi"><b>'+iss.length+'</b><span>'+qiL('전체 이슈','Всего')+'</span></div>'
+    +'<div class="qi-kpi done"><b>'+cnt.done+'</b><span>'+qiL('개선 적용 · 모니터링','Внедрено · мониторинг')+'</span></div>'
+    +'<div class="qi-kpi prog"><b>'+cnt.prog+'</b><span>'+qiL('개선 진행 중','В работе')+'</span></div>'
+    +'<div class="qi-kpi need"><b>'+cnt.need+'</b><span>'+qiL('본사 결정 필요','Нужно решение')+'</span></div></div>';
+  // 요약표
+  const shown=iss.map((i,k)=>({i,k})).filter(x=>qiMatch(x.i,kw));
+  h+='<section class="qi-panel"><h3 class="qi-h2">'+qiL('이슈 요약','Сводка')+'</h3>';
+  if(shown.length){
+    h+='<div class="qi-scroll"><table class="qi-tbl"><thead><tr><th class="c">No</th><th>'+qiL('모델','Модель')+'</th><th>'+qiL('부위','Узел')+'</th><th>'+qiL('이슈','Проблема')+'</th><th>'+qiL('상태','Статус')+'</th><th>'+qiL('다음 조치 / 담당','Следующий шаг / отв.')+'</th></tr></thead><tbody>'
+      +shown.map(x=>'<tr class="qi-go" data-qa="goto" data-id="'+escapeHtml(x.i.id)+'"><td class="c">'+(x.k+1)+'</td><td>'+escapeHtml(x.i.model)+'</td><td>'+escapeHtml(x.i.part)+'</td><td>'+escapeHtml(x.i.title)+'</td><td><span class="qi-tag '+x.i.status+'">'+QI_ST[x.i.status][ru?1:0]+'</span></td><td>'+escapeHtml(x.i.next)+(x.i.owner?' <span class="qi-sub">('+escapeHtml(x.i.owner)+')</span>':'')+'</td></tr>').join('')
+      +'</tbody></table></div>';
+  }else h+='<div class="qi-empty">'+(kw?qiL('찾는 이슈가 없습니다.','Ничего не найдено.'):qiL('이슈가 없습니다.','Нет записей.'))+'</div>';
+  h+='</section>';
+  // 상세
+  const F=[['all','전체','Все'],['need','결정 필요','Нужно решение'],['prog','진행 중','В работе'],['done','개선 적용','Внедрено']];
+  h+='<section class="qi-panel"><h3 class="qi-h2">'+qiL('이슈 상세','Подробно')+'</h3><div class="qi-filters">'
+    +F.map(f=>'<button class="qi-btn sm'+(qiFilter===f[0]?' on':'')+'" data-qa="filter" data-f="'+f[0]+'">'+(ru?f[2]:f[1])+'</button>').join('')+'</div>';
+  if(qiEdit && qiIsNew){ const n=iss.length; h+=qiFormHtml(qiDraft,n); }
+  shown.forEach(x=>{
+    if(qiEdit===x.i.id && !qiIsNew){ h+=qiFormHtml(qiDraft||x.i,x.k); return; }
+    if(qiFilter!=='all' && x.i.status!==qiFilter) return;
+    h+=qiCardHtml(x.i,x.k,ed);
+  });
+  h+='</section>';
+  // 결정 요청
+  const req=[];
+  ['need','prog'].forEach(s=>iss.forEach((i,k)=>{ if(i.status===s && i.next.trim()) req.push('<li><b>['+qiL('이슈','№')+' '+(k+1)+'] '+escapeHtml(i.model||i.title)+'</b> '+escapeHtml(i.next)+(i.owner?' <span class="qi-sub">('+escapeHtml(i.owner)+')</span>':'')+'</li>'); }));
+  h+='<section class="qi-panel"><h3 class="qi-h2">'+qiL('본사 확인 · 결정 요청 사항','Требуется решение')+'</h3>'
+    +(req.length?'<ol class="qi-todo">'+req.join('')+'</ol>':'<div class="qi-empty">'+qiL('결정이나 확인을 기다리는 건이 없습니다.','Нет вопросов.')+'</div>')
+    +'<div class="qi-sub" style="margin-top:6px">'+qiL('결정 필요 · 진행 중 이슈의 「남은 일」에서 자동으로 모읍니다.','Собирается из поля «Следующий шаг».')+'</div></section>';
+  // 참고
+  const r=qiData.ref;
+  if(qiRefEdit){
+    h+='<section class="qi-panel"><h3 class="qi-h2">'+qiL('참고 편집','Справка — изменить')+'</h3><form class="qi-form" data-qf="ref">'
+      +'<label class="qi-f">'+qiL('제목','Заголовок')+'<input type="text" id="qr-title" value="'+escapeHtml(r.title)+'"></label>'
+      +'<label class="qi-f">'+qiL('표','Таблица')+' <span class="qi-sub">'+qiL('한 줄에 한 행, 칸은 | 로 구분. 첫 줄은 머리글','строка = ряд, ячейки через |')+'</span><textarea id="qr-rows" rows="7">'+escapeHtml(r.rows.map(x=>x.join(' | ')).join('\n'))+'</textarea></label>'
+      +'<label class="qi-f">'+qiL('메모','Заметки')+'<textarea id="qr-notes" rows="4">'+escapeHtml(r.notes)+'</textarea></label>'
+      +'<div class="qi-row"><button class="qi-btn primary" type="submit">'+qiL('저장','Сохранить')+'</button><button class="qi-btn" type="button" data-qa="ref-cancel">'+qiL('취소','Отмена')+'</button></div></form></section>';
+  }else if(r.rows.length || r.notes.trim() || ed){
+    let t='';
+    if(r.rows.length) t='<div class="qi-scroll"><table class="qi-tbl"><thead><tr>'+r.rows[0].map(c=>'<th>'+escapeHtml(c)+'</th>').join('')+'</tr></thead><tbody>'
+      +r.rows.slice(1).map(x=>'<tr>'+x.map(c=>'<td>'+escapeHtml(c)+'</td>').join('')+'</tr>').join('')+'</tbody></table></div>';
+    const notes=r.notes.split('\n').filter(x=>x.trim()).map(x=>'<div class="qi-sub" style="margin-top:6px">'+escapeHtml(x)+'</div>').join('');
+    h+='<section class="qi-panel"><h3 class="qi-h2">'+escapeHtml(r.title||qiL('참고','Справка'))+(ed?'<button class="qi-btn sm" data-qa="ref-edit" style="margin-left:auto">'+qiL('편집','Изменить')+'</button>':'')+'</h3>'+t+notes+'</section>';
+  }
+  body.innerHTML=h;
+}
+function qiCardHtml(i,k,ed){
+  const ru=lang==='ru';
+  let dl='';
+  if(i.owner) dl+='<dt>'+qiL('담당','Отв.')+'</dt><dd>'+escapeHtml(i.owner)+'</dd>';
+  if(i.due) dl+='<dt>'+qiL('일정','Срок')+'</dt><dd>'+escapeHtml(i.due)+'</dd>';
+  QI_SHOW.forEach(f=>{ if(i[f[0]].trim()) dl+='<dt>'+(ru?f[2]:f[1])+'</dt><dd>'+qiLines(i[f[0]])+'</dd>'; });
+  const ph=i.photos.length?'<div class="qi-photos">'+i.photos.map((p,n)=>'<figure><img src="'+p.src+'" alt="'+escapeHtml(p.cap||i.title)+'" data-qa="zoom" data-id="'+escapeHtml(i.id)+'" data-n="'+n+'">'+(p.cap?'<figcaption>'+escapeHtml(p.cap)+'</figcaption>':'')+'</figure>').join('')+'</div>':'';
+  return '<article class="qi-issue" id="qi-'+escapeHtml(i.id)+'"><div class="qi-issue-h"><span class="qi-no">'+(k+1)+'</span><h4>'+escapeHtml(i.title||qiL('(제목 없음)','(без названия)'))+'</h4>'
+    +'<span class="qi-sub">'+escapeHtml([i.model,i.part].filter(Boolean).join(' · '))+'</span><span class="qi-tag '+i.status+'">'+QI_ST[i.status][ru?1:0]+'</span>'
+    +(ed?'<button class="qi-btn sm" data-qa="edit" data-id="'+escapeHtml(i.id)+'">'+qiL('편집','Изменить')+'</button>':'')+'</div>'
+    +'<div class="qi-issue-b'+(ph?'':' noimg')+'">'+ph+'<div style="min-width:0">'+(dl?'<dl class="qi-dl">'+dl+'</dl>':'')
+    +(i.next.trim()?'<div class="qi-next '+i.status+'"><b>'+(i.status==='need'?qiL('결정 필요','Нужно решение'):qiL('남은 일','Следующий шаг'))+':</b> '+escapeHtml(i.next)+'</div>':'')+'</div></div></article>';
+}
+function qiFormHtml(d,k){
+  const ru=lang==='ru';
+  const inp=(id,ko,rr,cls)=>'<label class="qi-f'+(cls?' '+cls:'')+'">'+(ru?rr:ko)+'<input type="text" id="qf-'+id+'" value="'+escapeHtml(d[id])+'"></label>';
+  const ta=(id,ko,rr,rows)=>'<label class="qi-f">'+(ru?rr:ko)+'<textarea id="qf-'+id+'" rows="'+(rows||3)+'">'+escapeHtml(d[id])+'</textarea></label>';
+  const sel='<label class="qi-f">'+qiL('상태','Статус')+'<select id="qf-status">'+Object.keys(QI_ST).map(s=>'<option value="'+s+'"'+(d.status===s?' selected':'')+'>'+QI_ST[s][ru?1:0]+'</option>').join('')+'</select></label>';
+  const photos=d.photos.map((p,n)=>'<div class="qi-ph-ed"><img src="'+p.src+'" alt=""><input type="text" id="qf-cap-'+n+'" value="'+escapeHtml(p.cap)+'" placeholder="'+qiL('사진 설명','Подпись')+'"><button class="qi-btn sm" type="button" data-qa="ph-del" data-n="'+n+'">'+qiL('빼기','Убрать')+'</button></div>').join('');
+  return '<article class="qi-issue qi-editing" id="qi-'+escapeHtml(d.id)+'"><div class="qi-issue-h"><span class="qi-no">'+(k+1)+'</span><h4>'+(qiIsNew?qiL('새 이슈','Новая запись'):qiL('이슈 편집','Изменить запись'))+'</h4></div>'
+    +'<form class="qi-form" data-qf="issue"><div class="qi-grid">'+inp('title','제목','Заголовок','qi-wide')+sel+inp('model','모델','Модель')+inp('part','부위','Узел')+inp('owner','담당','Ответственный')+inp('due','일정','Срок','qi-wide')+'</div>'
+    +'<div class="qi-sub">'+qiL('여러 항목은 줄을 바꿔 쓰면 목록으로 보입니다.','Каждая строка — отдельный пункт.')+'</div>'
+    +ta('problem','문제·현황','Проблема',4)+ta('history','진행 경과','Ход работ')+ta('cause','원인','Причина')+ta('action','조치','Меры')+ta('next','남은 일 / 결정 필요 사항','Следующий шаг',2)
+    +'<div class="qi-f">'+qiL('사진','Фото')+' <span class="qi-sub">'+qiL('파일을 고르거나, 화면 캡처(Win+Shift+S) 뒤 이 화면에서 Ctrl+V 로 붙여 넣으세요. 최대 ','Выберите файл или вставьте скриншот (Ctrl+V). До ')+QI_MAX_PHOTOS+qiL('장',' шт.')+'</span></div>'
+    +'<div class="qi-ph-list">'+photos+'</div>'
+    +(d.photos.length<QI_MAX_PHOTOS?'<div class="qi-row"><label class="qi-btn sm" for="qf-photo">'+qiL('사진 넣기','Добавить фото')+'</label><input type="file" id="qf-photo" accept="image/*" multiple style="display:none"></div>':'')
+    +'<div class="qi-row"><button class="qi-btn primary" type="submit">'+qiL('저장','Сохранить')+'</button><button class="qi-btn" type="button" data-qa="cancel">'+qiL('취소','Отмена')+'</button><span style="flex:1"></span>'
+    +(qiIsNew?'':'<button class="qi-btn sm" type="button" data-qa="up">'+qiL('위로','Вверх')+'</button><button class="qi-btn sm" type="button" data-qa="down">'+qiL('아래로','Вниз')+'</button>'
+      +(canDelQi()?'<button class="qi-btn sm danger" type="button" data-qa="del">'+(qiDelArm?qiL('정말 삭제','Точно удалить'):qiL('삭제','Удалить'))+'</button>':''))
+    +'</div></form></article>';
+}
+function qiVal(id){ const e=document.getElementById(id); return e?e.value:null; }
+// 고치던 칸의 값을 잃지 않게 다시 그리기 전에 담아 둔다
+function qiCapture(){
+  if(!qiEdit || !qiDraft || !document.getElementById('qf-title')) return;
+  QI_TXT.forEach(k=>{ const v=qiVal('qf-'+k); if(v!=null) qiDraft[k]=v; });
+  const s=qiVal('qf-status'); if(s && QI_ST[s]) qiDraft.status=s;
+  qiDraft.photos.forEach((p,n)=>{ const v=qiVal('qf-cap-'+n); if(v!=null) p.cap=v; });
+}
+function qiCloseEdit(){ qiEdit=null; qiDraft=null; qiIsNew=false; qiDelArm=false; }
+function qiScrollTo(id){ const el=document.getElementById('qi-'+id); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); }
+function qiToJpeg(file){
+  return new Promise((ok,no)=>{
+    const u=URL.createObjectURL(file), im=new Image();
+    im.onload=()=>{ const mx=1200, sc=Math.min(1,mx/Math.max(im.width,im.height)), c=document.createElement('canvas');
+      c.width=Math.round(im.width*sc); c.height=Math.round(im.height*sc);
+      const g=c.getContext('2d'); g.fillStyle='#fff'; g.fillRect(0,0,c.width,c.height); g.drawImage(im,0,0,c.width,c.height);
+      URL.revokeObjectURL(u); ok(c.toDataURL('image/jpeg',0.8)); };
+    im.onerror=()=>{ URL.revokeObjectURL(u); no(new Error('img')); };
+    im.src=u;
+  });
+}
+async function qiAddPhotos(list){
+  if(!qiEdit||!qiDraft) return;
+  qiCapture();
+  const arr=Array.prototype.slice.call(list||[]).filter(f=>/^image\//.test(f.type||''));
+  for(const f of arr){
+    if(qiDraft.photos.length>=QI_MAX_PHOTOS){ alert(qiL('사진은 이슈마다 '+QI_MAX_PHOTOS+'장까지 넣을 수 있습니다.','Не больше '+QI_MAX_PHOTOS+' фото.')); break; }
+    try{ qiDraft.photos.push({ src:await qiToJpeg(f), cap:'' }); }catch(e){ alert(qiL('사진을 읽지 못했습니다.','Не удалось прочитать фото.')); }
+  }
+  qiRender();
+}
+function qiZoom(src){
+  const ov=document.createElement('div');
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.8);display:flex;align-items:center;justify-content:center;z-index:99999;padding:16px;cursor:zoom-out';
+  const im=document.createElement('img'); im.src=src; im.style.cssText='max-width:100%;max-height:100%;border-radius:6px;background:#fff';
+  ov.appendChild(im); ov.onclick=()=>ov.remove(); document.body.appendChild(ov);
+}
+function qiBind(){
+  if(_qiBound) return; _qiBound=true;
+  const body=document.getElementById('qiBody'); if(!body) return;
+  body.addEventListener('click', async e=>{
+    const b=e.target.closest('[data-qa]'); if(!b) return;
+    const a=b.dataset.qa, id=b.dataset.id;
+    if(a==='filter'){ qiCapture(); qiFilter=b.dataset.f; qiRender(); return; }
+    if(a==='goto'){ qiCapture(); qiFilter='all'; qiRender(); qiScrollTo(id); return; }
+    if(a==='zoom'){ const i=qiData.issues.find(x=>x.id===id); const p=i&&i.photos[+b.dataset.n]; if(p) qiZoom(p.src); return; }
+    if(a==='edit'){ qiCloseEdit(); const i=qiData.issues.find(x=>x.id===id); if(!i) return; qiEdit=id; qiDraft=qiCopy(i); qiRender(); qiScrollTo(id); return; }
+    if(a==='cancel'){ qiCloseEdit(); qiRender(); return; }
+    if(a==='ph-del'){ qiCapture(); qiDraft.photos.splice(+b.dataset.n,1); qiRender(); return; }
+    if(a==='up'||a==='down'){
+      qiCapture(); const eid=qiEdit;
+      const ok=await qiCommit(base=>{ const k=base.issues.findIndex(x=>x.id===eid), j=a==='up'?k-1:k+1;
+        if(k<0||j<0||j>=base.issues.length) return; const t=base.issues[k]; base.issues[k]=base.issues[j]; base.issues[j]=t; });
+      if(ok){ qiRender(); qiScrollTo(eid); } return; }
+    if(a==='del'){
+      if(!canDelQi()) return;
+      qiCapture(); if(!qiDelArm){ qiDelArm=true; qiRender(); return; }
+      const eid=qiEdit;
+      if(await qiCommit(base=>{ base.issues=base.issues.filter(x=>x.id!==eid); })){ qiCloseEdit(); qiRender(); }
+      return; }
+    if(a==='meta-cancel'){ qiMetaEdit=false; qiRender(); return; }
+    if(a==='ref-edit'){ qiRefEdit=true; qiRender(); return; }
+    if(a==='ref-cancel'){ qiRefEdit=false; qiRender(); return; }
+  });
+  body.addEventListener('submit', async e=>{
+    e.preventDefault();
+    const f=e.target.dataset.qf;
+    if(f==='issue'){
+      qiCapture(); const d=qiCopy(qiDraft); if(!d.title.trim()) d.title=qiL('(제목 없음)','(без названия)');
+      const ok=await qiCommit(base=>{ const k=base.issues.findIndex(x=>x.id===d.id); if(k>=0) base.issues[k]=d; else base.issues.push(d); });
+      if(ok){ const id=d.id; qiCloseEdit(); qiRender(); qiScrollTo(id); }
+    }
+    if(f==='meta'){
+      const t=qiVal('qm-title'), bs=qiVal('qm-basis'), sr=qiVal('qm-source');
+      if(await qiCommit(base=>{ base.meta.title=t; base.meta.basis=bs; base.meta.source=sr; })){ qiMetaEdit=false; qiRender(); }
+    }
+    if(f==='ref'){
+      const t=qiVal('qr-title'), rows=String(qiVal('qr-rows')||'').split('\n').filter(x=>x.trim()).map(x=>x.split('|').map(c=>c.trim())), n=qiVal('qr-notes');
+      if(await qiCommit(base=>{ base.ref.title=t; base.ref.rows=rows; base.ref.notes=n; })){ qiRefEdit=false; qiRender(); }
+    }
+  });
+  body.addEventListener('change', e=>{ if(e.target.id==='qf-photo') qiAddPhotos(e.target.files); });
+  // 화면 캡처 붙여 넣기 — 이슈를 고치는 중일 때만. 글 칸에 글자를 붙일 때는 그대로 둔다.
+  document.addEventListener('paste', e=>{
+    if(!qiEdit || !ktPaneOn('pane-qi') || !e.clipboardData) return;
+    const types=Array.prototype.slice.call(e.clipboardData.types||[]);
+    if(types.indexOf('text/plain')>=0 && e.target.closest && e.target.closest('textarea,input')) return;
+    const imgs=[]; const items=e.clipboardData.items||[];
+    for(let i=0;i<items.length;i++){ if(items[i].kind==='file' && /^image\//.test(items[i].type)){ const f=items[i].getAsFile(); if(f) imgs.push(f); } }
+    if(!imgs.length) return;
+    e.preventDefault(); qiAddPhotos(imgs);
+  });
+}
+function qiAddOpen(){
+  if(!canEditQi()) return;
+  qiCapture(); qiCloseEdit(); qiFilter='all';
+  const n={ id:qiNewId(), status:'prog', photos:[] }; QI_TXT.forEach(k=>{ n[k]=''; });
+  qiEdit=n.id; qiIsNew=true; qiDraft=n; qiRender(); qiScrollTo(n.id);
+}
+function qiMetaOpen(){ if(!canEditQi()) return; qiMetaEdit=true; qiRender(); const b=getScrollBody(); if(b) b.scrollTop=0; }
+// 파일 불러오기 — 정리해 둔 품질이슈 자료(.json)로 지금 내용을 통째로 바꾼다
+function qiImport(event){
+  const f=event.target.files&&event.target.files[0]; event.target.value='';
+  if(!f||!canEditQi()) return;
+  const rd=new FileReader();
+  rd.onload=async()=>{
+    let d; try{ d=qiNorm(JSON.parse(String(rd.result||''))); }catch(e){ alert(qiL('품질이슈 자료 파일이 아닙니다.','Это не файл с данными.')); return; }
+    if(!d.issues.length){ alert(qiL('파일에 이슈가 없습니다.','В файле нет записей.')); return; }
+    const n=qiData?qiData.issues.length:0;
+    if(!confirm(qiL('이 파일의 이슈 '+d.issues.length+'건으로 지금 내용'+(n?('(이슈 '+n+'건)'):'')+'을 바꿉니다.\n\n계속할까요?','Заменить текущие данные записями из файла ('+d.issues.length+')?'))) return;
+    qiCloseEdit(); qiMetaEdit=false; qiRefEdit=false;
+    if(await qiCommit(base=>{ base.meta=d.meta; base.issues=d.issues; base.ref=d.ref; })){ qiRender(); alert(qiL('불러왔습니다.','Загружено.')); }
+  };
+  rd.readAsText(f,'utf-8');
+}
+function downloadQi(){
+  if(!qiData) return;
+  const ru=lang==='ru';
+  const head=['No',qiL('제목','Заголовок'),qiL('모델','Модель'),qiL('부위','Узел'),qiL('상태','Статус'),qiL('담당','Ответственный'),qiL('일정','Срок'),qiL('문제·현황','Проблема'),qiL('진행 경과','Ход работ'),qiL('원인','Причина'),qiL('조치','Меры'),qiL('남은 일','Следующий шаг')];
+  const rows=qiData.issues.map((i,k)=>[k+1,i.title,i.model,i.part,QI_ST[i.status][ru?1:0],i.owner,i.due,i.problem,i.history,i.cause,i.action,i.next]);
+  const ws=XLSX.utils.aoa_to_sheet([head].concat(rows));
+  ws['!cols']=[{wch:4},{wch:28},{wch:20},{wch:16},{wch:10},{wch:14},{wch:18},{wch:50},{wch:40},{wch:36},{wch:36},{wch:36}];
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,ru?'Качество':'품질이슈');
+  XLSX.writeFile(wb, xlsxName('품질이슈','Проблемы качества'));
 }
 // ══ 제품목록 ═══════════════════════════════════════════════
 //   완제품(보일러) 품번과 이름 목록. 부품이 아니라 제품이라 품번조회와는 따로 둔다.
