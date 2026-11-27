@@ -4408,10 +4408,13 @@ function prodNameOf(pn){
     _prodNameMap=new Map();
     (typeof prodData!=='undefined'?prodData:[]).forEach(r=>{
       const a=String(r.pn||'').trim().toUpperCase().replace(/\s+/g,'');
-      if(a && !_prodNameMap.has(a)) _prodNameMap.set(a, String(r.name||'').trim());
+      if(a && !_prodNameMap.has(a))
+        _prodNameMap.set(a, { ko:String(r.name||'').trim(), ru:String(r.nameRu||'').trim() });
     });
   }
-  return _prodNameMap.get(k)||'';
+  const o=_prodNameMap.get(k);
+  if(!o) return '';
+  return (lang==='ru')?(o.ru||o.ko):o.ko;
 }
 // 제품명은 제품목록이 기준이다 — 그 품번이 제품목록에 있으면 늘 목록의 이름을 쓴다.
 //   목록에 없는 모델만 적어 둔 이름(BOM 의 규격 등)을 그대로 보여 준다.
@@ -14887,9 +14890,18 @@ function openPoViewPanel(){
 //   줄 수가 몇백이라 표를 새로 만들지 않고 설정 보관소(kt_psi_cfg id=93)에 담는다.
 const PROD_CFG_ID=93;
 let prodData=[];            // [{pn, cmp:[…], fin, name, memo}]
+// 품명(표준화)은 나라말마다 따로 담는다 — 국문은 name, 러시아어는 nameRu.
+//   러시아어 칸이 비어 있으면 국문을 대신 보여 준다(빈칸처럼 보이지 않게).
+//   러시아어 화면에서 적거나 일괄변경을 하면 러시아어 칸에만 담기고 국문은 그대로 남는다.
+function prodNameText(r){
+  if(lang!=='ru') return String((r&&r.name)||'');
+  const v=String((r&&r.nameRu)||'');
+  return v||String((r&&r.name)||'');
+}
+function prodNameSet(r, v){ if(lang==='ru') r.nameRu=String(v||''); else r.name=String(v||''); }
 // 한 줄 사본 — 되돌릴 때 쓰므로 호환품번 목록까지 따로 떠 둔다
 function prodRowCopy(r){
-  return { pn:r.pn, name:r.name, memo:r.memo||'', fin:r.fin||'', cmp:(r.cmp||[]).slice(),
+  return { pn:r.pn, name:r.name, nameRu:r.nameRu||'', memo:r.memo||'', fin:r.fin||'', cmp:(r.cmp||[]).slice(),
            exp:r.exp||'', use:r.use||'', thermo:r.thermo||'', ctrl:r.ctrl||'', burner:r.burner||'',
            ername:r.ername||'', erspec:r.erspec||'' };
 }
@@ -14904,14 +14916,15 @@ async function loadProd(){
   try{
     const { data }=await sb.from('kt_psi_cfg').select('cfg').eq('id',PROD_CFG_ID).maybeSingle();
     const rows=(data && data.cfg && Array.isArray(data.cfg.rows))?data.cfg.rows:[];
-    prodData=rows.map(r=>({ pn:String(r.pn||'').trim(), name:String(r.name||'').trim(), memo:String(r.memo||'').trim(),
+    prodData=rows.map(r=>({ pn:String(r.pn||'').trim(), name:String(r.name||'').trim(),
+                            nameRu:String(r.nameRu||'').trim(), memo:String(r.memo||'').trim(),
                             cmp:Array.isArray(r.cmp)?prodCmpParse(r.cmp.join(' ')):prodCmpParse(r.cmp),
                             fin:pnUpAll(r.fin||''),
                             exp:String(r.exp||'').trim(), use:String(r.use||'').trim(),
                             thermo:String(r.thermo||'').trim(),
                             ctrl:String(r.ctrl||'').trim(), burner:String(r.burner||'').trim(),
                             ername:String(r.ername||'').trim(), erspec:String(r.erspec||'').trim()
-                          })).filter(r=>r.pn||r.name||r.memo);
+                          })).filter(r=>r.pn||r.name||r.nameRu||r.memo);
   }catch(e){ prodData=[]; }
   _prodLoaded=true;
   if(typeof prodNameClear==='function') prodNameClear();   // 품번조회의 적용모델 제품명이 이 목록을 본다
@@ -14950,7 +14963,7 @@ function prodCellVals(key, r){
     case 'pn':     return [String(r.pn||'')];
     case 'cmp':    return (r.cmp && r.cmp.length)?r.cmp.map(String):[''];
     case 'fin':    return [String(r.fin||'')];
-    case 'name':   return [String(r.name||'')];
+    case 'name':   return [prodNameText(r)];
     case 'ername': return [String(prodErpName(r)||'')];
     case 'erspec': return [String(prodErpSpec(r)||'')];
     case 'exp':    return [String(r.exp||'')];
@@ -15144,7 +15157,7 @@ function renderProd(){
   const ru=(lang==='ru'), L=(ko,rr)=>(ru?rr:ko);
   const kw=(document.getElementById('prodInput')?document.getElementById('prodInput').value:'').trim().toLowerCase();
   let rows=prodData.slice();
-  if(kw) rows=rows.filter(r=>(r.pn+' '+r.name+' '+(r.memo||'')+' '+prodCmpText(r)+' '+(r.fin||'')
+  if(kw) rows=rows.filter(r=>(r.pn+' '+r.name+' '+(r.nameRu||'')+' '+(r.memo||'')+' '+prodCmpText(r)+' '+(r.fin||'')
                               +' '+(r.use||'')+' '+(r.thermo||'')+' '+(r.ctrl||'')+' '+(r.burner||'')
                               +' '+prodErpName(r)+' '+prodErpSpec(r)
                               +' '+prodMdlText(r.pn)).toLowerCase().includes(kw));
@@ -15220,7 +15233,9 @@ function renderProd(){
                               :('<span style="'+codeWS+'">'+escapeHtml(prodCmpText(r))+'</span>'))+'</td>';
       case 'fin':    return '<td style="'+tdS+'">'+(ED?ed(r.pn,'fin',r.fin||'',1)
                               :('<span style="'+codeS+'">'+escapeHtml(r.fin||'')+'</span>'))+'</td>';
-      case 'name':   return '<td style="'+tdS+';word-break:break-all">'+(ED?ed(r.pn,'name',r.name,0):escapeHtml(r.name))+'</td>';
+      case 'name': { const nmT=prodNameText(r);
+                     return '<td style="'+tdS+';word-break:break-all">'
+                       +(ED?ed(r.pn,'name',nmT,0):escapeHtml(nmT))+'</td>'; }
       case 'ername': return '<td style="'+tdS+';word-break:break-all">'+erpCell(r,'ername')+'</td>';
       case 'erspec': return '<td style="'+tdS+';word-break:break-all">'+erpCell(r,'erspec')+'</td>';
       case 'exp':    return '<td style="'+tdS+';text-align:center">'+prodExpCell(r, ED)+'</td>';
@@ -15335,7 +15350,8 @@ async function onProdCellBlur(el){
     if(fld!=='newpn') return;
     if(!v){ el.textContent=''; return; }
     if(find(v)>=0){ alert(ru?'Уже есть.':normBadgePN(v)+' 는 이미 목록에 있습니다.'); el.textContent=''; return; }
-    prodData.push({ pn:v, name:cell('newname'), memo:cell('newmemo'),
+    const nmNew=cell('newname');
+    prodData.push({ pn:v, name:(lang==='ru'?'':nmNew), nameRu:(lang==='ru'?nmNew:''), memo:cell('newmemo'),
                     cmp:prodCmpParse(cell('newcmp')), fin:pnUpAll(cell('newfin')),
                     exp:'', use:'', thermo:pnUpAll(cell('newthermo')), ctrl:pnUpAll(cell('newctrl')),
                     burner:pnUpAll(cell('newburner')),
@@ -15355,7 +15371,7 @@ async function onProdCellBlur(el){
     else if(fld==='burner') prodData[i].burner=pnUpAll(v);
     else if(fld==='cmp') prodData[i].cmp=prodCmpParse(v);     // 쉼표·빈칸으로 여러 개
     else if(fld==='fin') prodData[i].fin=pnUpAll(v);
-    else prodData[i].name=v;
+    else prodNameSet(prodData[i], v);
   }
   const msg=await saveProd();
   if(msg){ prodData=old; alert((ru?'Ошибка сохранения':'저장 실패')+'\n['+msg+']'); renderProd(); return; }
@@ -15369,7 +15385,7 @@ async function prodDeleteRow(pn){
   const i=prodData.findIndex(r=>String(r.pn||'').trim().toUpperCase()===String(pn||'').trim().toUpperCase());
   if(i<0) return;
   const r=prodData[i];
-  if(!confirm(ru?('Удалить '+r.pn+'?'):(normBadgePN(r.pn)+(r.name?(' · '+r.name):'')+' 를 제품목록에서 지웁니다.\n\n계속할까요?'))) return;
+  if(!confirm(ru?('Удалить '+r.pn+'?'):(normBadgePN(r.pn)+(r.name?(' · '+r.name):'')+' 를 제품목록에서 지웁니다.\n\n계속할까요? (국문·러시아어 품명이 함께 지워집니다)'))) return;
   const old=prodData.map(prodRowCopy);
   prodData.splice(i,1);
   const msg=await saveProd();
@@ -15487,7 +15503,8 @@ async function prodAddSave(){
   if(prodData.some(r=>String(r.pn||'').trim().toUpperCase()===k)){
     say(L(normBadgePN(pn)+' 는 이미 목록에 있습니다.','Такой артикул уже есть.'),'#f59e0b'); g('pdPn').select(); return; }
   const old=prodData.map(prodRowCopy);
-  prodData.push({ pn, name:nm, memo:mo, cmp:cp, fin:fi, exp:ex, use:us, thermo:th, ctrl:ct, burner:bn, ername:en, erspec:es });
+  prodData.push({ pn, name:(ru?'':nm), nameRu:(ru?nm:''), memo:mo, cmp:cp, fin:fi, exp:ex, use:us,
+                  thermo:th, ctrl:ct, burner:bn, ername:en, erspec:es });
   g('pdSave').disabled=true;
   const err=await saveProd();
   g('pdSave').disabled=false;
@@ -15521,9 +15538,10 @@ function prodRepHits(find, to, cs, onlyFound){
   const hits=[];
   if(!find) return hits;
   prodData.forEach((r,i)=>{
-    if(onlyFound && kw && !((r.pn+' '+r.name+' '+(r.memo||'')).toLowerCase().includes(kw))) return;
-    const after=prodRepStr(r.name, find, to, cs);
-    if(after!==String(r.name||'')) hits.push({ i, pn:r.pn, before:r.name, after });
+    const now=prodNameText(r);
+    if(onlyFound && kw && !((r.pn+' '+now+' '+(r.memo||'')).toLowerCase().includes(kw))) return;
+    const after=prodRepStr(now, find, to, cs);
+    if(after!==String(now||'')) hits.push({ i, pn:r.pn, before:now, after });
   });
   return hits;
 }
@@ -15547,7 +15565,10 @@ function prodRepOpen(){
     '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;width:470px;max-width:100%;'
       +'max-height:88vh;display:flex;flex-direction:column;box-shadow:0 16px 44px #000a;font-size:12px;color:var(--text)">'
     +'<div style="padding:12px 14px;border-bottom:1px solid var(--border);font-weight:700;font-size:13px">'
-      +L('품명 일괄변경','Замена в названиях')+'</div>'
+      +L('품명 일괄변경','Замена в названиях')
+      +'<div style="font-weight:400;font-size:11px;color:var(--muted);margin-top:3px">'
+      +escapeHtml(L('지금 보는 국문 품명만 바뀝니다 (러시아어 품명은 그대로).',
+                    'Меняются только русские названия (корейские остаются).'))+'</div></div>'
     +'<div style="padding:12px 14px;overflow:auto">'
       +fld('prFind', L('찾을 글자','Найти'), 'TURBO')
       +fld('prTo',   L('바꿀 글자 (비우면 지웁니다)','Заменить на (пусто — удалить)'), 'TURBO PLUS')
@@ -15603,7 +15624,7 @@ async function prodRepRun(){
                  +'\n\n계속할까요? (바꾼 뒤에도 되돌리기 단추로 한 번 되돌릴 수 있습니다)',
                 'Изменить названий: '+hits.length+'?\n\n  «'+find+'» → '+(to?('«'+to+'»'):'(удалить)')))) return;
   const back=prodData.map(prodRowCopy);
-  hits.forEach(x=>{ prodData[x.i].name=x.after; });
+  hits.forEach(x=>{ prodNameSet(prodData[x.i], x.after); });
   g('prGo').disabled=true;
   const err=await saveProd();
   g('prGo').disabled=false;
@@ -15775,21 +15796,22 @@ function downloadProd(){
   const ru=(lang==='ru');
   const kw=(document.getElementById('prodInput')?document.getElementById('prodInput').value:'').trim().toLowerCase();
   let rows=prodData.slice();
-  if(kw) rows=rows.filter(r=>(r.pn+' '+r.name+' '+(r.memo||'')+' '+prodCmpText(r)+' '+(r.fin||'')
+  if(kw) rows=rows.filter(r=>(r.pn+' '+r.name+' '+(r.nameRu||'')+' '+(r.memo||'')+' '+prodCmpText(r)+' '+(r.fin||'')
                               +' '+(r.use||'')+' '+(r.thermo||'')+' '+(r.ctrl||'')+' '+(r.burner||'')
                               +' '+prodErpName(r)+' '+prodErpSpec(r)).toLowerCase().includes(kw));
   rows=prodApplySort(prodApplyFilters(rows));
   const aoa=[[ru?'Артикул':'품번', ru?'Артикулы замены':'호환품번', ru?'Актуальный':'최종품번',
-              ru?'Наименование (станд.)':'품명(표준화)', ru?'Наименование (ERP)':'품명(ERP)',
+              ru?'Наименование (кор.)':'품명(표준화)', ru?'Наименование (рус.)':'품명(러시아어)',
+              ru?'Наименование (ERP)':'품명(ERP)',
               ru?'Характеристика (ERP)':'규격(ERP)', ru?'Экспорт':'수출여부',
               ru?'Исп.':'사용', ru?'Термостат':'실내온도조절기',
               ru?'Блок управления':'콘트롤러', ru?'Горелка':'버너',
               ru?'Примечание':'비고', ru?'Модели':'적용모델']]
-    .concat(rows.map(r=>[r.pn, prodCmpText(r), r.fin||'', r.name, prodErpName(r), prodErpSpec(r),
+    .concat(rows.map(r=>[r.pn, prodCmpText(r), r.fin||'', r.name, r.nameRu||'', prodErpName(r), prodErpSpec(r),
                          r.exp||'', r.use||'', r.thermo||'', r.ctrl||'', r.burner||'', r.memo||'',
                          pnMdlEntries(r.pn).map(e=>(pnMdlName(e)||e.p)).join(', ')]));
   const ws=XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols']=[{wch:18},{wch:30},{wch:18},{wch:40},{wch:34},{wch:30},{wch:10},{wch:8},{wch:18},{wch:18},{wch:18},{wch:30},{wch:40}];
+  ws['!cols']=[{wch:18},{wch:30},{wch:18},{wch:40},{wch:40},{wch:34},{wch:30},{wch:10},{wch:8},{wch:18},{wch:18},{wch:18},{wch:30},{wch:40}];
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'PRODUCTS');
   XLSX.writeFile(wb, xlsxName('제품목록','Список изделий'));
 }
@@ -15805,13 +15827,14 @@ function handleProdUpload(event){
       const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
       const a=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:''});
       // 머리글 줄('품번'·'품명')을 찾고, 없으면 첫 줄부터 두 열을 그대로 읽는다
-      let h=-1, cPn=0, cNm=1, cMo=-1, cCp=-1, cFi=-1, cEx=-1, cUs=-1, cTh=-1, cCt=-1, cBn=-1, cEn=-1, cEs=-1, fNm=false;
+      let h=-1, cPn=0, cNm=1, cNr=-1, cMo=-1, cCp=-1, cFi=-1, cEx=-1, cUs=-1, cTh=-1, cCt=-1, cBn=-1, cEn=-1, cEs=-1, fNm=false;
       for(let r=0;r<Math.min(10,a.length) && h<0;r++){
         const w=a[r]||[];
         for(let c=0;c<w.length;c++){
           const t=String(w[c]==null?'':w[c]).replace(/\s/g,'');
           if(t==='품번'||/^артикул$/i.test(t)||t==='품목코드'){ cPn=c; h=r; }
-          if(t==='품명'||t==='품명(표준화)'||t==='제품명'||/^наименование\(станд\.?\)$/i.test(t)||/^наименование$/i.test(t)){ cNm=c; fNm=true; if(h<0) h=r; }
+          if(t==='품명'||t==='품명(표준화)'||t==='제품명'||/^наименование\(станд\.?\)$/i.test(t)||/^наименование\(кор\.?\)$/i.test(t)||/^наименование$/i.test(t)){ cNm=c; fNm=true; if(h<0) h=r; }
+          if(t==='품명(러시아어)'||t==='품명(러)'||t==='러시아어품명'||/^наименование\(рус\.?\)$/i.test(t)){ cNr=c; if(h<0) h=r; }
           if(t==='품명(ERP)'||t==='ERP품명'||/^наименование\(erp\)$/i.test(t)){ cEn=c; if(h<0) h=r; }
           if(t==='규격'||t==='규격(ERP)'||t==='ERP규격'||/^характеристика(\(erp\))?$/i.test(t)){ cEs=c; if(h<0) h=r; }
           if(t==='비고'||/^примечание$/i.test(t)||t==='메모'){ cMo=c; if(h<0) h=r; }
@@ -15846,7 +15869,8 @@ function handleProdUpload(event){
         const bn=(cBn>=0)?String(w[cBn]==null?'':w[cBn]).trim():'';
         if(!pn && !nm) continue;
         const k=pn.toUpperCase(); if(k && seen[k]) continue; if(k) seen[k]=1;
-        out.push({pn, name:nm, memo:mo, cmp:cp, fin:fi, exp:ex, use:us, thermo:th, ctrl:ct, burner:bn,
+        out.push({pn, name:nm, nameRu:(cNr>=0)?String(w[cNr]==null?'':w[cNr]).trim():'',
+                  memo:mo, cmp:cp, fin:fi, exp:ex, use:us, thermo:th, ctrl:ct, burner:bn,
                   ername:(cEn>=0)?String(w[cEn]==null?'':w[cEn]).trim():'',
                   erspec:(cEs>=0)?String(w[cEs]==null?'':w[cEs]).trim():''});
       }
@@ -15861,6 +15885,7 @@ function handleProdUpload(event){
           let ch=0;
           const m0=merged[idx[k]];
           if(r.name && m0.name!==r.name){ m0.name=r.name; ch=1; }
+          if(r.nameRu && (m0.nameRu||'')!==r.nameRu){ m0.nameRu=r.nameRu; ch=1; }
           if(r.memo && (m0.memo||'')!==r.memo){ m0.memo=r.memo; ch=1; }        // 비고는 적혀 있을 때만 바꾼다
           if(r.cmp && r.cmp.length && (m0.cmp||[]).join(',')!==r.cmp.join(',')){ m0.cmp=r.cmp.slice(); ch=1; }
           if(r.fin && (m0.fin||'')!==r.fin){ m0.fin=r.fin; ch=1; }
@@ -15872,7 +15897,7 @@ function handleProdUpload(event){
           if(r.ername && (m0.ername||'')!==r.ername){ m0.ername=r.ername; ch=1; }
           if(r.erspec && (m0.erspec||'')!==r.erspec){ m0.erspec=r.erspec; ch=1; }
           if(ch) upd++;
-        }else{ merged.push({pn:r.pn, name:r.name, memo:r.memo||'', cmp:(r.cmp||[]).slice(), fin:r.fin||'',
+        }else{ merged.push({pn:r.pn, name:r.name, nameRu:r.nameRu||'', memo:r.memo||'', cmp:(r.cmp||[]).slice(), fin:r.fin||'',
                             exp:r.exp||'', use:r.use||'', thermo:r.thermo||'', ctrl:r.ctrl||'', burner:r.burner||'',
                             ername:r.ername||'', erspec:r.erspec||''});
                if(k) idx[k]=merged.length-1; add++; }
